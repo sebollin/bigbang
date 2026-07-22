@@ -39,10 +39,6 @@ jobs:
 
       - uses: r-lib/actions/setup-tinytex@v2
 
-      - name: Install LaTeX packages required by the PDF manual
-        run: Rscript -e "tinytex::tlmgr_install(c('makeindex', 'texinfo'))"
-        shell: bash
-
       - name: Generate Spanish locale for gettext tests
         if: runner.os == 'Linux'
         run: |
@@ -52,8 +48,12 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck, any::covr, any::lintr
+          extra-packages: any::rcmdcheck, any::covr, any::lintr, any::tinytex
           needs: check
+
+      - name: Install LaTeX packages required by the PDF manual
+        run: Rscript -e "tinytex::tlmgr_install(c('makeindex', 'texinfo'))"
+        shell: bash
 
       - uses: r-lib/actions/check-r-package@v2
         with:
