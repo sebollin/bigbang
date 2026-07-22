@@ -1,0 +1,89 @@
+---
+title: "bigbang en español: guía completa"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{bigbang en español: guía completa}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+## Qué hace bigbang
+
+`bigbang` crea un metapaquete a partir de archivos locales `.tar.gz`, `.tar` o
+`.zip`. Está pensado para equipos que distribuyen paquetes internos sin depender de
+un repositorio en línea. La generación nunca instala componentes ni borra contenido
+del directorio de trabajo.
+
+La API pública usa nombres en inglés para ser consistente con el ecosistema de R:
+
+- `create_metapackage()` crea la fuente del metapaquete.
+- `install_local_pkg()` instala un archivo local y sus dependencias.
+- `diagnose_dependencies()` busca dependencias implícitas.
+- `scan_bigbang_artifact()` examina artefactos históricos sin cargarlos.
+
+## Crear un metapaquete
+
+Los nombres de `packages` incluyen la versión pero no la extensión:
+
+```{r, eval = FALSE}
+resultado <- create_metapackage(
+  name = "equipoverse",
+  packages = c("datos_1.2.0", "reportes_0.9.1"),
+  pkg_dir = "ruta/a/instalables",
+  ext = ".tar.gz",
+  dest_dir = tempdir(),
+  document = TRUE
+)
+resultado
+```
+
+El destino debe ser nuevo o estar vacío. Esta restricción evita conservar hooks o
+scripts generados por versiones antiguas vulnerables. Nunca regenere in-place una
+fuente cuya procedencia no haya sido verificada.
+
+## Instalar y adjuntar componentes
+
+La instalación es explícita. `library(equipoverse)` solo adjunta los componentes ya
+instalados e informa cuáles faltan. Para instalar desde los archivos locales:
+
+```{r, eval = FALSE}
+library(equipoverse)
+equipoverse_install(cran_deps = "skip")
+```
+
+La política predeterminada `cran_deps = "skip"` no accede a la red. Las alternativas
+son `"error"` (falla sin red) e `"install"` (intenta instalar desde `repos`). Los
+paquetes locales se instalan una sola vez en orden topológico; los ciclos producen
+una condición `bigbang_error_cycle`.
+
+## Archivos ZIP
+
+Un ZIP que contiene `Meta/package.rds` se considera un binario de Windows y solo se
+instala en Windows con `type = "win.binary"`. Los demás ZIP con DESCRIPTION se
+extraen en un directorio temporal propio y se instalan como fuente.
+
+## Revisar artefactos anteriores
+
+El escáner nunca carga el paquete y funciona en fuentes, tarballs, ZIP e
+instalaciones:
+
+```{r, eval = FALSE}
+scan_bigbang_artifact("ruta/al/artefacto", dry_run = TRUE)
+```
+
+Si detecta firmas V1/V2/V3/V7, no ejecute `library()`, `devtools::document()` ni
+hooks del artefacto. Genere una versión nueva en una ruta vacía con la versión actual
+de `bigbang`, vuelva a escanearla y recién entonces constrúyala e instálela.
+
+## Idioma
+
+Los mensajes de ejecución tienen inglés como fuente y traducción completa al
+español mediante gettext. En R 4.2 o posterior puede usar
+`Sys.setLanguage("es")`; en versiones anteriores, defina `LANGUAGE=es` antes de
+iniciar R. La ayuda Rd se publica en inglés, como requiere CRAN. Cuando
+`rhelpi18n` madure y llegue a CRAN se evaluará publicar un módulo separado
+`bigbang.es` para traducir también la ayuda interactiva.

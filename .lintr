@@ -1,0 +1,10 @@
+linters: linters_with_defaults(
+    line_length_linter = line_length_linter(120),
+    object_name_linter = object_name_linter(styles = c("snake_case", "symbols"))
+  )
+exclusions: list(
+    "R/crear_meta_paquete_local.R",
+    "R/translations.R",
+    "tests/regresion/verificar_fix_borrado.R",
+    "tests/testthat/test-regresion-borrado.R"
+  )

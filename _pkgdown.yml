@@ -1,0 +1,50 @@
+url: https://sebollin.github.io/bigbang/
+home:
+  title: "bigbang — create custom R metapackages from local packages"
+  description: >
+    bigbang — create custom R metapackages from local packages. Build
+    tidyverse-style metapackages from local package archives for offline and
+    institutional workflows.
+template:
+  bootstrap: 5
+  light-switch: true
+  bslib:
+    bg: "#FFFFFF"
+    fg: "#142839"
+    primary: "#08766A"
+    secondary: "#8AB46A"
+    success: "#0D9786"
+    border-color: "#D8E2DF"
+    navbar-bg: "#142839"
+    navbar-light-color: "#FFFFFF"
+    navbar-light-hover-color: "#D8E2DF"
+    navbar-light-active-color: "#FFFFFF"
+    navbar-dark-color: "#FFFFFF"
+    navbar-dark-hover-color: "#D8E2DF"
+    navbar-dark-active-color: "#FFFFFF"
+
+navbar:
+  structure:
+    left: [intro, reference, articles, news]
+    right: [search, github]
+
+articles:
+  - title: Guides
+    contents:
+      - getting-started
+      - bigbang-es
+
+reference:
+  - title: Build and inspect metapackages
+    contents:
+      - create_metapackage
+      - diagnose_dependencies
+      - scan_bigbang_artifact
+  - title: Install local packages
+    contents:
+      - install_local_pkg
+  - title: Result objects
+    contents:
+      - print.bigbang_artifact_scan
+      - print.bigbang_install_result
+      - print.bigbang_result

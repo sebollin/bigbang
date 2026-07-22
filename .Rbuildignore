@@ -1,0 +1,14 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.gitignore$
+^\.utiles-historial$
+^\.github$
+^_pkgdown\.yml$
+^cran-comments\.md$
+^\.lintr$
+^README\.es\.md$
+^CONTRIBUTING\.md$
+^RELEASE\.md$
+^tests/regresion$
+^tools/WORDLIST-es$
+^man/figures/\.gitkeep$

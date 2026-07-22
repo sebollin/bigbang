@@ -1,0 +1,213 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: bigbang 0.1.0\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "'name' must be one character string"
+msgstr "'name' debe ser una cadena de caracteres"
+
+msgid "'packages' must be a non-empty character vector"
+msgstr "'packages' debe ser un vector de caracteres no vacío"
+
+msgid "'pkg_dir' must be one character string"
+msgstr "'pkg_dir' debe ser una cadena de caracteres"
+
+msgid "The directory specified by 'pkg_dir' does not exist"
+msgstr "El directorio indicado por 'pkg_dir' no existe"
+
+msgid "Unsupported archive extension: %s"
+msgstr "Extensión de archivo no compatible: %s"
+
+msgid "No DESCRIPTION file found in package %s"
+msgstr "No se encontró DESCRIPTION en el paquete %s"
+
+msgid "DEBUG: DESCRIPTION file created"
+msgstr "DEBUG: archivo DESCRIPTION creado"
+
+msgid "DEBUG: NAMESPACE file created"
+msgstr "DEBUG: archivo NAMESPACE creado"
+
+msgid "Package archive not found: %s"
+msgstr "No se encontró el archivo del paquete: %s"
+
+msgid "No R directory found for package: %s"
+msgstr "No se encontró el directorio R del paquete: %s"
+
+msgid "Error processing package %s: %s"
+msgstr "Error al procesar el paquete %s: %s"
+
+msgid "No component packages are installed; re-exports were not generated."
+msgstr "No hay paquetes componentes instalados; no se generaron reexportaciones."
+
+msgid "No functions were found to re-export."
+msgstr "No se encontraron funciones para reexportar."
+
+msgid "Re-export file created with %d functions from %d packages."
+msgstr "Archivo de reexportaciones creado con %d funciones de %d paquetes."
+
+msgid "SAFETY: Path is too short and may be dangerous: %s"
+msgstr "SEGURIDAD: La ruta es demasiado corta y puede ser peligrosa: %s"
+
+msgid "SAFETY: Potentially dangerous path pattern: %s"
+msgstr "SEGURIDAD: Patrón de ruta potencialmente peligroso: %s"
+
+msgid "SAFETY: Potentially important directory: %s"
+msgstr "SEGURIDAD: Directorio potencialmente importante: %s"
+
+msgid "SAFETY: Possible non-temporary R package directory: %s"
+msgstr "SEGURIDAD: Posible directorio no temporal de un paquete R: %s"
+
+msgid "Could not remove completely: %s"
+msgstr "No se pudo eliminar por completo: %s"
+
+msgid "Current directory (%s) does not match project directory (%s)."
+msgstr "El directorio actual (%s) no coincide con el directorio del proyecto (%s)."
+
+msgid "Temporarily changed directory to: %s"
+msgstr "Se cambió temporalmente al directorio: %s"
+
+msgid "The DESCRIPTION file does not exist in the current directory."
+msgstr "El archivo DESCRIPTION no existe en el directorio actual."
+
+msgid "DESCRIPTION updated with a valid Suggests field"
+msgstr "DESCRIPTION actualizado con un campo Suggests válido"
+
+msgid "Error updating DESCRIPTION: %s"
+msgstr "Error al actualizar DESCRIPTION: %s"
+
+msgid "Basic vignette created at %s"
+msgstr "Viñeta básica creada en %s"
+
+msgid "Error creating basic vignette: %s"
+msgstr "Error al crear la viñeta básica: %s"
+
+msgid "Package name '%s' contains underscores, which R package names do not allow. Use '%s' instead."
+msgstr "El nombre de paquete '%s' contiene guiones bajos, que R no admite. Use '%s' en su lugar."
+
+msgid "For safety, the destination must be new or empty: %s. Generate into a new empty path; never regenerate an existing source in place."
+msgstr "Por seguridad, el destino debe ser nuevo o estar vacío: %s. Genere en una ruta nueva y vacía; nunca regenere una fuente existente in-place."
+
+msgid "Creating package structure at: %s"
+msgstr "Creando la estructura del paquete en: %s"
+
+msgid "Could not create project directory: %s"
+msgstr "No se pudo crear el directorio del proyecto: %s"
+
+msgid "Could not create directory: %s"
+msgstr "No se pudo crear el directorio: %s"
+
+msgid "The following package archives were not found: %s"
+msgstr "No se encontraron los siguientes archivos de paquete: %s"
+
+msgid "Creating metapackage '%s' for %d local packages..."
+msgstr "Creando el metapaquete '%s' para %d paquetes locales..."
+
+msgid "Packages: %s... and %d more"
+msgstr "Paquetes: %s... y %d más"
+
+msgid "Packages: %s"
+msgstr "Paquetes: %s"
+
+msgid "Using explicitly supplied dependencies: %s"
+msgstr "Usando las dependencias indicadas explícitamente: %s"
+
+msgid "Scanning local packages for implicit dependencies..."
+msgstr "Analizando dependencias implícitas en los paquetes locales..."
+
+msgid "Detected implicit dependencies: %s"
+msgstr "Dependencias implícitas detectadas: %s"
+
+msgid "Generating DESCRIPTION and NAMESPACE..."
+msgstr "Generando DESCRIPTION y NAMESPACE..."
+
+msgid "Generating metapackage R files..."
+msgstr "Generando los archivos R del metapaquete..."
+
+msgid "Metapackage %s created successfully at %s"
+msgstr "Metapaquete %s creado correctamente en %s"
+
+msgid "Generating documentation for %s..."
+msgstr "Generando documentación para %s..."
+
+msgid "Documentation generated successfully."
+msgstr "Documentación generada correctamente."
+
+msgid "Error generating documentation: %s"
+msgstr "Error al generar documentación: %s"
+
+msgid "Install package 'devtools' to generate documentation automatically."
+msgstr "Instale el paquete 'devtools' para generar documentación automáticamente."
+
+msgid "Created %s.R successfully."
+msgstr "Archivo %s.R creado correctamente."
+
+msgid "Error creating %s.R: %s"
+msgstr "Error al crear %s.R: %s"
+
+msgid "The template rendered empty content."
+msgstr "La plantilla generó contenido vacío."
+
+msgid "\\nOriginal template:"
+msgstr "\\nPlantilla original:"
+
+msgid "\\nTemplate data:"
+msgstr "\\nDatos de la plantilla:"
+
+msgid "%s.R already exists and will not be overwritten."
+msgstr "%s.R ya existe y no se sobrescribirá."
+
+msgid "The ZIP archive does not contain a DESCRIPTION file: "
+msgstr "El archivo ZIP no contiene DESCRIPTION: "
+
+msgid "Unsupported archive format: "
+msgstr "Formato de archivo no compatible: "
+
+msgid "Installed local package: "
+msgstr "Paquete local instalado: "
+
+msgid "Packages that failed: "
+msgstr "Paquetes que fallaron: "
+
+msgid "Packages skipped by the offline policy: "
+msgstr "Paquetes omitidos por la política offline: "
+
+msgid "'path' must be one non-empty character string."
+msgstr "'path' debe ser una cadena de caracteres no vacía."
+
+msgid "Only read-only scanning is supported; 'dry_run' must remain TRUE."
+msgstr "Solo se admite el escaneo de lectura; 'dry_run' debe permanecer en TRUE."
+
+msgid "Artifact does not exist: "
+msgstr "El artefacto no existe: "
+
+msgid "Unsupported artifact type: "
+msgstr "Tipo de artefacto no compatible: "
+
+msgid "No DESCRIPTION found in source directory: "
+msgstr "No se encontró DESCRIPTION en el directorio fuente: "
+
+msgid "Refusing to scan symbolic links in the source R directory."
+msgstr "Se rechaza escanear enlaces simbólicos en el directorio R de la fuente."
+
+msgid "Archive contains unsafe absolute or parent-traversal paths: "
+msgstr "El archivo contiene rutas absolutas o recorridos al directorio padre inseguros: "
+
+msgid "Refusing to scan an archive containing symbolic links."
+msgstr "Se rechaza escanear un archivo que contiene enlaces simbólicos."
+
+msgid "No DESCRIPTION found in source archive."
+msgstr "No se encontró DESCRIPTION en el archivo fuente."
+
+msgid "Source archive has multiple candidate package roots."
+msgstr "El archivo fuente tiene varias raíces de paquete candidatas."
+
+msgid "Installed package has no valid Package field."
+msgstr "El paquete instalado no tiene un campo Package válido."
+
+msgid "Could not identify the installed lazy-load database."
+msgstr "No se pudo identificar la base lazy-load instalada."
+

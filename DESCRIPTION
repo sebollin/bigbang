@@ -1,0 +1,41 @@
+Package: bigbang
+Type: Package
+Title: Build Tidyverse-Style Meta-Packages from Local Package Files
+Version: 0.1.0
+Authors@R: c(
+    person(given = "Sebastian",
+           family = "Lucas",
+           role = c("aut", "cre"),
+           email = "sebalucas@gmail.com"),
+    person(given = "Richard",
+           family = "Detomasi",
+           role = "ctb",
+           email = "rdetomasi@mides.gub.uy"))
+Description: Creates meta-packages (in the style of the 'tidyverse') from
+    locally stored package archives (.tar.gz, .zip). Designed for teams
+    working behind institutional firewalls without access to package
+    repositories. Resolves dependencies between local packages by building
+    a dependency graph with topological ordering and cycle detection,
+    classifies dependencies as local or CRAN, detects implicit dependencies
+    by scanning source code, and generates the full meta-package scaffold
+    including re-exports, vignettes and documentation.
+License: GPL (>= 3)
+Encoding: UTF-8
+Language: en
+Roxygen: list(markdown = TRUE)
+VignetteBuilder: knitr
+Depends:
+    R (>= 3.6.0)
+Imports:
+    brio,
+    glue,
+    utils,
+    whisker
+Suggests:
+    devtools,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0),
+    withr
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0

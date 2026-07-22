@@ -1,0 +1,213 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: bigbang 0.1.0\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "'name' must be one character string"
+msgstr ""
+
+msgid "'packages' must be a non-empty character vector"
+msgstr ""
+
+msgid "'pkg_dir' must be one character string"
+msgstr ""
+
+msgid "The directory specified by 'pkg_dir' does not exist"
+msgstr ""
+
+msgid "Unsupported archive extension: %s"
+msgstr ""
+
+msgid "No DESCRIPTION file found in package %s"
+msgstr ""
+
+msgid "DEBUG: DESCRIPTION file created"
+msgstr ""
+
+msgid "DEBUG: NAMESPACE file created"
+msgstr ""
+
+msgid "Package archive not found: %s"
+msgstr ""
+
+msgid "No R directory found for package: %s"
+msgstr ""
+
+msgid "Error processing package %s: %s"
+msgstr ""
+
+msgid "No component packages are installed; re-exports were not generated."
+msgstr ""
+
+msgid "No functions were found to re-export."
+msgstr ""
+
+msgid "Re-export file created with %d functions from %d packages."
+msgstr ""
+
+msgid "SAFETY: Path is too short and may be dangerous: %s"
+msgstr ""
+
+msgid "SAFETY: Potentially dangerous path pattern: %s"
+msgstr ""
+
+msgid "SAFETY: Potentially important directory: %s"
+msgstr ""
+
+msgid "SAFETY: Possible non-temporary R package directory: %s"
+msgstr ""
+
+msgid "Could not remove completely: %s"
+msgstr ""
+
+msgid "Current directory (%s) does not match project directory (%s)."
+msgstr ""
+
+msgid "Temporarily changed directory to: %s"
+msgstr ""
+
+msgid "The DESCRIPTION file does not exist in the current directory."
+msgstr ""
+
+msgid "DESCRIPTION updated with a valid Suggests field"
+msgstr ""
+
+msgid "Error updating DESCRIPTION: %s"
+msgstr ""
+
+msgid "Basic vignette created at %s"
+msgstr ""
+
+msgid "Error creating basic vignette: %s"
+msgstr ""
+
+msgid "Package name '%s' contains underscores, which R package names do not allow. Use '%s' instead."
+msgstr ""
+
+msgid "For safety, the destination must be new or empty: %s. Generate into a new empty path; never regenerate an existing source in place."
+msgstr ""
+
+msgid "Creating package structure at: %s"
+msgstr ""
+
+msgid "Could not create project directory: %s"
+msgstr ""
+
+msgid "Could not create directory: %s"
+msgstr ""
+
+msgid "The following package archives were not found: %s"
+msgstr ""
+
+msgid "Creating metapackage '%s' for %d local packages..."
+msgstr ""
+
+msgid "Packages: %s... and %d more"
+msgstr ""
+
+msgid "Packages: %s"
+msgstr ""
+
+msgid "Using explicitly supplied dependencies: %s"
+msgstr ""
+
+msgid "Scanning local packages for implicit dependencies..."
+msgstr ""
+
+msgid "Detected implicit dependencies: %s"
+msgstr ""
+
+msgid "Generating DESCRIPTION and NAMESPACE..."
+msgstr ""
+
+msgid "Generating metapackage R files..."
+msgstr ""
+
+msgid "Metapackage %s created successfully at %s"
+msgstr ""
+
+msgid "Generating documentation for %s..."
+msgstr ""
+
+msgid "Documentation generated successfully."
+msgstr ""
+
+msgid "Error generating documentation: %s"
+msgstr ""
+
+msgid "Install package 'devtools' to generate documentation automatically."
+msgstr ""
+
+msgid "Created %s.R successfully."
+msgstr ""
+
+msgid "Error creating %s.R: %s"
+msgstr ""
+
+msgid "The template rendered empty content."
+msgstr ""
+
+msgid "\\nOriginal template:"
+msgstr ""
+
+msgid "\\nTemplate data:"
+msgstr ""
+
+msgid "%s.R already exists and will not be overwritten."
+msgstr ""
+
+msgid "The ZIP archive does not contain a DESCRIPTION file: "
+msgstr ""
+
+msgid "Unsupported archive format: "
+msgstr ""
+
+msgid "Installed local package: "
+msgstr ""
+
+msgid "Packages that failed: "
+msgstr ""
+
+msgid "Packages skipped by the offline policy: "
+msgstr ""
+
+msgid "'path' must be one non-empty character string."
+msgstr ""
+
+msgid "Only read-only scanning is supported; 'dry_run' must remain TRUE."
+msgstr ""
+
+msgid "Artifact does not exist: "
+msgstr ""
+
+msgid "Unsupported artifact type: "
+msgstr ""
+
+msgid "No DESCRIPTION found in source directory: "
+msgstr ""
+
+msgid "Refusing to scan symbolic links in the source R directory."
+msgstr ""
+
+msgid "Archive contains unsafe absolute or parent-traversal paths: "
+msgstr ""
+
+msgid "Refusing to scan an archive containing symbolic links."
+msgstr ""
+
+msgid "No DESCRIPTION found in source archive."
+msgstr ""
+
+msgid "Source archive has multiple candidate package roots."
+msgstr ""
+
+msgid "Installed package has no valid Package field."
+msgstr ""
+
+msgid "Could not identify the installed lazy-load database."
+msgstr ""
+
