@@ -40,7 +40,7 @@ jobs:
       - uses: r-lib/actions/setup-tinytex@v2
 
       - name: Install LaTeX packages required by the PDF manual
-        run: tlmgr install makeindex texinfo
+        run: Rscript -e "tinytex::tlmgr_install(c('makeindex', 'texinfo'))"
         shell: bash
 
       - name: Generate Spanish locale for gettext tests
