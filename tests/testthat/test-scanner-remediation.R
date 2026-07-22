@@ -1,15 +1,4 @@
-if (!exists("scan_bigbang_artifact", mode = "function")) {
-  sys.source(
-    file.path(testthat::test_path(), "..", "..", "R", "crear_meta_paquete_local.R"),
-    envir = globalenv()
-  )
-  sys.source(
-    file.path(testthat::test_path(), "..", "..", "R", "scan_bigbang_artifact.R"),
-    envir = globalenv()
-  )
-}
-
-crear_fuente_toxica_inerte <- function(root, cleanup = TRUE) {
+make_inert_vulnerable_source <- function(root, cleanup = TRUE) {
   pkg <- file.path(root, "toxicmeta")
   dir.create(file.path(pkg, "R"), recursive = TRUE)
   writeLines(c(
@@ -35,10 +24,10 @@ crear_fuente_toxica_inerte <- function(root, cleanup = TRUE) {
   pkg
 }
 
-test_that("scanner detecta V1/V2/V3/V7 en fuente y tarball sin ejecutar código", {
+test_that("scanner detects V1/V2/V3/V7 in sources and tarballs without execution", {
   root <- tempfile("scanner-source-")
   dir.create(root)
-  pkg <- crear_fuente_toxica_inerte(root)
+  pkg <- make_inert_vulnerable_source(root)
   sentinel <- file.path(root, "sentinel.txt")
   writeLines("vive", sentinel)
 
@@ -60,21 +49,21 @@ test_that("scanner detecta V1/V2/V3/V7 en fuente y tarball sin ejecutar código"
   expect_error(scan_bigbang_artifact(pkg, dry_run = FALSE), "read-only")
 })
 
-test_that("scanner de instalación lazy-load no carga ni adjunta el paquete", {
+test_that("installed lazy-load scanning neither loads nor attaches the package", {
   root <- tempfile("scanner-installed-")
   dir.create(root)
-  pkg <- crear_fuente_toxica_inerte(root, cleanup = FALSE)
+  pkg <- make_inert_vulnerable_source(root, cleanup = FALSE)
   lib <- file.path(root, "lib")
   dir.create(lib)
   r_bin <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R")
-  salida <- withr::with_dir(root, system2(
+  output <- withr::with_dir(root, system2(
     r_bin,
     c("CMD", "INSTALL", paste0("--library=", shQuote(lib)), shQuote(pkg)),
     stdout = TRUE, stderr = TRUE
   ))
-  status <- attr(salida, "status")
+  status <- attr(output, "status")
   if (is.null(status)) status <- 0L
-  expect_equal(status, 0L, info = paste(salida, collapse = "\n"))
+  expect_equal(status, 0L, info = paste(output, collapse = "\n"))
 
   namespaces_antes <- loadedNamespaces()
   search_antes <- search()
@@ -111,15 +100,15 @@ test_that("artefactos nuevos quedan limpios y llevan procedencia", {
   withr::with_dir(src, utils::tar(
     file.path(archives, "aaa_0.1.0.tar.gz"), "aaa", compression = "gzip"
   ))
-  suppressMessages(crear_meta_paquete_local(
-    "miverso", "aaa_0.1.0", archives,
-    ruta_destino = dest,
-    generar_documentacion = FALSE,
-    mostrar_progreso = FALSE,
-    deps_forzar = character()
+  suppressMessages(create_metapackage(
+    "scanverse", "aaa_0.1.0", archives,
+    dest_dir = dest,
+    document = FALSE,
+    verbose = FALSE,
+    force_deps = character()
   ))
 
-  result <- scan_bigbang_artifact(file.path(dest, "miverso"))
+  result <- scan_bigbang_artifact(file.path(dest, "scanverse"))
   expect_false(result$vulnerable)
   expect_length(result$signatures, 0L)
   expect_identical(

@@ -35,7 +35,7 @@ lint, spelling, and coverage checks:
 ```sh
 export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH"
 Rscript --vanilla -e 'devtools::test(reporter = "summary")'
-Rscript --vanilla tests/regresion/verificar_fix_borrado.R
+Rscript --vanilla tests/integration/data-loss-verification.R
 Rscript --vanilla -e 'print(lintr::lint_package())'
 Rscript --vanilla -e 'spelling::spell_check_package(".", vignettes = FALSE)'
 Rscript --vanilla -e 'print(covr::package_coverage(quiet = FALSE))'

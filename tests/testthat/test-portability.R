@@ -1,11 +1,3 @@
-if (!exists("install_loc_pkg_w_dep", mode = "function")) {
-  root <- file.path(testthat::test_path(), "..", "..")
-  if (!exists("safe_unlink", mode = "function")) {
-    sys.source(file.path(root, "R", "crear_meta_paquete_local.R"), envir = globalenv())
-  }
-  sys.source(file.path(root, "R", "install_loc_pkg_w_dep.R"), envir = globalenv())
-}
-
 make_portability_package <- function(name, root, imports = NULL) {
   pkg <- file.path(root, name)
   dir.create(file.path(pkg, "R"), recursive = TRUE)
@@ -52,12 +44,12 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
   ))
 
   withr::with_locale(c(LC_CTYPE = "C"), suppressMessages(
-    crear_meta_paquete_local(
+    create_metapackage(
       "portablemeta", "mi.pkg_0.1.0", archives,
-      ruta_destino = destination,
-      generar_documentacion = FALSE,
-      mostrar_progreso = FALSE,
-      descripcion = "Metapaquete con acentos: gestión, instalación y análisis."
+      dest_dir = destination,
+      document = FALSE,
+      verbose = FALSE,
+      description = "Metapackage with UTF-8 text: café, jalapeño, naïve."
     )
   ))
   project <- file.path(destination, "portablemeta")
@@ -82,7 +74,11 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
 
   attach_env <- new.env(parent = baseenv())
   sys.source(file.path(project, "R", "attach.R"), envir = attach_env)
-  install_default <- formals(attach_env$portablemeta_install)$ruta_instalables
+  expect_named(
+    formals(attach_env$portablemeta_install),
+    c("pkg_dir", "ext", "cran_deps", "repos", "verbose")
+  )
+  install_default <- formals(attach_env$portablemeta_install)$pkg_dir
   expect_identical(eval(install_default), archives)
 })
 
@@ -107,10 +103,10 @@ test_that("ZIP content distinguishes source archives from Windows binaries", {
   old_libs <- .libPaths()
   on.exit(.libPaths(old_libs), add = TRUE)
   .libPaths(c(test_lib, old_libs))
-  source_result <- suppressMessages(install_loc_pkg_w_dep(
+  source_result <- suppressMessages(install_local_pkg(
     "ziplv_0.1.0", archives, ext = ".zip", cran_deps = "skip"
   ))
-  expect_named(source_result$instalados, "ziplv_0.1.0")
+  expect_named(source_result$installed, "ziplv_0.1.0")
   expect_true(requireNamespace("ziplv", quietly = TRUE))
 
   binary_root <- file.path(sandbox, "binary")
@@ -139,10 +135,10 @@ test_that("offline skip never calls install.packages for missing CRAN dependenci
     files = "offlinelv", compression = "gzip"
   ))
 
-  result <- install_loc_pkg_w_dep(
+  result <- install_local_pkg(
     "offlinelv_0.1.0", archives, cran_deps = "skip", repos = NULL
   )
-  expect_length(result$fallidos, 0L)
-  expect_named(result$omitidos, "offlinelv_0.1.0")
+  expect_length(result$failed, 0L)
+  expect_named(result$skipped, "offlinelv_0.1.0")
   expect_false(requireNamespace("offlinelv", quietly = TRUE))
 })

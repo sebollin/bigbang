@@ -1,31 +1,20 @@
-test_that("install_loc_pkg_w_dep limpia su temporal aun si sale antes", {
-  if (!exists("install_loc_pkg_w_dep", mode = "function")) {
-    sys.source(
-      file.path(testthat::test_path(), "..", "..", "R", "crear_meta_paquete_local.R"),
-      envir = globalenv()
-    )
-    sys.source(
-      file.path(testthat::test_path(), "..", "..", "R", "install_loc_pkg_w_dep.R"),
-      envir = globalenv()
-    )
-  }
-
+test_that("install_local_pkg removes its temporary directory after early exit", {
   sandbox <- tempfile("install-helper-")
   dir.create(sandbox)
-  contenido <- file.path(sandbox, "contenido")
-  dir.create(contenido)
-  writeLines("sin DESCRIPTION", file.path(contenido, "archivo.txt"))
-  withr::with_dir(contenido, utils::tar(
+  content <- file.path(sandbox, "content")
+  dir.create(content)
+  writeLines("missing DESCRIPTION", file.path(content, "file.txt"))
+  withr::with_dir(content, utils::tar(
     file.path(sandbox, "roto_0.1.0.tar.gz"),
-    files = "archivo.txt", compression = "gzip"
+    files = "file.txt", compression = "gzip"
   ))
 
-  antes <- list.dirs(tempdir(), recursive = FALSE, full.names = TRUE)
-  result <- install_loc_pkg_w_dep("roto_0.1.0", sandbox)
-  expect_named(result$fallidos, "roto_0.1.0")
-  expect_match(result$fallidos[[1L]], "Expected one DESCRIPTION")
-  despues <- list.dirs(tempdir(), recursive = FALSE, full.names = TRUE)
-  expect_setequal(despues, antes)
+  before <- list.dirs(tempdir(), recursive = FALSE, full.names = TRUE)
+  result <- install_local_pkg("roto_0.1.0", sandbox)
+  expect_named(result$failed, "roto_0.1.0")
+  expect_match(result$failed[[1L]], "Expected one DESCRIPTION")
+  after <- list.dirs(tempdir(), recursive = FALSE, full.names = TRUE)
+  expect_setequal(after, before)
 })
 
 test_that("install_local_pkg reports a missing archive without side effects", {

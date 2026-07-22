@@ -44,15 +44,13 @@ install_local_pkg <- function(
   verbose = getOption("bigbang.verbose", interactive())
 ) {
   cran_deps <- match.arg(cran_deps)
-  nombre_paquete <- package
-  ruta_instalables <- pkg_dir
   state <- new.env(parent = emptyenv())
   state$installed <- list()
   state$failed <- list()
   state$skipped <- list()
   state$visiting <- character()
 
-  archive_names <- list.files(ruta_instalables)
+  archive_names <- list.files(pkg_dir)
   archive_names <- archive_names[endsWith(archive_names, ext)]
   local_stems <- substr(archive_names, 1L, nchar(archive_names) - nchar(ext))
   local_base_names <- sub("_.*", "", local_stems)
@@ -60,7 +58,7 @@ install_local_pkg <- function(
   install_one <- function(stem) {
     base_name <- sub("_.*", "", stem)
     version_text <- sub("^[^_]+_", "", stem)
-    archive <- file.path(ruta_instalables, paste0(stem, ext))
+    archive <- file.path(pkg_dir, paste0(stem, ext))
 
     if (base_name %in% state$visiting) {
       state$failed[[stem]] <- "Circular local dependency"
@@ -209,7 +207,7 @@ install_local_pkg <- function(
     TRUE
   }
 
-  install_one(nombre_paquete)
+  install_one(package)
   if (isTRUE(verbose) && length(state$failed) > 0L) {
     message("Packages that failed: ", paste(names(state$failed), collapse = ", "),
             domain = "R-bigbang")

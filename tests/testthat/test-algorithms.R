@@ -49,23 +49,35 @@ test_that("dependency classification recognizes versioned local archives", {
   archives <- tempfile("bigbang-classification-")
   dir.create(archives)
   file.create(file.path(archives, c("mi.pkg_0.1.0.tar.gz", "localb_2.0.0.tar.gz")))
-  result <- clasificar_dependencias(
+  result <- classify_dependencies(
     c("mi.pkg", "localb", "stats", "mi.pkg_0.1.0"), archives, ".tar.gz"
   )
-  expect_setequal(result$locales, c("mi.pkg", "localb", "mi.pkg_0.1.0"))
+  expect_setequal(result$local, c("mi.pkg", "localb", "mi.pkg_0.1.0"))
   expect_identical(result$cran, "stats")
 })
 
 test_that("generated graph and topological sort put dependencies first", {
   fixture <- algorithm_fixture()
   packages <- paste0(c("grapha", "graphb", "graphc"), "_0.1.0")
-  graph <- fixture$env$crear_grafo_dependencias(
+  graph <- fixture$env$build_dependency_graph(
     packages, fixture$archives, ".tar.gz"
   )
+  expect_true(exists("install_local_archive", envir = fixture$env, inherits = FALSE))
+  expect_false(exists("install_loc_pkg_w_dep", envir = fixture$env, inherits = FALSE))
   expect_identical(unname(graph[1L, ]), c(0, 1, 0))
   expect_identical(unname(graph[2L, ]), c(0, 0, 1))
-  order <- fixture$env$ordenamiento_topologico(graph)
+  order <- fixture$env$topological_order(graph)
   expect_identical(packages[order], rev(packages))
+})
+
+test_that("generator internals use the English names", {
+  namespace <- asNamespace("bigbang")
+  expected <- c(
+    "extract_dependencies", "classify_dependencies",
+    "detect_implicit_dependencies", "write_reexports_file",
+    "write_basic_vignette", "write_metapackage_files"
+  )
+  expect_true(all(vapply(expected, exists, logical(1), envir = namespace, inherits = FALSE)))
 })
 
 test_that("generated cycle detection reports a cycle", {

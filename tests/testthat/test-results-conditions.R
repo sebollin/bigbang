@@ -1,14 +1,3 @@
-root <- file.path(testthat::test_path(), "..", "..")
-if (!exists("create_metapackage", mode = "function")) {
-  sys.source(file.path(root, "R", "crear_meta_paquete_local.R"), envir = globalenv())
-}
-if (!exists("scan_bigbang_artifact", mode = "function")) {
-  sys.source(file.path(root, "R", "scan_bigbang_artifact.R"), envir = globalenv())
-}
-if (!exists("print.bigbang_artifact_scan", mode = "function")) {
-  sys.source(file.path(root, "R", "results.R"), envir = globalenv())
-}
-
 test_that("generation returns a classified result and non-empty destinations are typed", {
   sandbox <- tempfile("bigbang-result-sandbox-")
   sources <- file.path(sandbox, "sources")
@@ -55,7 +44,7 @@ test_that("generation returns a classified result and non-empty destinations are
     if (startsWith(nombre_paquete, "aaa_")) "bbb" else "aaa"
   }
   expect_error(
-    emitted$crear_grafo_dependencias(
+    emitted$build_dependency_graph(
       c("aaa_0.1.0", "bbb_0.1.0"), archives, ".tar.gz"
     ),
     class = "bigbang_error_cycle"

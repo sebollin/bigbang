@@ -1,3 +1,5 @@
+# Translation keys and values must remain exact, so wrapping them would reduce
+# catalog auditability. # nolint start: line_length_linter
 .bigbang_spanish_catalog <- function() {
   c(
     "'name' must be one character string" = "'name' debe ser una cadena de caracteres",
@@ -139,7 +141,7 @@
       "Installation failed for %s: %s",
       "Installation complete.",
       "Included packages:",
-      "Circular dependencies detected (Dependencias circulares): %s. A clean installation has no valid topological order.",
+      "Circular dependencies detected: %s. A clean installation has no valid topological order.",
       sprintf("Not installed: %%s. Run %s_install() to install them.", name),
       "Could not install all components: %s",
       "Some components were skipped because non-local dependencies are missing: %s",
@@ -157,3 +159,4 @@
     )
   )
 }
+# nolint end
