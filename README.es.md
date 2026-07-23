@@ -5,7 +5,7 @@
 [![R-CMD-check](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml)
 [![CRAN status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.org/package=bigbang)
 [![Licencia: GPL v3](https://img.shields.io/badge/licencia-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![docs: English](https://img.shields.io/badge/docs-English-0D9786.svg)](README.md)
+[![docs: English](https://img.shields.io/badge/docs-English-0D9786.svg)](https://github.com/sebollin/bigbang/blob/main/README.md)
 
 **bigbang** construye metapaquetes estilo tidyverse a partir de archivos locales.
 Todo metapaquete termina en *-verse*—`tidyverse`, `tuequipoverse`, el tuyo. Este
@@ -134,7 +134,7 @@ ruta nueva y vacía. Nunca regenere in-place una fuente no clasificada.
 
 Los aportes son bienvenidos: reportes de errores e ideas en
 [issues](https://github.com/sebollin/bigbang/issues), y pull requests siguiendo
-[CONTRIBUTING.md](CONTRIBUTING.md). El paquete busca mantenerse chico y
+[CONTRIBUTING.md](https://github.com/sebollin/bigbang/blob/main/CONTRIBUTING.md). El paquete busca mantenerse chico y
 enfocado — ver *Diferencias con otras herramientas* para lo que queda
 deliberadamente fuera de alcance.
 

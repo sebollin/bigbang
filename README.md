@@ -6,7 +6,7 @@
 [![CRAN status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.org/package=bigbang)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-8AB46A.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![docs: español](https://img.shields.io/badge/docs-espa%C3%B1ol-0D9786.svg)](README.es.md)
+[![docs: español](https://img.shields.io/badge/docs-espa%C3%B1ol-0D9786.svg)](https://github.com/sebollin/bigbang/blob/main/README.es.md)
 
 **bigbang** builds tidyverse-style metapackages from local package archives.
 Every metapackage ends in *-verse*—`tidyverse`, `teamverse`, yours. This package
@@ -131,7 +131,7 @@ Sys.setLanguage("es")  # R >= 4.2
 
 On earlier R versions, set `LANGUAGE=es` before starting R. A complete Spanish
 guide is available in `vignette("bigbang-es", package = "bigbang")` and
-as [README.es.md](README.es.md). Rd help remains English because R has no stable
+as [README.es.md](https://github.com/sebollin/bigbang/blob/main/README.es.md). Rd help remains English because R has no stable
 native mechanism for translated help; a separate `bigbang.es` module can be
 considered if `rhelpi18n` becomes production-ready and reaches CRAN.
 
@@ -171,7 +171,7 @@ place. The full remediation procedure is documented in the Spanish guide and in
 
 Contributions are welcome: bug reports and feature ideas through
 [issues](https://github.com/sebollin/bigbang/issues), and pull requests
-following [CONTRIBUTING.md](CONTRIBUTING.md) (spelling, lint, and test
+following [CONTRIBUTING.md](https://github.com/sebollin/bigbang/blob/main/CONTRIBUTING.md) (spelling, lint, and test
 expectations are documented there). The package aims to stay small and
 focused — see *Choosing the right tool* above for what deliberately stays
 out of scope.

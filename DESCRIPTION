@@ -1,6 +1,6 @@
 Package: bigbang
 Type: Package
-Title: Build Tidyverse-Style Meta-Packages from Local Package Files
+Title: Build 'Tidyverse'-Style Meta-Packages from Local Package Files
 Version: 0.1.0
 Authors@R: c(
     person(given = "Sebastian",
