@@ -183,8 +183,8 @@ citation("bigbang")
 ```
 
 ```bibtex
-@Misc{bigbang2026,
-  title  = {bigbang: Build Tidyverse-Style Meta-Packages from Local Package Files},
+@Manual{bigbang2026,
+  title  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},
   author = {Sebastian Lucas},
   note   = {R package version 0.1.0},
   year   = {2026},

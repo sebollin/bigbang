@@ -12,6 +12,7 @@ knitr
 lazydb
 Lifecycle
 macOS
+md
 metapackage
 metapackages
 NAMESPACE
@@ -19,6 +20,7 @@ oldrel
 pkgdown
 pre
 repos
+README
 rhelpi18n
 rmarkdown
 runtime
