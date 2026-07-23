@@ -1,6 +1,11 @@
-# bigbang — create custom R metapackages from local packages
+# bigbang <img src="man/figures/logo.png" align="right" height="200" alt="logo de bigbang" />
 
-<img src="man/figures/logo.png" align="right" height="139" alt="logo de bigbang" />
+> **Creá tus propios metapaquetes de R a partir de paquetes locales.**
+
+[![R-CMD-check](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml)
+[![CRAN status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.org/package=bigbang)
+[![Licencia: GPL v3](https://img.shields.io/badge/licencia-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![docs: English](https://img.shields.io/badge/docs-English-0D9786.svg)](README.md)
 
 **bigbang** construye metapaquetes estilo tidyverse a partir de archivos locales.
 Todo metapaquete termina en *-verse*—`tidyverse`, `tuequipoverse`, el tuyo. Este
