@@ -35,7 +35,24 @@ The generated package has two separate jobs:
 
 ## 🚀 Installation
 
-During development, install the source checkout with:
+Once on CRAN, the stable version will install with:
+
+```r
+install.packages("bigbang")
+```
+
+The development version is on GitHub:
+
+```r
+# install.packages("pak")
+pak::pak("sebollin/bigbang")
+
+# or
+remotes::install_github("sebollin/bigbang")
+```
+
+And true to the package's offline spirit, a local source checkout installs
+without any network at all:
 
 ```r
 install.packages("path/to/bigbang", repos = NULL, type = "source")
@@ -149,6 +166,31 @@ If `scan$vulnerable` is true, quarantine the artifact and generate a new version
 in a new, empty destination. Never regenerate an unclassified source tree in
 place. The full remediation procedure is documented in the Spanish guide and in
 `RELEASE.md`.
+
+## 🤝 Contributing
+
+Contributions are welcome: bug reports and feature ideas through
+[issues](https://github.com/sebollin/bigbang/issues), and pull requests
+following [CONTRIBUTING.md](CONTRIBUTING.md) (spelling, lint, and test
+expectations are documented there). The package aims to stay small and
+focused — see *Choosing the right tool* above for what deliberately stays
+out of scope.
+
+## 📖 Citation
+
+```r
+citation("bigbang")
+```
+
+```bibtex
+@Misc{bigbang2026,
+  title  = {bigbang: Build Tidyverse-Style Meta-Packages from Local Package Files},
+  author = {Sebastian Lucas},
+  note   = {R package version 0.1.0},
+  year   = {2026},
+  url    = {https://github.com/sebollin/bigbang},
+}
+```
 
 ## 🔬 Development status
 

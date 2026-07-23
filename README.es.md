@@ -23,7 +23,32 @@ La arquitectura separa dos acciones:
 
 Los hooks de inicio nunca instalan paquetes ni eliminan archivos.
 
-## Uso rápido
+## 🚀 Instalación
+
+Cuando esté en CRAN, la versión estable se instalará con:
+
+```r
+install.packages("bigbang")
+```
+
+La versión de desarrollo está en GitHub:
+
+```r
+# install.packages("pak")
+pak::pak("sebollin/bigbang")
+
+# o bien
+remotes::install_github("sebollin/bigbang")
+```
+
+Y fiel al espíritu offline del paquete, una copia local de la fuente se
+instala sin red:
+
+```r
+install.packages("ruta/a/bigbang", repos = NULL, type = "source")
+```
+
+## ⚡ Uso rápido
 
 Si `archivos/` contiene `datos_1.2.0.tar.gz` y `reportes_0.9.1.tar.gz`:
 
@@ -51,7 +76,7 @@ equipoverse_install(cran_deps = "skip")
 una dependencia no local; `"install"` permite instalar desde un `repos`
 configurado explícitamente.
 
-## API
+## 🧰 API
 
 - `create_metapackage()` crea la fuente completa del metapaquete.
 - `install_local_pkg()` instala un archivo local y sus dependencias.
@@ -61,14 +86,14 @@ configurado explícitamente.
 Los nombres españoles anteriores siguen disponibles como aliases deprecados de
 transición. La API canónica usa inglés snake_case.
 
-## ZIP y portabilidad
+## 🗜️ ZIP y portabilidad
 
 Un ZIP con `Meta/package.rds` es un binario de Windows y solo se instala en
 Windows con `type = "win.binary"`. Los demás ZIP con DESCRIPTION se extraen a un
 temporal propio y se instalan como fuente. Todo texto generado se escribe en
 UTF-8 explícito y el CI incluye Linux, Windows y macOS.
 
-## Idioma
+## 🌎 Idioma
 
 El inglés es el idioma fuente del código, la ayuda y los mensajes. Los mensajes
 tienen traducción completa al español mediante gettext. En R 4.2 o posterior:
@@ -82,7 +107,7 @@ está en `vignette("bigbang-es", package = "bigbang")`. Cuando `rhelpi18n`
 madure y llegue a CRAN se podrá evaluar un módulo separado `bigbang.es` para la
 ayuda interactiva.
 
-## Diferencias con otras herramientas
+## 🧭 Diferencias con otras herramientas
 
 `bigbang` distribuye una selección fija de archivos mediante un metapaquete.
 `miniCRAN` y `drat` son preferibles cuando se necesita un repositorio convencional
@@ -90,7 +115,7 @@ con índices, varias versiones y semántica de repositorio. `pkgverse` cubre el 
 más pequeño de agrupar paquetes disponibles desde repositorios, sin el instalador
 offline de archivos locales de `bigbang`.
 
-## Seguridad y artefactos antiguos
+## 🛡️ Seguridad y artefactos antiguos
 
 Un antecesor no publicado emitía limpieza relativa al directorio de trabajo y
 podía eliminar carpetas con nombres de componentes. Esas rutas fueron retiradas y
@@ -104,3 +129,27 @@ scan_bigbang_artifact("ruta/al/artefacto", dry_run = TRUE)
 
 Si resulta vulnerable, póngala en cuarentena y genere una versión nueva en una
 ruta nueva y vacía. Nunca regenere in-place una fuente no clasificada.
+
+## 🤝 Aportes de la comunidad
+
+Los aportes son bienvenidos: reportes de errores e ideas en
+[issues](https://github.com/sebollin/bigbang/issues), y pull requests siguiendo
+[CONTRIBUTING.md](CONTRIBUTING.md). El paquete busca mantenerse chico y
+enfocado — ver *Diferencias con otras herramientas* para lo que queda
+deliberadamente fuera de alcance.
+
+## 📖 Citar el paquete
+
+```r
+citation("bigbang")
+```
+
+```bibtex
+@Misc{bigbang2026,
+  title  = {bigbang: Build Tidyverse-Style Meta-Packages from Local Package Files},
+  author = {Sebastian Lucas},
+  note   = {R package version 0.1.0},
+  year   = {2026},
+  url    = {https://github.com/sebollin/bigbang},
+}
+```
