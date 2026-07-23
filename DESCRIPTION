@@ -20,6 +20,8 @@ Description: Creates meta-packages (in the style of the 'tidyverse') from
     by scanning source code, and generates the full meta-package scaffold
     including re-exports, vignettes and documentation.
 License: GPL (>= 3)
+URL: https://github.com/sebollin/bigbang
+BugReports: https://github.com/sebollin/bigbang/issues
 Encoding: UTF-8
 Language: en
 Roxygen: list(markdown = TRUE)

@@ -1,8 +1,4 @@
-# bigbang — create custom R metapackages from local packages
-
-<!-- Logo in design:
-<img src="man/figures/logo.png" align="right" height="139" alt="bigbang logo" />
--->
+# bigbang — create custom R metapackages from local packages <img src="man/figures/logo.png" align="right" height="139" alt="bigbang logo" />
 
 **bigbang** builds tidyverse-style metapackages from local package archives.
 Every metapackage ends in *-verse*—`tidyverse`, `teamverse`, yours. This package
