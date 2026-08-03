@@ -130,6 +130,16 @@ scan_bigbang_artifact("ruta/al/artefacto", dry_run = TRUE)
 Si resulta vulnerable, póngala en cuarentena y genere una versión nueva en una
 ruta nueva y vacía. Nunca regenere in-place una fuente no clasificada.
 
+## 🙏 Agradecimientos
+
+bigbang nació de una sugerencia de
+[Richard Detomasi](https://github.com/RichDeto), quien propuso construir una
+herramienta de metapaquetes y señaló
+[pegeler/metapackage](https://github.com/pegeler/metapackage) como antecedente.
+El diseño y la implementación —incluida la resolución de dependencias mediante
+grafos— son de Sebastián Lucas. El logo hexagonal fue creado con
+[hexSticker](https://github.com/GuangchuangYu/hexSticker).
+
 ## 🤝 Aportes de la comunidad
 
 Los aportes son bienvenidos: reportes de errores e ideas en

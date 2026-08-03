@@ -10,7 +10,7 @@ crear_meta_paquete_local(
   ruta_instalables,
   ext = ".tar.gz",
   version = "0.1.0",
-  ruta_destino = NULL,
+  ruta_destino,
   reexportar_funciones = FALSE,
   generar_documentacion = TRUE,
   mostrar_progreso = TRUE,

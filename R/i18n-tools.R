@@ -48,7 +48,15 @@
   )
   ids <- c("", enc2utf8(messages))
   values <- c(header, enc2utf8(unname(translations[messages])))
-  ordering <- order(ids)
+  # GNU MO readers use bytewise binary search over msgids. R's default
+  # character ordering follows LC_COLLATE, so sort hexadecimal UTF-8 bytes to
+  # make the catalog independent of the locale used during generation.
+  byte_keys <- vapply(
+    ids,
+    function(id) paste(sprintf("%02x", as.integer(charToRaw(id))), collapse = ""),
+    character(1L)
+  )
+  ordering <- order(byte_keys, method = "radix")
   ids <- ids[ordering]
   values <- values[ordering]
   id_raw <- lapply(ids, charToRaw)

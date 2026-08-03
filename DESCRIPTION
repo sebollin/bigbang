@@ -10,7 +10,10 @@ Authors@R: c(
     person(given = "Richard",
            family = "Detomasi",
            role = "ctb",
-           email = "rdetomasi@mides.gub.uy"))
+           email = "richard.detomasi@gmail.com",
+           comment = c(
+               ORCID = "0000-0002-6725-0261",
+               "Suggested the initial idea of a metapackage builder")))
 Description: Creates meta-packages (in the style of the 'tidyverse') from
     locally stored package archives (.tar.gz, .zip). Designed for teams
     working behind institutional firewalls without access to package

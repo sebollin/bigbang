@@ -35,12 +35,11 @@ such as "there is no package called 'Matrix'" even when the package does not
 appear to use it directly.
 }
 \examples{
-\dontrun{
+archives <- system.file("extdata", package = "bigbang")
 res <- diagnose_dependencies(
-  packages = c("conexiones_0.8.3", "utiles_1.4"),
-  pkg_dir = "path/to/local/archives"
+  packages = "toycomponent_0.1.0",
+  pkg_dir = archives
 )
-res[["conexiones_0.8.3"]]
+res[["toycomponent_0.1.0"]]
 lapply(res, function(x) x$matrix_refs)
-}
 }

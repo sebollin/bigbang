@@ -50,6 +50,7 @@ test_that("scanner detects V1/V2/V3/V7 in sources and tarballs without execution
 })
 
 test_that("installed lazy-load scanning neither loads nor attaches the package", {
+  skip_on_cran()
   root <- tempfile("scanner-installed-")
   dir.create(root)
   pkg <- make_inert_vulnerable_source(root, cleanup = FALSE)

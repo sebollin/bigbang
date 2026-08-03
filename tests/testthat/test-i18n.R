@@ -34,11 +34,16 @@ translate_from_catalog <- function(domain, bind_dir, message) {
 }
 
 test_that("the bigbang runtime catalog translates messages to Spanish", {
+  source_catalog <- file.path(
+    testthat::test_path(), "..", "..", "inst", "po", "es", "LC_MESSAGES",
+    "R-bigbang.mo"
+  )
   installed_catalog <- system.file(
     "po", "es", "LC_MESSAGES", "R-bigbang.mo", package = "bigbang"
   )
-  bind_dir <- if (nzchar(installed_catalog)) {
-    dirname(dirname(dirname(installed_catalog)))
+  catalog <- if (file.exists(source_catalog)) source_catalog else installed_catalog
+  bind_dir <- if (nzchar(catalog)) {
+    dirname(dirname(dirname(catalog)))
   } else {
     normalizePath(file.path(testthat::test_path(), "..", "..", "inst", "po"))
   }
@@ -48,6 +53,21 @@ test_that("the bigbang runtime catalog translates messages to Spanish", {
   expect_identical(
     tail(output, 1L),
     "El directorio indicado por 'pkg_dir' no existe"
+  )
+
+  destination_message <- paste0(
+    "'dest_dir' must be supplied as one non-empty path: the meta-package is ",
+    "written inside it. Use tempdir() for disposable output."
+  )
+  destination_output <- translate_from_catalog(
+    "R-bigbang", bind_dir, destination_message
+  )
+  expect_identical(
+    tail(destination_output, 1L),
+    paste0(
+      "'dest_dir' debe proporcionarse como una ruta no vacía: el metapaquete ",
+      "se escribe dentro de ella. Use tempdir() para una salida descartable."
+    )
   )
 })
 

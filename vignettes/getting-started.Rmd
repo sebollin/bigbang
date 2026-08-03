@@ -92,3 +92,7 @@ toyverse_install(cran_deps = "skip")
 
 `cran_deps = "skip"` is the offline default. Choose `"error"` for strict
 offline validation or `"install"` only when an explicit repository is available.
+
+```{r cleanup, include = FALSE}
+unlink(root, recursive = TRUE)
+```

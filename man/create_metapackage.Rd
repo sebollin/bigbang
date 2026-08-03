@@ -10,7 +10,7 @@ create_metapackage(
   pkg_dir,
   ext = ".tar.gz",
   version = "0.1.0",
-  dest_dir = NULL,
+  dest_dir,
   reexport = FALSE,
   document = TRUE,
   verbose = getOption("bigbang.verbose", interactive()),
@@ -40,8 +40,9 @@ packages to include, e.g. \code{"myPackage_1.0.0"}.}
 
 \item{version}{Character. Version of the meta-package. Defaults to \code{"0.1.0"}.}
 
-\item{dest_dir}{Character. Directory in which to create the meta-package.
-If \code{NULL}, it is created in the current directory under the meta-package name.}
+\item{dest_dir}{Character. Required destination directory. The function writes
+the generated meta-package exclusively inside this directory; there is no
+default path. Use \code{tempdir()} for disposable output.}
 
 \item{reexport}{Logical. If \code{TRUE}, re-exports the component packages'
 functions so they are reachable directly through the meta-package (tidyverse
@@ -107,11 +108,18 @@ that are already installed and reports which ones are missing, but does not
 install anything or delete any files. To install the components from the local
 archives, the user calls \verb{<meta>_install()}. Installation resolves dependencies
 with a graph-based topological ordering that also detects circular dependencies.
+}
+\section{Component installation}{
+
+The generated meta-package installs component packages only when the user
+explicitly calls \verb{<meta>_install()}. Loading it with \code{library()} never installs
+packages. By default, the generated installer does not access a repository.
 
 If \code{reexport = TRUE}, a \code{reexports.R} file is generated so users can
 reach the component functions directly through the meta-package
 (\code{meta::fun()} instead of \code{component::fun()}), tidyverse style.
 }
+
 \section{Requirements}{
 
 \itemize{
@@ -122,22 +130,21 @@ reach the component functions directly through the meta-package
 }
 
 \examples{
-\dontrun{
-# Basic: a meta-package with two local packages
-create_metapackage(
-  name = "MyMeta",
-  packages = c("pkg1_1.0.0", "pkg2_0.8.3"),
-  pkg_dir = "path/to/archives"
-)
+archives <- system.file("extdata", package = "bigbang")
+destination <- tempfile("bigbang-example-")
+dir.create(destination)
 
-# Advanced: with re-exports and custom dependencies
-create_metapackage(
-  name = "AnalyticsMeta",
-  packages = c("myStats_1.2.0", "myPlots_0.9.1"),
-  pkg_dir = "path/to/archives",
-  reexport = TRUE,
-  additional_deps = c("ggplot2", "dplyr"),
-  import_deps = c("data.table", "purrr", "tibble")
+result <- create_metapackage(
+  name = "toyverse",
+  packages = "toycomponent_0.1.0",
+  pkg_dir = archives,
+  dest_dir = destination,
+  document = FALSE,
+  verbose = FALSE,
+  import_deps = character(),
+  force_deps = character()
 )
-}
+list.files(result$path)
+
+unlink(destination, recursive = TRUE)
 }

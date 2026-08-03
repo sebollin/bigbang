@@ -166,6 +166,7 @@ make_functional_sandbox <- function() {
 }
 
 test_that("_install installs each component once in dependency order and attaches it", {
+  skip_on_cran()
   s <- make_functional_sandbox()
   old_libs <- .libPaths()
   on.exit(.libPaths(old_libs), add = TRUE)
@@ -217,6 +218,7 @@ test_that("_install installs each component once in dependency order and attache
 })
 
 test_that("R CMD INSTALL preserves decoys inside the source tree", {
+  skip_on_cran()
   s <- generate_in_sandbox()
   internal_decoys <- c("aaa", "bbb", "tmpcomponent", "doc", "Meta", "libs")
   for (d in internal_decoys) {

@@ -1,3 +1,26 @@
+test_that("generation requires an explicit destination without writing to cwd", {
+  sandbox <- tempfile("bigbang-required-destination-")
+  dir.create(sandbox)
+
+  withr::with_dir(sandbox, {
+    expect_error(
+      create_metapackage(
+        "missingdest", "toycomponent_0.1.0", tempdir(),
+        document = FALSE, verbose = FALSE
+      ),
+      "'dest_dir' must be supplied"
+    )
+    expect_error(
+      crear_meta_paquete_local(
+        "missingdest", "toycomponent_0.1.0", tempdir(),
+        generar_documentacion = FALSE, mostrar_progreso = FALSE
+      ),
+      "'dest_dir' must be supplied"
+    )
+    expect_length(list.files(sandbox, all.files = TRUE, no.. = TRUE), 0L)
+  })
+})
+
 test_that("generation returns a classified result and non-empty destinations are typed", {
   sandbox <- tempfile("bigbang-result-sandbox-")
   sources <- file.path(sandbox, "sources")

@@ -113,14 +113,13 @@ classify_dependencies <- function(dependencies, pkg_dir, ext = ".tar.gz") {
 #' appear to use it directly.
 #'
 #' @examples
-#' \dontrun{
+#' archives <- system.file("extdata", package = "bigbang")
 #' res <- diagnose_dependencies(
-#'   packages = c("conexiones_0.8.3", "utiles_1.4"),
-#'   pkg_dir = "path/to/local/archives"
+#'   packages = "toycomponent_0.1.0",
+#'   pkg_dir = archives
 #' )
-#' res[["conexiones_0.8.3"]]
+#' res[["toycomponent_0.1.0"]]
 #' lapply(res, function(x) x$matrix_refs)
-#' }
 #' @export
 diagnose_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
   results <- list()

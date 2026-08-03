@@ -33,7 +33,14 @@
 #' @param verbose Logical. Whether to emit progress and summary messages. The
 #'   default follows `getOption("bigbang.verbose", interactive())`.
 #'
+#' @section Installation:
+#' This function installs packages into the user's active R library. Installation
+#' occurs only when the user calls the function; loading `bigbang` never installs
+#' packages. With the default `cran_deps = "skip"`, it does not access the network.
+#'
 #' @return Invisibly, a list describing installed, failed, and skipped packages.
+#' @seealso [create_metapackage()] for generating a meta-package with an explicit
+#'   component installer.
 #' @export
 install_local_pkg <- function(
   package,
@@ -231,6 +238,7 @@ install_local_pkg <- function(
 #' @param nombre_paquete Character package archive stem.
 #' @param ruta_instalables Directory containing local archives.
 #' @inheritParams install_local_pkg
+#' @inheritSection install_local_pkg Installation
 #' @return The result of [install_local_pkg()].
 #' @keywords internal
 #' @export

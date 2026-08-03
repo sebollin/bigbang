@@ -55,6 +55,18 @@ jobs:
         run: Rscript -e "tinytex::tlmgr_install(c('makeindex', 'texinfo'))"
         shell: bash
 
+      - name: Run tests that exercise package installation outside CRAN checks
+        shell: Rscript {0}
+        env:
+          NOT_CRAN: "true"
+        run: |
+          testthat::test_local(reporter = "summary", stop_on_failure = TRUE)
+
+      - name: Run the data-loss integration verification outside CRAN checks
+        if: matrix.config.os == 'ubuntu-latest' && matrix.config.r == 'release'
+        shell: bash
+        run: Rscript tests/integration/data-loss-verification.R
+
       - uses: r-lib/actions/check-r-package@v2
         with:
           args: 'c("--as-cran")'

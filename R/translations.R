@@ -6,6 +6,7 @@
     "'packages' must be a non-empty character vector" = "'packages' debe ser un vector de caracteres no vac\u00edo",
     "'pkg_dir' must be one character string" = "'pkg_dir' debe ser una cadena de caracteres",
     "The directory specified by 'pkg_dir' does not exist" = "El directorio indicado por 'pkg_dir' no existe",
+    "'dest_dir' must be supplied as one non-empty path: the meta-package is written inside it. Use tempdir() for disposable output." = "'dest_dir' debe proporcionarse como una ruta no vac\u00eda: el metapaquete se escribe dentro de ella. Use tempdir() para una salida descartable.",
     "Unsupported archive extension: %s" = "Extensi\u00f3n de archivo no compatible: %s",
     "No DESCRIPTION file found in package %s" = "No se encontr\u00f3 DESCRIPTION en el paquete %s",
     "DEBUG: DESCRIPTION file created" = "DEBUG: archivo DESCRIPTION creado",

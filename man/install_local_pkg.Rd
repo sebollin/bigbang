@@ -40,3 +40,14 @@ explicit \code{cran_deps} policy. ZIP archives containing \code{Meta/package.rds
 treated as Windows binaries, while other ZIP archives are unpacked and
 installed as source packages.
 }
+\section{Installation}{
+
+This function installs packages into the user's active R library. Installation
+occurs only when the user calls the function; loading \code{bigbang} never installs
+packages. With the default \code{cran_deps = "skip"}, it does not access the network.
+}
+
+\seealso{
+\code{\link[=create_metapackage]{create_metapackage()}} for generating a meta-package with an explicit
+component installer.
+}

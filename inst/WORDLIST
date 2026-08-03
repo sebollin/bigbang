@@ -4,9 +4,11 @@ CMD
 CRAN
 cwd
 devel
+Detomasi
 español
 gettext
 gz
+hexSticker
 html
 knitr
 lazydb
@@ -17,6 +19,7 @@ metapackage
 metapackages
 NAMESPACE
 oldrel
+pegeler
 pkgdown
 pre
 repos
@@ -24,6 +27,7 @@ README
 rhelpi18n
 rmarkdown
 runtime
+Sebastián
 tarball
 tarballs
 tempdir

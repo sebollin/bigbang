@@ -37,8 +37,9 @@
 #'   (`.tar.gz`, `.zip`, etc.).
 #' @param ext Character. Archive extension. Defaults to `".tar.gz"`.
 #' @param version Character. Version of the meta-package. Defaults to `"0.1.0"`.
-#' @param dest_dir Character. Directory in which to create the meta-package.
-#'   If `NULL`, it is created in the current directory under the meta-package name.
+#' @param dest_dir Character. Required destination directory. The function writes
+#'   the generated meta-package exclusively inside this directory; there is no
+#'   default path. Use `tempdir()` for disposable output.
 #' @param reexport Logical. If `TRUE`, re-exports the component packages'
 #'   functions so they are reachable directly through the meta-package (tidyverse
 #'   style). Defaults to `FALSE`.
@@ -85,6 +86,11 @@
 #' archives, the user calls `<meta>_install()`. Installation resolves dependencies
 #' with a graph-based topological ordering that also detects circular dependencies.
 #'
+#' @section Component installation:
+#' The generated meta-package installs component packages only when the user
+#' explicitly calls `<meta>_install()`. Loading it with `library()` never installs
+#' packages. By default, the generated installer does not access a repository.
+#'
 #' If `reexport = TRUE`, a `reexports.R` file is generated so users can
 #' reach the component functions directly through the meta-package
 #' (`meta::fun()` instead of `component::fun()`), tidyverse style.
@@ -95,24 +101,23 @@
 #'   `devtools` package.
 #'
 #' @examples
-#' \dontrun{
-#' # Basic: a meta-package with two local packages
-#' create_metapackage(
-#'   name = "MyMeta",
-#'   packages = c("pkg1_1.0.0", "pkg2_0.8.3"),
-#'   pkg_dir = "path/to/archives"
-#' )
+#' archives <- system.file("extdata", package = "bigbang")
+#' destination <- tempfile("bigbang-example-")
+#' dir.create(destination)
 #'
-#' # Advanced: with re-exports and custom dependencies
-#' create_metapackage(
-#'   name = "AnalyticsMeta",
-#'   packages = c("myStats_1.2.0", "myPlots_0.9.1"),
-#'   pkg_dir = "path/to/archives",
-#'   reexport = TRUE,
-#'   additional_deps = c("ggplot2", "dplyr"),
-#'   import_deps = c("data.table", "purrr", "tibble")
+#' result <- create_metapackage(
+#'   name = "toyverse",
+#'   packages = "toycomponent_0.1.0",
+#'   pkg_dir = archives,
+#'   dest_dir = destination,
+#'   document = FALSE,
+#'   verbose = FALSE,
+#'   import_deps = character(),
+#'   force_deps = character()
 #' )
-#' }
+#' list.files(result$path)
+#'
+#' unlink(destination, recursive = TRUE)
 #' @export
 
 create_metapackage <- function(
@@ -121,7 +126,7 @@ create_metapackage <- function(
   pkg_dir,
   ext = ".tar.gz",
   version = "0.1.0",
-  dest_dir = NULL,
+  dest_dir,
   reexport = FALSE,
   document = TRUE,
   verbose = getOption("bigbang.verbose", interactive()),
@@ -138,6 +143,14 @@ create_metapackage <- function(
   debug <- isTRUE(debug)
 
   # Validate public arguments before touching the filesystem.
+  if (missing(dest_dir) || is.null(dest_dir) ||
+        !is.character(dest_dir) || length(dest_dir) != 1L ||
+        is.na(dest_dir) || !nzchar(dest_dir)) {
+    stop(.bb_tr(paste0(
+      "'dest_dir' must be supplied as one non-empty path: the meta-package is ",
+      "written inside it. Use tempdir() for disposable output."
+    )), call. = FALSE)
+  }
   if (!is.character(name) || length(name) != 1) {
     stop(.bb_tr("'name' must be one character string"), call. = FALSE)
   }
@@ -170,7 +183,7 @@ create_metapackage <- function(
   # Resolve the generated project path.
   dir_original <- getwd()
   on.exit(setwd(dir_original), add = TRUE)
-  project_dir <- if (is.null(dest_dir)) file.path(dir_original, name) else file.path(dest_dir, name)
+  project_dir <- file.path(dest_dir, name)
 
   log_debug(glue::glue("New project path: {project_dir}"))
 
@@ -568,7 +581,7 @@ crear_meta_paquete_local <- function(
   ruta_instalables,
   ext = ".tar.gz",
   version = "0.1.0",
-  ruta_destino = NULL,
+  ruta_destino,
   reexportar_funciones = FALSE,
   generar_documentacion = TRUE,
   mostrar_progreso = TRUE,
@@ -590,7 +603,7 @@ crear_meta_paquete_local <- function(
     pkg_dir = ruta_instalables,
     ext = ext,
     version = version,
-    dest_dir = ruta_destino,
+    dest_dir = if (missing(ruta_destino)) NULL else ruta_destino,
     reexport = reexportar_funciones,
     document = generar_documentacion,
     verbose = mostrar_progreso,

@@ -83,6 +83,7 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
 })
 
 test_that("ZIP content distinguishes source archives from Windows binaries", {
+  skip_on_cran()
   skip_if_not_installed("withr")
   skip_if(Sys.which("zip") == "", "the zip utility is unavailable")
   sandbox <- tempfile("bigbang-zip-")

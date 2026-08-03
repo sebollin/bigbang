@@ -167,6 +167,16 @@ in a new, empty destination. Never regenerate an unclassified source tree in
 place. The full remediation procedure is documented in the Spanish guide and in
 `RELEASE.md`.
 
+## 🙏 Acknowledgments
+
+bigbang started from a suggestion by
+[Richard Detomasi](https://github.com/RichDeto), who proposed building a
+metapackage tool and pointed to
+[pegeler/metapackage](https://github.com/pegeler/metapackage) as an antecedent.
+The design and implementation—including the graph-based dependency
+resolution—are by Sebastián Lucas. The hex logo was created with
+[hexSticker](https://github.com/GuangchuangYu/hexSticker).
+
 ## 🤝 Contributing
 
 Contributions are welcome: bug reports and feature ideas through

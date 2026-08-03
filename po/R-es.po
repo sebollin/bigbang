@@ -19,6 +19,9 @@ msgstr "'pkg_dir' debe ser una cadena de caracteres"
 msgid "The directory specified by 'pkg_dir' does not exist"
 msgstr "El directorio indicado por 'pkg_dir' no existe"
 
+msgid "'dest_dir' must be supplied as one non-empty path: the meta-package is written inside it. Use tempdir() for disposable output."
+msgstr "'dest_dir' debe proporcionarse como una ruta no vacía: el metapaquete se escribe dentro de ella. Use tempdir() para una salida descartable."
+
 msgid "Unsupported archive extension: %s"
 msgstr "Extensión de archivo no compatible: %s"
 
@@ -210,4 +213,3 @@ msgstr "El paquete instalado no tiene un campo Package válido."
 
 msgid "Could not identify the installed lazy-load database."
 msgstr "No se pudo identificar la base lazy-load instalada."
-

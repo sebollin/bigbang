@@ -20,10 +20,23 @@
 #'   evidence locations, provenance fields, and R version used for the scan.
 #'
 #' @examples
-#' \dontrun{
-#' scan_bigbang_artifact("path/to/generated/metapackage")
-#' scan_bigbang_artifact("metapackage_0.1.0.tar.gz")
-#' }
+#' archives <- system.file("extdata", package = "bigbang")
+#' destination <- tempfile("bigbang-scan-example-")
+#' dir.create(destination)
+#'
+#' result <- create_metapackage(
+#'   name = "toyverse",
+#'   packages = "toycomponent_0.1.0",
+#'   pkg_dir = archives,
+#'   dest_dir = destination,
+#'   document = FALSE,
+#'   verbose = FALSE,
+#'   import_deps = character(),
+#'   force_deps = character()
+#' )
+#' scan_bigbang_artifact(result$path)
+#'
+#' unlink(destination, recursive = TRUE)
 #' @export
 scan_bigbang_artifact <- function(path, dry_run = TRUE) {
   if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {

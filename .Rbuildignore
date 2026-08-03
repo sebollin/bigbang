@@ -9,5 +9,5 @@
 ^README\.es\.md$
 ^CONTRIBUTING\.md$
 ^RELEASE\.md$
-^tests/regresion$
+^tests/integration$
 ^tools/WORDLIST-es$

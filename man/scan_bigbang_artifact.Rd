@@ -31,8 +31,21 @@ R 4.6.1. Because this is an internal R format, callers should re-run the scanner
 tests when adopting a new R minor release.
 }
 \examples{
-\dontrun{
-scan_bigbang_artifact("path/to/generated/metapackage")
-scan_bigbang_artifact("metapackage_0.1.0.tar.gz")
-}
+archives <- system.file("extdata", package = "bigbang")
+destination <- tempfile("bigbang-scan-example-")
+dir.create(destination)
+
+result <- create_metapackage(
+  name = "toyverse",
+  packages = "toycomponent_0.1.0",
+  pkg_dir = archives,
+  dest_dir = destination,
+  document = FALSE,
+  verbose = FALSE,
+  import_deps = character(),
+  force_deps = character()
+)
+scan_bigbang_artifact(result$path)
+
+unlink(destination, recursive = TRUE)
 }

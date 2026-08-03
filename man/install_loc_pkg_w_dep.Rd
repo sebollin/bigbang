@@ -35,4 +35,11 @@ The result of \code{\link[=install_local_pkg]{install_local_pkg()}}.
 \description{
 Deprecated Spanish alias for \code{install_local_pkg()}
 }
+\section{Installation}{
+
+This function installs packages into the user's active R library. Installation
+occurs only when the user calls the function; loading \code{bigbang} never installs
+packages. With the default \code{cran_deps = "skip"}, it does not access the network.
+}
+
 \keyword{internal}
