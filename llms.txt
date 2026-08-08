@@ -25,16 +25,16 @@ depend on each other. Someone joins the team, or another office asks for
 them. They are not on CRAN, so the way to hand them over is a folder of
 `.tar.gz` files.
 
-The trouble is that the folder explains nothing. Whoever receives it has
-to open each `DESCRIPTION` to see what depends on what, work out the
-installation order, and trust that the versions you sent are the ones
-that worked together. Start with the wrong package and installation
-stops on a missing dependency, leaving them to reconstruct the order by
-hand.
+At best you add instructions: install this one first, then that one,
+this version goes with that one. But instructions are manual work for
+whoever receives them, and one more document to keep current every time
+a version changes or a package joins the set.
 
-bigbang turns that folder into one metapackage that already knows all
-three things. The set you curated is the set they install, in a single
-line.
+bigbang puts that knowledge inside the package instead. The order comes
+from the real dependency graph and the versions are recorded in the
+generated metapackage, so there is nothing to follow by hand and nothing
+that can drift out of step with what the folder actually contains. The
+set you curated is the set they install, in a single line.
 
 ## ✨ At a glance
 
