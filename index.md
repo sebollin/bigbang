@@ -18,11 +18,23 @@ yours. This package creates them: one function call, and a new *-verse*
 exists.
 
 Its reason to exist is **distributing a set of packages as a single
-unit**. Handing someone a folder of archives makes them your installer:
-they have to figure out which package depends on which, in what order to
-install them, and which versions were the ones that actually worked
-together. bigbang turns that folder into one metapackage that already
-knows all three. The set you curated is the set they install.
+unit**.
+
+Say you maintain four packages of your own that are used together and
+depend on each other. Someone joins the team, or another office asks for
+them. They are not on CRAN, so the way to hand them over is a folder of
+`.tar.gz` files.
+
+The trouble is that the folder explains nothing. Whoever receives it has
+to open each `DESCRIPTION` to see what depends on what, work out the
+installation order, and trust that the versions you sent are the ones
+that worked together. Start with the wrong package and installation
+stops on a missing dependency, leaving them to reconstruct the order by
+hand.
+
+bigbang turns that folder into one metapackage that already knows all
+three things. The set you curated is the set they install, in a single
+line.
 
 ## ✨ At a glance
 
