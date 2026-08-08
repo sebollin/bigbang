@@ -12,11 +12,19 @@ Todo metapaquete termina en *-verse*—`tidyverse`, `tuequipoverse`, el tuyo. Es
 paquete es lo que los crea: una llamada, y un nuevo *-verse* existe.
 
 Su razón de ser es **distribuir un conjunto de paquetes como una sola unidad**.
-Cuando le pasás a alguien una carpeta con archivos, lo convertís en tu
-instalador: tiene que averiguar cuál depende de cuál, en qué orden instalarlos y
-qué versiones eran las que realmente funcionaban juntas. bigbang convierte esa
-carpeta en un metapaquete que ya sabe las tres cosas. El conjunto que curaste es
-el conjunto que instalan.
+
+Supongamos que mantenés cuatro paquetes propios que se usan juntos y dependen
+entre sí. Entra alguien nuevo al equipo, o te los pide otra oficina. Como no
+están en CRAN, la forma de entregarlos es mandar una carpeta con los `.tar.gz`.
+
+El problema es que esa carpeta no explica nada. Quien la recibe tiene que abrir
+cada `DESCRIPTION` para ver qué depende de qué, deducir en qué orden
+instalarlos, y confiar en que las versiones que le mandaste son las que
+funcionaban juntas. Si arranca por el paquete equivocado, la instalación se
+corta con un error de dependencia faltante y tiene que rearmar el orden a mano.
+
+bigbang convierte esa carpeta en un solo metapaquete que ya sabe esas tres
+cosas. El conjunto que curaste es el conjunto que instalan, con una línea.
 
 Eso incluye a los equipos que trabajan detrás de un firewall institucional y no
 mantienen un repositorio de paquetes, pero no se limita a ellos: sirve igual para
