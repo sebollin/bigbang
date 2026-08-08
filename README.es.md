@@ -17,14 +17,16 @@ Supongamos que mantenés cuatro paquetes propios que se usan juntos y dependen
 entre sí. Entra alguien nuevo al equipo, o te los pide otra oficina. Como no
 están en CRAN, la forma de entregarlos es mandar una carpeta con los `.tar.gz`.
 
-El problema es que esa carpeta no explica nada. Quien la recibe tiene que abrir
-cada `DESCRIPTION` para ver qué depende de qué, deducir en qué orden
-instalarlos, y confiar en que las versiones que le mandaste son las que
-funcionaban juntas. Si arranca por el paquete equivocado, la instalación se
-corta con un error de dependencia faltante y tiene que rearmar el orden a mano.
+En el mejor de los casos le sumás instrucciones: instalá este primero, después
+este otro, esta versión va con aquella. Pero esas instrucciones son trabajo
+manual para quien recibe, y un documento más que mantener al día cada vez que
+cambia una versión o entra un paquete nuevo.
 
-bigbang convierte esa carpeta en un solo metapaquete que ya sabe esas tres
-cosas. El conjunto que curaste es el conjunto que instalan, con una línea.
+bigbang pone ese conocimiento adentro del paquete. El orden sale del grafo real
+de dependencias y las versiones quedan registradas en el metapaquete generado,
+así que no hay nada que seguir a mano ni nada que pueda quedar desfasado del
+contenido de la carpeta. El conjunto que curaste es el conjunto que instalan,
+con una línea.
 
 Eso incluye a los equipos que trabajan detrás de un firewall institucional y no
 mantienen un repositorio de paquetes, pero no se limita a ellos: sirve igual para
