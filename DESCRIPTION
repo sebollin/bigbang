@@ -14,14 +14,20 @@ Authors@R: c(
            comment = c(
                ORCID = "0000-0002-6725-0261",
                "Suggested the initial idea of a metapackage builder")))
-Description: Creates meta-packages (in the style of the 'tidyverse') from
-    locally stored package archives (.tar.gz, .zip). Designed for teams
-    working behind institutional firewalls without access to package
-    repositories. Resolves dependencies between local packages by building
-    a dependency graph with topological ordering and cycle detection,
-    classifies dependencies as local or CRAN, detects implicit dependencies
-    by scanning source code, and generates the full meta-package scaffold
-    including re-exports, vignettes and documentation.
+Description: Turns a curated set of package archives (.tar.gz, .zip) into one
+    meta-package in the style of the 'tidyverse', so that a group of
+    interdependent packages can be distributed and installed as a single
+    unit. The generated meta-package records the exact archive versions it
+    was built from and installs its components in dependency order, so that
+    whoever receives it does not have to work out which package to install
+    first.
+    Resolves dependencies by building a graph with topological ordering and
+    cycle detection, classifies them as local or external, and detects
+    implicit dependencies by scanning source code. Reading every component
+    from a directory of files also means that installation needs no
+    repository access, which suits teams working behind institutional
+    firewalls. Generates the complete meta-package scaffold, including
+    re-exports, vignettes and documentation.
 License: GPL (>= 3)
 URL: https://sebollin.github.io/bigbang/,
     https://github.com/sebollin/bigbang

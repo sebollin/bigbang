@@ -12,15 +12,28 @@
 Every metapackage ends in *-verse*—`tidyverse`, `teamverse`, yours. This package
 creates them: one function call, and a new *-verse* exists.
 
+Its reason to exist is **distributing a set of packages as a single unit**.
+Handing someone a folder of archives makes them your installer: they have to
+figure out which package depends on which, in what order to install them, and
+which versions were the ones that actually worked together. bigbang turns that
+folder into one metapackage that already knows all three. The set you curated
+is the set they install.
+
 ## ✨ At a glance
 
 - 📦 **One call, one -verse** — `create_metapackage()` scaffolds a complete,
   documented, CRAN-checkable metapackage from a directory of `.tar.gz`/`.zip`
   archives.
+- 🎯 **A curated set, distributed as one** — the metapackage records the exact
+  archive versions it was built from, so the combination you tested is the
+  combination that gets installed.
 - 🧭 **Real dependency resolution** — builds the local dependency graph,
-  orders installation topologically, and refuses cycles up front.
-- 🔌 **Offline first** — designed for teams behind institutional firewalls;
-  `cran_deps = "skip"` never touches the network.
+  orders installation topologically, and refuses cycles up front. Nobody
+  downstream has to work out what to install first.
+- 🔌 **No repository required** — every component is read from a directory of
+  files, so installation needs no network at all; `cran_deps = "skip"` is the
+  default. This is what makes bigbang work behind an institutional firewall,
+  but it is just as useful for shipping a versioned bundle anywhere.
 - 🌐 **Bilingual at runtime** — English and Spanish messages through R's native
   gettext support.
 - 🛡️ **Safe by design** — startup hooks never install packages or remove
@@ -35,7 +48,7 @@ The generated package has two separate jobs:
 
 ## 🚀 Installation
 
-Once on CRAN, the stable version will install with:
+The stable version is on CRAN:
 
 ```r
 install.packages("bigbang")
@@ -139,7 +152,7 @@ considered if `rhelpi18n` becomes production-ready and reaches CRAN.
 
 | Need | Best fit |
 |---|---|
-| One metapackage over a fixed set of local archives, with explicit offline installation | `bigbang` |
+| Distribute one curated, version-pinned set of local archives as a single installable unit | `bigbang` |
 | A conventional local repository with indexes, multiple packages, and repository semantics | `miniCRAN` or `drat` |
 | A small metapackage around packages already available from repositories | `pkgverse` |
 
