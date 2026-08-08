@@ -1,0 +1,94 @@
+# bigbang en español: guía completa
+
+## Qué hace bigbang
+
+`bigbang` crea un metapaquete a partir de archivos locales `.tar.gz`,
+`.tar` o `.zip`. Está pensado para equipos que distribuyen paquetes
+internos sin depender de un repositorio en línea. La generación nunca
+instala componentes ni borra contenido del directorio de trabajo.
+
+La API pública usa nombres en inglés para ser consistente con el
+ecosistema de R:
+
+- [`create_metapackage()`](https://sebollin.github.io/bigbang/reference/create_metapackage.md)
+  crea la fuente del metapaquete.
+- [`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md)
+  instala un archivo local y sus dependencias.
+- [`diagnose_dependencies()`](https://sebollin.github.io/bigbang/reference/diagnose_dependencies.md)
+  busca dependencias implícitas.
+- [`scan_bigbang_artifact()`](https://sebollin.github.io/bigbang/reference/scan_bigbang_artifact.md)
+  examina artefactos históricos sin cargarlos.
+
+## Crear un metapaquete
+
+Los nombres de `packages` incluyen la versión pero no la extensión:
+
+``` r
+
+resultado <- create_metapackage(
+  name = "equipoverse",
+  packages = c("datos_1.2.0", "reportes_0.9.1"),
+  pkg_dir = "ruta/a/instalables",
+  ext = ".tar.gz",
+  dest_dir = tempdir(),
+  document = TRUE
+)
+resultado
+```
+
+El destino debe ser nuevo o estar vacío. Esta restricción evita
+conservar hooks o scripts generados por versiones antiguas vulnerables.
+Nunca regenere in-place una fuente cuya procedencia no haya sido
+verificada.
+
+## Instalar y adjuntar componentes
+
+La instalación es explícita.
+[`library(equipoverse)`](https://rdrr.io/r/base/library.html) solo
+adjunta los componentes ya instalados e informa cuáles faltan. Para
+instalar desde los archivos locales:
+
+``` r
+
+library(equipoverse)
+equipoverse_install(cran_deps = "skip")
+```
+
+La política predeterminada `cran_deps = "skip"` no accede a la red. Las
+alternativas son `"error"` (falla sin red) e `"install"` (intenta
+instalar desde `repos`). Los paquetes locales se instalan una sola vez
+en orden topológico; los ciclos producen una condición
+`bigbang_error_cycle`.
+
+## Archivos ZIP
+
+Un ZIP que contiene `Meta/package.rds` se considera un binario de
+Windows y solo se instala en Windows con `type = "win.binary"`. Los
+demás ZIP con DESCRIPTION se extraen en un directorio temporal propio y
+se instalan como fuente.
+
+## Revisar artefactos anteriores
+
+El escáner nunca carga el paquete y funciona en fuentes, tarballs, ZIP e
+instalaciones:
+
+``` r
+
+scan_bigbang_artifact("ruta/al/artefacto", dry_run = TRUE)
+```
+
+Si detecta firmas V1/V2/V3/V7, no ejecute
+[`library()`](https://rdrr.io/r/base/library.html),
+[`devtools::document()`](https://devtools.r-lib.org/reference/document.html)
+ni hooks del artefacto. Genere una versión nueva en una ruta vacía con
+la versión actual de `bigbang`, vuelva a escanearla y recién entonces
+constrúyala e instálela.
+
+## Idioma
+
+Los mensajes de ejecución tienen inglés como fuente y traducción
+completa al español mediante gettext. En R 4.2 o posterior puede usar
+`Sys.setLanguage("es")`; en versiones anteriores, defina `LANGUAGE=es`
+antes de iniciar R. La ayuda Rd se publica en inglés, como requiere
+CRAN. Cuando `rhelpi18n` madure y llegue a CRAN se evaluará publicar un
+módulo separado `bigbang.es` para traducir también la ayuda interactiva.
