@@ -1,8 +1,12 @@
 # Changelog
 
+## bigbang (development version)
+
 ## bigbang 0.1.0
 
 CRAN release: 2026-08-08
+
+First release on CRAN, accepted on 2026-08-08.
 
 **bigbang — create custom R metapackages from local packages**
 

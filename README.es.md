@@ -15,9 +15,17 @@ locales. Todo metapaquete termina en *-verse*—`tidyverse`,
 `tuequipoverse`, el tuyo. Este paquete es lo que los crea: una llamada,
 y un nuevo *-verse* existe.
 
-Está pensado para equipos que intercambian archivos locales de paquetes
-R (`.tar.gz` o `.zip`) detrás de un firewall institucional y no
-mantienen un repositorio de paquetes.
+Su razón de ser es **distribuir un conjunto de paquetes como una sola
+unidad**. Cuando le pasás a alguien una carpeta con archivos, lo
+convertís en tu instalador: tiene que averiguar cuál depende de cuál, en
+qué orden instalarlos y qué versiones eran las que realmente funcionaban
+juntas. bigbang convierte esa carpeta en un metapaquete que ya sabe las
+tres cosas. El conjunto que curaste es el conjunto que instalan.
+
+Eso incluye a los equipos que trabajan detrás de un firewall
+institucional y no mantienen un repositorio de paquetes, pero no se
+limita a ellos: sirve igual para entregar un conjunto con versiones
+fijas a cualquier destinatario.
 
 La arquitectura separa dos acciones:
 
@@ -30,7 +38,7 @@ Los hooks de inicio nunca instalan paquetes ni eliminan archivos.
 
 ## 🚀 Instalación
 
-Cuando esté en CRAN, la versión estable se instalará con:
+La versión estable está en CRAN:
 
 ``` r
 
@@ -127,12 +135,12 @@ separado `bigbang.es` para la ayuda interactiva.
 
 ## 🧭 Diferencias con otras herramientas
 
-`bigbang` distribuye una selección fija de archivos mediante un
-metapaquete. `miniCRAN` y `drat` son preferibles cuando se necesita un
-repositorio convencional con índices, varias versiones y semántica de
-repositorio. `pkgverse` cubre el caso más pequeño de agrupar paquetes
-disponibles desde repositorios, sin el instalador offline de archivos
-locales de `bigbang`.
+`bigbang` distribuye un conjunto curado de archivos, con versiones
+fijas, como una sola unidad instalable. `miniCRAN` y `drat` son
+preferibles cuando se necesita un repositorio convencional con índices,
+varias versiones y semántica de repositorio. `pkgverse` cubre el caso
+más pequeño de agrupar paquetes disponibles desde repositorios, sin el
+instalador de archivos locales de `bigbang`.
 
 ## 🛡️ Seguridad y artefactos antiguos
 

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -39,7 +39,8 @@
 </blockquote>
 <p><a href="https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a> <a href="https://CRAN.R-project.org/package=bigbang" class="external-link"><img src="https://www.r-pkg.org/badges/version/bigbang" alt="CRAN status"></a> <a href="https://www.gnu.org/licenses/gpl-3.0" class="external-link"><img src="https://img.shields.io/badge/licencia-GPL%20(%3E%3D%203)-142839.svg" alt="Licencia: GPL v3"></a> <a href="https://github.com/sebollin/bigbang/blob/main/README.md" class="external-link"><img src="https://img.shields.io/badge/docs-English-0D9786.svg" alt="docs: English"></a></p>
 <p><strong>bigbang</strong> construye metapaquetes estilo tidyverse a partir de archivos locales. Todo metapaquete termina en <em>-verse</em>—<code>tidyverse</code>, <code>tuequipoverse</code>, el tuyo. Este paquete es lo que los crea: una llamada, y un nuevo <em>-verse</em> existe.</p>
-<p>Está pensado para equipos que intercambian archivos locales de paquetes R (<code>.tar.gz</code> o <code>.zip</code>) detrás de un firewall institucional y no mantienen un repositorio de paquetes.</p>
+<p>Su razón de ser es <strong>distribuir un conjunto de paquetes como una sola unidad</strong>. Cuando le pasás a alguien una carpeta con archivos, lo convertís en tu instalador: tiene que averiguar cuál depende de cuál, en qué orden instalarlos y qué versiones eran las que realmente funcionaban juntas. bigbang convierte esa carpeta en un metapaquete que ya sabe las tres cosas. El conjunto que curaste es el conjunto que instalan.</p>
+<p>Eso incluye a los equipos que trabajan detrás de un firewall institucional y no mantienen un repositorio de paquetes, pero no se limita a ellos: sirve igual para entregar un conjunto con versiones fijas a cualquier destinatario.</p>
 <p>La arquitectura separa dos acciones:</p>
 <ul><li>
 <code>library(&lt;meta&gt;)</code> adjunta los componentes ya instalados e informa los faltantes.</li>
@@ -48,7 +49,7 @@
 </ul><p>Los hooks de inicio nunca instalan paquetes ni eliminan archivos.</p>
 <div class="section level2">
 <h2 id="rocket-instalación">🚀 Instalación<a class="anchor" aria-label="anchor" href="#rocket-instalaci%C3%B3n"></a></h2>
-<p>Cuando esté en CRAN, la versión estable se instalará con:</p>
+<p>La versión estable está en CRAN:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"bigbang"</span><span class="op">)</span></span></code></pre></div>
 <p>La versión de desarrollo está en GitHub:</p>
@@ -107,7 +108,7 @@
 </div>
 <div class="section level2">
 <h2 id="compass-diferencias-con-otras-herramientas">🧭 Diferencias con otras herramientas<a class="anchor" aria-label="anchor" href="#compass-diferencias-con-otras-herramientas"></a></h2>
-<p><code>bigbang</code> distribuye una selección fija de archivos mediante un metapaquete. <code>miniCRAN</code> y <code>drat</code> son preferibles cuando se necesita un repositorio convencional con índices, varias versiones y semántica de repositorio. <code>pkgverse</code> cubre el caso más pequeño de agrupar paquetes disponibles desde repositorios, sin el instalador offline de archivos locales de <code>bigbang</code>.</p>
+<p><code>bigbang</code> distribuye un conjunto curado de archivos, con versiones fijas, como una sola unidad instalable. <code>miniCRAN</code> y <code>drat</code> son preferibles cuando se necesita un repositorio convencional con índices, varias versiones y semántica de repositorio. <code>pkgverse</code> cubre el caso más pequeño de agrupar paquetes disponibles desde repositorios, sin el instalador de archivos locales de <code>bigbang</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="shield-seguridad-y-artefactos-antiguos">🛡️ Seguridad y artefactos antiguos<a class="anchor" aria-label="anchor" href="#shield-seguridad-y-artefactos-antiguos"></a></h2>
