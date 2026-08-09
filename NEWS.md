@@ -9,6 +9,8 @@
 - Kept generated installer signatures short by storing the archive-directory
   default in an internal constant.
 - Documented related metapackage projects and design precedents.
+- Fixed generated helper examples so they use the requested metapackage name
+  instead of an internal historical name.
 
 # bigbang 0.1.0
 

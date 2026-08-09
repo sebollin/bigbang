@@ -714,7 +714,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
 #\'
 #\' @examples
 #\' \\dontrun{
-#\'   DADverse_load_all()
+#\'   {{ name }}_load_all()
 #\' }
 {{ name }}_load_all <- function() {
   .Deprecated("{{ name }}_attach", package = "{{ name }}")
@@ -730,7 +730,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
 #\'
 #\' @examples
 #\' \\dontrun{
-#\'   DADverse_detach()
+#\'   {{ name }}_detach()
 #\' }
 
 {{ name }}_detach <- function() {
@@ -746,7 +746,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
 #\'
 #\' @examples
 #\' \\dontrun{
-#\'   DADverse_packages()
+#\'   {{ name }}_packages()
 #\' }
 
 {{ name }}_packages <- function() {
@@ -762,7 +762,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
 #\'
 #\' @examples
 #\' \\dontrun{
-#\'   DADverse_attach_all()
+#\'   {{ name }}_attach_all()
 #\' }
 {{ name }}_attach_all <- function() {
   lapply(.pkgs, library, character.only = TRUE)

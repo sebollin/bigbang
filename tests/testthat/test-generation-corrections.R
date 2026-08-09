@@ -51,6 +51,27 @@ test_that("relative destination and archive paths generate a complete project", 
     list.files(file.path(result$path, "R")),
     c("attach.R", "defaults.R", "install_packages.R", "utils.R", "zzz.R")
   )
+
+  text_files <- list.files(
+    result$path,
+    pattern = "(\\.(R|Rd|Rmd|po|pot)$|DESCRIPTION$|NAMESPACE$)",
+    recursive = TRUE,
+    full.names = TRUE
+  )
+  generated_text <- unlist(lapply(
+    text_files, readLines, warn = FALSE, encoding = "UTF-8"
+  ), use.names = FALSE)
+  helper_identifiers <- regmatches(
+    generated_text,
+    gregexpr(
+      "\\b[A-Za-z][A-Za-z0-9.]*verse_(load_all|detach|packages|attach_all)\\b",
+      generated_text,
+      perl = TRUE
+    )
+  )
+  helper_identifiers <- unique(unlist(helper_identifiers, use.names = FALSE))
+  expect_true(length(helper_identifiers) > 0L)
+  expect_true(all(startsWith(helper_identifiers, "relverse_")))
 })
 
 test_that("failed generation restores cwd and rolls back only its own project", {
