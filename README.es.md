@@ -124,6 +124,17 @@ está en `vignette("bigbang-es", package = "bigbang")`. Cuando `rhelpi18n`
 madure y llegue a CRAN se podrá evaluar un módulo separado `bigbang.es` para la
 ayuda interactiva.
 
+## 🔭 Proyectos relacionados
+
+- [pegeler/metapackage](https://github.com/pegeler/metapackage), de Paul
+  Egeler, es un metapaquete personal declarativo basado en paquetes disponibles
+  en repositorios en línea. bigbang, en cambio, genera metapaquetes a partir de
+  archivos locales.
+- [metaverse](https://rmetaverse.github.io/metaverse/) es un metapaquete
+  comunitario para síntesis de evidencia, modelado sobre tidyverse. El mensaje
+  de adjunción y el diseño de `<meta>_packages()` en los metapaquetes generados
+  por bigbang se inspiran en tidyverse y en metaverse (Westgate y colaboradores).
+
 ## 🧭 Diferencias con otras herramientas
 
 `bigbang` distribuye un conjunto curado de archivos, con versiones fijas, como

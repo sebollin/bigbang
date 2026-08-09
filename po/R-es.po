@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.1.0\n"
+"Project-Id-Version: bigbang 0.1.0.9000\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -154,29 +154,29 @@ msgstr "Error al crear %s.R: %s"
 msgid "The template rendered empty content."
 msgstr "La plantilla generó contenido vacío."
 
-msgid "\\nOriginal template:"
-msgstr "\\nPlantilla original:"
+msgid "Original template:"
+msgstr "Plantilla original:"
 
-msgid "\\nTemplate data:"
-msgstr "\\nDatos de la plantilla:"
+msgid "Template data:"
+msgstr "Datos de la plantilla:"
 
 msgid "%s.R already exists and will not be overwritten."
 msgstr "%s.R ya existe y no se sobrescribirá."
 
-msgid "The ZIP archive does not contain a DESCRIPTION file: "
-msgstr "El archivo ZIP no contiene DESCRIPTION: "
+msgid "The ZIP archive does not contain a DESCRIPTION file: %s"
+msgstr "El archivo ZIP no contiene DESCRIPTION: %s"
 
-msgid "Unsupported archive format: "
-msgstr "Formato de archivo no compatible: "
+msgid "Unsupported archive format: %s"
+msgstr "Formato de archivo no compatible: %s"
 
-msgid "Installed local package: "
-msgstr "Paquete local instalado: "
+msgid "Installed local package: %s"
+msgstr "Paquete local instalado: %s"
 
-msgid "Packages that failed: "
-msgstr "Paquetes que fallaron: "
+msgid "Packages that failed: %s"
+msgstr "Paquetes que fallaron: %s"
 
-msgid "Packages skipped by the offline policy: "
-msgstr "Paquetes omitidos por la política offline: "
+msgid "Packages skipped by the offline policy: %s"
+msgstr "Paquetes omitidos por la política offline: %s"
 
 msgid "'path' must be one non-empty character string."
 msgstr "'path' debe ser una cadena de caracteres no vacía."
@@ -184,20 +184,20 @@ msgstr "'path' debe ser una cadena de caracteres no vacía."
 msgid "Only read-only scanning is supported; 'dry_run' must remain TRUE."
 msgstr "Solo se admite el escaneo de lectura; 'dry_run' debe permanecer en TRUE."
 
-msgid "Artifact does not exist: "
-msgstr "El artefacto no existe: "
+msgid "Artifact does not exist: %s"
+msgstr "El artefacto no existe: %s"
 
-msgid "Unsupported artifact type: "
-msgstr "Tipo de artefacto no compatible: "
+msgid "Unsupported artifact type: %s"
+msgstr "Tipo de artefacto no compatible: %s"
 
-msgid "No DESCRIPTION found in source directory: "
-msgstr "No se encontró DESCRIPTION en el directorio fuente: "
+msgid "No DESCRIPTION found in source directory: %s"
+msgstr "No se encontró DESCRIPTION en el directorio fuente: %s"
 
 msgid "Refusing to scan symbolic links in the source R directory."
 msgstr "Se rechaza escanear enlaces simbólicos en el directorio R de la fuente."
 
-msgid "Archive contains unsafe absolute or parent-traversal paths: "
-msgstr "El archivo contiene rutas absolutas o recorridos al directorio padre inseguros: "
+msgid "Archive contains unsafe absolute or parent-traversal paths: %s"
+msgstr "El archivo contiene rutas absolutas o recorridos al directorio padre inseguros: %s"
 
 msgid "Refusing to scan an archive containing symbolic links."
 msgstr "Se rechaza escanear un archivo que contiene enlaces simbólicos."

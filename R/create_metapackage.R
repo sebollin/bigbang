@@ -22,6 +22,34 @@
   stop(condition)
 }
 
+.restore_documentation_session <- function(search_before, namespaces_before,
+                                           generated_name) {
+  new_search_entries <- setdiff(search(), search_before)
+  for (entry in rev(new_search_entries)) {
+    try(detach(entry, character.only = TRUE, unload = FALSE), silent = TRUE)
+  }
+
+  if (generated_name %in% setdiff(loadedNamespaces(), namespaces_before) &&
+        "devtools" %in% loadedNamespaces()) {
+    try(devtools::unload(generated_name, quiet = TRUE), silent = TRUE)
+  }
+
+  repeat {
+    new_namespaces <- setdiff(loadedNamespaces(), namespaces_before)
+    if (length(new_namespaces) == 0L) break
+
+    count_before <- length(new_namespaces)
+    for (namespace in rev(new_namespaces)) {
+      try(unloadNamespace(namespace), silent = TRUE)
+    }
+    if (length(setdiff(loadedNamespaces(), namespaces_before)) >= count_before) {
+      break
+    }
+  }
+
+  invisible(NULL)
+}
+
 #' Build a local meta-package
 #'
 #' @description
@@ -164,6 +192,10 @@ create_metapackage <- function(
     stop(.bb_tr("The directory specified by 'pkg_dir' does not exist"), call. = FALSE)
   }
 
+  # Resolve caller-supplied paths before generation changes the working directory.
+  dest_dir <- normalizePath(dest_dir, winslash = "/", mustWork = FALSE)
+  pkg_dir <- normalizePath(pkg_dir, winslash = "/", mustWork = TRUE)
+
   # Validate the package name.
   if (grepl("_", name)) {
     suggested_name <- gsub("_", ".", name)
@@ -182,8 +214,37 @@ create_metapackage <- function(
 
   # Resolve the generated project path.
   dir_original <- getwd()
-  on.exit(setwd(dir_original), add = TRUE)
-  project_dir <- file.path(dest_dir, name)
+  project_dir <- normalizePath(
+    file.path(dest_dir, name), winslash = "/", mustWork = FALSE
+  )
+  project_created <- FALSE
+  generation_complete <- FALSE
+  documentation_search <- NULL
+  documentation_namespaces <- NULL
+  on.exit({
+    setwd(dir_original)
+
+    if (!is.null(documentation_search)) {
+      .restore_documentation_session(
+        documentation_search, documentation_namespaces, name
+      )
+    }
+
+    # Roll back only a project directory created by this exact invocation.
+    # Pre-existing directories, including empty ones, are never removed.
+    expected_project <- normalizePath(
+      file.path(dest_dir, name), winslash = "/", mustWork = FALSE
+    )
+    owned_project <- project_created && identical(project_dir, expected_project) &&
+      is_path_inside(project_dir, dest_dir)
+    if (!generation_complete && owned_project && dir.exists(project_dir)) {
+      removal_status <- unlink(project_dir, recursive = TRUE, force = TRUE)
+      if (removal_status != 0L) {
+        warning(.bb_trf("Could not remove completely: %s", project_dir),
+                call. = FALSE)
+      }
+    }
+  }, add = TRUE)
 
   log_debug(glue::glue("New project path: {project_dir}"))
 
@@ -214,6 +275,7 @@ create_metapackage <- function(
       stop(.bb_trf("Could not create project directory: %s", project_dir),
            call. = FALSE)
     }
+    project_created <- TRUE
   }
 
   for (subdir in c("R", "man", "vignettes")) {
@@ -517,17 +579,17 @@ StripTrailingWhitespace: Yes"
 
 
   # Generate documentation only when explicitly requested.
-  if (isTRUE(document) && requireNamespace("devtools", quietly = TRUE)) {
+  doc_ok <- FALSE
+  devtools_available <- FALSE
+  if (isTRUE(document)) {
+    documentation_search <- search()
+    documentation_namespaces <- loadedNamespaces()
+    devtools_available <- requireNamespace("devtools", quietly = TRUE)
+  }
+  if (isTRUE(document) && devtools_available) {
     if (verbose) {
       message(.bb_trf("Generating documentation for %s...", name))
     }
-
-    # Restore the caller's working directory after documentation.
-    old_wd <- getwd()
-    on.exit(setwd(old_wd), add = TRUE)
-
-    # Document the generated package from its source root.
-    setwd(project_dir)
 
     # Run roxygen without loading unclassified legacy source.
     tryCatch({
@@ -539,6 +601,7 @@ StripTrailingWhitespace: Yes"
       if (verbose) {
         message(.bb_tr("Documentation generated successfully."))
       }
+      doc_ok <- TRUE
     }, error = function(e) {
       warning(.bb_trf("Error generating documentation: %s", e$message),
               call. = FALSE)
@@ -548,7 +611,7 @@ StripTrailingWhitespace: Yes"
   }
 
 
-  invisible(structure(
+  result <- structure(
     list(
       path = normalizePath(project_dir, mustWork = TRUE),
       name = name,
@@ -557,11 +620,12 @@ StripTrailingWhitespace: Yes"
       local_dependencies = local_deps,
       cran_dependencies = cran_deps,
       implicit_dependencies = implicit_deps,
-      documented = isTRUE(document) &&
-        requireNamespace("devtools", quietly = TRUE)
+      documented = doc_ok
     ),
     class = "bigbang_result"
-  ))
+  )
+  generation_complete <- TRUE
+  invisible(result)
 }
 
 

@@ -536,7 +536,7 @@ install_packages_in_order <- function(packages, pkg_dir, ext,
 #\' @return A sorted character vector of dependency names.
 #\' @export
 {name}_deps <- function(
-    pkg_dir = {paste(deparse(pkg_dir), collapse = "")},
+    pkg_dir = .pkg_dir_default,
     ext = {paste(deparse(ext), collapse = "")}) {{
   packages <- {.r_literal(packages)}
   deps <- unlist(lapply(
@@ -607,6 +607,9 @@ write_metapackage_files <- function(
 
   # Templates for the generated runtime files.
   templates <- list(
+    defaults = '
+.pkg_dir_default <- {{{ install_path }}}
+',
     attach = '
 utils::globalVariables(".pkgs")
 .pkgs <- {{{ package_list }}}
@@ -666,7 +669,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
 #\' \\dontrun{
 #\'   {{ name }}_install()
 #\' }
-{{ name }}_install <- function(pkg_dir = {{{ install_path }}},
+{{ name }}_install <- function(pkg_dir = .pkg_dir_default,
                                ext = {{{ extension }}},
                                cran_deps = c("skip", "error", "install"),
                                repos = getOption("repos"),
@@ -1134,9 +1137,11 @@ zzz = '
                 call. = FALSE)
         # Emit diagnostic context in verbose mode
         if (verbose) {
-          message(.bb_tr("\nOriginal template:"))
+          message()
+          message(.bb_tr("Original template:"))
           message(templates[[file_name]])
-          message(.bb_tr("\nTemplate data:"))
+          message()
+          message(.bb_tr("Template data:"))
           utils::str(template_data)
         }
       })

@@ -5,6 +5,7 @@ CRAN
 cwd
 devel
 Detomasi
+Egeler
 español
 gettext
 gz
@@ -18,8 +19,10 @@ macOS
 md
 metapackage
 metapackages
+metaverse
 NAMESPACE
 oldrel
+Paul
 pegeler
 pkgdown
 pre
@@ -38,6 +41,7 @@ UTF
 VignetteEncoding
 VignetteEngine
 VignetteIndexEntry
+Westgate
 win-builder
 ZIPs
 ️

@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.1.0\n"
+"Project-Id-Version: bigbang 0.1.0.9000\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -154,28 +154,28 @@ msgstr ""
 msgid "The template rendered empty content."
 msgstr ""
 
-msgid "\\nOriginal template:"
+msgid "Original template:"
 msgstr ""
 
-msgid "\\nTemplate data:"
+msgid "Template data:"
 msgstr ""
 
 msgid "%s.R already exists and will not be overwritten."
 msgstr ""
 
-msgid "The ZIP archive does not contain a DESCRIPTION file: "
+msgid "The ZIP archive does not contain a DESCRIPTION file: %s"
 msgstr ""
 
-msgid "Unsupported archive format: "
+msgid "Unsupported archive format: %s"
 msgstr ""
 
-msgid "Installed local package: "
+msgid "Installed local package: %s"
 msgstr ""
 
-msgid "Packages that failed: "
+msgid "Packages that failed: %s"
 msgstr ""
 
-msgid "Packages skipped by the offline policy: "
+msgid "Packages skipped by the offline policy: %s"
 msgstr ""
 
 msgid "'path' must be one non-empty character string."
@@ -184,19 +184,19 @@ msgstr ""
 msgid "Only read-only scanning is supported; 'dry_run' must remain TRUE."
 msgstr ""
 
-msgid "Artifact does not exist: "
+msgid "Artifact does not exist: %s"
 msgstr ""
 
-msgid "Unsupported artifact type: "
+msgid "Unsupported artifact type: %s"
 msgstr ""
 
-msgid "No DESCRIPTION found in source directory: "
+msgid "No DESCRIPTION found in source directory: %s"
 msgstr ""
 
 msgid "Refusing to scan symbolic links in the source R directory."
 msgstr ""
 
-msgid "Archive contains unsafe absolute or parent-traversal paths: "
+msgid "Archive contains unsafe absolute or parent-traversal paths: %s"
 msgstr ""
 
 msgid "Refusing to scan an archive containing symbolic links."

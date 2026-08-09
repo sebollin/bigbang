@@ -4,8 +4,9 @@
     "\\\\", "/", utils::unzip(archive, list = TRUE)$Name, fixed = TRUE
   )
   if (!any(grepl("(^|/)DESCRIPTION$", members))) {
-    stop("The ZIP archive does not contain a DESCRIPTION file: ", archive,
-         domain = "R-bigbang")
+    stop(.bb_trf(
+      "The ZIP archive does not contain a DESCRIPTION file: %s", archive
+    ), call. = FALSE)
   }
   if (any(grepl("(^|/)Meta/package\\.rds$", members))) {
     "win.binary"
@@ -96,7 +97,7 @@ install_local_pkg <- function(
       } else if (identical(tolower(ext), ".zip")) {
         utils::unzip(archive, exdir = extracted)
       } else {
-        stop("Unsupported archive format: ", ext, domain = "R-bigbang")
+        stop(.bb_trf("Unsupported archive format: %s", ext), call. = FALSE)
       }
       NULL
     }, error = identity)
@@ -209,19 +210,22 @@ install_local_pkg <- function(
 
     state$installed[[stem]] <- "Installed successfully"
     if (isTRUE(verbose)) {
-      message("Installed local package: ", stem, domain = "R-bigbang")
+      message(.bb_trf("Installed local package: %s", stem))
     }
     TRUE
   }
 
   install_one(package)
   if (isTRUE(verbose) && length(state$failed) > 0L) {
-    message("Packages that failed: ", paste(names(state$failed), collapse = ", "),
-            domain = "R-bigbang")
+    message(.bb_trf(
+      "Packages that failed: %s", paste(names(state$failed), collapse = ", ")
+    ))
   }
   if (isTRUE(verbose) && length(state$skipped) > 0L) {
-    message("Packages skipped by the offline policy: ",
-            paste(names(state$skipped), collapse = ", "), domain = "R-bigbang")
+    message(.bb_trf(
+      "Packages skipped by the offline policy: %s",
+      paste(names(state$skipped), collapse = ", ")
+    ))
   }
   invisible(structure(
     list(

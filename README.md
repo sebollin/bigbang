@@ -158,6 +158,17 @@ as [README.es.md](https://github.com/sebollin/bigbang/blob/main/README.es.md). R
 native mechanism for translated help; a separate `bigbang.es` module can be
 considered if `rhelpi18n` becomes production-ready and reaches CRAN.
 
+## 🔭 Related projects
+
+- [pegeler/metapackage](https://github.com/pegeler/metapackage), by Paul
+  Egeler, is a declarative personal metapackage built around packages available
+  from online repositories. bigbang instead generates metapackages from local
+  package archives.
+- [metaverse](https://rmetaverse.github.io/metaverse/) is a community
+  metapackage for evidence synthesis, modeled on tidyverse. The attachment
+  message and `<meta>_packages()` design in bigbang-generated metapackages draw
+  on tidyverse and on metaverse (Westgate and colleagues).
+
 ## 🧭 Choosing the right tool
 
 | Need | Best fit |

@@ -1,5 +1,15 @@
 # bigbang (development version)
 
+- Fixed generation with relative `dest_dir` and `pkg_dir` paths, and roll back
+  incomplete project trees created by a failed invocation.
+- Restored the caller's attached packages and loaded namespaces after automatic
+  documentation, and report documentation success accurately.
+- Fixed eleven Spanish runtime messages whose catalog keys had leading or
+  trailing whitespace.
+- Kept generated installer signatures short by storing the archive-directory
+  default in an internal constant.
+- Documented related metapackage projects and design precedents.
+
 # bigbang 0.1.0
 
 First release on CRAN, accepted on 2026-08-08.

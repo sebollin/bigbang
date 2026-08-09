@@ -1,5 +1,5 @@
-translate_from_catalog <- function(domain, bind_dir, message) {
-  code <- paste0(
+run_spanish_child <- function(domain, bind_dir, code) {
+  child_code <- paste0(
     "candidates <- c('es_ES.UTF-8', 'es_ES.utf8', ",
     "'Spanish_Spain.utf8', 'Spanish_Spain.1252', ",
     "'en_US.UTF-8', 'English_United States.utf8'); ",
@@ -11,11 +11,11 @@ translate_from_catalog <- function(domain, bind_dir, message) {
     "error = conditionMessage); ",
     "writeLines(paste0('GETTEXT_PROBE|', probe)); ",
     "invisible(bindtextdomain(", deparse(domain), ", ", deparse(bind_dir), ")); ",
-    "writeLines(gettext(", deparse(message), ", domain = ", deparse(domain), "))"
+    code
   )
   output <- system2(
     file.path(R.home("bin"), "Rscript"),
-    c("--vanilla", "-e", shQuote(code)),
+    c("--vanilla", "-e", shQuote(child_code)),
     stdout = TRUE,
     stderr = TRUE
   )
@@ -33,7 +33,18 @@ translate_from_catalog <- function(domain, bind_dir, message) {
   output[!startsWith(output, "GETTEXT_PROBE|")]
 }
 
-test_that("the bigbang runtime catalog translates messages to Spanish", {
+translate_from_catalog <- function(domain, bind_dir, message) {
+  run_spanish_child(
+    domain,
+    bind_dir,
+    paste0(
+      "writeLines(gettext(", deparse(message),
+      ", domain = ", deparse(domain), "))"
+    )
+  )
+}
+
+bigbang_catalog_dir <- function() {
   source_catalog <- file.path(
     testthat::test_path(), "..", "..", "inst", "po", "es", "LC_MESSAGES",
     "R-bigbang.mo"
@@ -42,11 +53,29 @@ test_that("the bigbang runtime catalog translates messages to Spanish", {
     "po", "es", "LC_MESSAGES", "R-bigbang.mo", package = "bigbang"
   )
   catalog <- if (file.exists(source_catalog)) source_catalog else installed_catalog
-  bind_dir <- if (nzchar(catalog)) {
-    dirname(dirname(dirname(catalog)))
+  if (nzchar(catalog)) {
+    dirname(dirname(dirname(normalizePath(catalog))))
   } else {
     normalizePath(file.path(testthat::test_path(), "..", "..", "inst", "po"))
   }
+}
+
+bigbang_child_load_code <- function() {
+  source_root <- normalizePath(
+    file.path(testthat::test_path(), "..", ".."), mustWork = FALSE
+  )
+  if (file.exists(file.path(source_root, "R", "create_metapackage.R"))) {
+    paste0(
+      "devtools::load_all(",
+      deparse(source_root), ", quiet = TRUE); "
+    )
+  } else {
+    "library(bigbang); "
+  }
+}
+
+test_that("the bigbang runtime catalog translates messages to Spanish", {
+  bind_dir <- bigbang_catalog_dir()
   output <- translate_from_catalog(
     "R-bigbang", bind_dir, "The directory specified by 'pkg_dir' does not exist"
   )
@@ -131,6 +160,10 @@ test_that("Spanish catalogs are complete and preserve format placeholders", {
   expect_true(all(nzchar(unname(local_catalog))))
   expect_true(all(nzchar(names(meta_catalog))))
   expect_true(all(nzchar(unname(meta_catalog))))
+  expect_identical(names(local_catalog), trimws(names(local_catalog)))
+  expect_identical(unname(local_catalog), trimws(unname(local_catalog)))
+  expect_identical(names(meta_catalog), trimws(names(meta_catalog)))
+  expect_identical(unname(meta_catalog), trimws(unname(meta_catalog)))
 
   placeholders <- function(text) {
     matches <- gregexpr("%(?:[0-9]+\\$)?[a-zA-Z]", text, perl = TRUE)
@@ -148,4 +181,118 @@ test_that("Spanish catalogs are complete and preserve format placeholders", {
   expect_true(all(grepl(
     "catalogverse_install", unname(meta_catalog[install_messages]), fixed = TRUE
   )))
+})
+
+test_that("messages formerly keyed with edge whitespace translate at runtime", {
+  skip_on_cran()
+  skip_if(Sys.which("zip") == "", "the zip utility is unavailable")
+  sandbox <- tempfile("bigbang-i18n-runtime-")
+  dir.create(sandbox)
+  empty_zip_root <- file.path(sandbox, "empty-zip")
+  dir.create(empty_zip_root)
+  writeLines("not a package", file.path(empty_zip_root, "empty.txt"))
+  empty_zip <- file.path(sandbox, "empty.zip")
+  withr::with_dir(empty_zip_root, utils::zip(
+    empty_zip, files = "empty.txt", flags = "-q"
+  ))
+
+  bad_archives <- file.path(sandbox, "bad-archives")
+  dir.create(bad_archives)
+  writeLines("not an archive", file.path(bad_archives, "badpkg_0.1.0.bad"))
+
+  skipped_source <- file.path(sandbox, "skipped-source")
+  skipped_pkg <- file.path(skipped_source, "skippkg")
+  dir.create(file.path(skipped_pkg, "R"), recursive = TRUE)
+  writeLines(c(
+    "Package: skippkg", "Version: 0.1.0", "Title: Skipped Package",
+    "Description: Temporary package for translation tests.",
+    "Authors@R: person('T','A',email='t@example.org',role=c('aut','cre'))",
+    "License: MIT", "Imports: definitely.not.installed.bigbang"
+  ), file.path(skipped_pkg, "DESCRIPTION"))
+  writeLines(character(), file.path(skipped_pkg, "NAMESPACE"))
+  writeLines("value <- 1L", file.path(skipped_pkg, "R", "value.R"))
+  skipped_archives <- file.path(sandbox, "skipped-archives")
+  dir.create(skipped_archives)
+  withr::with_dir(skipped_source, utils::tar(
+    file.path(skipped_archives, "skippkg_0.1.0.tar.gz"),
+    files = "skippkg", compression = "gzip"
+  ))
+
+  no_description <- file.path(sandbox, "no-description")
+  dir.create(no_description)
+  unsupported_artifact <- file.path(sandbox, "artifact.txt")
+  writeLines("artifact", unsupported_artifact)
+  test_library <- file.path(sandbox, "library")
+  dir.create(test_library)
+  toy_archive <- system.file(
+    "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
+  )
+  if (!nzchar(toy_archive)) {
+    toy_archive <- normalizePath(testthat::test_path(
+      "..", "..", "inst", "extdata", "toycomponent_0.1.0.tar.gz"
+    ))
+  }
+  toy_archives <- dirname(toy_archive)
+
+  code <- paste0(
+    bigbang_child_load_code(),
+    ".libPaths(c(", deparse(test_library), ", .Library)); ",
+    "capture_error <- function(expr) tryCatch(expr, error = conditionMessage); ",
+    "capture_messages <- function(expr) paste(capture.output(expr, type = 'message'), collapse = '\\n'); ",
+    "classify <- get('.classify_local_archive', envir = asNamespace('bigbang')); ",
+    "validate <- get('.validate_archive_members', envir = asNamespace('bigbang')); ",
+    "writeLines(paste0('ZIP|', capture_error(classify(", deparse(empty_zip), ", '.zip')))); ",
+    "bad <- install_local_pkg('badpkg_0.1.0', ", deparse(bad_archives), ", ext = '.bad'); ",
+    "writeLines(paste0('FORMAT|', bad$failed[['badpkg_0.1.0']])); ",
+    "writeLines(paste0('INSTALLED|', capture_messages(install_local_pkg('toycomponent_0.1.0', ",
+    deparse(toy_archives), ", verbose = TRUE)))); ",
+    "writeLines(paste0('FAILED|', capture_messages(install_local_pkg('absent_0.1.0', ",
+    deparse(bad_archives), ", verbose = TRUE)))); ",
+    "writeLines(paste0('SKIPPED|', capture_messages(install_local_pkg('skippkg_0.1.0', ",
+    deparse(skipped_archives), ", verbose = TRUE)))); ",
+    "writeLines(paste0('MISSING|', capture_error(scan_bigbang_artifact(",
+    deparse(file.path(sandbox, "missing")), ")))); ",
+    "writeLines(paste0('TYPE|', capture_error(scan_bigbang_artifact(",
+    deparse(unsupported_artifact), ")))); ",
+    "writeLines(paste0('DESCRIPTION|', capture_error(scan_bigbang_artifact(",
+    deparse(no_description), ")))); ",
+    "writeLines(paste0('UNSAFE|', capture_error(validate('../escape'))))"
+  )
+  output <- run_spanish_child("R-bigbang", bigbang_catalog_dir(), code)
+  translated <- paste(output, collapse = "\n")
+
+  expect_match(translated, "El archivo ZIP no contiene DESCRIPTION", fixed = TRUE)
+  expect_match(translated, "Formato de archivo no compatible", fixed = TRUE)
+  expect_match(translated, "Paquete local instalado", fixed = TRUE)
+  expect_match(translated, "Paquetes que fallaron", fixed = TRUE)
+  expect_match(
+    translated, "Paquetes omitidos por la política offline", fixed = TRUE
+  )
+  expect_match(translated, "El artefacto no existe", fixed = TRUE)
+  expect_match(translated, "Tipo de artefacto no compatible", fixed = TRUE)
+  expect_match(
+    translated, "No se encontró DESCRIPTION en el directorio fuente", fixed = TRUE
+  )
+  expect_match(translated, "rutas absolutas", fixed = TRUE)
+})
+
+test_that("template diagnostics translate without edge whitespace", {
+  sandbox <- tempfile("bigbang-i18n-template-")
+  dir.create(sandbox)
+  code <- paste0(
+    bigbang_child_load_code(),
+    "whisker_ns <- asNamespace('whisker'); ",
+    "unlockBinding('whisker.render', whisker_ns); ",
+    "assign('whisker.render', function(...) stop('forced render failure'), envir = whisker_ns); ",
+    "lockBinding('whisker.render', whisker_ns); ",
+    "writer <- get('write_metapackage_files', envir = asNamespace('bigbang')); ",
+    "messages <- capture.output(writer('diagverse', 'toycomponent', ",
+    deparse(sandbox), ", 'toycomponent_0.1.0', dest_dir = ",
+    deparse(file.path(sandbox, "R")), ", verbose = TRUE), type = 'message'); ",
+    "writeLines(messages)"
+  )
+  output <- run_spanish_child("R-bigbang", bigbang_catalog_dir(), code)
+  translated <- paste(output, collapse = "\n")
+  expect_match(translated, "Plantilla original:", fixed = TRUE)
+  expect_match(translated, "Datos de la plantilla:", fixed = TRUE)
 })

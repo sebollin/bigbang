@@ -391,7 +391,9 @@ write_reexports_file <- function(
 
 write_basic_vignette <- function(name, packages, project_dir, verbose = FALSE) {
   # Operate from the generated project root and restore the caller's cwd.
-  if (basename(getwd()) != basename(project_dir)) {
+  current_dir <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+  project_dir <- normalizePath(project_dir, winslash = "/", mustWork = FALSE)
+  if (!identical(current_dir, project_dir)) {
     warning(.bb_trf(
       "Current directory (%s) does not match project directory (%s).",
       getwd(), project_dir

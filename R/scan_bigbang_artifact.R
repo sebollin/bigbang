@@ -50,7 +50,7 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
     )
   }
   if (!file.exists(path) && !dir.exists(path)) {
-    stop("Artifact does not exist: ", path, call. = FALSE, domain = "R-bigbang")
+    stop(.bb_trf("Artifact does not exist: %s", path), call. = FALSE)
   }
 
   original_path <- path
@@ -72,8 +72,7 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
     result <- .scan_source_archive(path)
     type <- "archive"
   } else {
-    stop("Unsupported artifact type: ", original_path, call. = FALSE,
-         domain = "R-bigbang")
+    stop(.bb_trf("Unsupported artifact type: %s", original_path), call. = FALSE)
   }
 
   structure(
@@ -180,8 +179,9 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
 .scan_source_tree <- function(root) {
   description <- file.path(root, "DESCRIPTION")
   if (!file.exists(description)) {
-    stop("No DESCRIPTION found in source directory: ", root, call. = FALSE,
-         domain = "R-bigbang")
+    stop(.bb_trf(
+      "No DESCRIPTION found in source directory: %s", root
+    ), call. = FALSE)
   }
   r_dir <- file.path(root, "R")
   r_files <- if (dir.exists(r_dir)) {
@@ -233,11 +233,10 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
     grepl("^[A-Za-z]:", members) |
     grepl("(^|/)\\.\\.(/|$)", members, perl = TRUE)
   if (any(unsafe)) {
-    stop(
-      "Archive contains unsafe absolute or parent-traversal paths: ",
-      paste(utils::head(members[unsafe], 3L), collapse = ", "),
-      call. = FALSE, domain = "R-bigbang"
-    )
+    stop(.bb_trf(
+      "Archive contains unsafe absolute or parent-traversal paths: %s",
+      paste(utils::head(members[unsafe], 3L), collapse = ", ")
+    ), call. = FALSE)
   }
   invisible(members)
 }

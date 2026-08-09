@@ -34,7 +34,11 @@
     }, messages, unname(translations)
   ), use.names = FALSE)
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
-  .write_utf8(c(header, entries), path)
+  content <- c(header, entries)
+  if (length(content) > 0L && !nzchar(content[[length(content)]])) {
+    content <- content[-length(content)]
+  }
+  .write_utf8(content, path)
 }
 
 .write_mo_catalog <- function(messages, translations, path) {
