@@ -1,5 +1,11 @@
 # bigbang (development version)
 
+- When a generated meta-package skips a component because a non-local
+  dependency is missing, the warning now names the call that resolves it
+  (`<meta>_install(cran_deps = 'install')`) and the attachment step no longer
+  follows it with a vaguer hint suggesting a bare re-run, which would have
+  skipped the component again for the same reason.
+
 - Non-local dependencies are installed with `dependencies = NA`, which covers
   Depends, Imports and LinkingTo, instead of `TRUE`, which also covered
   Suggests. Asking for one small dependency used to pull development tooling and

@@ -95,6 +95,16 @@
   } else {
     paste0(name, "_install(pkg_dir = PATH)")
   }
+  repo_es <- if (isTRUE(include_archives)) {
+    paste0(name, "_install(cran_deps = 'install')")
+  } else {
+    paste0(name, "_install(pkg_dir = RUTA, cran_deps = 'install')")
+  }
+  repo_en <- if (isTRUE(include_archives)) {
+    paste0(name, "_install(cran_deps = 'install')")
+  } else {
+    paste0(name, "_install(pkg_dir = PATH, cran_deps = 'install')")
+  }
   stats::setNames(
     c(
       "Los archivos de los componentes que acompa\u00f1an a este paquete no est\u00e1n disponibles. Reinst\u00e1lelo o pase pkg_dir apuntando a un directorio con los archivos de los componentes.",
@@ -127,7 +137,7 @@
       "Dependencias circulares detectadas: %s. Una instalaci\u00f3n limpia no tiene un orden topol\u00f3gico v\u00e1lido.",
       sprintf("No instalado: %%s. Ejecute %s para instalarlo.", call_es),
       "No se pudieron instalar todos los componentes: %s",
-      "Se omitieron componentes porque faltan dependencias no locales: %s",
+      sprintf("Se omitieron componentes porque faltan dependencias no locales: %%s. Instale esas dependencias o llame a %s para obtenerlas desde un repositorio.", repo_es),
       "SEGURIDAD: La ruta es demasiado corta y puede ser peligrosa: %s",
       "SEGURIDAD: Patr\u00f3n de ruta potencialmente peligroso: %s",
       "SEGURIDAD: Directorio potencialmente importante: %s",
@@ -177,7 +187,7 @@
       "Circular dependencies detected: %s. A clean installation has no valid topological order.",
       sprintf("Not installed: %%s. Run %s to install them.", call_en),
       "Could not install all components: %s",
-      "Some components were skipped because non-local dependencies are missing: %s",
+      sprintf("Some components were skipped because non-local dependencies are missing: %%s. Install those dependencies, or call %s to obtain them from a repository.", repo_en),
       "SAFETY: Path is too short and may be dangerous: %s",
       "SAFETY: Potentially dangerous path pattern: %s",
       "SAFETY: Potentially important directory: %s",

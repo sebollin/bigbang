@@ -660,6 +660,13 @@ write_metapackage_files <- function(
     } else {
       paste0(name, "_install(pkg_dir = PATH)")
     },
+    # Single quotes inside the emitted message, which is itself a double-quoted
+    # R string.
+    install_call_repo = if (isTRUE(include_archives)) {
+      paste0(name, "_install(cran_deps = 'install')")
+    } else {
+      paste0(name, "_install(pkg_dir = PATH, cran_deps = 'install')")
+    },
     implicit_deps = if (!is.null(implicit_deps)) paste(implicit_deps, collapse = ", ") else ""
   )
 
@@ -782,7 +789,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
   }
   if (length(result$skipped) > 0L) {
     warning(gettextf(
-      "Some components were skipped because non-local dependencies are missing: %s",
+      "Some components were skipped because non-local dependencies are missing: %s. Install those dependencies, or call {{{ install_call_repo }}} to obtain them from a repository.",
       paste(names(result$skipped), collapse = ", "), domain = "R-{{ name }}"
     ), call. = FALSE)
   }
@@ -792,7 +799,12 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
       paste(names(result$unchanged), collapse = ", ")
     ))
   }
-  {{ name }}_attach(sub("_.*", "", packages))
+  # A skipped component was just reported with its reason and the call that
+  # fixes it, so attaching must not follow it with a vaguer hint.
+  attach_installed_packages(
+    sub("_.*", "", packages),
+    warn_missing = length(result$skipped) == 0L
+  )
   invisible(result)
 }
 
