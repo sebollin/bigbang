@@ -10,6 +10,8 @@ install_local_pkg(
   ext = ".tar.gz",
   repos = getOption("repos"),
   cran_deps = c("skip", "error", "install"),
+  force = FALSE,
+  upgrade = c("newer", "always", "never"),
   verbose = getOption("bigbang.verbose", interactive())
 )
 }
@@ -26,6 +28,14 @@ install_local_pkg(
 \item{cran_deps}{Character. Policy for missing non-local dependencies:
 \code{"skip"} (the default) never accesses the network, \code{"error"} fails without
 accessing it, and \code{"install"} attempts installation from \code{repos}.}
+
+\item{force}{Logical. Reinstall every local archive. This is a convenience
+alias for \code{upgrade = "always"}.}
+
+\item{upgrade}{Character. Installed-version policy: \code{"newer"} installs only
+when the archive is newer, \code{"always"} reinstalls, and \code{"never"} keeps any
+installed version. Explicitly combining \code{force = TRUE} with a value other
+than \code{"always"} is an error.}
 
 \item{verbose}{Logical. Whether to emit progress and summary messages. The
 default follows \code{getOption("bigbang.verbose", interactive())}.}

@@ -46,10 +46,82 @@ test_that("install_local_pkg recognizes a package version already installed", {
   result <- install_local_pkg(stem, sandbox, verbose = FALSE)
 
   expect_s3_class(result, "bigbang_install_result")
-  expect_identical(result$installed[[stem]], "Already installed")
+  expect_identical(result$unchanged[[stem]], "Already installed")
+  expect_length(result$installed, 0L)
   expect_length(result$failed, 0L)
   expect_length(result$skipped, 0L)
   expect_true(file.exists(archive))
+})
+
+test_that("force and upgrade policies control local reinstallation", {
+  skip_on_cran()
+  sandbox <- tempfile("install-helper-upgrade-")
+  source_root <- file.path(sandbox, "source")
+  archives <- file.path(sandbox, "archives")
+  library <- file.path(sandbox, "library")
+  package_dir <- file.path(source_root, "upgradepkg")
+  dir.create(file.path(package_dir, "R"), recursive = TRUE)
+  dir.create(archives)
+  dir.create(library)
+  withr::local_libpaths(c(library, .libPaths()))
+
+  write_package <- function(version) {
+    writeLines(c(
+      "Package: upgradepkg",
+      paste0("Version: ", version),
+      "Title: Upgrade Policy Fixture",
+      "Description: A temporary package for installation policy tests.",
+      "Authors@R: person('T','A',email='t@example.org',role=c('aut','cre'))",
+      "License: MIT"
+    ), file.path(package_dir, "DESCRIPTION"))
+    writeLines(character(), file.path(package_dir, "NAMESPACE"))
+    writeLines("fixture_value <- 1L", file.path(package_dir, "R", "fixture.R"))
+    archive <- file.path(archives, paste0("upgradepkg_", version, ".tar.gz"))
+    withr::with_dir(source_root, utils::tar(
+      archive, files = "upgradepkg", compression = "gzip"
+    ))
+    invisible(archive)
+  }
+
+  write_package("0.1.0")
+  first <- install_local_pkg("upgradepkg_0.1.0", archives, verbose = FALSE)
+  expect_named(first$installed, "upgradepkg_0.1.0")
+
+  unchanged <- install_local_pkg(
+    "upgradepkg_0.1.0", archives, verbose = FALSE
+  )
+  expect_named(unchanged$unchanged, "upgradepkg_0.1.0")
+
+  forced <- install_local_pkg(
+    "upgradepkg_0.1.0", archives, force = TRUE, verbose = FALSE
+  )
+  expect_named(forced$installed, "upgradepkg_0.1.0")
+
+  write_package("0.2.0")
+  never <- install_local_pkg(
+    "upgradepkg_0.2.0", archives, upgrade = "never", verbose = FALSE
+  )
+  expect_named(never$unchanged, "upgradepkg_0.2.0")
+  expect_identical(as.character(utils::packageVersion("upgradepkg")), "0.1.0")
+
+  newer <- install_local_pkg(
+    "upgradepkg_0.2.0", archives, upgrade = "newer", verbose = FALSE
+  )
+  expect_named(newer$installed, "upgradepkg_0.2.0")
+  expect_identical(as.character(utils::packageVersion("upgradepkg")), "0.2.0")
+})
+
+test_that("force rejects an explicitly conflicting upgrade policy", {
+  expect_error(
+    install_local_pkg(
+      "unused_0.1.0", tempdir(), force = TRUE, upgrade = "never"
+    ),
+    class = "bigbang_error_install_policy"
+  )
+  expect_error(
+    install_local_pkg("unused_0.1.0", tempdir(), force = NA),
+    class = "bigbang_error_install_policy"
+  )
 })
 
 test_that("ZIP classification rejects archives without DESCRIPTION", {

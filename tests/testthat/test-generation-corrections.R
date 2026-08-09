@@ -49,7 +49,7 @@ test_that("relative destination and archive paths generate a complete project", 
   expect_true(file.exists(file.path(result$path, "NAMESPACE")))
   expect_setequal(
     list.files(file.path(result$path, "R")),
-    c("attach.R", "defaults.R", "install_packages.R", "utils.R", "zzz.R")
+    c("attach.R", "install_packages.R", "utils.R", "zzz.R")
   )
 
   text_files <- list.files(
@@ -157,8 +157,8 @@ test_that("failed documentation is reported and restores the caller session", {
       generate_toy_metapackage(
         "faileddocverse", archives, destination, document = TRUE
       ),
-      document = function(...) {
-        suppressPackageStartupMessages(devtools::load_all(".", quiet = TRUE))
+      document = function(pkg, ...) {
+        suppressPackageStartupMessages(devtools::load_all(pkg, quiet = TRUE))
         stop("forced documentation failure")
       },
       .package = "devtools"

@@ -130,6 +130,7 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
     "Version",
     paste0(current_prefix, "/generator-version"),
     paste0(current_prefix, "/template-safety-schema"),
+    paste0(current_prefix, "/packages"),
     paste0(legacy_prefix, "/generator-version"),
     paste0(legacy_prefix, "/template-safety-schema")
   )

@@ -87,11 +87,15 @@ workflow. Loading the metapackage never installs components:
 system2(file.path(R.home("bin"), "R"), c("CMD", "build", result$path))
 install.packages("toyverse_0.1.0.tar.gz", repos = NULL, type = "source")
 library(toyverse)
-toyverse_install(cran_deps = "skip")
+toyverse_install(pkg_dir = archives, cran_deps = "skip")
 ```
 
 `cran_deps = "skip"` is the offline default. Choose `"error"` for strict
 offline validation or `"install"` only when an explicit repository is available.
+Use `upgrade = "always"` or `force = TRUE` for an explicit reinstall. Generated
+metapackages provide `<meta>_conflicts()` and honor
+`options(<meta>.quiet = TRUE)` for startup output. Their optional `cli` display
+falls back to a dependency-free ASCII banner.
 
 ```{r cleanup, include = FALSE}
 unlink(root, recursive = TRUE)

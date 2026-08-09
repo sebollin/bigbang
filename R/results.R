@@ -43,6 +43,7 @@ print.bigbang_result <- function(x, ...) {
 print.bigbang_install_result <- function(x, ...) {
   cat("<bigbang local installation>\n")
   cat("  Installed: ", length(x$installed), "\n", sep = "")
+  cat("  Unchanged: ", length(x$unchanged), "\n", sep = "")
   cat("  Failed: ", length(x$failed), "\n", sep = "")
   cat("  Skipped: ", length(x$skipped), "\n", sep = "")
   invisible(x)

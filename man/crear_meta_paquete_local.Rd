@@ -23,6 +23,7 @@ crear_meta_paquete_local(
   deps_imports = c("data.table", "dplyr", "ggplot2", "readr", "tibble", "tidyr", "xts",
     "zoo"),
   deps_forzar = NULL,
+  workflow = NULL,
   verbose = FALSE
 )
 }
@@ -38,6 +39,10 @@ crear_meta_paquete_local(
 \item{mostrar_progreso, autores, descripcion, licencia}{Deprecated Spanish arguments.}
 
 \item{deps_adicionales, deps_ignorar, deps_imports, deps_forzar, verbose}{Deprecated Spanish arguments.}
+
+\item{workflow}{Optional named character vector mapping ordered stage labels
+to component package names. When supplied, every component must appear once
+and a pipeline vignette skeleton is generated.}
 }
 \value{
 A \code{bigbang_result}, invisibly.

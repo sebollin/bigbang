@@ -1,4 +1,4 @@
-.render_install_engine <- function(name, packages, pkg_dir, ext) {
+.render_install_engine <- function(name, packages, ext) {
   glue::glue('
 
 .bigbang_abort <- function(class, message, ...) {{
@@ -7,6 +7,28 @@
     class = c(class, "bigbang_error", "error", "condition")
   )
   stop(condition)
+}}
+
+resolve_upgrade_policy <- function(force, upgrade, upgrade_missing) {{
+  if (!is.logical(force) || length(force) != 1L || is.na(force)) {{
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .meta_tr("\'force\' must be TRUE or FALSE")
+    )
+  }}
+  upgrade <- match.arg(upgrade, c("newer", "always", "never"))
+  if (isTRUE(force)) {{
+    if (!isTRUE(upgrade_missing) && !identical(upgrade, "always")) {{
+      .bigbang_abort(
+        "bigbang_error_install_policy",
+        .meta_tr(
+          "\'force = TRUE\' conflicts with an explicit upgrade policy other than \'always\'"
+        )
+      )
+    }}
+    upgrade <- "always"
+  }}
+  upgrade
 }}
 
 #\' Read dependencies from a local package archive
@@ -100,8 +122,10 @@ classify_package_archive <- function(archive, ext) {{
 #\' @keywords internal
 install_local_archive <- function(package, pkg_dir, ext = ".tar.gz",
                                    repos = getOption("repos"),
-                                   cran_deps = c("skip", "error", "install")) {{
+                                   cran_deps = c("skip", "error", "install"),
+                                   upgrade = c("newer", "always", "never")) {{
   cran_deps <- match.arg(cran_deps)
+  upgrade <- match.arg(upgrade)
   archive <- file.path(pkg_dir, paste0(package, ext))
   if (!file.exists(archive)) {{
     return(list(
@@ -120,18 +144,27 @@ install_local_archive <- function(package, pkg_dir, ext = ".tar.gz",
     return(list(success = FALSE, message = conditionMessage(dependencies)))
   }}
 
-  already_installed <- tryCatch(
-    utils::packageVersion(base_name) >= base::package_version(version),
-    error = function(e) FALSE
+  installed_version <- tryCatch(
+    utils::packageVersion(base_name), error = function(e) NULL
   )
-  if (already_installed) {{
+  keep_installed <- !is.null(installed_version) && (
+    identical(upgrade, "never") ||
+      (identical(upgrade, "newer") &&
+         installed_version >= base::package_version(version))
+  )
+  if (keep_installed) {{
     message(.meta_trf(
       "Package %s (version %s) is already installed.", base_name, version
     ))
+    unchanged_message <- if (identical(upgrade, "never")) {{
+      .meta_tr("Kept installed version because upgrade = \'never\'")
+    }} else {{
+      .meta_tr("Already installed")
+    }}
     return(list(
       success = TRUE,
-      message = .meta_tr("Already installed"),
-      installed = stats::setNames(list(.meta_tr("Already installed")), package),
+      unchanged = TRUE,
+      message = unchanged_message,
       dependencies = dependencies
     ))
   }}
@@ -249,7 +282,7 @@ install_local_archive <- function(package, pkg_dir, ext = ".tar.gz",
   )
 
   installed <- is.null(install_error) && tryCatch(
-    utils::packageVersion(base_name) >= base::package_version(version),
+    utils::packageVersion(base_name) == base::package_version(version),
     error = function(e) FALSE
   )
   if (!installed) {{
@@ -471,12 +504,15 @@ topological_order <- function(adjacency) {{
 install_packages_in_order <- function(packages, pkg_dir, ext,
                                       verbose = TRUE,
                                       repos = getOption("repos"),
-                                      cran_deps = c("skip", "error", "install")) {{
+                                      cran_deps = c("skip", "error", "install"),
+                                      upgrade = c("newer", "always", "never")) {{
   cran_deps <- match.arg(cran_deps)
+  upgrade <- match.arg(upgrade)
   adjacency <- build_dependency_graph(packages, pkg_dir, ext)
   install_order <- topological_order(adjacency)
 
   installed_packages <- list()
+  unchanged_packages <- list()
   failed_packages <- list()
   skipped_packages <- list()
   pb <- NULL
@@ -494,12 +530,15 @@ install_packages_in_order <- function(packages, pkg_dir, ext,
 
     result <- tryCatch(
       install_local_archive(
-        package, pkg_dir, ext, repos = repos, cran_deps = cran_deps
+        package, pkg_dir, ext, repos = repos, cran_deps = cran_deps,
+        upgrade = upgrade
       ),
       error = function(e) list(success = FALSE, message = conditionMessage(e))
     )
 
-    if (isTRUE(result$success)) {{
+    if (isTRUE(result$success) && isTRUE(result$unchanged)) {{
+      unchanged_packages[[package]] <- result$message
+    }} else if (isTRUE(result$success)) {{
       installed_packages[[package]] <- result$message
     }} else if (isTRUE(result$skipped)) {{
       skipped_packages[[package]] <- result$message
@@ -519,6 +558,7 @@ install_packages_in_order <- function(packages, pkg_dir, ext,
 
   invisible(list(
     installed = installed_packages,
+    unchanged = unchanged_packages,
     failed = failed_packages,
     skipped = skipped_packages,
     order = packages[install_order]
@@ -536,7 +576,7 @@ install_packages_in_order <- function(packages, pkg_dir, ext,
 #\' @return A sorted character vector of dependency names.
 #\' @export
 {name}_deps <- function(
-    pkg_dir = .pkg_dir_default,
+    pkg_dir,
     ext = {paste(deparse(ext), collapse = "")}) {{
   packages <- {.r_literal(packages)}
   deps <- unlist(lapply(
@@ -551,7 +591,6 @@ install_packages_in_order <- function(packages, pkg_dir, ext,
 #'
 #' @param name Character metapackage name.
 #' @param packages Character component names without versions.
-#' @param pkg_dir Character archive directory.
 #' @param archive_stems Character archive stems including versions.
 #' @param ext Character archive extension.
 #' @param dest_dir Character R output directory.
@@ -567,7 +606,6 @@ install_packages_in_order <- function(packages, pkg_dir, ext,
 write_metapackage_files <- function(
     name,
     packages,
-    pkg_dir,
     archive_stems,
     ext = ".tar.gz",
     dest_dir = "R",
@@ -590,7 +628,6 @@ write_metapackage_files <- function(
     name = name,
     package_list = .r_literal(packages),
     local_packages = .r_literal(archive_stems),
-    install_path = paste(deparse(pkg_dir), collapse = ""),
     extension = paste(deparse(ext), collapse = ""),
     implicit_deps = if (!is.null(implicit_deps)) paste(implicit_deps, collapse = ", ") else ""
   )
@@ -600,16 +637,12 @@ write_metapackage_files <- function(
     log_debug(paste("name:", template_data$name))
     log_debug(paste("package_list:", template_data$package_list))
     log_debug(paste("local_packages:", template_data$local_packages))
-    log_debug(paste("install_path:", template_data$install_path))
     log_debug(paste("extension:", template_data$extension))
   }
 
 
   # Templates for the generated runtime files.
   templates <- list(
-    defaults = '
-.pkg_dir_default <- {{{ install_path }}}
-',
     attach = '
 utils::globalVariables(".pkgs")
 .pkgs <- {{{ package_list }}}
@@ -620,7 +653,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
   missing <- to_load[!vapply(to_load, requireNamespace, logical(1), quietly = TRUE)]
   if (warn_missing && length(missing) > 0) {
     warning(gettextf(
-      "Not installed: %s. Run {{ name }}_install() to install them.",
+      "Not installed: %s. Run {{ name }}_install(pkg_dir = PATH) to install them.",
       paste(missing, collapse = ", "), domain = "R-{{ name }}"
     ), call. = FALSE)
   }
@@ -660,6 +693,11 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
 #\' @param ext Character archive extension.
 #\' @param cran_deps Character missing non-local dependency policy.
 #\' @param repos Character repositories used only by `cran_deps = "install"`.
+#\' @param force Logical. Reinstall every component; equivalent to
+#\'   `upgrade = "always"`.
+#\' @param upgrade Character installed-version policy: `"newer"`, `"always"`,
+#\'   or `"never"`. Combining `force = TRUE` with an explicit value other than
+#\'   `"always"` is an error.
 #\' @param verbose Logical progress toggle.
 #\'
 #\' @return Invisibly, structured installation results.
@@ -667,18 +705,21 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
 #\'
 #\' @examples
 #\' \\dontrun{
-#\'   {{ name }}_install()
+#\'   {{ name }}_install(pkg_dir = "/path/to/local/archives")
 #\' }
-{{ name }}_install <- function(pkg_dir = .pkg_dir_default,
+{{ name }}_install <- function(pkg_dir,
                                ext = {{{ extension }}},
                                cran_deps = c("skip", "error", "install"),
                                repos = getOption("repos"),
+                               force = FALSE,
+                               upgrade = c("newer", "always", "never"),
                                verbose = getOption("bigbang.verbose", interactive())) {
   cran_deps <- match.arg(cran_deps)
+  upgrade <- resolve_upgrade_policy(force, upgrade, missing(upgrade))
   packages <- {{{ local_packages }}}
   result <- install_packages_in_order(
     packages, pkg_dir, ext, verbose = verbose,
-    repos = repos, cran_deps = cran_deps
+    repos = repos, cran_deps = cran_deps, upgrade = upgrade
   )
   if (length(result$failed) > 0) {
     details <- paste0(
@@ -702,6 +743,12 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
       "Some components were skipped because non-local dependencies are missing: %s",
       paste(names(result$skipped), collapse = ", "), domain = "R-{{ name }}"
     ), call. = FALSE)
+  }
+  if (isTRUE(verbose) && interactive() && length(result$unchanged) > 0L) {
+    message(.meta_trf(
+      "Use force = TRUE or upgrade = \'always\' to reinstall unchanged packages: %s",
+      paste(names(result$unchanged), collapse = ", ")
+    ))
   }
   {{ name }}_attach(sub("_.*", "", packages))
   invisible(result)
@@ -745,12 +792,53 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
 #\' @export
 #\'
 #\' @examples
-#\' \\dontrun{
-#\'   {{ name }}_packages()
-#\' }
+#\' {{ name }}_packages()
 
 {{ name }}_packages <- function() {
   .pkgs
+}
+
+#\' Report masking conflicts involving metapackage components
+#\'
+#\' Examines attached package environments and reports names exported by more
+#\' than one package when at least one owner is a metapackage component.
+#\'
+#\' @return A named list of conflicting package search entries.
+#\' @export
+{{ name }}_conflicts <- function() {
+  package_entries <- grep("^package:", search(), value = TRUE)
+  component_entries <- intersect(paste0("package:", .pkgs), package_entries)
+  if (length(component_entries) == 0L) {
+    return(structure(list(), class = c("{{ name }}_conflicts", "list")))
+  }
+
+  objects <- lapply(package_entries, function(entry) {
+    ls(envir = as.environment(entry), all.names = TRUE)
+  })
+  names(objects) <- package_entries
+  candidates <- unique(unlist(objects[component_entries], use.names = FALSE))
+  conflicts <- lapply(candidates, function(object) {
+    package_entries[vapply(objects, function(exports) {
+      object %in% exports
+    }, logical(1))]
+  })
+  names(conflicts) <- candidates
+  conflicts <- conflicts[vapply(conflicts, length, integer(1)) > 1L]
+  structure(conflicts, class = c("{{ name }}_conflicts", "list"))
+}
+
+#\' @export
+print.{{ name }}_conflicts <- function(x, ...) {
+  if (length(x) == 0L) {
+    cat(.meta_tr("No conflicts found."), "\\n")
+    return(invisible(x))
+  }
+  cat(.meta_tr("Conflicts:"), "\\n")
+  for (object in names(x)) {
+    owners <- sub("^package:", "", x[[object]])
+    cat("  ", object, ": ", paste(owners, collapse = ", "), "\\n", sep = "")
+  }
+  invisible(x)
 }
 
 #\' Attach all components without a preflight check
@@ -789,21 +877,13 @@ utils = '
 #\'
 #\' @keywords internal
 style_startup_text <- function(x) {
-  # If not in RStudio, return x as is
-  if (!requireNamespace("rstudioapi", quietly = TRUE)) {
-    return(x)
-  }
-  if (!rstudioapi::isAvailable() || !rstudioapi::hasFun("getThemeInfo")) {
-    return(x)
-  }
-  theme <- rstudioapi::getThemeInfo()
-  if (isTRUE(theme$dark) && requireNamespace("crayon", quietly = TRUE)) crayon::white(x) else x
+  if (requireNamespace("cli", quietly = TRUE)) cli::style_bold(x) else x
 }
 
 package_version <- function(x) {
   version <- base::unclass(utils::packageVersion(x))[[1]]
-  if (length(version) > 3 && requireNamespace("crayon", quietly = TRUE)) {
-    version[4:length(version)] <- crayon::red(as.character(version[4:length(version)]))
+  if (length(version) > 3 && requireNamespace("cli", quietly = TRUE)) {
+    version[4:length(version)] <- cli::col_red(as.character(version[4:length(version)]))
   }
   paste0(version, collapse = ".")
 }
@@ -858,6 +938,39 @@ generate_ascii_banner <- function(name, packages = NULL) {
   }
 
   paste(banner, collapse = "\\n")
+}
+
+#\' Format the modern startup message
+#\'
+#\' Uses cli when it is available and returns `NULL` otherwise, allowing the
+#\' caller to fall back to the dependency-free ASCII banner.
+#\'
+#\' @param name Character metapackage name.
+#\' @param packages Character installed component names.
+#\' @return A character scalar or `NULL`.
+#\' @keywords internal
+format_cli_startup <- function(name, packages) {
+  if (!requireNamespace("cli", quietly = TRUE)) return(NULL)
+
+  meta_version <- tryCatch(package_version(name), error = function(e) "")
+  right <- trimws(paste(name, meta_version))
+  heading <- cli::rule(
+    left = .meta_tr("Attaching packages"),
+    right = right
+  )
+  if (length(packages) == 0L) return(heading)
+
+  versions <- vapply(packages, function(package) {
+    tryCatch(as.character(utils::packageVersion(package)), error = function(e) "")
+  }, character(1))
+  name_width <- max(cli::ansi_nchar(packages))
+  version_width <- max(cli::ansi_nchar(versions))
+  rows <- paste(
+    cli::col_green(cli::symbol$tick),
+    cli::ansi_align(packages, width = name_width, align = "left"),
+    cli::ansi_align(versions, width = version_width, align = "right")
+  )
+  paste(c(heading, rows), collapse = "\\n")
 }
 
 #\' Remove an owned temporary path safely
@@ -1053,20 +1166,28 @@ zzz = '
   # Safety fix 2026-07: no deletion and no installation from startup.
   pkg_base_names <- sub("_.*", "", {{{ local_packages }}})
 
-  banner <- generate_ascii_banner("{{{ name }}}", pkg_base_names)
-  startup_message(paste0("\\n", banner, "\\n"))
-
   # Tidyverse-style startup hook: delegate search-path changes to a helper.
   result <- attach_installed_packages(pkg_base_names, warn_missing = FALSE)
   missing <- result$missing
   installed <- setdiff(pkg_base_names, missing)
 
-  if (length(installed) > 0) {
-    startup_message(.meta_trf("Attached packages: %s", paste(installed, collapse = ", ")))
+  if (isTRUE(getOption("{{ name }}.quiet", FALSE))) return(invisible())
+
+  formatted <- format_cli_startup("{{{ name }}}", installed)
+  if (!is.null(formatted)) {
+    startup_message(paste0("\\n", formatted, "\\n"))
+  } else {
+    banner <- generate_ascii_banner("{{{ name }}}", pkg_base_names)
+    startup_message(paste0("\\n", banner, "\\n"))
+    if (length(installed) > 0) {
+      startup_message(.meta_trf(
+        "Attached packages: %s", paste(installed, collapse = ", ")
+      ))
+    }
   }
   if (length(missing) > 0) {
     packageStartupMessage(.meta_trf(
-      "Components still need installation: %s\\nRun {{ name }}_install() to install them from local archives.",
+      "Components still need installation: %s\\nRun {{ name }}_install(pkg_dir = PATH) to install them from local archives.",
       paste(missing, collapse = ", ")
     ))
   }

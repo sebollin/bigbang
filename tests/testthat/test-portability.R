@@ -73,18 +73,26 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
   expect_false(grepl(exact_pattern, "miXpkg"))
 
   attach_env <- new.env(parent = baseenv())
-  sys.source(file.path(project, "R", "defaults.R"), envir = attach_env)
   sys.source(file.path(project, "R", "attach.R"), envir = attach_env)
   sys.source(file.path(project, "R", "install_packages.R"), envir = attach_env)
   expect_named(
     formals(attach_env$portablemeta_install),
-    c("pkg_dir", "ext", "cran_deps", "repos", "verbose")
+    c("pkg_dir", "ext", "cran_deps", "repos", "force", "upgrade", "verbose")
   )
-  install_default <- formals(attach_env$portablemeta_install)$pkg_dir
-  deps_default <- formals(attach_env$portablemeta_deps)$pkg_dir
-  expect_identical(install_default, quote(.pkg_dir_default))
-  expect_identical(deps_default, quote(.pkg_dir_default))
-  expect_identical(eval(install_default, envir = attach_env), archives)
+  expect_identical(
+    formals(attach_env$portablemeta_install)["pkg_dir"],
+    alist(pkg_dir = )
+  )
+  expect_identical(
+    formals(attach_env$portablemeta_deps)["pkg_dir"],
+    alist(pkg_dir = )
+  )
+  emitted_code <- paste(
+    readLines(file.path(project, "R", "attach.R"), warn = FALSE),
+    readLines(file.path(project, "R", "install_packages.R"), warn = FALSE),
+    collapse = "\n"
+  )
+  expect_false(grepl(normalizePath(archives), emitted_code, fixed = TRUE))
 })
 
 test_that("ZIP content distinguishes source archives from Windows binaries", {

@@ -1,13 +1,18 @@
 # bigbang (development version)
 
+- Generated metapackages now provide optional `cli` startup formatting, a
+  package-specific quiet option, conflict reporting, explicit reinstall and
+  upgrade policies, and optional ordered workflow vignettes.
+- Component archive directories are now required by generated installers, and
+  generated metadata includes a consistency test for its component list.
+- Generation no longer changes the process working directory; every scaffold
+  writer receives an explicit absolute path.
 - Fixed generation with relative `dest_dir` and `pkg_dir` paths, and roll back
   incomplete project trees created by a failed invocation.
 - Restored the caller's attached packages and loaded namespaces after automatic
   documentation, and report documentation success accurately.
 - Fixed eleven Spanish runtime messages whose catalog keys had leading or
   trailing whitespace.
-- Kept generated installer signatures short by storing the archive-directory
-  default in an internal constant.
 - Documented related metapackage projects and design precedents.
 - Fixed generated helper examples so they use the requested metapackage name
   instead of an internal historical name.

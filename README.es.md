@@ -86,12 +86,25 @@ Luego de construir e instalar `equipoverse` como cualquier paquete R:
 
 ```r
 library(equipoverse)
-equipoverse_install(cran_deps = "skip")
+equipoverse_install(pkg_dir = "archivos", cran_deps = "skip")
 ```
 
 `"skip"` es el modo predeterminado y nunca usa la red. `"error"` falla si falta
 una dependencia no local; `"install"` permite instalar desde un `repos`
 configurado explícitamente.
+
+Los instaladores generados también aceptan `upgrade = "newer"` (predeterminado),
+`"always"` o `"never"`; `force = TRUE` equivale a `upgrade = "always"`. Los
+metapaquetes usan un mensaje opcional de dos columnas mediante `cli` y vuelven
+al banner ASCII cuando `cli` no está disponible. Use
+`options(equipoverse.quiet = TRUE)` para silenciar el arranque y
+`equipoverse_conflicts()` para revisar conflictos de enmascaramiento.
+
+Para generar una guía de flujo ordenada, indique cada componente una vez:
+
+```r
+workflow = c("Importación" = "datos", "Informe" = "reportes")
+```
 
 ## 🧰 API
 

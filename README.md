@@ -111,13 +111,26 @@ installation remains explicit:
 
 ```r
 library(teamverse)                 # attaches what is already installed
-teamverse_install(cran_deps = "skip")
+teamverse_install(pkg_dir = "archives", cran_deps = "skip")
 ```
 
 `cran_deps = "skip"` is the default and never accesses the network. Use
 `"error"` to fail immediately when a non-local dependency is missing, or
 `"install"` with an explicitly configured `repos` value to allow repository
 installation.
+
+Generated installers also accept `upgrade = "newer"` (the default), `"always"`,
+or `"never"`; `force = TRUE` is the concise form of `upgrade = "always"`.
+Generated metapackages use an optional `cli` two-column attachment message and
+fall back to their ASCII banner when `cli` is unavailable. Set
+`options(teamverse.quiet = TRUE)` to silence startup messages, or call
+`teamverse_conflicts()` to inspect masking conflicts.
+
+For an ordered pipeline guide, supply every component once in a named workflow:
+
+```r
+workflow = c("Import" = "datahelpers", "Report" = "reports")
+```
 
 See `vignette("getting-started", package = "bigbang")` for a reproducible
 toy project created entirely under `tempdir()`.

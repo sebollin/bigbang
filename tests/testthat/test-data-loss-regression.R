@@ -308,6 +308,8 @@ test_that("dependency graph detects cycles without installing", {
 test_that("_install turns engine failures into a visible error", {
   s <- make_functional_sandbox()
   env <- new.env(parent = baseenv())
+  sys.source(file.path(s$project, "R", "utils.R"), envir = env)
+  sys.source(file.path(s$project, "R", "install_packages.R"), envir = env)
   sys.source(file.path(s$project, "R", "attach.R"), envir = env)
   env$install_packages_in_order <- function(...) {
     list(installed = list(), failed = list(

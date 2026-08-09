@@ -23,6 +23,7 @@ create_metapackage(
   import_deps = c("data.table", "dplyr", "ggplot2", "readr", "tibble", "tidyr", "xts",
     "zoo"),
   force_deps = NULL,
+  workflow = NULL,
   debug = FALSE
 )
 }
@@ -73,6 +74,10 @@ user calls \code{library()} on the meta-package, but remain available via \code{
 \item{force_deps}{Character vector. Exact package names to use as dependencies,
 bypassing automatic detection. If supplied, only these are used as the
 meta-package's implicit dependencies.}
+
+\item{workflow}{Optional named character vector mapping ordered stage labels
+to component package names. When supplied, every component must appear once
+and a pipeline vignette skeleton is generated.}
 
 \item{debug}{Logical. If \code{TRUE}, emits detailed debugging messages. Defaults
 to \code{FALSE}.}

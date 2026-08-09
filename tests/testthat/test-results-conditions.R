@@ -136,6 +136,7 @@ test_that("generation and installation results print all summary branches", {
   installation <- structure(
     list(
       installed = list(aaa = "Installed successfully"),
+      unchanged = list(ddd = "Already installed"),
       failed = list(bbb = "Installation failed"),
       skipped = list(ccc = "Offline policy")
     ),
@@ -146,6 +147,7 @@ test_that("generation and installation results print all summary branches", {
   )
   expect_identical(installation_returned, installation)
   expect_match(paste(installation_output, collapse = "\n"), "Installed: 1")
+  expect_match(paste(installation_output, collapse = "\n"), "Unchanged: 1")
   expect_match(paste(installation_output, collapse = "\n"), "Failed: 1")
   expect_match(paste(installation_output, collapse = "\n"), "Skipped: 1")
 })

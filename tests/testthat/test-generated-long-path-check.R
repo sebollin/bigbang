@@ -37,13 +37,17 @@ test_that("generated documentation keeps long archive paths out of usage", {
   ))
   expect_true(result$documented)
 
-  defaults <- readLines(file.path(result$path, "R", "defaults.R"), warn = FALSE)
-  expect_match(paste(defaults, collapse = "\n"), normalizePath(archives), fixed = TRUE)
+  generated_r <- unlist(lapply(
+    list.files(file.path(result$path, "R"), full.names = TRUE),
+    readLines,
+    warn = FALSE
+  ), use.names = FALSE)
+  expect_false(any(grepl(normalizePath(archives), generated_r, fixed = TRUE)))
   install_rd <- readLines(
     file.path(result$path, "man", "longpathverse_install.Rd"), warn = FALSE
   )
   expect_false(any(grepl(normalizePath(archives), install_rd, fixed = TRUE)))
-  expect_true(any(grepl("pkg_dir = .pkg_dir_default", install_rd, fixed = TRUE)))
+  expect_true(any(grepl("pkg_dir,", install_rd, fixed = TRUE)))
 
   r_binary <- file.path(
     R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"

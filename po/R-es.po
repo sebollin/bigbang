@@ -22,6 +22,9 @@ msgstr "El directorio indicado por 'pkg_dir' no existe"
 msgid "'dest_dir' must be supplied as one non-empty path: the meta-package is written inside it. Use tempdir() for disposable output."
 msgstr "'dest_dir' debe proporcionarse como una ruta no vacía: el metapaquete se escribe dentro de ella. Use tempdir() para una salida descartable."
 
+msgid "'workflow' must map unique non-empty stage names to every component package exactly once"
+msgstr "'workflow' debe asociar nombres de etapa únicos y no vacíos con cada paquete componente exactamente una vez"
+
 msgid "Unsupported archive extension: %s"
 msgstr "Extensión de archivo no compatible: %s"
 
@@ -67,14 +70,8 @@ msgstr "SEGURIDAD: Posible directorio no temporal de un paquete R: %s"
 msgid "Could not remove completely: %s"
 msgstr "No se pudo eliminar por completo: %s"
 
-msgid "Current directory (%s) does not match project directory (%s)."
-msgstr "El directorio actual (%s) no coincide con el directorio del proyecto (%s)."
-
-msgid "Temporarily changed directory to: %s"
-msgstr "Se cambió temporalmente al directorio: %s"
-
-msgid "The DESCRIPTION file does not exist in the current directory."
-msgstr "El archivo DESCRIPTION no existe en el directorio actual."
+msgid "The DESCRIPTION file does not exist in the project directory."
+msgstr "El archivo DESCRIPTION no existe en el directorio del proyecto."
 
 msgid "DESCRIPTION updated with a valid Suggests field"
 msgstr "DESCRIPTION actualizado con un campo Suggests válido"
@@ -177,6 +174,18 @@ msgstr "Paquetes que fallaron: %s"
 
 msgid "Packages skipped by the offline policy: %s"
 msgstr "Paquetes omitidos por la política offline: %s"
+
+msgid "'force' must be TRUE or FALSE"
+msgstr "'force' debe ser TRUE o FALSE"
+
+msgid "'force = TRUE' conflicts with an explicit upgrade policy other than 'always'"
+msgstr "'force = TRUE' entra en conflicto con una política 'upgrade' explícita distinta de 'always'"
+
+msgid "Kept installed version because upgrade = 'never'"
+msgstr "Se conservó la versión instalada porque upgrade = 'never'"
+
+msgid "Use force = TRUE or upgrade = 'always' to reinstall unchanged packages: %s"
+msgstr "Use force = TRUE o upgrade = 'always' para reinstalar paquetes sin cambios: %s"
 
 msgid "'path' must be one non-empty character string."
 msgstr "'path' debe ser una cadena de caracteres no vacía."

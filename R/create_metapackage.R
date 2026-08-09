@@ -88,6 +88,9 @@
 #' @param force_deps Character vector. Exact package names to use as dependencies,
 #'   bypassing automatic detection. If supplied, only these are used as the
 #'   meta-package's implicit dependencies.
+#' @param workflow Optional named character vector mapping ordered stage labels
+#'   to component package names. When supplied, every component must appear once
+#'   and a pipeline vignette skeleton is generated.
 #' @param debug Logical. If `TRUE`, emits detailed debugging messages. Defaults
 #'   to `FALSE`.
 #'
@@ -165,6 +168,7 @@ create_metapackage <- function(
   ignore_deps = NULL,
   import_deps = c("data.table", "dplyr", "ggplot2", "readr", "tibble", "tidyr", "xts", "zoo"),
   force_deps = NULL,
+  workflow = NULL,
   debug = FALSE
 ) {
   verbose <- isTRUE(verbose)
@@ -196,6 +200,23 @@ create_metapackage <- function(
   dest_dir <- normalizePath(dest_dir, winslash = "/", mustWork = FALSE)
   pkg_dir <- normalizePath(pkg_dir, winslash = "/", mustWork = TRUE)
 
+  component_packages <- unique(sub("_.*", "", packages))
+  if (!is.null(workflow)) {
+    valid_workflow <- is.character(workflow) && length(workflow) > 0L &&
+      !is.null(names(workflow)) && all(nzchar(names(workflow))) &&
+      !any(grepl("\\r|\\n", names(workflow), perl = TRUE)) &&
+      !anyDuplicated(names(workflow)) && !anyDuplicated(unname(workflow)) &&
+      setequal(unname(workflow), component_packages)
+    if (!isTRUE(valid_workflow)) {
+      .bigbang_abort(
+        "bigbang_error_workflow",
+        .bb_tr(
+          "'workflow' must map unique non-empty stage names to every component package exactly once"
+        )
+      )
+    }
+  }
+
   # Validate the package name.
   if (grepl("_", name)) {
     suggested_name <- gsub("_", ".", name)
@@ -213,7 +234,6 @@ create_metapackage <- function(
 
 
   # Resolve the generated project path.
-  dir_original <- getwd()
   project_dir <- normalizePath(
     file.path(dest_dir, name), winslash = "/", mustWork = FALSE
   )
@@ -222,8 +242,6 @@ create_metapackage <- function(
   documentation_search <- NULL
   documentation_namespaces <- NULL
   on.exit({
-    setwd(dir_original)
-
     if (!is.null(documentation_search)) {
       .restore_documentation_session(
         documentation_search, documentation_namespaces, name
@@ -285,9 +303,6 @@ create_metapackage <- function(
     }
   }
   log_debug("Basic directory structure created")
-
-  setwd(project_dir)
-  log_debug(glue::glue("Changed to project directory: {getwd()}"))
 
   # Require every requested local archive to exist.
   missing_archives <- packages[!file.exists(file.path(pkg_dir, paste0(packages, ext)))]
@@ -379,12 +394,19 @@ create_metapackage <- function(
     authors = authors,
     description = description,
     license = license,
+    component_packages = component_packages,
+    description_path = file.path(project_dir, "DESCRIPTION"),
     verbose = debug
   )
 
 
   # Create the basic vignette after DESCRIPTION exists.
   write_basic_vignette(name, packages, project_dir, verbose = debug)
+  if (!is.null(workflow)) {
+    write_workflow_vignette(name, workflow, project_dir)
+  }
+  write_metapackage_readme(name, project_dir)
+  write_consistency_test(name, project_dir)
   if (debug) {
     log_debug("Basic vignette created for R CMD check")
   }
@@ -393,7 +415,7 @@ create_metapackage <- function(
   write_namespace_file(
     name = name,
     cran_packages = cran_deps,
-    namespace_path = "NAMESPACE",
+    namespace_path = file.path(project_dir, "NAMESPACE"),
     implicit_deps = implicit_deps,
     import_deps = import_deps,
     verbose = debug
@@ -415,13 +437,14 @@ create_metapackage <- function(
   # Append generated S3 method directives when present.
   if (exists("namespace_additions") && length(namespace_additions) > 0) {
     # Read the current NAMESPACE.
-    namespace_content <- readLines("NAMESPACE")
+    namespace_file <- file.path(project_dir, "NAMESPACE")
+    namespace_content <- readLines(namespace_file)
 
     # Append S3 method directives.
     namespace_content <- c(namespace_content, "", "# S3 methods from reexports", namespace_additions)
 
     # Write the updated NAMESPACE.
-    .write_utf8(namespace_content, "NAMESPACE")
+    .write_utf8(namespace_content, namespace_file)
 
     if (debug) {
       log_debug(paste("Added", length(namespace_additions), "S3 methods to NAMESPACE"))
@@ -431,7 +454,7 @@ create_metapackage <- function(
   log_debug("NAMESPACE file created")
 
   # Generate the component installation engine.
-  install_packages_content <- .render_install_engine(name, packages, pkg_dir, ext)
+  install_packages_content <- .render_install_engine(name, packages, ext)
 
   install_packages_content <- .drop_regular_comment_lines(install_packages_content)
   .write_utf8(install_packages_content, file.path(project_dir, "R", "install_packages.R"))
@@ -443,7 +466,7 @@ create_metapackage <- function(
       paste0("YEAR: ", format(Sys.Date(), "%Y")),
       paste0("COPYRIGHT HOLDER: ", .copyright_holders(authors))
     )
-    .write_utf8(license_content, "LICENSE")
+    .write_utf8(license_content, file.path(project_dir, "LICENSE"))
     log_debug("LICENSE file created")
   }
 
@@ -454,16 +477,21 @@ create_metapackage <- function(
   if (exists(".metapackage_spanish_catalog", mode = "function")) {
     spanish_catalog <- .metapackage_spanish_catalog(name)
     .write_po_catalog(
-      names(spanish_catalog), NULL, file.path("po", paste0("R-", name, ".pot")),
+      names(spanish_catalog), NULL,
+      file.path(project_dir, "po", paste0("R-", name, ".pot")),
       project = paste(name, version)
     )
     .write_po_catalog(
-      names(spanish_catalog), spanish_catalog, file.path("po", "R-es.po"),
+      names(spanish_catalog), spanish_catalog,
+      file.path(project_dir, "po", "R-es.po"),
       project = paste(name, version)
     )
     .write_mo_catalog(
       names(spanish_catalog), spanish_catalog,
-      file.path("inst", "po", "es", "LC_MESSAGES", paste0("R-", name, ".mo"))
+      file.path(
+        project_dir, "inst", "po", "es", "LC_MESSAGES",
+        paste0("R-", name, ".mo")
+      )
     )
   }
 
@@ -514,7 +542,7 @@ create_metapackage <- function(
   rbuildignore_content <- unique(unlist(rbuildignore_content))
 
   # Write project metadata files.
-  .write_utf8(".Rproj.user", ".gitignore")
+  .write_utf8(".Rproj.user", file.path(project_dir, ".gitignore"))
   log_debug(".Rbuildignore and .gitignore created")
 
   # Accept non-standard directories in the generated source package.
@@ -547,7 +575,7 @@ LaTeX: pdfLaTeX
 AutoAppendNewline: Yes
 StripTrailingWhitespace: Yes"
 
-  .write_utf8(rproj_content, paste0(name, ".Rproj"))
+  .write_utf8(rproj_content, file.path(project_dir, paste0(name, ".Rproj")))
   log_debug(glue::glue("{name}.Rproj created"))
 
   # Render the remaining metapackage source files.
@@ -558,10 +586,9 @@ StripTrailingWhitespace: Yes"
   write_metapackage_files(
     name = name,
     packages = sub("_.*", "", packages),
-    pkg_dir = pkg_dir,
     archive_stems = packages,
     ext = ext,
-    dest_dir = "R",
+    dest_dir = file.path(project_dir, "R"),
     implicit_deps = implicit_deps,
     reexport = reexport,
     verbose = debug
@@ -594,9 +621,11 @@ StripTrailingWhitespace: Yes"
     # Run roxygen without loading unclassified legacy source.
     tryCatch({
       if (verbose) {
-        devtools::document(quiet = TRUE)
+        devtools::document(pkg = project_dir, quiet = TRUE)
       } else {
-        suppressPackageStartupMessages(devtools::document(quiet = TRUE))
+        suppressPackageStartupMessages(
+          devtools::document(pkg = project_dir, quiet = TRUE)
+        )
       }
       if (verbose) {
         message(.bb_tr("Documentation generated successfully."))
@@ -620,6 +649,7 @@ StripTrailingWhitespace: Yes"
       local_dependencies = local_deps,
       cran_dependencies = cran_deps,
       implicit_dependencies = implicit_deps,
+      workflow = workflow,
       documented = doc_ok
     ),
     class = "bigbang_result"
@@ -656,6 +686,7 @@ crear_meta_paquete_local <- function(
   deps_ignorar = NULL,
   deps_imports = c("data.table", "dplyr", "ggplot2", "readr", "tibble", "tidyr", "xts", "zoo"),
   deps_forzar = NULL,
+  workflow = NULL,
   verbose = FALSE
 ) {
   if (isTRUE(getOption("bigbang.deprecation_warnings", interactive()))) {
@@ -678,6 +709,7 @@ crear_meta_paquete_local <- function(
     ignore_deps = deps_ignorar,
     import_deps = deps_imports,
     force_deps = deps_forzar,
+    workflow = workflow,
     debug = verbose
   )
 }

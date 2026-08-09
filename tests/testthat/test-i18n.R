@@ -286,8 +286,8 @@ test_that("template diagnostics translate without edge whitespace", {
     "assign('whisker.render', function(...) stop('forced render failure'), envir = whisker_ns); ",
     "lockBinding('whisker.render', whisker_ns); ",
     "writer <- get('write_metapackage_files', envir = asNamespace('bigbang')); ",
-    "messages <- capture.output(writer('diagverse', 'toycomponent', ",
-    deparse(sandbox), ", 'toycomponent_0.1.0', dest_dir = ",
+    "messages <- capture.output(writer(name = 'diagverse', packages = 'toycomponent', ",
+    "archive_stems = 'toycomponent_0.1.0', dest_dir = ",
     deparse(file.path(sandbox, "R")), ", verbose = TRUE), type = 'message'); ",
     "writeLines(messages)"
   )
@@ -295,4 +295,33 @@ test_that("template diagnostics translate without edge whitespace", {
   translated <- paste(output, collapse = "\n")
   expect_match(translated, "Plantilla original:", fixed = TRUE)
   expect_match(translated, "Datos de la plantilla:", fixed = TRUE)
+})
+
+test_that("generated cli startup message translates to Spanish", {
+  skip_on_cran()
+  sandbox <- tempfile("bigbang-i18n-startup-")
+  destination <- file.path(sandbox, "output")
+  library <- file.path(sandbox, "library")
+  dir.create(destination, recursive = TRUE)
+  dir.create(library)
+  fixture <- system.file(
+    "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
+  )
+  result <- create_metapackage(
+    "spanishverse", "toycomponent_0.1.0", dirname(fixture),
+    dest_dir = destination, document = FALSE, verbose = FALSE,
+    import_deps = character(), force_deps = character()
+  )
+  code <- paste0(
+    ".libPaths(c(", deparse(library), ", .libPaths())); ",
+    "utils::install.packages(", deparse(result$path),
+    ", repos = NULL, type = 'source', lib = ", deparse(library), "); ",
+    "invisible(bindtextdomain('R-spanishverse', file.path(",
+    deparse(library), ", 'spanishverse', 'po'))); ",
+    "library(spanishverse, lib.loc = ", deparse(library), ")"
+  )
+  output <- run_spanish_child("R-bigbang", bigbang_catalog_dir(), code)
+  translated <- paste(output, collapse = "\n")
+  expect_match(translated, "Adjuntando paquetes", fixed = TRUE)
+  expect_match(translated, "Faltan componentes por instalar", fixed = TRUE)
 })

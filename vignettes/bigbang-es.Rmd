@@ -52,13 +52,19 @@ instalados e informa cuáles faltan. Para instalar desde los archivos locales:
 
 ```{r, eval = FALSE}
 library(equipoverse)
-equipoverse_install(cran_deps = "skip")
+equipoverse_install(pkg_dir = "archivos", cran_deps = "skip")
 ```
 
 La política predeterminada `cran_deps = "skip"` no accede a la red. Las alternativas
 son `"error"` (falla sin red) e `"install"` (intenta instalar desde `repos`). Los
 paquetes locales se instalan una sola vez en orden topológico; los ciclos producen
 una condición `bigbang_error_cycle`.
+
+`upgrade = "newer"` instala solo archivos más nuevos; `"always"` reinstala y
+`"never"` conserva cualquier versión instalada. `force = TRUE` equivale a
+`"always"`. Los metapaquetes generados ofrecen `<meta>_conflicts()` y respetan
+`options(<meta>.quiet = TRUE)`. Si `cli` no está disponible, el mensaje de
+arranque vuelve al banner ASCII sin fallar.
 
 ## Archivos ZIP
 

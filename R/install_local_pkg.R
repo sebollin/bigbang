@@ -15,6 +15,26 @@
   }
 }
 
+.resolve_upgrade_policy <- function(force, upgrade, upgrade_missing) {
+  if (!is.logical(force) || length(force) != 1L || is.na(force)) {
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .bb_tr("'force' must be TRUE or FALSE")
+    )
+  }
+  upgrade <- match.arg(upgrade, c("newer", "always", "never"))
+  if (isTRUE(force)) {
+    if (!isTRUE(upgrade_missing) && !identical(upgrade, "always")) {
+      .bigbang_abort(
+        "bigbang_error_install_policy",
+        .bb_tr("'force = TRUE' conflicts with an explicit upgrade policy other than 'always'")
+      )
+    }
+    upgrade <- "always"
+  }
+  upgrade
+}
+
 #' Install a local package together with its dependencies
 #'
 #' Installs a package from a local archive. Dependencies available as local
@@ -31,6 +51,12 @@
 #' @param cran_deps Character. Policy for missing non-local dependencies:
 #'   `"skip"` (the default) never accesses the network, `"error"` fails without
 #'   accessing it, and `"install"` attempts installation from `repos`.
+#' @param force Logical. Reinstall every local archive. This is a convenience
+#'   alias for `upgrade = "always"`.
+#' @param upgrade Character. Installed-version policy: `"newer"` installs only
+#'   when the archive is newer, `"always"` reinstalls, and `"never"` keeps any
+#'   installed version. Explicitly combining `force = TRUE` with a value other
+#'   than `"always"` is an error.
 #' @param verbose Logical. Whether to emit progress and summary messages. The
 #'   default follows `getOption("bigbang.verbose", interactive())`.
 #'
@@ -49,11 +75,15 @@ install_local_pkg <- function(
   ext = ".tar.gz",
   repos = getOption("repos"),
   cran_deps = c("skip", "error", "install"),
+  force = FALSE,
+  upgrade = c("newer", "always", "never"),
   verbose = getOption("bigbang.verbose", interactive())
 ) {
   cran_deps <- match.arg(cran_deps)
+  upgrade <- .resolve_upgrade_policy(force, upgrade, missing(upgrade))
   state <- new.env(parent = emptyenv())
   state$installed <- list()
+  state$unchanged <- list()
   state$failed <- list()
   state$skipped <- list()
   state$visiting <- character()
@@ -76,12 +106,20 @@ install_local_pkg <- function(
       state$failed[[stem]] <- paste("Package archive does not exist:", archive)
       return(FALSE)
     }
-    already_installed <- tryCatch(
-      utils::packageVersion(base_name) >= base::package_version(version_text),
-      error = function(e) FALSE
+    installed_version <- tryCatch(
+      utils::packageVersion(base_name), error = function(e) NULL
     )
-    if (already_installed) {
-      state$installed[[stem]] <- "Already installed"
+    keep_installed <- !is.null(installed_version) && (
+      identical(upgrade, "never") ||
+        (identical(upgrade, "newer") &&
+           installed_version >= base::package_version(version_text))
+    )
+    if (keep_installed) {
+      state$unchanged[[stem]] <- if (identical(upgrade, "never")) {
+        .bb_tr("Kept installed version because upgrade = 'never'")
+      } else {
+        .bb_tr("Already installed")
+      }
       return(TRUE)
     }
 
@@ -196,7 +234,7 @@ install_local_pkg <- function(
       NULL
     }, error = identity)
     verified <- !inherits(install_error, "error") && tryCatch(
-      utils::packageVersion(base_name) >= base::package_version(version_text),
+      utils::packageVersion(base_name) == base::package_version(version_text),
       error = function(e) FALSE
     )
     if (!verified) {
@@ -227,9 +265,16 @@ install_local_pkg <- function(
       paste(names(state$skipped), collapse = ", ")
     ))
   }
+  if (isTRUE(verbose) && interactive() && length(state$unchanged) > 0L) {
+    message(.bb_trf(
+      "Use force = TRUE or upgrade = 'always' to reinstall unchanged packages: %s",
+      paste(names(state$unchanged), collapse = ", ")
+    ))
+  }
   invisible(structure(
     list(
       installed = state$installed,
+      unchanged = state$unchanged,
       failed = state$failed,
       skipped = state$skipped
     ),
