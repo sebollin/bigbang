@@ -113,17 +113,59 @@ test_that("include_archives rejects anything that is not one logical", {
   }
 })
 
+build_component <- function(name, root, archives, imports = NULL) {
+  pkg <- file.path(root, name)
+  dir.create(file.path(pkg, "R"), recursive = TRUE)
+  writeLines(c(
+    paste0("Package: ", name), "Type: Package",
+    paste0("Title: Component ", name), "Version: 0.1.0",
+    "Authors@R: person('Test', 'Author', email='test@example.org', role=c('aut','cre'))",
+    paste0("Description: Component used only in temporary tests: ", name, "."),
+    "License: MIT", "Encoding: UTF-8",
+    if (!is.null(imports)) paste0("Imports: ", imports)
+  ), file.path(pkg, "DESCRIPTION"))
+  writeLines(paste0("export(", name, "_value)"), file.path(pkg, "NAMESPACE"))
+  writeLines(
+    paste0(name, "_value <- function() \"", name, "\""),
+    file.path(pkg, "R", "value.R")
+  )
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  withr::with_dir(root, system2(
+    r_binary, c("CMD", "build", shQuote(pkg)), stdout = TRUE, stderr = TRUE
+  ))
+  tarball <- paste0(name, "_0.1.0.tar.gz")
+  file.rename(file.path(root, tarball), file.path(archives, tarball))
+  invisible(file.path(archives, tarball))
+}
+
 test_that("a shipped meta-package installs its components with no arguments", {
   skip_on_cran()
   skip_if_not_installed("withr")
 
   sandbox <- tempfile("bigbang-no-paths-")
   archives <- file.path(sandbox, "archives")
-  toy_archive_dir(archives)
+  dir.create(archives, recursive = TRUE)
+  sources <- file.path(sandbox, "sources")
+  dir.create(sources, recursive = TRUE)
+  # The second component depends on the first, so the recipient also exercises
+  # the topological order rather than a single trivial install.
+  build_component("compalpha", sources, archives)
+  build_component("compbeta", sources, archives, imports = "compalpha")
   destination <- file.path(sandbox, "destination")
   dir.create(destination, recursive = TRUE)
 
-  result <- generate_self_contained("shippedverse", archives, destination)
+  result <- create_metapackage(
+    name = "shippedverse",
+    packages = c("compalpha_0.1.0", "compbeta_0.1.0"),
+    pkg_dir = archives,
+    dest_dir = destination,
+    document = FALSE,
+    verbose = FALSE,
+    import_deps = character(),
+    force_deps = character()
+  )
 
   r_binary <- file.path(
     R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
@@ -158,7 +200,8 @@ test_that("a shipped meta-package installs its components with no arguments", {
   expect_identical(
     install_status, 0L, info = paste(install_output, collapse = "\n")
   )
-  expect_false(dir.exists(file.path(library_dir, "toycomponent")))
+  expect_false(dir.exists(file.path(library_dir, "compalpha")))
+  expect_false(dir.exists(file.path(library_dir, "compbeta")))
 
   script <- file.path(sandbox, "recipient.R")
   writeLines(c(
@@ -166,7 +209,10 @@ test_that("a shipped meta-package installs its components with no arguments", {
     "suppressPackageStartupMessages(library(shippedverse))",
     "result <- shippedverse_install(verbose = FALSE)",
     "cat('FAILED:', length(result$failed), '\\n')",
-    "cat('COMPONENT:', requireNamespace('toycomponent', quietly = TRUE), '\\n')"
+    "cat('ORDER:', paste(result$order, collapse = '|'), '\\n')",
+    "cat('ALPHA:', requireNamespace('compalpha', quietly = TRUE), '\\n')",
+    "cat('BETA:', requireNamespace('compbeta', quietly = TRUE), '\\n')",
+    "cat('VALUES:', compalpha::compalpha_value(), compbeta::compbeta_value(), '\\n')"
   ), script)
   recipient_output <- system2(
     file.path(R.home("bin"), "Rscript"),
@@ -176,8 +222,19 @@ test_that("a shipped meta-package installs its components with no arguments", {
   report <- paste(recipient_output, collapse = "\n")
 
   expect_true(any(grepl("FAILED: 0", recipient_output, fixed = TRUE)), info = report)
-  expect_true(any(grepl("COMPONENT: TRUE", recipient_output, fixed = TRUE)), info = report)
-  expect_true(dir.exists(file.path(library_dir, "toycomponent")), info = report)
+  expect_true(any(grepl("ALPHA: TRUE", recipient_output, fixed = TRUE)), info = report)
+  expect_true(any(grepl("BETA: TRUE", recipient_output, fixed = TRUE)), info = report)
+  # The dependency must be installed before the package that imports it.
+  expect_true(
+    any(grepl("ORDER: compalpha_0.1.0|compbeta_0.1.0", recipient_output, fixed = TRUE)),
+    info = report
+  )
+  expect_true(
+    any(grepl("VALUES: compalpha compbeta", recipient_output, fixed = TRUE)),
+    info = report
+  )
+  expect_true(dir.exists(file.path(library_dir, "compalpha")), info = report)
+  expect_true(dir.exists(file.path(library_dir, "compbeta")), info = report)
 })
 
 test_that("the generated README documents the installation call that applies", {
@@ -213,4 +270,98 @@ test_that("the generated README documents the installation call that applies", {
       "maintainer named in DESCRIPTION", readme, fixed = TRUE
     )))
   }
+})
+
+test_that("the built tarball carries the shipped archives and no stray ones", {
+  skip_on_cran()
+  skip_if_not_installed("withr")
+
+  sandbox <- tempfile("bigbang-tarball-contents-")
+  archives <- file.path(sandbox, "archives")
+  toy_archive_dir(archives)
+  destination <- file.path(sandbox, "destination")
+  dir.create(destination, recursive = TRUE)
+
+  result <- generate_self_contained("tarballverse", archives, destination)
+
+  # Archives a user might leave lying around, at the root and nested.
+  file.copy(
+    file.path(archives, "toycomponent_0.1.0.tar.gz"),
+    file.path(result$path, "root-stray.tar.gz")
+  )
+  dir.create(file.path(result$path, "vendor"))
+  file.copy(
+    file.path(archives, "toycomponent_0.1.0.tar.gz"),
+    file.path(result$path, "vendor", "nested-stray.tar.gz")
+  )
+
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  build_output <- withr::with_dir(sandbox, system2(
+    r_binary, c("CMD", "build", shQuote(result$path)),
+    stdout = TRUE, stderr = TRUE
+  ))
+  build_status <- attr(build_output, "status")
+  if (is.null(build_status)) build_status <- 0L
+  expect_identical(build_status, 0L, info = paste(build_output, collapse = "\n"))
+
+  tarball <- file.path(sandbox, "tarballverse_0.1.0.tar.gz")
+  entries <- untar(tarball, list = TRUE)
+
+  # The assertion is on the tarball itself, not on the patterns in isolation.
+  expect_true(any(grepl(
+    "tarballverse/inst/archives/toycomponent_0.1.0.tar.gz", entries, fixed = TRUE
+  )))
+  expect_false(any(grepl("root-stray.tar.gz", entries, fixed = TRUE)))
+  expect_false(any(grepl("nested-stray.tar.gz", entries, fixed = TRUE)))
+})
+
+test_that("reserved R package names are refused", {
+  sandbox <- tempfile("bigbang-reserved-")
+  archives <- file.path(sandbox, "archives")
+  toy_archive_dir(archives)
+  destination <- file.path(sandbox, "destination")
+  dir.create(destination, recursive = TRUE)
+
+  for (reserved in c("base", "stats", "utils", "methods", "tools")) {
+    expect_error(
+      generate_self_contained(reserved, archives, destination),
+      regexp = "belongs to R itself",
+      info = reserved
+    )
+  }
+  expect_length(list.files(destination, all.files = TRUE, no.. = TRUE), 0L)
+})
+
+test_that("the startup hint names a call the reader can actually make", {
+  sandbox <- tempfile("bigbang-hints-")
+  archives <- file.path(sandbox, "archives")
+  toy_archive_dir(archives)
+  destination <- file.path(sandbox, "destination")
+  dir.create(destination, recursive = TRUE)
+
+  shipped <- generate_self_contained("hintshipped", archives, destination)
+  shipped_code <- unlist(lapply(
+    list.files(file.path(shipped$path, "R"), full.names = TRUE),
+    readLines, warn = FALSE
+  ), use.names = FALSE)
+  hints <- grep("to install them", shipped_code, value = TRUE)
+  expect_length(hints, 2L)
+  expect_true(all(grepl("hintshipped_install()", hints, fixed = TRUE)))
+  expect_false(any(grepl("pkg_dir", hints, fixed = TRUE)))
+
+  external <- generate_self_contained(
+    "hintexternal", archives, destination, include_archives = FALSE
+  )
+  external_code <- unlist(lapply(
+    list.files(file.path(external$path, "R"), full.names = TRUE),
+    readLines, warn = FALSE
+  ), use.names = FALSE)
+  external_hints <- grep("to install them", external_code, value = TRUE)
+  expect_length(external_hints, 2L)
+  # Suggesting a bare call here would send the reader straight into an error.
+  expect_true(all(grepl(
+    "hintexternal_install(pkg_dir = PATH)", external_hints, fixed = TRUE
+  )))
 })

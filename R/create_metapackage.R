@@ -7,6 +7,14 @@
 # Startup hooks may attach installed components but never install or remove files.
 
 .generator_version <- "0.1.0"
+
+# Names R ships with. Kept as a literal so the check works without inspecting
+# the library, which may differ from the machine the meta-package runs on.
+.r_standard_packages <- c(
+  "base", "compiler", "datasets", "graphics", "grDevices", "grid", "methods",
+  "parallel", "splines", "stats", "stats4", "tcltk", "tools", "translations",
+  "utils"
+)
 .template_safety_schema <- "2"
 
 .bigbang_condition <- function(class, message, ..., call = NULL) {
@@ -94,9 +102,12 @@
 #' @param include_archives Logical. If `TRUE`, the default, the component
 #'   archives are copied into `inst/archives/` of the generated meta-package, so
 #'   that the meta-package is the only artifact that has to be distributed and
-#'   `<meta>_install()` works with no arguments on any machine. Set it to `FALSE`
-#'   when the archives stay in a shared location that recipients can reach; then
-#'   `<meta>_install()` requires an explicit `pkg_dir`.
+#'   `<meta>_install()` works with no arguments, without any path being agreed
+#'   on beforehand. Components still install only where they can: a Windows
+#'   binary archive is refused on other platforms. Shipping the archives also
+#'   means redistributing them, so their licenses have to allow it. Set it to
+#'   `FALSE` when the archives stay in a shared location that recipients can
+#'   reach; then `<meta>_install()` requires an explicit `pkg_dir`.
 #' @param debug Logical. If `TRUE`, emits detailed debugging messages. Defaults
 #'   to `FALSE`.
 #'
@@ -249,6 +260,13 @@ create_metapackage <- function(
   # legal package name is rejected before touching the filesystem. Otherwise a
   # name carrying path separators or a parent reference would place the
   # generated tree outside the requested destination.
+  # R ships these names, so a meta-package cannot take one: R CMD build would
+  # reject it later, with a message that does not point back here.
+  if (name %in% .r_standard_packages) {
+    stop(.bb_trf(
+      "Package name '%s' belongs to R itself and cannot be reused.", name
+    ), call. = FALSE)
+  }
   if (!grepl("^[a-zA-Z][a-zA-Z0-9.]*[a-zA-Z0-9]$", name)) {
     stop(.bb_trf(paste0(
       "Package name '%s' is not a valid R package name: use at least two ",
@@ -345,7 +363,7 @@ create_metapackage <- function(
   }
 
   # Ship the component archives inside the meta-package so that installing it
-  # is enough to install the components on any machine.
+  # is enough to install the components wherever it is installed.
   if (isTRUE(include_archives)) {
     archive_dir <- file.path(project_dir, "inst", .archive_subdir)
     if (!dir.create(archive_dir, recursive = TRUE, showWarnings = FALSE) &&
@@ -527,7 +545,7 @@ create_metapackage <- function(
   # gettext build tools. The conditional keeps standalone sourcing of this file
   # useful in the security regression script.
   if (exists(".metapackage_spanish_catalog", mode = "function")) {
-    spanish_catalog <- .metapackage_spanish_catalog(name)
+    spanish_catalog <- .metapackage_spanish_catalog(name, include_archives)
     .write_po_catalog(
       names(spanish_catalog), NULL,
       file.path(project_dir, "po", paste0("R-", name, ".pot")),
@@ -574,12 +592,13 @@ create_metapackage <- function(
     "^\\.gitignore$",
     "^\\.git$",
 
-    # Package archives left at the project root. The patterns stop at the first
-    # level on purpose: component archives shipped under inst/archives/ are part
-    # of the meta-package and must reach the tarball.
-    "^[^/]*\\.tar\\.gz$",
-    "^[^/]*\\.zip$",
-    "^[^/]*\\.tar$",
+    # Package archives anywhere in the tree, except the component archives
+    # shipped under inst/archives/, which are part of the meta-package and must
+    # reach the tarball. R applies these patterns with perl = TRUE, so the
+    # negative lookahead is honoured.
+    "^(?!inst/archives/).*\\.tar\\.gz$",
+    "^(?!inst/archives/).*\\.zip$",
+    "^(?!inst/archives/).*\\.tar$",
 
     # Local component patterns
     vapply(sub("_.*", "", packages), function(pkg) {

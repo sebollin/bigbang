@@ -61,6 +61,7 @@
     "Packages skipped by the offline policy: %s" = "Paquetes omitidos por la pol\u00edtica offline: %s",
     "'force' must be TRUE or FALSE" = "'force' debe ser TRUE o FALSE",
     "'include_archives' must be TRUE or FALSE" = "'include_archives' debe ser TRUE o FALSE",
+    "Package name '%s' belongs to R itself and cannot be reused." = "El nombre de paquete '%s' pertenece a R y no puede reutilizarse.",
     "Could not copy the component archives into the meta-package: %s" = "No se pudieron copiar los archivos de los componentes dentro del metapaquete: %s",
     "'force = TRUE' conflicts with an explicit upgrade policy other than 'always'" = "'force = TRUE' entra en conflicto con una pol\u00edtica 'upgrade' expl\u00edcita distinta de 'always'",
     "Kept installed version because upgrade = 'never'" = "Se conserv\u00f3 la versi\u00f3n instalada porque upgrade = 'never'",
@@ -80,9 +81,24 @@
   )
 }
 
-.metapackage_spanish_catalog <- function(name) {
+.metapackage_spanish_catalog <- function(name, include_archives = FALSE) {
+  # The hint has to name the call the reader can actually make: without shipped
+  # archives the installer needs a directory, and suggesting a bare call would
+  # send them into an error.
+  call_es <- if (isTRUE(include_archives)) {
+    paste0(name, "_install()")
+  } else {
+    paste0(name, "_install(pkg_dir = RUTA)")
+  }
+  call_en <- if (isTRUE(include_archives)) {
+    paste0(name, "_install()")
+  } else {
+    paste0(name, "_install(pkg_dir = PATH)")
+  }
   stats::setNames(
     c(
+      "Los archivos de los componentes que acompa\u00f1an a este paquete no est\u00e1n disponibles. Reinst\u00e1lelo o pase pkg_dir apuntando a un directorio con los archivos de los componentes.",
+      "El directorio de archivos no existe: %s",
       "El archivo del paquete no existe: %s",
       "Formato de archivo no compatible: %s",
       "Se esperaba un DESCRIPTION en %s; se encontraron %d.",
@@ -109,10 +125,7 @@
       "Paquetes incluidos:",
       "Adjuntando paquetes",
       "Dependencias circulares detectadas: %s. Una instalaci\u00f3n limpia no tiene un orden topol\u00f3gico v\u00e1lido.",
-      sprintf(
-        "No instalado: %%s. Ejecute %s_install() para instalarlo.",
-        name
-      ),
+      sprintf("No instalado: %%s. Ejecute %s para instalarlo.", call_es),
       "No se pudieron instalar todos los componentes: %s",
       "Se omitieron componentes porque faltan dependencias no locales: %s",
       "SEGURIDAD: La ruta es demasiado corta y puede ser peligrosa: %s",
@@ -128,12 +141,14 @@
       "Se conserv\u00f3 la versi\u00f3n instalada porque upgrade = 'never'",
       "Use force = TRUE o upgrade = 'always' para reinstalar paquetes sin cambios: %s",
       sprintf(
-        "Faltan componentes por instalar: %%s\nEjecute %s_install() para instalarlos desde los archivos locales.",
-        name
+        "Faltan componentes por instalar: %%s\nEjecute %s para instalarlos desde los archivos locales.",
+        call_es
       ),
       "Nota: error durante la descarga segura: %s"
     ),
     c(
+      "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives.",
+      "The archive directory does not exist: %s",
       "Package archive does not exist: %s",
       "Unsupported archive format: %s",
       "Expected one DESCRIPTION in %s; found %d.",
@@ -160,10 +175,7 @@
       "Included packages:",
       "Attaching packages",
       "Circular dependencies detected: %s. A clean installation has no valid topological order.",
-      sprintf(
-        "Not installed: %%s. Run %s_install() to install them.",
-        name
-      ),
+      sprintf("Not installed: %%s. Run %s to install them.", call_en),
       "Could not install all components: %s",
       "Some components were skipped because non-local dependencies are missing: %s",
       "SAFETY: Path is too short and may be dangerous: %s",
@@ -179,8 +191,8 @@
       "Kept installed version because upgrade = 'never'",
       "Use force = TRUE or upgrade = 'always' to reinstall unchanged packages: %s",
       sprintf(
-        "Components still need installation: %%s\nRun %s_install() to install them from local archives.",
-        name
+        "Components still need installation: %%s\nRun %s to install them from local archives.",
+        call_en
       ),
       "Note: Error during safe unload: %s"
     )

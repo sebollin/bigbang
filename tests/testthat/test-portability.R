@@ -60,8 +60,11 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
   # Compiled gettext catalogs are binary, not emitted text files.
   text_files <- text_files[!grepl("\\.mo$", text_files)]
   # Component archives are copied verbatim into the meta-package; they are
-  # binary payload rather than generated text.
-  text_files <- text_files[!grepl("/inst/archives/", text_files, fixed = TRUE)]
+  # binary payload rather than generated text. Only the archives themselves are
+  # exempt, so anything else appearing there is still validated.
+  text_files <- text_files[
+    !grepl("/inst/archives/.*\\.(tar\\.gz|tgz|zip|tar)$", text_files)
+  ]
   expect_gt(length(text_files), 5L)
   for (path in text_files) {
     bytes <- readBin(path, what = "raw", n = file.info(path)$size)

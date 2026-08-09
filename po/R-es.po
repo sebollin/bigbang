@@ -184,6 +184,9 @@ msgstr "'force' debe ser TRUE o FALSE"
 msgid "'include_archives' must be TRUE or FALSE"
 msgstr "'include_archives' debe ser TRUE o FALSE"
 
+msgid "Package name '%s' belongs to R itself and cannot be reused."
+msgstr "El nombre de paquete '%s' pertenece a R y no puede reutilizarse."
+
 msgid "Could not copy the component archives into the meta-package: %s"
 msgstr "No se pudieron copiar los archivos de los componentes dentro del metapaquete: %s"
 

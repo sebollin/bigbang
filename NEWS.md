@@ -12,20 +12,21 @@
   `<meta>_install()` then defaults `pkg_dir` to
   `system.file("archives", package = "<meta>")`, resolved when the installer is
   called, so the meta-package is the only artifact that has to be distributed
-  and its components install with no arguments on any machine, with no path
-  agreed on beforehand. Network access remains necessary only for components
+  and its components install with no arguments, with no path agreed on
+  beforehand. Network access remains necessary only for components
   that depend on a package coming from a repository. Pass
   `include_archives = FALSE` to keep the previous behaviour, where the archives
   live in a location the recipient can reach and `pkg_dir` is required.
-- The build ignore rules of a generated meta-package no longer discard archives
-  below the project root, so shipped components reach the tarball while
-  archives left at the root are still excluded.
+- The build ignore rules of a generated meta-package exempt `inst/archives/`,
+  so shipped components reach the tarball while every other archive anywhere in
+  the tree is still excluded.
 
 - Generated metapackages now provide optional `cli` startup formatting, a
   package-specific quiet option, conflict reporting, explicit reinstall and
   upgrade policies, and optional ordered workflow vignettes.
-- Component archive directories are now required by generated installers, and
-  generated metadata includes a consistency test for its component list.
+- Generated metadata records the component list in
+  `Config/bigbang/packages` and the generated package tests that the list agrees
+  with what it exports.
 - Generation no longer changes the process working directory; every scaffold
   writer receives an explicit absolute path.
 - Fixed generation with relative `dest_dir` and `pkg_dir` paths, and roll back

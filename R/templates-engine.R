@@ -652,6 +652,11 @@ write_metapackage_files <- function(
     local_packages = .r_literal(archive_stems),
     extension = paste(deparse(ext), collapse = ""),
     pkg_dir_default = .archive_dir_default(name, include_archives),
+    install_call = if (isTRUE(include_archives)) {
+      paste0(name, "_install()")
+    } else {
+      paste0(name, "_install(pkg_dir = PATH)")
+    },
     implicit_deps = if (!is.null(implicit_deps)) paste(implicit_deps, collapse = ", ") else ""
   )
 
@@ -676,7 +681,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
   missing <- to_load[!vapply(to_load, requireNamespace, logical(1), quietly = TRUE)]
   if (warn_missing && length(missing) > 0) {
     warning(gettextf(
-      "Not installed: %s. Run {{ name }}_install() to install them.",
+      "Not installed: %s. Run {{{ install_call }}} to install them.",
       paste(missing, collapse = ", "), domain = "R-{{ name }}"
     ), call. = FALSE)
   }
@@ -739,6 +744,17 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
                                verbose = getOption("bigbang.verbose", interactive())) {
   cran_deps <- match.arg(cran_deps)
   upgrade <- resolve_upgrade_policy(force, upgrade, missing(upgrade))
+  # An empty pkg_dir means the shipped archive directory was not found, which
+  # produces a misleading path further down. Say what is wrong instead.
+  if (!is.character(pkg_dir) || length(pkg_dir) != 1L || !nzchar(pkg_dir)) {
+    stop(.meta_tr(
+      "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives."
+    ), call. = FALSE)
+  }
+  if (!dir.exists(pkg_dir)) {
+    stop(.meta_trf("The archive directory does not exist: %s", pkg_dir),
+         call. = FALSE)
+  }
   packages <- {{{ local_packages }}}
   result <- install_packages_in_order(
     packages, pkg_dir, ext, verbose = verbose,
@@ -1210,7 +1226,7 @@ zzz = '
   }
   if (length(missing) > 0) {
     packageStartupMessage(.meta_trf(
-      "Components still need installation: %s\\nRun {{ name }}_install() to install them from local archives.",
+      "Components still need installation: %s\\nRun {{{ install_call }}} to install them from local archives.",
       paste(missing, collapse = ", ")
     ))
   }

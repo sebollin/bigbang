@@ -83,9 +83,12 @@ and a pipeline vignette skeleton is generated.}
 \item{include_archives}{Logical. If \code{TRUE}, the default, the component
 archives are copied into \verb{inst/archives/} of the generated meta-package, so
 that the meta-package is the only artifact that has to be distributed and
-\verb{<meta>_install()} works with no arguments on any machine. Set it to \code{FALSE}
-when the archives stay in a shared location that recipients can reach; then
-\verb{<meta>_install()} requires an explicit \code{pkg_dir}.}
+\verb{<meta>_install()} works with no arguments, without any path being agreed
+on beforehand. Components still install only where they can: a Windows
+binary archive is refused on other platforms. Shipping the archives also
+means redistributing them, so their licenses have to allow it. Set it to
+\code{FALSE} when the archives stay in a shared location that recipients can
+reach; then \verb{<meta>_install()} requires an explicit \code{pkg_dir}.}
 
 \item{debug}{Logical. If \code{TRUE}, emits detailed debugging messages. Defaults
 to \code{FALSE}.}
