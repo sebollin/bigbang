@@ -1,67 +1,73 @@
-## Resubmission
+## Update
 
-This is a resubmission of the initial submission of `bigbang`, addressing the
-three points raised by Konstanze Lauseker on 2026-08-02.
+This is an update from 0.1.0, which was published on 2026-08-08.
 
-**1. `\dontrun{}` in examples.** All three examples that used `\dontrun{}` are
-now unwrapped and fully executable. Each runs in well under five seconds, uses a
-small package archive shipped in `inst/extdata`, writes only inside a directory
-created by `tempfile()`, and removes that directory before returning. The
-examples neither install packages nor access the network.
+The release makes a generated meta-package self-contained. Until now a generated
+meta-package could not install its own components: the recipient also needed the
+directory of component archives and had to be told where it was, which assumes
+that both machines agree on a path. The component archives are now copied into
+`inst/archives/` of the generated meta-package, and its installer defaults the
+archive directory to `system.file("archives", package = "<meta>")`. Distributing
+the meta-package is therefore enough, and no path has to be agreed on
+beforehand.
 
-**2. Writing to the user's filespace.** `dest_dir` is now a required argument of
-`create_metapackage()` and has no default. Its documentation states that all
-generated output is written inside that explicit destination and recommends
-`tempdir()` for disposable output. The examples and vignettes supply temporary
-destinations and clean up after themselves.
+Nothing in `bigbang` itself installs anything unless the user calls an
+installation function explicitly, and no repository is contacted unless the user
+selects `cran_deps = "install"`. Loading either `bigbang` or a generated
+meta-package never installs packages.
 
-**3. Installing packages.** The purpose of `bigbang` is to create meta-packages
-that simplify installing components from local archives. Installation is
-confined to clearly named, explicitly invoked installation functions:
-`install_local_pkg()` in `bigbang` and `<meta>_install()` in generated
-meta-packages. Loading either `bigbang` or a generated meta-package never
-installs software. The generated meta-package only reports components that are
-not yet installed when it is loaded.
+## Behaviour changes that are not backwards compatible
 
-The installation functions are not invoked in examples or vignettes. Tests
-that exercise real installation are skipped during CRAN checks and continue to
-run separately in non-CRAN continuous integration. The installation help now
-states explicitly that calling the function installs packages in the user's R
-library. The default `cran_deps = "skip"` policy does not access a repository;
-repository installation occurs only if the user explicitly selects it.
+Three, all in the direction of failing early rather than misleading. They are
+listed in NEWS.md.
+
+1. In a generated meta-package built with `include_archives = FALSE`,
+   `<meta>_install()` requires `pkg_dir`. In 0.1.0 that argument defaulted to
+   the absolute archive path of the machine where the meta-package had been
+   generated, which does not exist anywhere else and produced a confusing
+   failure. With the new default, `include_archives = TRUE`, the argument is
+   optional again because the archives travel inside the package.
+2. Components that the installation policy left untouched are reported in a new
+   `unchanged` element of the installation result instead of appearing in
+   `installed`, where they were labelled "Already installed". Reporting a
+   package as installed when nothing was installed was misleading.
+3. The deprecated Spanish aliases `crear_meta_paquete_local()`,
+   `diagnosticar_dependencias()` and `install_loc_pkg_w_dep()` were removed.
+   They existed to ease a rename inside the organisation the package grew in,
+   while it was still unpublished. The English names have been the documented
+   API since 0.1.0.
 
 ## Test environments
 
-Every result below was obtained on the resubmission source, not on the initial
-submission.
+Every result below was obtained on the source of this submission.
 
 - Local Linux (Pop!_OS 22.04), R 4.6.1: `R CMD check --as-cran`, including the
   PDF manual: 0 errors, 0 warnings.
-- win-builder, R-devel (2026-07-30 r90327 ucrt), checked on 2026-08-03:
-  Status: 1 NOTE (the standard new-submission NOTE). Examples and tests pass.
-- R-hub v2, R-devel on the Linux, Windows, and macOS containers, run on
-  2026-08-03: Status OK on all three.
+- win-builder, R-devel: to be filled at submission time.
+- R-hub v2, R-devel on the Linux, Windows, and macOS containers: to be filled at
+  submission time.
 - GitHub Actions: Ubuntu (release, devel, oldrel-1), Windows (release), and
-  macOS (release), with the PDF manual enabled: all five configurations pass.
-  The tests that install packages, which are skipped under `--as-cran`, run in a
-  dedicated step on all five configurations, and the destructive data-loss
-  verification runs on Ubuntu release.
-- A meta-package generated by the resubmission source was built and checked
-  with `R CMD check --as-cran`, including its PDF manual: 0 errors, 0 warnings.
+  macOS (release), with the PDF manual enabled.
+- The tests that install packages are skipped under `--as-cran` and run in a
+  dedicated step on every configuration; the destructive data-loss verification
+  runs on Ubuntu release.
+- A meta-package generated by this source was built and checked with
+  `R CMD check --as-cran`, including its PDF manual, in both shipping modes and
+  with a destination path longer than 120 characters: 0 errors, 0 warnings.
+- A generated meta-package carrying its components was built, its source tree
+  and the original archive directory were deleted, and it was installed into an
+  empty library on its own. `<meta>_install()` with no arguments installed both
+  components in dependency order.
 
-The only remaining NOTE is the standard new-submission NOTE.
+## Included component archives
 
-## Pre-release data-safety defect
-
-During pre-CRAN testing we found that an unreleased predecessor generated
-startup cleanup code that could recursively remove working-directory folders
-named after component packages. No CRAN release contained this code. We removed
-startup installation and every working-directory-relative cleanup path, made
-installation explicit, and added regression tests that recreate the former
-failure conditions only inside disposable temporary trees. We also provide a
-read-only scanner for internally generated historical artifacts so users can
-classify and replace them without loading the package.
+`include_archives = TRUE` copies the user's own package archives into the
+meta-package that `bigbang` generates on the user's machine. It does not ship
+any third-party content inside `bigbang`; the archives are supplied by whoever
+calls the function. The help states that distributing them this way is a
+redistribution, so their licenses have to allow it.
 
 ## Reverse dependencies
 
-There are no reverse dependencies because this is a new submission.
+There are none. Checked against the 24705 packages available from CRAN: no
+package declares `bigbang` in Depends, Imports, Suggests, LinkingTo or Enhances.

@@ -189,7 +189,8 @@ install_local_pkg <- function(
       }
       for (dependency in missing_external) {
         install_error <- tryCatch({
-          utils::install.packages(dependency, dependencies = TRUE, repos = repos)
+          # NA installs Depends, Imports and LinkingTo, not Suggests.
+          utils::install.packages(dependency, dependencies = NA, repos = repos)
           NULL
         }, error = identity)
         if (inherits(install_error, "error")) {

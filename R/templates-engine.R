@@ -239,7 +239,10 @@ install_local_archive <- function(package, pkg_dir, ext = ".tar.gz",
     for (dep in missing_nonlocal) {{
       message(.meta_trf("Installing non-local dependency: %s", dep))
       tryCatch(
-        utils::install.packages(dep, dependencies = TRUE, repos = repos),
+        # NA is what is needed to use the package: Depends, Imports and
+        # LinkingTo. TRUE would add Suggests, pulling development tooling
+        # into environments that asked for one dependency.
+        utils::install.packages(dep, dependencies = NA, repos = repos),
         error = function(e) warning(conditionMessage(e), call. = FALSE)
       )
     }}

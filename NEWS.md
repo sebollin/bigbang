@@ -1,5 +1,11 @@
 # bigbang (development version)
 
+- Non-local dependencies are installed with `dependencies = NA`, which covers
+  Depends, Imports and LinkingTo, instead of `TRUE`, which also covered
+  Suggests. Asking for one small dependency used to pull development tooling and
+  its whole tree into the library, which is the opposite of what a constrained
+  environment wants.
+
 - Removed the deprecated Spanish aliases `crear_meta_paquete_local()`,
   `diagnosticar_dependencias()` and `install_loc_pkg_w_dep()`. They existed to
   ease a transition inside the organisation the package grew in, before it was
