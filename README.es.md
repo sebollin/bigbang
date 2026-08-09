@@ -4,6 +4,7 @@
 
 [![R-CMD-check](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml)
 [![CRAN status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.org/package=bigbang)
+[![r-universe](https://sebollin.r-universe.dev/bigbang/badges/version)](https://sebollin.r-universe.dev/bigbang)
 [![Licencia: GPL v3](https://img.shields.io/badge/licencia-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![docs: English](https://img.shields.io/badge/docs-English-0D9786.svg)](https://github.com/sebollin/bigbang/blob/main/README.md)
 
@@ -48,7 +49,15 @@ La versión estable está en CRAN:
 install.packages("bigbang")
 ```
 
-La versión de desarrollo está en GitHub:
+La versión de desarrollo se publica como binario en r-universe, así que no
+requiere compilar nada:
+
+```r
+install.packages("bigbang", repos = c("https://sebollin.r-universe.dev",
+                                      "https://cloud.r-project.org"))
+```
+
+O desde las fuentes en GitHub:
 
 ```r
 # install.packages("pak")
