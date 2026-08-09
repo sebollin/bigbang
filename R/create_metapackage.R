@@ -225,6 +225,17 @@ create_metapackage <- function(
       name, suggested_name
     ), call. = FALSE)
   }
+  # The name becomes a directory under 'dest_dir', so anything that is not a
+  # legal package name is rejected before touching the filesystem. Otherwise a
+  # name carrying path separators or a parent reference would place the
+  # generated tree outside the requested destination.
+  if (!grepl("^[a-zA-Z][a-zA-Z0-9.]*[a-zA-Z0-9]$", name)) {
+    stop(.bb_trf(paste0(
+      "Package name '%s' is not a valid R package name: use at least two ",
+      "characters, start with a letter, continue with letters, digits or dots, ",
+      "and do not end with a dot."
+    ), name), call. = FALSE)
+  }
   # Debug logger.
   log_debug <- function(debug_message) {
     if (debug) message(paste0("DEBUG: ", debug_message))

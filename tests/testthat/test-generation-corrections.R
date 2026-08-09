@@ -176,3 +176,70 @@ test_that("failed documentation is reported and restores the caller session", {
     expect_false("devtools_shims" %in% search())
   }
 })
+
+test_that("illegal package names are rejected before anything is written", {
+  sandbox <- tempfile("bigbang-name-validation-")
+  dir.create(sandbox)
+  copy_toy_archive(file.path(sandbox, "archives"))
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  dir.create(destination)
+  neighbour <- file.path(sandbox, "neighbour")
+  dir.create(neighbour)
+
+  # A name carrying a parent reference or a separator would otherwise place the
+  # generated tree outside the requested destination.
+  illegal_names <- c(
+    "../escaped", "sub/nested", "./here", "a/../b",
+    "1leading", "trailing.", ".hidden", "x", ""
+  )
+
+  for (illegal in illegal_names) {
+    expect_error(
+      generate_toy_metapackage(illegal, archives, destination),
+      regexp = "valid R package name|one character string",
+      info = illegal
+    )
+  }
+
+  # Nothing was created, neither inside the destination nor beside it.
+  expect_length(list.files(destination, all.files = TRUE, no.. = TRUE), 0L)
+  expect_length(list.files(neighbour, all.files = TRUE, no.. = TRUE), 0L)
+  expect_setequal(
+    basename(list.dirs(sandbox, recursive = FALSE)),
+    c("archives", "destination", "neighbour")
+  )
+})
+
+test_that("the underscore message keeps precedence over the generic one", {
+  sandbox <- tempfile("bigbang-name-underscore-")
+  dir.create(sandbox)
+  copy_toy_archive(file.path(sandbox, "archives"))
+  destination <- file.path(sandbox, "destination")
+  dir.create(destination)
+
+  expect_error(
+    generate_toy_metapackage(
+      "team_verse", file.path(sandbox, "archives"), destination
+    ),
+    regexp = "underscores"
+  )
+})
+
+test_that("legal package names spanning the grammar are accepted", {
+  sandbox <- tempfile("bigbang-name-legal-")
+  dir.create(sandbox)
+  copy_toy_archive(file.path(sandbox, "archives"))
+  archives <- file.path(sandbox, "archives")
+
+  for (legal in c("ab", "teamverse", "team.verse", "verse2", "A9.b")) {
+    destination <- file.path(sandbox, paste0("out-", legal))
+    dir.create(destination)
+    result <- generate_toy_metapackage(legal, archives, destination)
+    expect_true(dir.exists(result$path), info = legal)
+    expect_true(
+      file.exists(file.path(result$path, "R", "install_packages.R")),
+      info = legal
+    )
+  }
+})

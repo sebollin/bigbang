@@ -88,6 +88,9 @@ msgstr "Error al crear la viñeta básica: %s"
 msgid "Package name '%s' contains underscores, which R package names do not allow. Use '%s' instead."
 msgstr "El nombre de paquete '%s' contiene guiones bajos, que R no admite. Use '%s' en su lugar."
 
+msgid "Package name '%s' is not a valid R package name: use at least two characters, start with a letter, continue with letters, digits or dots, and do not end with a dot."
+msgstr "El nombre de paquete '%s' no es un nombre de paquete de R válido: use al menos dos caracteres, comience con una letra, continúe con letras, dígitos o puntos, y no termine con un punto."
+
 msgid "For safety, the destination must be new or empty: %s. Generate into a new empty path; never regenerate an existing source in place."
 msgstr "Por seguridad, el destino debe ser nuevo o estar vacío: %s. Genere en una ruta nueva y vacía; nunca regenere una fuente existente in-place."
 

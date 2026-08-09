@@ -88,6 +88,9 @@ msgstr ""
 msgid "Package name '%s' contains underscores, which R package names do not allow. Use '%s' instead."
 msgstr ""
 
+msgid "Package name '%s' is not a valid R package name: use at least two characters, start with a letter, continue with letters, digits or dots, and do not end with a dot."
+msgstr ""
+
 msgid "For safety, the destination must be new or empty: %s. Generate into a new empty path; never regenerate an existing source in place."
 msgstr ""
 

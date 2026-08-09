@@ -9,6 +9,13 @@
   writer receives an explicit absolute path.
 - Fixed generation with relative `dest_dir` and `pkg_dir` paths, and roll back
   incomplete project trees created by a failed invocation.
+- `create_metapackage()` now validates `name` against the R package name
+  grammar before writing anything. A name carrying a path separator or a parent
+  reference previously placed the generated tree outside `dest_dir` and still
+  reported success.
+- Components that were left untouched by the installation policy are now
+  reported in the new `unchanged` element of the install result instead of
+  `installed`.
 - Restored the caller's attached packages and loaded namespaces after automatic
   documentation, and report documentation success accurately.
 - Fixed eleven Spanish runtime messages whose catalog keys had leading or

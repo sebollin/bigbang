@@ -29,6 +29,7 @@
     "Basic vignette created at %s" = "Vi\u00f1eta b\u00e1sica creada en %s",
     "Error creating basic vignette: %s" = "Error al crear la vi\u00f1eta b\u00e1sica: %s",
     "Package name '%s' contains underscores, which R package names do not allow. Use '%s' instead." = "El nombre de paquete '%s' contiene guiones bajos, que R no admite. Use '%s' en su lugar.",
+    "Package name '%s' is not a valid R package name: use at least two characters, start with a letter, continue with letters, digits or dots, and do not end with a dot." = "El nombre de paquete '%s' no es un nombre de paquete de R v\u00e1lido: use al menos dos caracteres, comience con una letra, contin\u00fae con letras, d\u00edgitos o puntos, y no termine con un punto.",
     "For safety, the destination must be new or empty: %s. Generate into a new empty path; never regenerate an existing source in place." = "Por seguridad, el destino debe ser nuevo o estar vac\u00edo: %s. Genere en una ruta nueva y vac\u00eda; nunca regenere una fuente existente in-place.",
     "Creating package structure at: %s" = "Creando la estructura del paquete en: %s",
     "Could not create project directory: %s" = "No se pudo crear el directorio del proyecto: %s",
