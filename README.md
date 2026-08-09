@@ -38,6 +38,9 @@ set they install, in a single line.
 - 🎯 **A curated set, distributed as one** — the metapackage records the exact
   archive versions it was built from, so the combination you tested is the
   combination that gets installed.
+- 📮 **One artifact to hand over** — the component archives travel inside the
+  generated metapackage, so `<meta>_install()` works with no arguments and no
+  path has to be agreed on between machines.
 - 🧭 **Real dependency resolution** — builds the local dependency graph,
   orders installation topologically, and refuses cycles up front. Nobody
   downstream has to work out what to install first.
@@ -120,8 +123,15 @@ installation remains explicit:
 
 ```r
 library(teamverse)                 # attaches what is already installed
-teamverse_install(pkg_dir = "archives", cran_deps = "skip")
+teamverse_install()                # installs them, in dependency order
 ```
+
+`teamverse` carries its components, so the call takes no arguments and that is
+all anyone who receives it has to do. Hand over the built
+`teamverse_0.1.0.tar.gz` and nothing else: no folder of archives alongside it,
+and no path to agree on beforehand. If the archives should stay in a shared
+location instead, generate with `include_archives = FALSE`; then
+`teamverse_install()` requires an explicit `pkg_dir`.
 
 `cran_deps = "skip"` is the default and never accesses the network. Use
 `"error"` to fail immediately when a non-local dependency is missing, or

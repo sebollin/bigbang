@@ -21,13 +21,15 @@ Description: Turns a curated set of package archives (.tar.gz, .zip) into one
     was built from and installs its components in dependency order, so that
     whoever receives it does not have to work out which package to install
     first.
-    Resolves dependencies by building a graph with topological ordering and
-    cycle detection, classifies them as local or external, and detects
-    implicit dependencies by scanning source code. Reading every component
-    from a directory of files also means that installation needs no
-    repository access, which suits teams working behind institutional
-    firewalls. Generates the complete meta-package scaffold, including
-    re-exports, vignettes and documentation.
+    The component archives are copied into the generated meta-package, so it
+    is the only artifact that has to be distributed and no directory has to be
+    agreed on between machines. Resolves dependencies by building a graph with
+    topological ordering and cycle detection, classifies them as local or
+    external, and detects implicit dependencies by scanning source code.
+    Installation needs no repository access unless a component depends on a
+    package that only exists in one, which suits teams working behind
+    institutional firewalls. Generates the complete meta-package scaffold,
+    including re-exports, vignettes and documentation.
 License: GPL (>= 3)
 URL: https://sebollin.github.io/bigbang/,
     https://github.com/sebollin/bigbang

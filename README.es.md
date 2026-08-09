@@ -23,11 +23,12 @@ este otro, esta versión va con aquella. Pero esas instrucciones son trabajo
 manual para quien recibe, y un documento más que mantener al día cada vez que
 cambia una versión o entra un paquete nuevo.
 
-bigbang pone ese conocimiento adentro del paquete. El orden sale del grafo real
-de dependencias y las versiones quedan registradas en el metapaquete generado,
-así que no hay nada que seguir a mano ni nada que pueda quedar desfasado del
-contenido de la carpeta. El conjunto que curaste es el conjunto que instalan,
-con una línea.
+bigbang pone ese conocimiento adentro del paquete, y también los archivos: el
+metapaquete generado lleva los `.tar.gz` de sus componentes. Le entregás un solo
+archivo y nada más —ni la carpeta al lado, ni una ruta que acordar— y del otro
+lado alcanza una línea. El orden sale del grafo real de dependencias y las
+versiones quedan registradas, así que no hay nada que seguir a mano ni nada que
+pueda quedar desfasado.
 
 Eso incluye a los equipos que trabajan detrás de un firewall institucional y no
 mantienen un repositorio de paquetes, pero no se limita a ellos: sirve igual para
@@ -95,8 +96,14 @@ Luego de construir e instalar `equipoverse` como cualquier paquete R:
 
 ```r
 library(equipoverse)
-equipoverse_install(pkg_dir = "archivos", cran_deps = "skip")
+equipoverse_install()
 ```
+
+`equipoverse` lleva sus componentes adentro, así que la llamada no necesita
+argumentos y eso es todo lo que tiene que hacer quien lo recibe: le pasás el
+`equipoverse_0.1.0.tar.gz` construido y nada más. Si preferís que los archivos
+queden en una ubicación compartida, generá con `include_archives = FALSE` y
+entonces `equipoverse_install()` va a pedir un `pkg_dir` explícito.
 
 `"skip"` es el modo predeterminado y nunca usa la red. `"error"` falla si falta
 una dependencia no local; `"install"` permite instalar desde un `repos`
