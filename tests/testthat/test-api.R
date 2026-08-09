@@ -11,7 +11,7 @@ test_that("the public API uses English snake_case names", {
       "name", "packages", "pkg_dir", "ext", "version", "dest_dir",
       "reexport", "document", "verbose", "authors", "description",
       "license", "additional_deps", "ignore_deps", "import_deps",
-      "force_deps", "workflow", "debug"
+      "force_deps", "workflow", "include_archives", "debug"
     )
   )
   expect_named(

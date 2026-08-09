@@ -1,5 +1,20 @@
 # bigbang (development version)
 
+- Generated meta-packages are now self-contained. `create_metapackage()` gained
+  `include_archives`, `TRUE` by default, which copies the component archives
+  into `inst/archives/` of the generated meta-package. The generated
+  `<meta>_install()` then defaults `pkg_dir` to
+  `system.file("archives", package = "<meta>")`, resolved when the installer is
+  called, so the meta-package is the only artifact that has to be distributed
+  and its components install with no arguments on any machine, with no path
+  agreed on beforehand. Network access remains necessary only for components
+  that depend on a package coming from a repository. Pass
+  `include_archives = FALSE` to keep the previous behaviour, where the archives
+  live in a location the recipient can reach and `pkg_dir` is required.
+- The build ignore rules of a generated meta-package no longer discard archives
+  below the project root, so shipped components reach the tarball while
+  archives left at the root are still excluded.
+
 - Generated metapackages now provide optional `cli` startup formatting, a
   package-specific quiet option, conflict reporting, explicit reinstall and
   upgrade policies, and optional ordered workflow vignettes.

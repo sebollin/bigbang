@@ -91,6 +91,12 @@
 #' @param workflow Optional named character vector mapping ordered stage labels
 #'   to component package names. When supplied, every component must appear once
 #'   and a pipeline vignette skeleton is generated.
+#' @param include_archives Logical. If `TRUE`, the default, the component
+#'   archives are copied into `inst/archives/` of the generated meta-package, so
+#'   that the meta-package is the only artifact that has to be distributed and
+#'   `<meta>_install()` works with no arguments on any machine. Set it to `FALSE`
+#'   when the archives stay in a shared location that recipients can reach; then
+#'   `<meta>_install()` requires an explicit `pkg_dir`.
 #' @param debug Logical. If `TRUE`, emits detailed debugging messages. Defaults
 #'   to `FALSE`.
 #'
@@ -121,6 +127,15 @@
 #' The generated meta-package installs component packages only when the user
 #' explicitly calls `<meta>_install()`. Loading it with `library()` never installs
 #' packages. By default, the generated installer does not access a repository.
+#'
+#' With `include_archives = TRUE`, the default, the component archives travel
+#' inside the generated meta-package and `pkg_dir` defaults to
+#' `system.file("archives", package = "<meta>")`. That default is resolved when
+#' the installer is called, so it points at the library of whoever installed the
+#' meta-package: recipients need nothing beyond the meta-package itself, and no
+#' path has to be agreed on between machines. Network access is needed only when
+#' a component depends on a package that must come from a repository, which
+#' happens exclusively under `cran_deps = "install"`.
 #'
 #' If `reexport = TRUE`, a `reexports.R` file is generated so users can
 #' reach the component functions directly through the meta-package
@@ -169,6 +184,7 @@ create_metapackage <- function(
   import_deps = c("data.table", "dplyr", "ggplot2", "readr", "tibble", "tidyr", "xts", "zoo"),
   force_deps = NULL,
   workflow = NULL,
+  include_archives = TRUE,
   debug = FALSE
 ) {
   verbose <- isTRUE(verbose)
@@ -194,6 +210,10 @@ create_metapackage <- function(
   }
   if (!dir.exists(pkg_dir)) {
     stop(.bb_tr("The directory specified by 'pkg_dir' does not exist"), call. = FALSE)
+  }
+  if (!is.logical(include_archives) || length(include_archives) != 1L ||
+        is.na(include_archives)) {
+    stop(.bb_tr("'include_archives' must be TRUE or FALSE"), call. = FALSE)
   }
 
   # Resolve caller-supplied paths before generation changes the working directory.
@@ -322,6 +342,25 @@ create_metapackage <- function(
       "The following package archives were not found: %s",
       paste(missing_archives, collapse = ", ")
     ), call. = FALSE)
+  }
+
+  # Ship the component archives inside the meta-package so that installing it
+  # is enough to install the components on any machine.
+  if (isTRUE(include_archives)) {
+    archive_dir <- file.path(project_dir, "inst", .archive_subdir)
+    if (!dir.create(archive_dir, recursive = TRUE, showWarnings = FALSE) &&
+          !dir.exists(archive_dir)) {
+      stop(.bb_trf("Could not create directory: %s", archive_dir), call. = FALSE)
+    }
+    sources <- file.path(pkg_dir, paste0(packages, ext))
+    copied <- file.copy(sources, archive_dir, overwrite = TRUE)
+    if (!all(copied)) {
+      stop(.bb_trf(
+        "Could not copy the component archives into the meta-package: %s",
+        paste(packages[!copied], collapse = ", ")
+      ), call. = FALSE)
+    }
+    log_debug(paste("Component archives copied into", archive_dir))
   }
 
   # Report verbose when requested.
@@ -465,7 +504,9 @@ create_metapackage <- function(
   log_debug("NAMESPACE file created")
 
   # Generate the component installation engine.
-  install_packages_content <- .render_install_engine(name, packages, ext)
+  install_packages_content <- .render_install_engine(
+    name, packages, ext, .archive_dir_default(name, include_archives)
+  )
 
   install_packages_content <- .drop_regular_comment_lines(install_packages_content)
   .write_utf8(install_packages_content, file.path(project_dir, "R", "install_packages.R"))
@@ -533,10 +574,12 @@ create_metapackage <- function(
     "^\\.gitignore$",
     "^\\.git$",
 
-    # Generic package archives
-    "^.*\\.tar\\.gz$",
-    "^.*\\.zip$",
-    "^.*\\.tar$",
+    # Package archives left at the project root. The patterns stop at the first
+    # level on purpose: component archives shipped under inst/archives/ are part
+    # of the meta-package and must reach the tarball.
+    "^[^/]*\\.tar\\.gz$",
+    "^[^/]*\\.zip$",
+    "^[^/]*\\.tar$",
 
     # Local component patterns
     vapply(sub("_.*", "", packages), function(pkg) {
@@ -602,6 +645,7 @@ StripTrailingWhitespace: Yes"
     dest_dir = file.path(project_dir, "R"),
     implicit_deps = implicit_deps,
     reexport = reexport,
+    include_archives = include_archives,
     verbose = debug
   )
   log_debug("Additional metapackage files created")

@@ -181,6 +181,12 @@ msgstr "Paquetes omitidos por la política offline: %s"
 msgid "'force' must be TRUE or FALSE"
 msgstr "'force' debe ser TRUE o FALSE"
 
+msgid "'include_archives' must be TRUE or FALSE"
+msgstr "'include_archives' debe ser TRUE o FALSE"
+
+msgid "Could not copy the component archives into the meta-package: %s"
+msgstr "No se pudieron copiar los archivos de los componentes dentro del metapaquete: %s"
+
 msgid "'force = TRUE' conflicts with an explicit upgrade policy other than 'always'"
 msgstr "'force = TRUE' entra en conflicto con una política 'upgrade' explícita distinta de 'always'"
 

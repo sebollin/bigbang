@@ -59,6 +59,9 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
   text_files <- text_files[!dir.exists(text_files)]
   # Compiled gettext catalogs are binary, not emitted text files.
   text_files <- text_files[!grepl("\\.mo$", text_files)]
+  # Component archives are copied verbatim into the meta-package; they are
+  # binary payload rather than generated text.
+  text_files <- text_files[!grepl("/inst/archives/", text_files, fixed = TRUE)]
   expect_gt(length(text_files), 5L)
   for (path in text_files) {
     bytes <- readBin(path, what = "raw", n = file.info(path)$size)
@@ -79,13 +82,15 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
     formals(attach_env$portablemeta_install),
     c("pkg_dir", "ext", "cran_deps", "repos", "force", "upgrade", "verbose")
   )
+  # The archives ship inside the meta-package, so both entry points default to
+  # the shipped directory. The default is a call, resolved when the function
+  # runs, and never a path belonging to the generating machine.
+  expected_default <- quote(system.file("archives", package = "portablemeta"))
   expect_identical(
-    formals(attach_env$portablemeta_install)["pkg_dir"],
-    alist(pkg_dir = )
+    formals(attach_env$portablemeta_install)[["pkg_dir"]], expected_default
   )
   expect_identical(
-    formals(attach_env$portablemeta_deps)["pkg_dir"],
-    alist(pkg_dir = )
+    formals(attach_env$portablemeta_deps)[["pkg_dir"]], expected_default
   )
   emitted_code <- paste(
     readLines(file.path(project, "R", "attach.R"), warn = FALSE),

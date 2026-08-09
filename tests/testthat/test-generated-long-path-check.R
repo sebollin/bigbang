@@ -47,7 +47,12 @@ test_that("generated documentation keeps long archive paths out of usage", {
     file.path(result$path, "man", "longpathverse_install.Rd"), warn = FALSE
   )
   expect_false(any(grepl(normalizePath(archives), install_rd, fixed = TRUE)))
-  expect_true(any(grepl("pkg_dir,", install_rd, fixed = TRUE)))
+  # The usage shows the portable default instead of this machine's archive
+  # path, which is what keeps the Rd line widths within the limit.
+  expect_true(any(grepl(
+    'system.file("archives", package = "longpathverse")',
+    install_rd, fixed = TRUE
+  )))
 
   r_binary <- file.path(
     R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"

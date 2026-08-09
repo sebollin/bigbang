@@ -24,6 +24,7 @@ create_metapackage(
     "zoo"),
   force_deps = NULL,
   workflow = NULL,
+  include_archives = TRUE,
   debug = FALSE
 )
 }
@@ -79,6 +80,13 @@ meta-package's implicit dependencies.}
 to component package names. When supplied, every component must appear once
 and a pipeline vignette skeleton is generated.}
 
+\item{include_archives}{Logical. If \code{TRUE}, the default, the component
+archives are copied into \verb{inst/archives/} of the generated meta-package, so
+that the meta-package is the only artifact that has to be distributed and
+\verb{<meta>_install()} works with no arguments on any machine. Set it to \code{FALSE}
+when the archives stay in a shared location that recipients can reach; then
+\verb{<meta>_install()} requires an explicit \code{pkg_dir}.}
+
 \item{debug}{Logical. If \code{TRUE}, emits detailed debugging messages. Defaults
 to \code{FALSE}.}
 }
@@ -119,6 +127,15 @@ with a graph-based topological ordering that also detects circular dependencies.
 The generated meta-package installs component packages only when the user
 explicitly calls \verb{<meta>_install()}. Loading it with \code{library()} never installs
 packages. By default, the generated installer does not access a repository.
+
+With \code{include_archives = TRUE}, the default, the component archives travel
+inside the generated meta-package and \code{pkg_dir} defaults to
+\code{system.file("archives", package = "<meta>")}. That default is resolved when
+the installer is called, so it points at the library of whoever installed the
+meta-package: recipients need nothing beyond the meta-package itself, and no
+path has to be agreed on between machines. Network access is needed only when
+a component depends on a package that must come from a repository, which
+happens exclusively under \code{cran_deps = "install"}.
 
 If \code{reexport = TRUE}, a \code{reexports.R} file is generated so users can
 reach the component functions directly through the meta-package

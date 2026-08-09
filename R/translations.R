@@ -60,6 +60,8 @@
     "Packages that failed: %s" = "Paquetes que fallaron: %s",
     "Packages skipped by the offline policy: %s" = "Paquetes omitidos por la pol\u00edtica offline: %s",
     "'force' must be TRUE or FALSE" = "'force' debe ser TRUE o FALSE",
+    "'include_archives' must be TRUE or FALSE" = "'include_archives' debe ser TRUE o FALSE",
+    "Could not copy the component archives into the meta-package: %s" = "No se pudieron copiar los archivos de los componentes dentro del metapaquete: %s",
     "'force = TRUE' conflicts with an explicit upgrade policy other than 'always'" = "'force = TRUE' entra en conflicto con una pol\u00edtica 'upgrade' expl\u00edcita distinta de 'always'",
     "Kept installed version because upgrade = 'never'" = "Se conserv\u00f3 la versi\u00f3n instalada porque upgrade = 'never'",
     "Use force = TRUE or upgrade = 'always' to reinstall unchanged packages: %s" = "Use force = TRUE o upgrade = 'always' para reinstalar paquetes sin cambios: %s",
@@ -108,7 +110,7 @@
       "Adjuntando paquetes",
       "Dependencias circulares detectadas: %s. Una instalaci\u00f3n limpia no tiene un orden topol\u00f3gico v\u00e1lido.",
       sprintf(
-        "No instalado: %%s. Ejecute %s_install(pkg_dir = RUTA) para instalarlo.",
+        "No instalado: %%s. Ejecute %s_install() para instalarlo.",
         name
       ),
       "No se pudieron instalar todos los componentes: %s",
@@ -126,7 +128,7 @@
       "Se conserv\u00f3 la versi\u00f3n instalada porque upgrade = 'never'",
       "Use force = TRUE o upgrade = 'always' para reinstalar paquetes sin cambios: %s",
       sprintf(
-        "Faltan componentes por instalar: %%s\nEjecute %s_install(pkg_dir = RUTA) para instalarlos desde los archivos locales.",
+        "Faltan componentes por instalar: %%s\nEjecute %s_install() para instalarlos desde los archivos locales.",
         name
       ),
       "Nota: error durante la descarga segura: %s"
@@ -159,7 +161,7 @@
       "Attaching packages",
       "Circular dependencies detected: %s. A clean installation has no valid topological order.",
       sprintf(
-        "Not installed: %%s. Run %s_install(pkg_dir = PATH) to install them.",
+        "Not installed: %%s. Run %s_install() to install them.",
         name
       ),
       "Could not install all components: %s",
@@ -177,7 +179,7 @@
       "Kept installed version because upgrade = 'never'",
       "Use force = TRUE or upgrade = 'always' to reinstall unchanged packages: %s",
       sprintf(
-        "Components still need installation: %%s\nRun %s_install(pkg_dir = PATH) to install them from local archives.",
+        "Components still need installation: %%s\nRun %s_install() to install them from local archives.",
         name
       ),
       "Note: Error during safe unload: %s"

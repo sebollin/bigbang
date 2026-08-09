@@ -1,4 +1,25 @@
-.render_install_engine <- function(name, packages, ext) {
+#' Build the default clause for the generated 'pkg_dir' argument
+#'
+#' Component archives shipped inside the meta-package are resolved with
+#' `system.file()`, which is evaluated when the installer is called and
+#' therefore points at the library of whoever installed it. When the archives
+#' are not shipped there is no portable location to guess, so the argument
+#' stays mandatory.
+#'
+#' @param name Character meta-package name.
+#' @param include_archives Logical, whether archives travel inside the package.
+#' @return Character default clause, empty when the argument is mandatory.
+#' @noRd
+.archive_dir_default <- function(name, include_archives) {
+  if (!isTRUE(include_archives)) return("")
+  paste0(' = system.file("', .archive_subdir, '", package = "', name, '")')
+}
+
+#' Subdirectory holding component archives inside a generated meta-package
+#' @noRd
+.archive_subdir <- "archives"
+
+.render_install_engine <- function(name, packages, ext, pkg_dir_default = "") {
   glue::glue('
 
 .bigbang_abort <- function(class, message, ...) {{
@@ -576,7 +597,7 @@ install_packages_in_order <- function(packages, pkg_dir, ext,
 #\' @return A sorted character vector of dependency names.
 #\' @export
 {name}_deps <- function(
-    pkg_dir,
+    pkg_dir{pkg_dir_default},
     ext = {paste(deparse(ext), collapse = "")}) {{
   packages <- {.r_literal(packages)}
   deps <- unlist(lapply(
@@ -614,6 +635,7 @@ write_metapackage_files <- function(
     authors = "person('First', 'Last', email = 'first.last@example.com', role = c('aut', 'cre'))",
     description = "Local Package Metapackage",
     license = "MIT + file LICENSE",
+    include_archives = FALSE,
     verbose = FALSE
 ) {
 
@@ -629,6 +651,7 @@ write_metapackage_files <- function(
     package_list = .r_literal(packages),
     local_packages = .r_literal(archive_stems),
     extension = paste(deparse(ext), collapse = ""),
+    pkg_dir_default = .archive_dir_default(name, include_archives),
     implicit_deps = if (!is.null(implicit_deps)) paste(implicit_deps, collapse = ", ") else ""
   )
 
@@ -653,7 +676,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
   missing <- to_load[!vapply(to_load, requireNamespace, logical(1), quietly = TRUE)]
   if (warn_missing && length(missing) > 0) {
     warning(gettextf(
-      "Not installed: %s. Run {{ name }}_install(pkg_dir = PATH) to install them.",
+      "Not installed: %s. Run {{ name }}_install() to install them.",
       paste(missing, collapse = ", "), domain = "R-{{ name }}"
     ), call. = FALSE)
   }
@@ -707,7 +730,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
 #\' \\dontrun{
 #\'   {{ name }}_install(pkg_dir = "/path/to/local/archives")
 #\' }
-{{ name }}_install <- function(pkg_dir,
+{{ name }}_install <- function(pkg_dir{{{ pkg_dir_default }}},
                                ext = {{{ extension }}},
                                cran_deps = c("skip", "error", "install"),
                                repos = getOption("repos"),
@@ -1187,7 +1210,7 @@ zzz = '
   }
   if (length(missing) > 0) {
     packageStartupMessage(.meta_trf(
-      "Components still need installation: %s\\nRun {{ name }}_install(pkg_dir = PATH) to install them from local archives.",
+      "Components still need installation: %s\\nRun {{ name }}_install() to install them from local archives.",
       paste(missing, collapse = ", ")
     ))
   }
