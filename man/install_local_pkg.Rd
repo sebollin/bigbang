@@ -10,9 +10,9 @@ install_local_pkg(
   ext = ".tar.gz",
   repos = getOption("repos"),
   cran_deps = c("skip", "error", "install"),
+  verbose = getOption("bigbang.verbose", interactive()),
   force = FALSE,
-  upgrade = c("newer", "always", "never"),
-  verbose = getOption("bigbang.verbose", interactive())
+  upgrade = c("newer", "always", "never")
 )
 }
 \arguments{
@@ -29,6 +29,9 @@ install_local_pkg(
 \code{"skip"} (the default) never accesses the network, \code{"error"} fails without
 accessing it, and \code{"install"} attempts installation from \code{repos}.}
 
+\item{verbose}{Logical. Whether to emit progress and summary messages. The
+default follows \code{getOption("bigbang.verbose", interactive())}.}
+
 \item{force}{Logical. Reinstall every local archive. This is a convenience
 alias for \code{upgrade = "always"}.}
 
@@ -36,12 +39,11 @@ alias for \code{upgrade = "always"}.}
 when the archive is newer, \code{"always"} reinstalls, and \code{"never"} keeps any
 installed version. Explicitly combining \code{force = TRUE} with a value other
 than \code{"always"} is an error.}
-
-\item{verbose}{Logical. Whether to emit progress and summary messages. The
-default follows \code{getOption("bigbang.verbose", interactive())}.}
 }
 \value{
-Invisibly, a list describing installed, failed, and skipped packages.
+Invisibly, a list describing installed, unchanged, failed, and
+skipped packages. Components that an upgrade policy left in place are
+reported in \code{unchanged}, not in \code{installed}.
 }
 \description{
 Installs a package from a local archive. Dependencies available as local

@@ -749,9 +749,9 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
                                ext = {{{ extension }}},
                                cran_deps = c("skip", "error", "install"),
                                repos = getOption("repos"),
+                               verbose = getOption("bigbang.verbose", interactive()),
                                force = FALSE,
-                               upgrade = c("newer", "always", "never"),
-                               verbose = getOption("bigbang.verbose", interactive())) {
+                               upgrade = c("newer", "always", "never")) {
   cran_deps <- match.arg(cran_deps)
   upgrade <- resolve_upgrade_policy(force, upgrade, missing(upgrade))
   # An empty pkg_dir means the shipped archive directory was not found, which

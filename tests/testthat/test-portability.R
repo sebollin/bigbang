@@ -83,7 +83,7 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
   sys.source(file.path(project, "R", "install_packages.R"), envir = attach_env)
   expect_named(
     formals(attach_env$portablemeta_install),
-    c("pkg_dir", "ext", "cran_deps", "repos", "force", "upgrade", "verbose")
+    c("pkg_dir", "ext", "cran_deps", "repos", "verbose", "force", "upgrade")
   )
   # The archives ship inside the meta-package, so both entry points default to
   # the shipped directory. The default is a call, resolved when the function

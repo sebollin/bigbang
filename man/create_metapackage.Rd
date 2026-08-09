@@ -23,9 +23,9 @@ create_metapackage(
   import_deps = c("data.table", "dplyr", "ggplot2", "readr", "tibble", "tidyr", "xts",
     "zoo"),
   force_deps = NULL,
+  debug = FALSE,
   workflow = NULL,
-  include_archives = TRUE,
-  debug = FALSE
+  include_archives = TRUE
 )
 }
 \arguments{
@@ -76,6 +76,9 @@ user calls \code{library()} on the meta-package, but remain available via \code{
 bypassing automatic detection. If supplied, only these are used as the
 meta-package's implicit dependencies.}
 
+\item{debug}{Logical. If \code{TRUE}, emits detailed debugging messages. Defaults
+to \code{FALSE}.}
+
 \item{workflow}{Optional named character vector mapping ordered stage labels
 to component package names. When supplied, every component must appear once
 and a pipeline vignette skeleton is generated.}
@@ -86,12 +89,12 @@ that the meta-package is the only artifact that has to be distributed and
 \verb{<meta>_install()} works with no arguments, without any path being agreed
 on beforehand. Components still install only where they can: a Windows
 binary archive is refused on other platforms. Shipping the archives also
-means redistributing them, so their licenses have to allow it. Set it to
+means redistributing them, so their licenses have to allow it, and it makes
+the generated tarball as large as its components: CRAN prefers source
+tarballs under 10 MB and does not accept binary executables in them, which
+matters only if a generated meta-package is ever submitted there. Set it to
 \code{FALSE} when the archives stay in a shared location that recipients can
 reach; then \verb{<meta>_install()} requires an explicit \code{pkg_dir}.}
-
-\item{debug}{Logical. If \code{TRUE}, emits detailed debugging messages. Defaults
-to \code{FALSE}.}
 }
 \value{
 Invisibly, a \code{bigbang_result} containing the generated path,

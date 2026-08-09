@@ -113,7 +113,8 @@ test_that("artefactos nuevos quedan limpios y llevan procedencia", {
   expect_false(result$vulnerable)
   expect_length(result$signatures, 0L)
   expect_identical(
-    result$provenance[["Config/bigbang/generator-version"]], "0.1.0"
+    result$provenance[["Config/bigbang/generator-version"]],
+    as.character(utils::packageVersion("bigbang"))
   )
   expect_identical(
     result$provenance[["Config/bigbang/template-safety-schema"]], "2"

@@ -96,7 +96,7 @@ Imports:
 Suggests:
     cli
 Config/Needs/website: {paste(implicit_deps, collapse = ", ")}
-Config/bigbang/generator-version: {.generator_version}
+Config/bigbang/generator-version: {.bb_generator_version()}
 Config/bigbang/template-safety-schema: {.template_safety_schema}
 Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
 '
@@ -544,7 +544,8 @@ write_reexports_file <- function(
 #' @return Invisible `NULL`; called for side effects.
 #' @noRd
 
-write_basic_vignette <- function(name, packages, project_dir, verbose = FALSE) {
+write_basic_vignette <- function(name, packages, project_dir,
+                                 include_archives = FALSE, verbose = FALSE) {
   project_dir <- normalizePath(project_dir, winslash = "/", mustWork = TRUE)
   desc_file <- file.path(project_dir, "DESCRIPTION")
   if (!file.exists(desc_file)) {
@@ -589,7 +590,11 @@ write_basic_vignette <- function(name, packages, project_dir, verbose = FALSE) {
       "library(", name, ")\n",
       "```\n\n",
       "## Available functions\n\n",
-      "* `", name, "_install(pkg_dir = ...)`: installs components from local archives.\n",
+      if (isTRUE(include_archives)) {
+        paste0("* `", name, "_install()`: installs the components shipped inside this package.\n")
+      } else {
+        paste0("* `", name, "_install(pkg_dir = ...)`: installs components from local archives.\n")
+      },
       "* `", name, "_attach()`: attaches installed components.\n",
       "* `", name, "_detach()`: detaches all components.\n",
       "* `", name, "_packages()`: lists included packages.\n",

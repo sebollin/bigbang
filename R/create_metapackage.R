@@ -6,7 +6,16 @@
 # graph, rejects cycles, and installs each component once in topological order.
 # Startup hooks may attach installed components but never install or remove files.
 
-.generator_version <- "0.1.0"
+# Read from the installed DESCRIPTION rather than kept as a literal, so the
+# field stamped into a generated meta-package can never fall behind the version
+# that actually produced it.
+.bb_generator_version <- function() {
+  version <- tryCatch(
+    as.character(utils::packageVersion("bigbang")),
+    error = function(e) NA_character_
+  )
+  if (is.na(version)) "unknown" else version
+}
 
 # Names R ships with. Kept as a literal so the check works without inspecting
 # the library, which may differ from the machine the meta-package runs on.
@@ -105,7 +114,10 @@
 #'   `<meta>_install()` works with no arguments, without any path being agreed
 #'   on beforehand. Components still install only where they can: a Windows
 #'   binary archive is refused on other platforms. Shipping the archives also
-#'   means redistributing them, so their licenses have to allow it. Set it to
+#'   means redistributing them, so their licenses have to allow it, and it makes
+#'   the generated tarball as large as its components: CRAN prefers source
+#'   tarballs under 10 MB and does not accept binary executables in them, which
+#'   matters only if a generated meta-package is ever submitted there. Set it to
 #'   `FALSE` when the archives stay in a shared location that recipients can
 #'   reach; then `<meta>_install()` requires an explicit `pkg_dir`.
 #' @param debug Logical. If `TRUE`, emits detailed debugging messages. Defaults
@@ -194,9 +206,11 @@ create_metapackage <- function(
   ignore_deps = NULL,
   import_deps = c("data.table", "dplyr", "ggplot2", "readr", "tibble", "tidyr", "xts", "zoo"),
   force_deps = NULL,
+  debug = FALSE,
+  # Arguments added after 0.1.0 go last, so that a positional call written
+  # against 0.1.0 keeps binding to the same parameters.
   workflow = NULL,
-  include_archives = TRUE,
-  debug = FALSE
+  include_archives = TRUE
 ) {
   verbose <- isTRUE(verbose)
   debug <- isTRUE(debug)
@@ -378,6 +392,13 @@ create_metapackage <- function(
         paste(packages[!copied], collapse = ", ")
       ), call. = FALSE)
     }
+    total_bytes <- sum(file.size(sources), na.rm = TRUE)
+    if (verbose) {
+      message(.bb_trf(
+        "Component archives copied into the meta-package: %s (%.1f MB).",
+        archive_dir, total_bytes / 1024^2
+      ))
+    }
     log_debug(paste("Component archives copied into", archive_dir))
   }
 
@@ -469,7 +490,8 @@ create_metapackage <- function(
 
 
   # Create the basic vignette after DESCRIPTION exists.
-  write_basic_vignette(name, packages, project_dir, verbose = debug)
+  write_basic_vignette(name, packages, project_dir,
+                       include_archives = include_archives, verbose = debug)
   if (!is.null(workflow)) {
     write_workflow_vignette(name, workflow, project_dir)
   }
@@ -595,10 +617,12 @@ create_metapackage <- function(
     # Package archives anywhere in the tree, except the component archives
     # shipped under inst/archives/, which are part of the meta-package and must
     # reach the tarball. R applies these patterns with perl = TRUE, so the
-    # negative lookahead is honoured.
-    "^(?!inst/archives/).*\\.tar\\.gz$",
-    "^(?!inst/archives/).*\\.zip$",
-    "^(?!inst/archives/).*\\.tar$",
+    # negative lookahead is honoured; (?-i:) keeps the exemption case-sensitive,
+    # because R also applies them with ignore.case = TRUE and only the real
+    # inst/archives/ is ours.
+    "^(?!(?-i:inst/archives/)).*\\.tar\\.gz$",
+    "^(?!(?-i:inst/archives/)).*\\.zip$",
+    "^(?!(?-i:inst/archives/)).*\\.tar$",
 
     # Local component patterns
     vapply(sub("_.*", "", packages), function(pkg) {

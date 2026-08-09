@@ -184,6 +184,9 @@ msgstr ""
 msgid "'include_archives' must be TRUE or FALSE"
 msgstr ""
 
+msgid "Component archives copied into the meta-package: %s (%.1f MB)."
+msgstr ""
+
 msgid "Package name '%s' belongs to R itself and cannot be reused."
 msgstr ""
 

@@ -17,6 +17,14 @@
   `unchanged` element of the installation result instead of appearing in
   `installed` labelled "Already installed". Reporting a package as installed
   when nothing was installed was misleading.
+- Non-local dependencies are installed with `dependencies = NA` instead of
+  `TRUE`, so their `Suggests` are no longer installed. Everything a component
+  needs in order to run is still installed; what is no longer pulled in is the
+  tooling those dependencies use for their own examples, tests and vignettes.
+- The arguments added in this release come last in every signature, so a
+  positional call written against 0.1.0 keeps binding to the same parameters.
+  Positional calls are still a fragile way to call these functions: name the
+  arguments.
 
 ## Generated meta-packages are self-contained
 

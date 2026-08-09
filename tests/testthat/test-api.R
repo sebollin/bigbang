@@ -11,14 +11,14 @@ test_that("the public API uses English snake_case names", {
       "name", "packages", "pkg_dir", "ext", "version", "dest_dir",
       "reexport", "document", "verbose", "authors", "description",
       "license", "additional_deps", "ignore_deps", "import_deps",
-      "force_deps", "workflow", "include_archives", "debug"
+      "force_deps", "debug", "workflow", "include_archives"
     )
   )
   expect_named(
     formals(install_local_pkg),
     c(
-      "package", "pkg_dir", "ext", "repos", "cran_deps", "force",
-      "upgrade", "verbose"
+      "package", "pkg_dir", "ext", "repos", "cran_deps", "verbose",
+      "force", "upgrade"
     )
   )
   expect_named(formals(diagnose_dependencies), c("packages", "pkg_dir", "ext"))

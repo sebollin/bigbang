@@ -65,7 +65,9 @@
 #' occurs only when the user calls the function; loading `bigbang` never installs
 #' packages. With the default `cran_deps = "skip"`, it does not access the network.
 #'
-#' @return Invisibly, a list describing installed, failed, and skipped packages.
+#' @return Invisibly, a list describing installed, unchanged, failed, and
+#'   skipped packages. Components that an upgrade policy left in place are
+#'   reported in `unchanged`, not in `installed`.
 #' @seealso [create_metapackage()] for generating a meta-package with an explicit
 #'   component installer.
 #' @export
@@ -75,9 +77,11 @@ install_local_pkg <- function(
   ext = ".tar.gz",
   repos = getOption("repos"),
   cran_deps = c("skip", "error", "install"),
+  verbose = getOption("bigbang.verbose", interactive()),
+  # Added after 0.1.0, so they go last: a positional call written against
+  # 0.1.0 passed verbose sixth, and must keep meaning verbose.
   force = FALSE,
-  upgrade = c("newer", "always", "never"),
-  verbose = getOption("bigbang.verbose", interactive())
+  upgrade = c("newer", "always", "never")
 ) {
   cran_deps <- match.arg(cran_deps)
   upgrade <- .resolve_upgrade_policy(force, upgrade, missing(upgrade))

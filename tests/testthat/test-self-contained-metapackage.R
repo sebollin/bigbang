@@ -365,3 +365,91 @@ test_that("the startup hint names a call the reader can actually make", {
     "hintexternal_install(pkg_dir = PATH)", external_hints, fixed = TRUE
   )))
 })
+
+test_that("the arguments added after 0.1.0 do not displace the earlier ones", {
+  # A positional call written against 0.1.0 must keep binding to the same
+  # parameters, or it silently starts meaning something else.
+  released_create <- c(
+    "name", "packages", "pkg_dir", "ext", "version", "dest_dir", "reexport",
+    "document", "verbose", "authors", "description", "license",
+    "additional_deps", "ignore_deps", "import_deps", "force_deps", "debug"
+  )
+  expect_identical(
+    names(formals(create_metapackage))[seq_along(released_create)],
+    released_create
+  )
+
+  released_install <- c(
+    "package", "pkg_dir", "ext", "repos", "cran_deps", "verbose"
+  )
+  expect_identical(
+    names(formals(install_local_pkg))[seq_along(released_install)],
+    released_install
+  )
+})
+
+test_that("only the real inst/archives is exempt from the ignore rules", {
+  sandbox <- tempfile("bigbang-ignore-case-")
+  archives <- file.path(sandbox, "archives")
+  toy_archive_dir(archives)
+  destination <- file.path(sandbox, "destination")
+  dir.create(destination, recursive = TRUE)
+
+  result <- generate_self_contained("caseverse", archives, destination)
+  patterns <- readLines(file.path(result$path, ".Rbuildignore"), warn = FALSE)
+  # R applies these with perl = TRUE and ignore.case = TRUE.
+  excluded <- function(path) {
+    any(vapply(patterns, function(pattern) {
+      grepl(pattern, path, perl = TRUE, ignore.case = TRUE)
+    }, logical(1)))
+  }
+
+  expect_false(excluded("inst/archives/toycomponent_0.1.0.tar.gz"))
+  expect_true(excluded("INST/ARCHIVES/upper.TAR.GZ"))
+  expect_true(excluded("Inst/Archives/mixed.tar.gz"))
+  expect_true(excluded("inst.archives/x.tar.gz"))
+  expect_true(excluded("vendor/nested.tar.gz"))
+  expect_true(excluded("root.tar.gz"))
+})
+
+test_that("the generated vignette names the installation call of its mode", {
+  sandbox <- tempfile("bigbang-vignette-mode-")
+  archives <- file.path(sandbox, "archives")
+  toy_archive_dir(archives)
+  destination <- file.path(sandbox, "destination")
+  dir.create(destination, recursive = TRUE)
+
+  shipped <- generate_self_contained("vshipped", archives, destination)
+  shipped_lines <- readLines(
+    file.path(shipped$path, "vignettes", "introduction-vshipped.Rmd"),
+    warn = FALSE
+  )
+  expect_true(any(grepl("vshipped_install()`", shipped_lines, fixed = TRUE)))
+  expect_false(any(grepl("pkg_dir = ...", shipped_lines, fixed = TRUE)))
+
+  external <- generate_self_contained(
+    "vexternal", archives, destination, include_archives = FALSE
+  )
+  external_lines <- readLines(
+    file.path(external$path, "vignettes", "introduction-vexternal.Rmd"),
+    warn = FALSE
+  )
+  expect_true(any(grepl(
+    "vexternal_install(pkg_dir = ...)", external_lines, fixed = TRUE
+  )))
+})
+
+test_that("the stamped generator version tracks the package version", {
+  sandbox <- tempfile("bigbang-generator-version-")
+  archives <- file.path(sandbox, "archives")
+  toy_archive_dir(archives)
+  destination <- file.path(sandbox, "destination")
+  dir.create(destination, recursive = TRUE)
+
+  result <- generate_self_contained("stampverse", archives, destination)
+  description <- read.dcf(file.path(result$path, "DESCRIPTION"))
+  expect_identical(
+    unname(description[1, "Config/bigbang/generator-version"]),
+    as.character(utils::packageVersion("bigbang"))
+  )
+})

@@ -61,6 +61,7 @@
     "Packages skipped by the offline policy: %s" = "Paquetes omitidos por la pol\u00edtica offline: %s",
     "'force' must be TRUE or FALSE" = "'force' debe ser TRUE o FALSE",
     "'include_archives' must be TRUE or FALSE" = "'include_archives' debe ser TRUE o FALSE",
+    "Component archives copied into the meta-package: %s (%.1f MB)." = "Archivos de los componentes copiados dentro del metapaquete: %s (%.1f MB).",
     "Package name '%s' belongs to R itself and cannot be reused." = "El nombre de paquete '%s' pertenece a R y no puede reutilizarse.",
     "Could not copy the component archives into the meta-package: %s" = "No se pudieron copiar los archivos de los componentes dentro del metapaquete: %s",
     "'force = TRUE' conflicts with an explicit upgrade policy other than 'always'" = "'force = TRUE' entra en conflicto con una pol\u00edtica 'upgrade' expl\u00edcita distinta de 'always'",
