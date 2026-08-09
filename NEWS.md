@@ -1,5 +1,11 @@
 # bigbang (development version)
 
+- Removed the deprecated Spanish aliases `crear_meta_paquete_local()`,
+  `diagnosticar_dependencias()` and `install_loc_pkg_w_dep()`. They existed to
+  ease a transition inside the organisation the package grew in, before it was
+  published. Use `create_metapackage()`, `diagnose_dependencies()` and
+  `install_local_pkg()`.
+
 - Generated meta-packages are now self-contained. `create_metapackage()` gained
   `include_archives`, `TRUE` by default, which copies the component archives
   into `inst/archives/` of the generated meta-package. The generated

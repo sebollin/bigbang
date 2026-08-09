@@ -143,7 +143,6 @@ toy project created entirely under `tempdir()`.
 - `scan_bigbang_artifact()` scans old source trees, archives, or installed
   packages for historical deletion signatures without loading them.
 
-The former Spanish function names remain as deprecated transition aliases.
 
 ## 🗜️ ZIP files and portability
 

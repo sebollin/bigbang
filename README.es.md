@@ -113,8 +113,7 @@ workflow = c("Importación" = "datos", "Informe" = "reportes")
 - `diagnose_dependencies()` busca dependencias implícitas.
 - `scan_bigbang_artifact()` examina artefactos antiguos sin cargarlos.
 
-Los nombres españoles anteriores siguen disponibles como aliases deprecados de
-transición. La API canónica usa inglés snake_case.
+La API usa inglés snake_case.
 
 ## 🗜️ ZIP y portabilidad
 

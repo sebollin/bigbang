@@ -10,13 +10,6 @@ test_that("generation requires an explicit destination without writing to cwd", 
       ),
       "'dest_dir' must be supplied"
     )
-    expect_error(
-      crear_meta_paquete_local(
-        "missingdest", "toycomponent_0.1.0", tempdir(),
-        generar_documentacion = FALSE, mostrar_progreso = FALSE
-      ),
-      "'dest_dir' must be supplied"
-    )
     expect_length(list.files(sandbox, all.files = TRUE, no.. = TRUE), 0L)
   })
 })

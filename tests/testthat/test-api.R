@@ -24,16 +24,29 @@ test_that("the public API uses English snake_case names", {
   expect_named(formals(diagnose_dependencies), c("packages", "pkg_dir", "ext"))
 })
 
-test_that("Spanish compatibility aliases issue standard deprecation warnings", {
-  withr::local_options(bigbang.deprecation_warnings = TRUE)
-  expect_warning(
-    diagnosticar_dependencias(character(), tempdir()),
-    "deprecated"
+test_that("the Spanish transition aliases are gone", {
+  removed <- c(
+    "crear_meta_paquete_local", "diagnosticar_dependencias",
+    "install_loc_pkg_w_dep"
   )
-  expect_warning(
-    install_loc_pkg_w_dep("doesnotexist_0.0.0", tempdir()),
-    "deprecated"
-  )
+  if ("bigbang" %in% loadedNamespaces()) {
+    expect_false(any(removed %in% getNamespaceExports("bigbang")))
+  }
+  # The source NAMESPACE is only reachable when the tests run from the source
+  # tree; under R CMD check the installed namespace above is the authority.
+  namespace_file <- file.path(testthat::test_path(), "..", "..", "NAMESPACE")
+  if (file.exists(namespace_file)) {
+    namespace <- readLines(namespace_file, warn = FALSE)
+    for (name in removed) {
+      expect_false(
+        any(grepl(paste0("export(", name, ")"), namespace, fixed = TRUE)),
+        info = name
+      )
+    }
+  }
+  expect_false(any(vapply(
+    removed, exists, logical(1), where = asNamespace("bigbang"), inherits = FALSE
+  )))
 })
 
 test_that("unrelated utility leftovers are internal", {

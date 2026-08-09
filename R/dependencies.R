@@ -186,22 +186,6 @@ diagnose_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
   results
 }
 
-#' Deprecated Spanish alias for `diagnose_dependencies()`
-#'
-#' @param paquetes_locales Character vector of package archive stems.
-#' @param ruta_instalables Directory containing the archives.
-#' @param ext Archive extension.
-#' @return The result of [diagnose_dependencies()].
-#' @keywords internal
-#' @export
-diagnosticar_dependencias <- function(paquetes_locales, ruta_instalables,
-                                      ext = ".tar.gz") {
-  if (isTRUE(getOption("bigbang.deprecation_warnings", interactive()))) {
-    .Deprecated("diagnose_dependencies", package = "bigbang")
-  }
-  diagnose_dependencies(paquetes_locales, ruta_instalables, ext)
-}
-
 
 #' Detect possible implicit dependencies in local package sources
 #'

@@ -281,39 +281,3 @@ install_local_pkg <- function(
     class = "bigbang_install_result"
   ))
 }
-
-#' Deprecated Spanish alias for `install_local_pkg()`
-#'
-#' @param nombre_paquete Character package archive stem.
-#' @param ruta_instalables Directory containing local archives.
-#' @inheritParams install_local_pkg
-#' @inheritSection install_local_pkg Installation
-#' @return The result of [install_local_pkg()].
-#' @keywords internal
-#' @export
-install_loc_pkg_w_dep <- function(
-  nombre_paquete,
-  ruta_instalables,
-  ext = ".tar.gz",
-  repos = getOption("repos"),
-  cran_deps = c("skip", "error", "install"),
-  verbose = getOption("bigbang.verbose", interactive())
-) {
-  if (isTRUE(getOption("bigbang.deprecation_warnings", interactive()))) {
-    .Deprecated("install_local_pkg", package = "bigbang")
-  }
-  result <- install_local_pkg(
-    package = nombre_paquete,
-    pkg_dir = ruta_instalables,
-    ext = ext,
-    repos = repos,
-    cran_deps = cran_deps,
-    verbose = verbose
-  )
-  # Preserve the historical field names for existing MIDES callers.
-  invisible(list(
-    instalados = result$installed,
-    fallidos = result$failed,
-    omitidos = result$skipped
-  ))
-}
