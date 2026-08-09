@@ -455,7 +455,7 @@ create_metapackage <- function(
   if (!is.null(workflow)) {
     write_workflow_vignette(name, workflow, project_dir)
   }
-  write_metapackage_readme(name, project_dir)
+  write_metapackage_readme(name, project_dir, include_archives)
   write_consistency_test(name, project_dir)
   if (debug) {
     log_debug("Basic vignette created for R CMD check")

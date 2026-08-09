@@ -163,9 +163,13 @@ write_namespace_file <- function(name, cran_packages, namespace_path,
 #'
 #' @param name Character metapackage name.
 #' @param project_dir Character project directory.
+#' @param include_archives Logical, whether the component archives ship inside
+#'   the meta-package. It decides whether the documented installation call needs
+#'   an archive directory at all.
 #' @return Invisible path to the generated README.
 #' @noRd
-write_metapackage_readme <- function(name, project_dir) {
+write_metapackage_readme <- function(name, project_dir,
+                                     include_archives = FALSE) {
   readme_path <- file.path(project_dir, "README.md")
   content <- c(
     paste0("# ", name),
@@ -176,11 +180,29 @@ write_metapackage_readme <- function(name, project_dir) {
     "",
     "## Install components",
     "",
-    "```r",
-    paste0(name, "_install(pkg_dir = \"/path/to/local/archives\")"),
-    "```",
+    if (isTRUE(include_archives)) {
+      c(
+        "The component archives ship inside this package, so installing the",
+        "components needs nothing else and no path has to be known:",
+        "",
+        "```r",
+        paste0(name, "_install()"),
+        "```"
+      )
+    } else {
+      c(
+        "The component archives live outside this package, so the directory",
+        "holding them is required:",
+        "",
+        "```r",
+        paste0(name, "_install(pkg_dir = \"/path/to/local/archives\")"),
+        "```"
+      )
+    },
     "",
-    "The archive directory is required and no repository is contacted by default.",
+    "Components are installed in dependency order. No repository is contacted",
+    "unless a component depends on a package that only exists in one, which",
+    "requires `cran_deps = \"install\"`.",
     "",
     "## Startup messages",
     "",
@@ -196,7 +218,12 @@ write_metapackage_readme <- function(name, project_dir) {
     "",
     paste0("- `", name, "_packages()` lists components."),
     paste0("- `", name, "_conflicts()` reports masking conflicts."),
-    paste0("- `", name, "_detach()` detaches components.")
+    paste0("- `", name, "_detach()` detaches components."),
+    "",
+    "## Adding a component",
+    "",
+    "To request that a package be included in this meta-package, contact the",
+    "maintainer named in DESCRIPTION."
   )
   .write_utf8(content, readme_path)
   invisible(readme_path)

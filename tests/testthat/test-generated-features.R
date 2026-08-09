@@ -127,7 +127,11 @@ test_that("generated metadata and base test agree on component identity", {
     collapse = "\n"
   )
   expect_match(readme, "consistentverse.quiet", fixed = TRUE)
-  expect_match(readme, "pkg_dir =", fixed = TRUE)
+  # The archives ship inside the meta-package here, so the documented call
+  # takes no argument. The variant that does is covered in
+  # test-self-contained-metapackage.R.
+  expect_match(readme, "consistentverse_install()", fixed = TRUE)
+  expect_no_match(readme, "pkg_dir =", fixed = TRUE)
 })
 
 test_that("workflow creates an ordered vignette and validates all components", {

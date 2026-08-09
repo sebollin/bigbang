@@ -179,3 +179,38 @@ test_that("a shipped meta-package installs its components with no arguments", {
   expect_true(any(grepl("COMPONENT: TRUE", recipient_output, fixed = TRUE)), info = report)
   expect_true(dir.exists(file.path(library_dir, "toycomponent")), info = report)
 })
+
+test_that("the generated README documents the installation call that applies", {
+  sandbox <- tempfile("bigbang-readme-modes-")
+  archives <- file.path(sandbox, "archives")
+  toy_archive_dir(archives)
+  destination <- file.path(sandbox, "destination")
+  dir.create(destination, recursive = TRUE)
+
+  shipped <- generate_self_contained("shippedreadme", archives, destination)
+  shipped_readme <- readLines(
+    file.path(shipped$path, "README.md"), warn = FALSE
+  )
+  expect_true(any(grepl("shippedreadme_install()", shipped_readme, fixed = TRUE)))
+  expect_false(any(grepl("pkg_dir =", shipped_readme, fixed = TRUE)))
+  expect_true(any(grepl("ship inside this package", shipped_readme, fixed = TRUE)))
+
+  external <- generate_self_contained(
+    "externalreadme", archives, destination, include_archives = FALSE
+  )
+  external_readme <- readLines(
+    file.path(external$path, "README.md"), warn = FALSE
+  )
+  expect_true(any(grepl(
+    "externalreadme_install(pkg_dir =", external_readme, fixed = TRUE
+  )))
+  expect_true(any(grepl("live outside this package", external_readme, fixed = TRUE)))
+
+  # The inclusion request is the only governance guidance the generator emits.
+  for (readme in list(shipped_readme, external_readme)) {
+    expect_true(any(grepl("## Adding a component", readme, fixed = TRUE)))
+    expect_true(any(grepl(
+      "maintainer named in DESCRIPTION", readme, fixed = TRUE
+    )))
+  }
+})
