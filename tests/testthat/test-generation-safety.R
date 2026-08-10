@@ -311,13 +311,26 @@ test_that("malformed R source is reported during heuristic scanning", {
     "badparse", "1.0.0", source_root, archives,
     code = "badparse_value <- function(x) {{{"
   )
-  expect_warning(
+  warning_message <- NULL
+  withCallingHandlers(
     create_metapackage(
       "parseverse", "badparse_1.0.0", archives,
       dest_dir = destination, document = FALSE, verbose = FALSE
     ),
-    "Could not parse R source file"
+    warning = function(w) {
+      if (grepl("Could not parse R source file", conditionMessage(w))) {
+        warning_message <<- conditionMessage(w)
+      }
+      invokeRestart("muffleWarning")
+    }
   )
+  expect_false(is.null(warning_message))
+  # Name the component archive and the path inside it. The extraction directory
+  # is a temporary that no longer exists when the reader sees the warning, so
+  # reporting it would leave nothing to act on.
+  expect_match(warning_message, "badparse_1.0.0.tar.gz", fixed = TRUE)
+  expect_match(warning_message, "R/value.R", fixed = TRUE)
+  expect_false(grepl(basename(tempdir()), warning_message, fixed = TRUE))
 })
 
 test_that("a self-contained chain installs despite comment-only dependency words", {

@@ -304,10 +304,23 @@ install_local_archive <- function(package, pkg_dir, ext = ".tar.gz",
         base_name, as.character(installed_version), version
       )
     }})
+    # The reported reason has to carry the versions: a bare already-installed
+    # label is false when the installed package only shares the component name.
     unchanged_message <- if (identical(upgrade, "never")) {{
-      .meta_tr("Kept installed version because upgrade = \'never\'")
+      .meta_trf(
+        "Kept installed version %s because upgrade = \'never\'; the archive names version %s",
+        as.character(installed_version), version
+      )
+    }} else if (newer) {{
+      .meta_trf(
+        "Kept installed version %s, newer than archive version %s",
+        as.character(installed_version), version
+      )
     }} else {{
-      .meta_tr("Already installed")
+      .meta_trf(
+        "Kept installed version %s, matching archive version %s",
+        as.character(installed_version), version
+      )
     }}
     return(list(
       success = TRUE,

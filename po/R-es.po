@@ -259,8 +259,14 @@ msgstr "No se pudieron copiar los archivos de los componentes dentro del metapaq
 msgid "'force = TRUE' conflicts with an explicit upgrade policy other than 'always'"
 msgstr "'force = TRUE' entra en conflicto con una política 'upgrade' explícita distinta de 'always'"
 
-msgid "Kept installed version because upgrade = 'never'"
-msgstr "Se conservó la versión instalada porque upgrade = 'never'"
+msgid "Kept installed version %s because upgrade = 'never'; the archive names version %s"
+msgstr "Se conservó la versión instalada %s porque upgrade = 'never'; el archivo nombra la versión %s"
+
+msgid "Kept installed version %s, newer than archive version %s"
+msgstr "Se conservó la versión instalada %s, más nueva que la versión %s del archivo"
+
+msgid "Kept installed version %s, matching archive version %s"
+msgstr "Se conservó la versión instalada %s, igual a la versión %s del archivo"
 
 msgid "Use force = TRUE or upgrade = 'always' to reinstall unchanged packages: %s"
 msgstr "Use force = TRUE o upgrade = 'always' para reinstalar paquetes sin cambios: %s"

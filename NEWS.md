@@ -102,14 +102,19 @@ Released on 2026-08-09.
   `.Rbuildignore` rules that could exclude the generated package's own files or
   shipped archives.
 - Already-installed messages show both the installed and archive versions, and
-  explicitly flag when the installed version is newer.
+  explicitly flag when the installed version is newer. The `unchanged` element of
+  an installation result now carries the same two versions instead of the label
+  "Already installed", which is untrue when the installed package only shares a
+  component's name; the result is the only thing a calling script can inspect.
 - Archive inspection now validates extraction status, member paths, symbolic
   links, and the single package root before accepting an archive. Nested
   `tests/DESCRIPTION` files are allowed, while a missing root DESCRIPTION is
   reported clearly.
-- Malformed component R files produce a warning naming the source file while
-  generation continues, so a possible encoding issue is diagnosable without
-  turning generation into an unconditional rejection.
+- Malformed component R files produce a warning naming the component archive and
+  the path inside it, while generation continues, so a possible encoding issue is
+  diagnosable without turning generation into an unconditional rejection. The
+  warning no longer names the extraction directory, a temporary that no longer
+  exists by the time the warning is read.
 - Rollback removes an empty destination directory created by the failed call,
   and `safe_unlink()` uses temporary-directory containment rather than a broad
   basename heuristic.

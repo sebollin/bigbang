@@ -35,6 +35,29 @@
   upgrade
 }
 
+# Explain, in the result itself, why a component was left alone. A bare
+# "Already installed" is false whenever the installed package merely shares the
+# component's name, and the result is the only thing a calling script can read.
+.unchanged_reason <- function(installed_version, version_text, upgrade, newer) {
+  installed_text <- as.character(installed_version)
+  if (identical(upgrade, "never")) {
+    .bb_trf(
+      "Kept installed version %s because upgrade = 'never'; the archive names version %s",
+      installed_text, version_text
+    )
+  } else if (isTRUE(newer)) {
+    .bb_trf(
+      "Kept installed version %s, newer than archive version %s",
+      installed_text, version_text
+    )
+  } else {
+    .bb_trf(
+      "Kept installed version %s, matching archive version %s",
+      installed_text, version_text
+    )
+  }
+}
+
 #' Install a local package together with its dependencies
 #'
 #' Installs a package from a local archive. Dependencies available as local
@@ -122,8 +145,8 @@ install_local_pkg <- function(
            installed_version >= base::package_version(version_text))
     )
     if (keep_installed) {
+      newer <- installed_version > base::package_version(version_text)
       if (isTRUE(verbose)) {
-        newer <- installed_version > base::package_version(version_text)
         message(if (newer) {
           .bb_trf(
             "Package %s has installed version %s, newer than archive version %s; keeping the installed version.",
@@ -136,11 +159,9 @@ install_local_pkg <- function(
           )
         })
       }
-      state$unchanged[[stem]] <- if (identical(upgrade, "never")) {
-        .bb_tr("Kept installed version because upgrade = 'never'")
-      } else {
-        .bb_tr("Already installed")
-      }
+      state$unchanged[[stem]] <- .unchanged_reason(
+        installed_version, version_text, upgrade, newer
+      )
       return(TRUE)
     }
     state$visiting <- c(state$visiting, base_name)
@@ -222,8 +243,8 @@ install_local_pkg <- function(
            installed_version >= base::package_version(version_text))
     )
     if (keep_installed) {
+      newer <- installed_version > base::package_version(version_text)
       if (isTRUE(verbose)) {
-        newer <- installed_version > base::package_version(version_text)
         message(if (newer) {
           .bb_trf(
             "Package %s has installed version %s, newer than archive version %s; keeping the installed version.",
@@ -236,11 +257,9 @@ install_local_pkg <- function(
           )
         })
       }
-      state$unchanged[[stem]] <- if (identical(upgrade, "never")) {
-        .bb_tr("Kept installed version because upgrade = 'never'")
-      } else {
-        .bb_tr("Already installed")
-      }
+      state$unchanged[[stem]] <- .unchanged_reason(
+        installed_version, version_text, upgrade, newer
+      )
       return(TRUE)
     }
     dependency_fields <- intersect(

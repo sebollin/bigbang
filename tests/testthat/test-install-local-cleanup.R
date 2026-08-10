@@ -46,7 +46,12 @@ test_that("install_local_pkg recognizes a package version already installed", {
   result <- install_local_pkg(stem, sandbox, verbose = FALSE)
 
   expect_s3_class(result, "bigbang_install_result")
-  expect_identical(result$unchanged[[stem]], "Already installed")
+  # The reported reason has to name the versions involved. A bare
+  # already-installed label is false when the installed package only shares the
+  # component name, and the result is all a calling script can inspect.
+  installed_version <- as.character(utils::packageVersion("stats"))
+  expect_match(result$unchanged[[stem]], installed_version, fixed = TRUE)
+  expect_match(result$unchanged[[stem]], "matching archive version", fixed = TRUE)
   expect_length(result$installed, 0L)
   expect_length(result$failed, 0L)
   expect_length(result$skipped, 0L)

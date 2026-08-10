@@ -641,8 +641,12 @@ detect_implicit_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
       content <- paste(vapply(
         r_files,
         function(file) {
+          # Name the component archive and the path inside it. The extraction
+          # directory is a temporary that no longer exists when the reader sees
+          # the warning, so reporting it would be unactionable.
           .strip_r_comments_and_strings(
-            readLines(file, warn = FALSE), source_file = file
+            readLines(file, warn = FALSE),
+            source_file = paste0(basename(archive), ": R/", basename(file))
           )
         },
         character(1L)

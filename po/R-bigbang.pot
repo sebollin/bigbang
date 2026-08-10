@@ -259,7 +259,13 @@ msgstr ""
 msgid "'force = TRUE' conflicts with an explicit upgrade policy other than 'always'"
 msgstr ""
 
-msgid "Kept installed version because upgrade = 'never'"
+msgid "Kept installed version %s because upgrade = 'never'; the archive names version %s"
+msgstr ""
+
+msgid "Kept installed version %s, newer than archive version %s"
+msgstr ""
+
+msgid "Kept installed version %s, matching archive version %s"
 msgstr ""
 
 msgid "Use force = TRUE or upgrade = 'always' to reinstall unchanged packages: %s"
