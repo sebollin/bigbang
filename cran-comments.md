@@ -97,7 +97,8 @@ Every result below was obtained on the source of this submission.
 
 - Local Linux (Pop!_OS 22.04), R 4.6.1: `R CMD check --as-cran`, including the
   PDF manual: 0 errors, 0 warnings.
-- win-builder, R-devel: WINBUILDER-PENDIENTE.
+- win-builder, R-devel (2026-08-09 r90385 ucrt): Status 1 NOTE, the
+  days-since-update one. No technical observation.
 - R-hub v2, R-devel on the Linux, Windows, and macOS containers: Status OK on all
   three, with no notes (run 31417000641).
 - GitHub Actions: Ubuntu (release, devel, oldrel-1), Windows (release), and macOS
