@@ -76,6 +76,24 @@ Released on 2026-08-09.
 
 ### Bug fixes
 
+- `create_metapackage(reexport = TRUE)` works. It previously failed for
+  every input: a block that ran before the re-export writer iterated the
+  versioned archive stems and called
+  [`asNamespace()`](https://rdrr.io/r/base/ns-internal.html) on them,
+  which can never resolve, so the call aborted with “there is no package
+  called ‘pkg_1.0’” before reaching the writer that does the work. That
+  block also declared `S3method(<name>, default)` for every export
+  whether or not it was a generic. It was removed;
+  `write_reexports_file()` already resolves component namespaces and
+  distinguishes S3 generics from ordinary functions.
+- An archive whose root directory is accompanied by an AppleDouble
+  `._<dir>` member is accepted. Archiving a package directory on macOS
+  with extended attributes emits one, and R installs such an archive, so
+  rejecting it rejected a working package.
+- [`diagnose_dependencies()`](https://sebollin.github.io/bigbang/reference/diagnose_dependencies.md)
+  extracts through the same guarded path as generation. A component
+  carrying a symbolic link made the scanner read a file outside the
+  archive and return its contents in the result.
 - Generation no longer changes the process working directory; every
   scaffold writer receives an explicit absolute path.
 - Fixed generation with relative `dest_dir` and `pkg_dir` paths, and
