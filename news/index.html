@@ -64,6 +64,7 @@
 <li>Restored the caller’s attached packages and loaded namespaces after automatic documentation, and report documentation success accurately.</li>
 <li>Fixed eleven Spanish runtime messages whose catalog keys had leading or trailing whitespace.</li>
 <li>Generated helper examples use the requested meta-package name instead of an internal historical name.</li>
+<li>Paths returned in results use forward slashes on every platform, like the rest of the package. On Windows <code>result$path</code> came back in the platform convention and therefore did not compare equal to a path the caller had built with <code><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path()</a></code>. The containment checks normalise both sides the same way, so a destination that does not exist yet cannot be compared against one that does in a different convention.</li>
 <li>When a component is skipped because a non-local dependency is missing, the warning names the call that resolves it and the attachment step no longer follows it with a vaguer hint suggesting a bare re-run, which would have skipped the component again for the same reason.</li>
 </ul></div>
 <div class="section level3">
