@@ -1,10 +1,3 @@
-<!-- PENDIENTE ANTES DE ENVIAR: reemplazar los dos RUN-PENDIENTE de la sección
-     "Test environments" por los identificadores reales de las corridas de R-hub
-     y GitHub Actions sobre el commit exacto que se envía, y borrar este
-     comentario. Las corridas anteriores se hicieron sobre un commit previo y no
-     valen: la lección del ciclo pasado es que las verificaciones externas tienen
-     que correr sobre el SHA definitivo. -->
-
 ## Update
 
 This is an update from 0.1.0, which was published on 2026-08-08. The interval is
@@ -104,13 +97,12 @@ Every result below was obtained on the source of this submission.
 
 - Local Linux (Pop!_OS 22.04), R 4.6.1: `R CMD check --as-cran`, including the
   PDF manual: 0 errors, 0 warnings.
-- win-builder, R-devel: Status 1 NOTE, the days-since-update one. No technical
-  observation.
+- win-builder, R-devel: WINBUILDER-PENDIENTE.
 - R-hub v2, R-devel on the Linux, Windows, and macOS containers: Status OK on all
-  three (run RUN-PENDIENTE).
+  three, with no notes (run 31417000641).
 - GitHub Actions: Ubuntu (release, devel, oldrel-1), Windows (release), and macOS
   (release), with the PDF manual enabled: all five configurations pass (run
-  RUN-PENDIENTE).
+  31412087109).
 - The tests that install packages are skipped under `--as-cran` and run in a
   dedicated step on every configuration; the destructive data-loss verification
   runs on Ubuntu release.
