@@ -1,15 +1,23 @@
 ## Update
 
-This is an update from 0.1.0, which was published on 2026-08-08.
+This is an update from 0.1.0, which was published on 2026-08-08. The interval is
+short and we do not intend to make a habit of it; what follows is why we think
+it is worth your time now rather than in two months.
 
-The release makes a generated meta-package self-contained. Until now a generated
-meta-package could not install its own components: the recipient also needed the
-directory of component archives and had to be told where it was, which assumes
-that both machines agree on a path. The component archives are now copied into
-`inst/archives/` of the generated meta-package, and its installer defaults the
-archive directory to `system.file("archives", package = "<meta>")`. Distributing
-the meta-package is therefore enough, and no path has to be agreed on
-beforehand.
+The release completes the feature the package is built around. A generated
+meta-package now carries its component archives, so installing that one file is
+enough to install the components. Previously the recipient also needed the
+directory of archives and had to be told its path, which assumes that both
+machines agree on one; in the environments this package is meant for they often
+share neither a path nor a network. Two smaller fixes are of the same kind:
+generation left the destination unusable when `dest_dir` was relative, and the
+generated installer took the absolute archive path of the machine that produced
+it as its default. Subsequent updates will keep to the usual pace.
+
+Mechanically: the archives are copied into `inst/archives/` of the generated
+meta-package, and its installer defaults the archive directory to
+`system.file("archives", package = "<meta>")`, which is resolved when the
+installer runs and so points at the library of whoever installed it.
 
 Nothing in `bigbang` itself installs anything unless the user calls an
 installation function explicitly, and no repository is contacted unless the user
@@ -43,11 +51,13 @@ Every result below was obtained on the source of this submission.
 
 - Local Linux (Pop!_OS 22.04), R 4.6.1: `R CMD check --as-cran`, including the
   PDF manual: 0 errors, 0 warnings.
-- win-builder, R-devel: to be filled at submission time.
-- R-hub v2, R-devel on the Linux, Windows, and macOS containers: to be filled at
-  submission time.
+- win-builder, R-devel (2026-08-09 r90385 ucrt): Status 1 NOTE, the
+  days-since-update one. No technical observation.
+- R-hub v2, R-devel on the Linux, Windows, and macOS containers: Status OK on all
+  three (run 31344946492).
 - GitHub Actions: Ubuntu (release, devel, oldrel-1), Windows (release), and
-  macOS (release), with the PDF manual enabled.
+  macOS (release), with the PDF manual enabled: all five configurations pass
+  (run 31344581932).
 - The tests that install packages are skipped under `--as-cran` and run in a
   dedicated step on every configuration; the destructive data-loss verification
   runs on Ubuntu release.
@@ -66,6 +76,9 @@ meta-package that `bigbang` generates on the user's machine. It does not ship
 any third-party content inside `bigbang`; the archives are supplied by whoever
 calls the function. The help states that distributing them this way is a
 redistribution, so their licenses have to allow it.
+
+The only NOTE on this machine beyond the days-since-update one is the absence of
+HTML Tidy, which is not installed here.
 
 ## Reverse dependencies
 
