@@ -58,7 +58,8 @@
 </ul></div>
 <div class="section level3">
 <h3 id="bug-fixes-0-2-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-2-0"></a></h3>
-<ul><li>
+<ul><li>Rollback of a failed generation works when a component of the destination path is a symbolic link. The project path was normalised before the directory existed and therefore left unresolved, while the path it was compared against was normalised after creation and resolved, so the two never matched and the rollback declined silently. That is the situation on macOS, where <code><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir()</a></code> sits under <code>/var</code>, itself a link to <code>/private/var</code>. Both sides are now normalised at the same moment.</li>
+<li>
 <code>create_metapackage(reexport = TRUE)</code> works. It previously failed for every input: a block that ran before the re-export writer iterated the versioned archive stems and called <code><a href="https://rdrr.io/r/base/ns-internal.html" class="external-link">asNamespace()</a></code> on them, which can never resolve, so the call aborted with “there is no package called ‘pkg_1.0’” before reaching the writer that does the work. That block also declared <code>S3method(&lt;name&gt;, default)</code> for every export whether or not it was a generic. It was removed; <code>write_reexports_file()</code> already resolves component namespaces and distinguishes S3 generics from ordinary functions.</li>
 <li>An archive whose root directory is accompanied by an AppleDouble <code>._&lt;dir&gt;</code> member is accepted. Archiving a package directory on macOS with extended attributes emits one, and R installs such an archive, so rejecting it rejected a working package.</li>
 <li>
