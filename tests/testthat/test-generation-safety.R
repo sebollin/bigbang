@@ -572,39 +572,29 @@ test_that("reexport = TRUE generates re-exports instead of failing", {
 })
 
 test_that("an AppleDouble sibling does not hide the package root", {
-  sandbox <- tempfile("bigbang-appledouble-")
-  source_root <- file.path(sandbox, "sources")
-  archives <- file.path(sandbox, "archives")
-  destination <- file.path(sandbox, "destination")
-  dir.create(source_root, recursive = TRUE)
-  dir.create(archives)
-  dir.create(destination)
-  build_safety_archive("apdouble", "1.0.0", source_root, archives)
-
   # Archiving a package directory on macOS with extended attributes emits a
-  # "._<dir>" member beside it. R installs such an archive, so rejecting it
-  # would reject a working package.
-  rebuilt <- file.path(sandbox, "rebuild")
-  dir.create(rebuilt)
-  archive <- file.path(archives, "apdouble_1.0.0.tar.gz")
-  untar(archive, exdir = rebuilt)
-  root <- list.files(rebuilt)
-  expect_length(root, 1L)
-  writeLines("apple double metadata", file.path(rebuilt, paste0("._", root)))
-  old <- setwd(rebuilt)
-  on.exit(setwd(old), add = TRUE)
-  expect_equal(
-    utils::tar(archive, files = c(root, paste0("._", root)), compression = "gzip"),
-    0L
+  # "._<dir>" member beside it, and R installs such an archive, so rejecting it
+  # would reject a working package. This exercises the root-counting rule
+  # directly: building the archive with a tar that writes the sibling is not
+  # reproducible across platforms, and the rule is what the fix changed.
+  extracted <- tempfile("bigbang-appledouble-")
+  root <- file.path(extracted, "apdouble")
+  dir.create(root, recursive = TRUE)
+  writeLines("Package: apdouble", file.path(root, "DESCRIPTION"))
+  writeLines("apple double metadata", file.path(extracted, "._apdouble"))
+  writeLines("finder metadata", file.path(extracted, ".DS_Store"))
+  expect_identical(
+    .find_archive_root(extracted, "apdouble_1.0.0.tar.gz"),
+    file.path(extracted, "apdouble")
   )
-  setwd(old)
-  expect_true(paste0("._", root) %in% untar(archive, list = TRUE))
 
-  result <- create_metapackage(
-    "appleverse", "apdouble_1.0.0", archives,
-    dest_dir = destination, document = FALSE, verbose = FALSE
+  # Only that metadata convention is ignored. Any other extra entry still means
+  # the archive is not a single package root.
+  writeLines("stray", file.path(extracted, "stray.txt"))
+  expect_error(
+    .find_archive_root(extracted, "apdouble_1.0.0.tar.gz"),
+    "one package root directory"
   )
-  expect_true(dir.exists(result$path))
 })
 
 test_that("diagnose_dependencies refuses an archive carrying symbolic links", {
@@ -629,15 +619,17 @@ test_that("diagnose_dependencies refuses an archive carrying symbolic links", {
   linked <- file.symlink(secret, file.path(source_dir, "R", "f.R"))
   skip_if_not(isTRUE(linked), "This platform cannot create symbolic links.")
 
-  old <- setwd(source_root)
-  on.exit(setwd(old), add = TRUE)
-  expect_equal(
-    utils::tar(
-      file.path(archives, "spy_1.0.0.tar.gz"), files = "spy", compression = "gzip"
-    ),
-    0L
+  # The system archiver stores the link as a link. utils::tar() reaches for a GNU
+  # long-linkname extension on some platforms, which is not what we are testing.
+  archive <- file.path(archives, "spy_1.0.0.tar.gz")
+  packed <- withr::with_dir(source_root, system2(
+    "tar", c("czf", shQuote(archive), "spy"), stdout = FALSE, stderr = FALSE
+  ))
+  skip_if_not(identical(packed, 0L), "No usable system tar for this test.")
+  skip_if_not(
+    any(startsWith(system2("tar", c("tvzf", shQuote(archive)), stdout = TRUE), "l")),
+    "This platform did not store the symbolic link as a link."
   )
-  setwd(old)
 
   # The scanner used to read through the link and return the contents of an
   # unrelated file in its result.
