@@ -597,7 +597,32 @@ test_that("an AppleDouble sibling does not hide the package root", {
   )
 })
 
+test_that("diagnose_dependencies extracts through the guarded path", {
+  # It is exported, and it used to call untar() directly. A truncated archive
+  # shows the guard is in place on every platform: without it the extraction
+  # status is discarded and only a warning is emitted.
+  sandbox <- tempfile("bigbang-diagnose-guarded-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  build_safety_archive(
+    "truncme", "1.0.0", source_root, archives,
+    code = rep("padding_value <- 1", 4000)
+  )
+  archive <- file.path(archives, "truncme_1.0.0.tar.gz")
+  bytes <- readBin(archive, "raw", file.size(archive))
+  writeBin(bytes[seq_len(floor(length(bytes) * 0.4))], archive)
+  expect_error(
+    diagnose_dependencies("truncme_1.0.0", pkg_dir = archives),
+    "Could not extract archive"
+  )
+})
+
 test_that("diagnose_dependencies refuses an archive carrying symbolic links", {
+  # Windows stores a link as a reparse point that untar does not reconstruct, so
+  # there is no link left to reject and the case cannot be built there.
+  skip_on_os("windows")
   sandbox <- tempfile("bigbang-diagnose-symlink-")
   source_root <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")
@@ -626,9 +651,14 @@ test_that("diagnose_dependencies refuses an archive carrying symbolic links", {
     "tar", c("czf", shQuote(archive), "spy"), stdout = FALSE, stderr = FALSE
   ))
   skip_if_not(identical(packed, 0L), "No usable system tar for this test.")
+
+  extracted <- tempfile("bigbang-symlink-probe-")
+  dir.create(extracted)
+  suppressWarnings(utils::untar(archive, exdir = extracted))
+  probe <- file.path(extracted, "spy", "R", "f.R")
   skip_if_not(
-    any(startsWith(system2("tar", c("tvzf", shQuote(archive)), stdout = TRUE), "l")),
-    "This platform did not store the symbolic link as a link."
+    nzchar(Sys.readlink(probe)),
+    "This platform did not restore the member as a symbolic link."
   )
 
   # The scanner used to read through the link and return the contents of an
