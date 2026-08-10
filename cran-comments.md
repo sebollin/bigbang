@@ -26,7 +26,7 @@ meta-package never installs packages.
 
 ## Behaviour changes that are not backwards compatible
 
-Three, all in the direction of failing early rather than misleading. They are
+Four, all in the direction of failing early rather than misleading. They are
 listed in NEWS.md.
 
 1. In a generated meta-package built with `include_archives = FALSE`,
@@ -44,6 +44,11 @@ listed in NEWS.md.
    They existed to ease a rename inside the organisation the package grew in,
    while it was still unpublished. The English names have been the documented
    API since 0.1.0.
+4. Source-code dependency guesses are diagnostic by default rather than hard
+   dependencies of generated packages. Dependencies declared by a component,
+   or supplied explicitly through `additional_deps`/`force_deps`, still bind.
+   This prevents comments and ambiguous common function names from making a
+   distributed meta-package require unrelated packages.
 
 ## Test environments
 

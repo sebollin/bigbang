@@ -24,6 +24,15 @@
   "parallel", "splines", "stats", "stats4", "tcltk", "tools", "translations",
   "utils"
 )
+# Names that R CMD build needs for the generated package itself. A component
+# with one of these names cannot be excluded by a component-specific pattern:
+# doing so would also exclude the generated DESCRIPTION, R, or inst tree.
+.r_build_reserved_paths <- c(
+  "r", "src", "data", "demo", "exec", "inst", "tests", "vignettes",
+  "man", "po", "tools", "meta", "configure", "cleanup", "cleanup.win",
+  "description", "namespace", "license", "licence", "readme",
+  ".rbuildignore", ".gitignore"
+)
 .template_safety_schema <- "2"
 
 .bigbang_condition <- function(class, message, ..., call = NULL) {
@@ -96,7 +105,9 @@
 #' @param description Character. Description of the meta-package.
 #' @param license Character. License of the meta-package.
 #' @param additional_deps Character vector. Extra dependencies to add on top of the
-#'   ones detected automatically.
+#'   ones declared by components. Source-code guesses are diagnostic by default;
+#'   use this argument when a guessed dependency should bind in the generated
+#'   package.
 #' @param ignore_deps Character vector. Dependencies to ignore even if detected.
 #' @param import_deps Character vector. Packages that should go in the `Imports`
 #'   field of DESCRIPTION rather than `Depends`. Imports are not attached when the
@@ -131,7 +142,9 @@
 #'
 #' 1. Creates the basic R package structure (`R`, `man`, `vignettes`, etc.).
 #' 2. Detects dependencies between packages, both explicit (from DESCRIPTION) and
-#'    implicit (found by scanning the source code).
+#'    possible implicit uses (found by scanning executable source tokens). The
+#'    latter are reported for diagnosis and are not hard dependencies unless
+#'    explicitly supplied through `additional_deps` or `force_deps`.
 #' 3. Generates DESCRIPTION and NAMESPACE with the appropriate dependencies.
 #' 4. Creates a basic vignette documenting the meta-package.
 #' 5. Generates R files with functions to install and load the component packages:
@@ -246,6 +259,19 @@ create_metapackage <- function(
   pkg_dir <- normalizePath(pkg_dir, winslash = "/", mustWork = TRUE)
 
   component_packages <- unique(sub("_.*", "", packages))
+  duplicate_components <- unique(
+    sub("_.*", "", packages)[duplicated(sub("_.*", "", packages))]
+  )
+  if (length(duplicate_components) > 0L) {
+    .bigbang_abort(
+      "bigbang_error_duplicate_component",
+      .bb_trf(
+        "More than one archive was supplied for component package(s): %s.",
+        paste(duplicate_components, collapse = ", ")
+      ),
+      packages = duplicate_components
+    )
+  }
   if (!is.null(workflow)) {
     valid_workflow <- is.character(workflow) && length(workflow) > 0L &&
       !is.null(names(workflow)) && all(nzchar(names(workflow))) &&
@@ -376,6 +402,12 @@ create_metapackage <- function(
     ), call. = FALSE)
   }
 
+  # Validate metadata and the local dependency graph before writing any
+  # component-specific files. This moves errors that are knowable to the
+  # generator (filename/description mismatches and cycles) away from the
+  # recipient's installation step.
+  archive_metadata <- .validate_component_archives(packages, pkg_dir, ext)
+
   # Ship the component archives inside the meta-package so that installing it
   # is enough to install the components wherever it is installed.
   if (isTRUE(include_archives)) {
@@ -419,14 +451,17 @@ create_metapackage <- function(
     }
   }
 
-  # Explicit forced dependencies bypass automatic detection.
-  if (!is.null(force_deps) && length(force_deps) > 0) {
-    implicit_deps <- force_deps
+  # Source-code guesses are diagnostic by default. Only explicitly supplied
+  # dependencies (`force_deps` or `additional_deps`) become hard dependencies
+  # in the generated DESCRIPTION/NAMESPACE. Supplying even an empty
+  # `force_deps` intentionally disables the heuristic for reproducible builds.
+  if (!is.null(force_deps)) {
+    detected_implicit_deps <- character()
 
     if (verbose) {
       message(.bb_trf(
         "Using explicitly supplied dependencies: %s",
-        paste(implicit_deps, collapse = ", ")
+        paste(force_deps, collapse = ", ")
       ))
     }
   } else {
@@ -435,29 +470,30 @@ create_metapackage <- function(
       message(.bb_tr("Scanning local packages for implicit dependencies..."))
     }
 
-    implicit_deps <- detect_implicit_dependencies(packages, pkg_dir, ext)
-
-    # Add user-supplied dependencies.
-    if (!is.null(additional_deps) && length(additional_deps) > 0) {
-      implicit_deps <- unique(c(implicit_deps, additional_deps))
-    }
-
-    # Remove explicitly ignored dependencies.
-    if (!is.null(ignore_deps) && length(ignore_deps) > 0) {
-      implicit_deps <- setdiff(implicit_deps, ignore_deps)
-    }
+    detected_implicit_deps <- detect_implicit_dependencies(packages, pkg_dir, ext)
 
     if (verbose) {
       message(.bb_trf(
         "Detected implicit dependencies: %s",
-        paste(implicit_deps, collapse = ", ")
+        paste(detected_implicit_deps, collapse = ", ")
       ))
     }
 
   }
 
+  hard_implicit_deps <- unique(c(
+    if (is.null(force_deps)) character() else force_deps,
+    if (is.null(additional_deps)) character() else additional_deps
+  ))
+  if (!is.null(ignore_deps) && length(ignore_deps) > 0L) {
+    hard_implicit_deps <- setdiff(hard_implicit_deps, ignore_deps)
+  }
+  if (is.null(force_deps) && !is.null(ignore_deps) && length(ignore_deps) > 0L) {
+    detected_implicit_deps <- setdiff(detected_implicit_deps, ignore_deps)
+  }
+
   # Extract explicit dependencies from local archives.
-  dependencies <- unlist(lapply(packages, extract_dependencies, pkg_dir, ext))
+  dependencies <- unlist(lapply(archive_metadata, `[[`, "dependencies"), use.names = FALSE)
 
   # Classify dependencies as local or repository-provided.
   classified_deps <- classify_dependencies(dependencies, pkg_dir, ext)
@@ -478,7 +514,7 @@ create_metapackage <- function(
   write_description_file(
     name = name,
     version = version,
-    implicit_deps = implicit_deps,
+    implicit_deps = hard_implicit_deps,
     import_deps = import_deps,
     authors = authors,
     description = description,
@@ -501,12 +537,12 @@ create_metapackage <- function(
     log_debug("Basic vignette created for R CMD check")
   }
 
-  # Write NAMESPACE with implicit dependencies.
+  # Write NAMESPACE with explicitly selected additional dependencies.
   write_namespace_file(
     name = name,
     cran_packages = cran_deps,
     namespace_path = file.path(project_dir, "NAMESPACE"),
-    implicit_deps = implicit_deps,
+    implicit_deps = hard_implicit_deps,
     import_deps = import_deps,
     verbose = debug
   )
@@ -625,13 +661,14 @@ create_metapackage <- function(
     "^(?!(?-i:inst/archives/)).*\\.tar$",
 
     # Local component patterns
-    vapply(sub("_.*", "", packages), function(pkg) {
+    unlist(lapply(sub("_.*", "", packages), function(pkg) {
       pkg_pattern <- .escape_regex_literal(pkg)
+      if (tolower(pkg) %in% .r_build_reserved_paths) return(character())
       c(sprintf("^%s$", pkg_pattern),         # Exact component directory
         sprintf("^%s(/.*)?$", pkg_pattern),  # Directory and descendants
         sprintf("^%s[._-].*$", pkg_pattern)  # Files prefixed by component name
       )
-    }, character(3))
+    }), use.names = FALSE)
 
   )
 
@@ -686,7 +723,7 @@ StripTrailingWhitespace: Yes"
     archive_stems = packages,
     ext = ext,
     dest_dir = file.path(project_dir, "R"),
-    implicit_deps = implicit_deps,
+    implicit_deps = hard_implicit_deps,
     reexport = reexport,
     include_archives = include_archives,
     verbose = debug
@@ -746,7 +783,7 @@ StripTrailingWhitespace: Yes"
       archives = packages,
       local_dependencies = local_deps,
       cran_dependencies = cran_deps,
-      implicit_dependencies = implicit_deps,
+      implicit_dependencies = detected_implicit_deps,
       workflow = workflow,
       documented = doc_ok
     ),

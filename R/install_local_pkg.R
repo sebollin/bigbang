@@ -110,6 +110,9 @@ install_local_pkg <- function(
       state$failed[[stem]] <- paste("Package archive does not exist:", archive)
       return(FALSE)
     }
+    # Preserve the inexpensive early-exit behavior for an already installed
+    # package. Full archive metadata validation still happens before any
+    # installation when the policy decides that work is needed.
     installed_version <- tryCatch(
       utils::packageVersion(base_name), error = function(e) NULL
     )
@@ -126,7 +129,6 @@ install_local_pkg <- function(
       }
       return(TRUE)
     }
-
     state$visiting <- c(state$visiting, base_name)
     on.exit(state$visiting <- setdiff(state$visiting, base_name), add = TRUE)
 
@@ -157,11 +159,71 @@ install_local_pkg <- function(
       )
       return(FALSE)
     }
-    desc <- read.dcf(descriptions, fields = c("Depends", "Imports", "LinkingTo"))
-    dependencies <- unlist(
-      strsplit(paste(desc[!is.na(desc)], collapse = ","), ","),
-      use.names = FALSE
+    desc <- read.dcf(
+      descriptions, fields = c("Package", "Version", "Depends", "Imports", "LinkingTo")
     )
+    declared_package <- if ("Package" %in% colnames(desc)) {
+      trimws(unname(desc[1L, "Package"]))
+    } else {
+      NA_character_
+    }
+    declared_version <- if ("Version" %in% colnames(desc)) {
+      trimws(unname(desc[1L, "Version"]))
+    } else {
+      NA_character_
+    }
+    if (is.na(declared_package) || is.na(declared_version) ||
+          !identical(declared_package, base_name)) {
+      state$failed[[stem]] <- .bb_trf(
+        "Archive %s declares package %s, but its filename names %s.",
+        archive, declared_package, base_name
+      )
+      return(FALSE)
+    }
+    if (!.version_matches(declared_version, version_text)) {
+      state$failed[[stem]] <- .bb_trf(
+        "Archive %s declares version %s, but its filename names version %s.",
+        archive, declared_version, version_text
+      )
+      return(FALSE)
+    }
+    version_text <- declared_version
+
+    installed_version <- tryCatch(
+      utils::packageVersion(base_name), error = function(e) NULL
+    )
+    keep_installed <- !is.null(installed_version) && (
+      identical(upgrade, "never") ||
+        (identical(upgrade, "newer") &&
+           installed_version >= base::package_version(version_text))
+    )
+    if (keep_installed) {
+      state$unchanged[[stem]] <- if (identical(upgrade, "never")) {
+        .bb_tr("Kept installed version because upgrade = 'never'")
+      } else {
+        .bb_tr("Already installed")
+      }
+      return(TRUE)
+    }
+    dependency_fields <- intersect(
+      c("Depends", "Imports", "LinkingTo"), colnames(desc)
+    )
+    dependencies <- if (length(dependency_fields) == 0L) {
+      character()
+    } else {
+      dependency_values <- unname(desc[1L, dependency_fields])
+      dependency_values <- dependency_values[
+        !is.na(dependency_values) & nzchar(dependency_values)
+      ]
+      if (length(dependency_values) == 0L) {
+        character()
+      } else {
+        unlist(
+          strsplit(paste(dependency_values, collapse = ","), ","),
+          use.names = FALSE
+        )
+      }
+    }
     dependencies <- trimws(gsub("\\s*\\([^)]*\\)", "", dependencies))
     dependencies <- unique(dependencies[nzchar(dependencies) & dependencies != "R"])
 

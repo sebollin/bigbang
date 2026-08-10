@@ -9,6 +9,13 @@
     "'dest_dir' must be supplied as one non-empty path: the meta-package is written inside it. Use tempdir() for disposable output." = "'dest_dir' debe proporcionarse como una ruta no vac\u00eda: el metapaquete se escribe dentro de ella. Use tempdir() para una salida descartable.",
     "'workflow' must map unique non-empty stage names to every component package exactly once" = "'workflow' debe asociar nombres de etapa \u00fanicos y no vac\u00edos con cada paquete componente exactamente una vez",
     "Unsupported archive extension: %s" = "Extensi\u00f3n de archivo no compatible: %s",
+    "Package archive does not exist: %s" = "El archivo del paquete no existe: %s",
+    "Expected one DESCRIPTION in %s; found %d." = "Se esperaba un DESCRIPTION en %s; se encontraron %d.",
+    "Archive %s must declare non-empty Package and Version fields." = "El archivo %s debe declarar campos Package y Version no vac\u00edos.",
+    "Archive %s declares package %s, but its filename names %s." = "El archivo %s declara el paquete %s, pero su nombre indica %s.",
+    "Archive %s declares version %s, but its filename names version %s." = "El archivo %s declara la versi\u00f3n %s, pero su nombre indica la versi\u00f3n %s.",
+    "More than one archive was supplied for component package(s): %s." = "Se proporcion\u00f3 m\u00e1s de un archivo para los paquetes componentes: %s.",
+    "Circular dependencies detected: %s. A clean installation has no valid topological order." = "Dependencias circulares detectadas: %s. Una instalaci\u00f3n limpia no tiene un orden topol\u00f3gico v\u00e1lido.",
     "No DESCRIPTION file found in package %s" = "No se encontr\u00f3 DESCRIPTION en el paquete %s",
     "DEBUG: DESCRIPTION file created" = "DEBUG: archivo DESCRIPTION creado",
     "DEBUG: NAMESPACE file created" = "DEBUG: archivo NAMESPACE creado",
@@ -114,7 +121,7 @@
       "Formato de archivo no compatible: %s",
       "Se esperaba un DESCRIPTION en %s; se encontraron %d.",
       "El ZIP no contiene DESCRIPTION: %s",
-      "El paquete %s (versi\u00f3n %s) ya est\u00e1 instalado.",
+      "El paquete %s (versi\u00f3n instalada %s) ya est\u00e1 instalado.",
       "Ya instalado",
       "Omitido porque faltan dependencias no locales: %s",
       "Falta",
@@ -155,7 +162,10 @@
         "Faltan componentes por instalar: %%s\nEjecute %s para instalarlos desde los archivos locales.",
         call_es
       ),
-      "Nota: error durante la descarga segura: %s"
+      "Nota: error durante la descarga segura: %s",
+      "El archivo %s declara el paquete %s, pero su nombre indica %s.",
+      "El archivo %s declara la versi\u00f3n %s, pero su nombre indica la versi\u00f3n %s.",
+      "Se proporcion\u00f3 m\u00e1s de un archivo para los paquetes componentes: %s."
     ),
     c(
       "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives.",
@@ -164,7 +174,7 @@
       "Unsupported archive format: %s",
       "Expected one DESCRIPTION in %s; found %d.",
       "The ZIP archive does not contain a DESCRIPTION file: %s",
-      "Package %s (version %s) is already installed.",
+      "Package %s (installed version %s) is already installed.",
       "Already installed",
       "Skipped because non-local dependencies are missing: %s",
       "Missing",
@@ -205,7 +215,10 @@
         "Components still need installation: %%s\nRun %s to install them from local archives.",
         call_en
       ),
-      "Note: Error during safe unload: %s"
+      "Note: Error during safe unload: %s",
+      "Archive %s declares package %s, but its filename names %s.",
+      "Archive %s declares version %s, but its filename names version %s.",
+      "More than one archive was supplied for component package(s): %s."
     )
   )
 }

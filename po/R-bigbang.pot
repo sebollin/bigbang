@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.1.0.9000\n"
+"Project-Id-Version: bigbang 0.2.0\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -26,6 +26,27 @@ msgid "'workflow' must map unique non-empty stage names to every component packa
 msgstr ""
 
 msgid "Unsupported archive extension: %s"
+msgstr ""
+
+msgid "Package archive does not exist: %s"
+msgstr ""
+
+msgid "Expected one DESCRIPTION in %s; found %d."
+msgstr ""
+
+msgid "Archive %s must declare non-empty Package and Version fields."
+msgstr ""
+
+msgid "Archive %s declares package %s, but its filename names %s."
+msgstr ""
+
+msgid "Archive %s declares version %s, but its filename names version %s."
+msgstr ""
+
+msgid "More than one archive was supplied for component package(s): %s."
+msgstr ""
+
+msgid "Circular dependencies detected: %s. A clean installation has no valid topological order."
 msgstr ""
 
 msgid "No DESCRIPTION file found in package %s"

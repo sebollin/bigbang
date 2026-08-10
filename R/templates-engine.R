@@ -61,10 +61,9 @@ resolve_upgrade_policy <- function(force, upgrade, upgrade_missing) {{
 #\' @param pkg_dir Character directory containing local archives.
 #\' @param ext Character archive extension.
 #\'
-#\' @return A character vector of dependency names.
+#\' @return A list with declared package metadata and dependencies.
 #\' @keywords internal
-
-read_archive_dependencies <- function(package, pkg_dir, ext = ".tar.gz") {{
+read_archive_metadata <- function(package, pkg_dir, ext = ".tar.gz") {{
   archive <- file.path(pkg_dir, paste0(package, ext))
   if (!file.exists(archive)) {{
     stop(.meta_trf("Package archive does not exist: %s", archive),
@@ -93,11 +92,51 @@ read_archive_dependencies <- function(package, pkg_dir, ext = ".tar.gz") {{
     ), call. = FALSE)
   }}
 
-  desc <- read.dcf(description_file, fields = c("Depends", "Imports", "LinkingTo"))
-  dependencies <- unlist(strsplit(paste(desc[!is.na(desc)], collapse = ","), ","),
-                         use.names = FALSE)
-  dependencies <- trimws(gsub("\\\\s*\\\\([^)]*\\\\)", "", dependencies))
-  unique(dependencies[nzchar(dependencies) & dependencies != "R"])
+  desc <- read.dcf(
+    description_file,
+    fields = c("Package", "Version", "Depends", "Imports", "LinkingTo")
+  )
+  field <- function(name) {{
+    if (!name %in% colnames(desc)) return(NA_character_)
+    value <- unname(desc[1L, name])
+    if (is.na(value)) NA_character_ else trimws(value)
+  }}
+  declared_package <- field("Package")
+  declared_version <- field("Version")
+  expected_package <- sub("_.*", "", package)
+  expected_version <- sub("^[^_]+_", "", package)
+  if (is.na(declared_package) || is.na(declared_version) ||
+      !identical(declared_package, expected_package)) {{
+    stop(.meta_trf(
+      "Archive %s declares package %s, but its filename names %s.",
+      archive, declared_package, expected_package
+    ), call. = FALSE)
+  }}
+  versions_match <- tryCatch(
+    isTRUE(base::package_version(declared_version) ==
+             base::package_version(expected_version)),
+    error = function(e) FALSE
+  )
+  if (!versions_match) {{
+    stop(.meta_trf(
+      "Archive %s declares version %s, but its filename names version %s.",
+      archive, declared_version, expected_version
+    ), call. = FALSE)
+  }}
+  dependencies <- unlist(lapply(c("Depends", "Imports", "LinkingTo"), function(name) {{
+    value <- field(name)
+    if (is.na(value) || !nzchar(value)) return(character())
+    trimws(gsub("\\\\s*\\\\([^)]*\\\\)", "", strsplit(value, ",", fixed = TRUE)[[1L]]))
+  }}), use.names = FALSE)
+  list(
+    package = declared_package,
+    version = declared_version,
+    dependencies = unique(dependencies[nzchar(dependencies) & dependencies != "R"])
+  )
+}}
+
+read_archive_dependencies <- function(package, pkg_dir, ext = ".tar.gz") {{
+  read_archive_metadata(package, pkg_dir, ext)$dependencies
 }}
 
 
@@ -156,14 +195,15 @@ install_local_archive <- function(package, pkg_dir, ext = ".tar.gz",
   }}
 
   base_name <- sub("_.*", "", package)
-  version <- sub("^[^_]+_", "", package)
-  dependencies <- tryCatch(
-    read_archive_dependencies(package, pkg_dir, ext),
+  metadata <- tryCatch(
+    read_archive_metadata(package, pkg_dir, ext),
     error = function(e) e
   )
-  if (inherits(dependencies, "error")) {{
-    return(list(success = FALSE, message = conditionMessage(dependencies)))
+  if (inherits(metadata, "error")) {{
+    return(list(success = FALSE, message = conditionMessage(metadata)))
   }}
+  version <- metadata$version
+  dependencies <- metadata$dependencies
 
   installed_version <- tryCatch(
     utils::packageVersion(base_name), error = function(e) NULL
@@ -175,7 +215,8 @@ install_local_archive <- function(package, pkg_dir, ext = ".tar.gz",
   )
   if (keep_installed) {{
     message(.meta_trf(
-      "Package %s (version %s) is already installed.", base_name, version
+      "Package %s (installed version %s) is already installed.",
+      base_name, as.character(installed_version)
     ))
     unchanged_message <- if (identical(upgrade, "never")) {{
       .meta_tr("Kept installed version because upgrade = \'never\'")

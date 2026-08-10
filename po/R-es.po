@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.1.0.9000\n"
+"Project-Id-Version: bigbang 0.2.0\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -27,6 +27,27 @@ msgstr "'workflow' debe asociar nombres de etapa únicos y no vacíos con cada p
 
 msgid "Unsupported archive extension: %s"
 msgstr "Extensión de archivo no compatible: %s"
+
+msgid "Package archive does not exist: %s"
+msgstr "El archivo del paquete no existe: %s"
+
+msgid "Expected one DESCRIPTION in %s; found %d."
+msgstr "Se esperaba un DESCRIPTION en %s; se encontraron %d."
+
+msgid "Archive %s must declare non-empty Package and Version fields."
+msgstr "El archivo %s debe declarar campos Package y Version no vacíos."
+
+msgid "Archive %s declares package %s, but its filename names %s."
+msgstr "El archivo %s declara el paquete %s, pero su nombre indica %s."
+
+msgid "Archive %s declares version %s, but its filename names version %s."
+msgstr "El archivo %s declara la versión %s, pero su nombre indica la versión %s."
+
+msgid "More than one archive was supplied for component package(s): %s."
+msgstr "Se proporcionó más de un archivo para los paquetes componentes: %s."
+
+msgid "Circular dependencies detected: %s. A clean installation has no valid topological order."
+msgstr "Dependencias circulares detectadas: %s. Una instalación limpia no tiene un orden topológico válido."
 
 msgid "No DESCRIPTION file found in package %s"
 msgstr "No se encontró DESCRIPTION en el paquete %s"
