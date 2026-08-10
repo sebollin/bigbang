@@ -1,12 +1,13 @@
 Package: bigbang
 Type: Package
 Title: Build 'Tidyverse'-Style Meta-Packages from Local Package Files
-Version: 0.1.0.9000
+Version: 0.2.0
 Authors@R: c(
-    person(given = "Sebastian",
+    person(given = "Sebastián",
            family = "Lucas",
            role = c("aut", "cre"),
-           email = "sebalucas@gmail.com"),
+           email = "sebalucas@gmail.com",
+           comment = c(ORCID = "0009-0009-9068-0276")),
     person(given = "Richard",
            family = "Detomasi",
            role = "ctb",

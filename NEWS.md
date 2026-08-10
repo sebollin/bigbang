@@ -1,4 +1,6 @@
-# bigbang (development version)
+# bigbang 0.2.0
+
+Released on 2026-08-09.
 
 ## Breaking changes
 
@@ -78,6 +80,9 @@
   skipped the component again for the same reason.
 
 ## Documentation
+
+- The maintainer's given name is spelled Sebastián, and the author entry now
+  carries an ORCID identifier.
 
 - Documented that distributing the component archives inside a meta-package is a
   redistribution, so their licenses have to allow it, and that a component still

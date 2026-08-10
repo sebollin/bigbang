@@ -260,10 +260,10 @@ citation("bigbang")
 ```bibtex
 @Manual{bigbang2026,
   title  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},
-  author = {Sebastian Lucas},
-  note   = {R package version 0.1.0},
+  author = {Sebastián Lucas},
+  note   = {R package version 0.2.0},
   year   = {2026},
-  url    = {https://github.com/sebollin/bigbang},
+  url    = {https://sebollin.github.io/bigbang/},
 }
 ```
 
