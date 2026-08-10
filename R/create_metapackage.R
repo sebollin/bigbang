@@ -740,7 +740,7 @@ StripTrailingWhitespace: Yes"
 
   result <- structure(
     list(
-      path = normalizePath(project_dir, mustWork = TRUE),
+      path = normalizePath(project_dir, winslash = "/", mustWork = TRUE),
       name = name,
       packages = sub("_.*", "", packages),
       archives = packages,

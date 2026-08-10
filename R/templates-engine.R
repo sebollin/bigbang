@@ -1168,8 +1168,11 @@ safe_unlink <- function(path, recursive = FALSE, force = FALSE, verify = TRUE) {
 
 is_path_inside <- function(inner_path, outer_path) {
   # Normalize paths before comparing components.
-  inner <- normalizePath(inner_path, mustWork = FALSE)
-  outer <- normalizePath(outer_path, mustWork = FALSE)
+  # Both sides use the same separator convention as the rest of the package. A
+  # path that does not exist comes back from normalizePath() unchanged, so
+  # mixing conventions would make the comparison fail on Windows.
+  inner <- normalizePath(inner_path, winslash = "/", mustWork = FALSE)
+  outer <- normalizePath(outer_path, winslash = "/", mustWork = FALSE)
 
   # Use one separator representation on Windows.
   if (.Platform$OS.type == "windows") {

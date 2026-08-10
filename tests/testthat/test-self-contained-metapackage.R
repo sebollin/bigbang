@@ -453,3 +453,30 @@ test_that("the stamped generator version tracks the package version", {
     as.character(utils::packageVersion("bigbang"))
   )
 })
+
+test_that("returned paths use one separator convention", {
+  sandbox <- tempfile("bigbang-separators-")
+  archives <- file.path(sandbox, "archives")
+  toy_archive_dir(archives)
+  destination <- file.path(sandbox, "destination")
+  dir.create(destination, recursive = TRUE)
+
+  result <- generate_self_contained("sepverse", archives, destination)
+
+  # The package normalises with winslash = "/" throughout. A result path in the
+  # platform default would not compare equal to a path the caller built with
+  # file.path(), on Windows only.
+  expect_identical(
+    result$path,
+    normalizePath(
+      file.path(destination, "sepverse"), winslash = "/", mustWork = TRUE
+    )
+  )
+  expect_false(grepl("\\\\", result$path))
+
+  scan <- scan_bigbang_artifact(result$path)
+  expect_identical(
+    scan$path, normalizePath(result$path, winslash = "/", mustWork = TRUE)
+  )
+  expect_false(grepl("\\\\", scan$path))
+})

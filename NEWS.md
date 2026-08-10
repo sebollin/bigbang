@@ -74,6 +74,12 @@ Released on 2026-08-09.
   trailing whitespace.
 - Generated helper examples use the requested meta-package name instead of an
   internal historical name.
+- Paths returned in results use forward slashes on every platform, like the rest
+  of the package. On Windows `result$path` came back in the platform convention
+  and therefore did not compare equal to a path the caller had built with
+  `file.path()`. The containment checks normalise both sides the same way, so a
+  destination that does not exist yet cannot be compared against one that does
+  in a different convention.
 - When a component is skipped because a non-local dependency is missing, the
   warning names the call that resolves it and the attachment step no longer
   follows it with a vaguer hint suggesting a bare re-run, which would have

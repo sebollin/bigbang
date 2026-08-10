@@ -54,7 +54,7 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
   }
 
   original_path <- path
-  path <- normalizePath(path, mustWork = TRUE)
+  path <- normalizePath(path, winslash = "/", mustWork = TRUE)
 
   if (dir.exists(path)) {
     db <- list.files(
