@@ -29,6 +29,12 @@ Released on 2026-08-09.
   component needs in order to run is still installed; what is no longer
   pulled in is the tooling those dependencies use for their own
   examples, tests and vignettes.
+- Source-code guesses from `detect_implicit_dependencies()` are now
+  diagnostic only. Dependencies declared by a component, or supplied
+  explicitly through `additional_deps`/`force_deps`, remain binding;
+  guessed packages must be opted in explicitly. This prevents comments
+  and common function names from making a distributed meta-package
+  depend on unrelated packages.
 - The arguments added in this release come last in every signature, so a
   positional call written against 0.1.0 keeps binding to the same
   parameters. Positional calls are still a fragile way to call these
@@ -96,6 +102,19 @@ Released on 2026-08-09.
   the warning names the call that resolves it and the attachment step no
   longer follows it with a vaguer hint suggesting a bare re-run, which
   would have skipped the component again for the same reason.
+- Component archive `Package` and `Version` fields are validated against
+  their filenames, duplicate component versions and dependency cycles
+  are rejected while generating, and generated installers verify the
+  declared version.
+- Already-installed messages now report the installed version rather
+  than the version named by the archive.
+- Component names matching standard R package paths no longer generate
+  `.Rbuildignore` rules that could exclude the generated package’s own
+  files or shipped archives.
+- The source-code patterns require a namespace qualifier or a call for
+  every package they guess at, so ordinary S4 code is no longer reported
+  as needing `Matrix`, and an identifier beginning with `st_` no longer
+  suggests `sf`.
 
 ### Documentation
 

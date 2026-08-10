@@ -41,6 +41,7 @@
 <li>In a generated meta-package built with <code>include_archives = FALSE</code>, <code>&lt;meta&gt;_install()</code> requires <code>pkg_dir</code>. In 0.1.0 that argument defaulted to the absolute archive path of the machine where the meta-package had been generated, which exists nowhere else. With the new default, <code>include_archives = TRUE</code>, the argument is optional again because the archives travel inside the package.</li>
 <li>Components that the installation policy left untouched are reported in a new <code>unchanged</code> element of the installation result instead of appearing in <code>installed</code> labelled “Already installed”. Reporting a package as installed when nothing was installed was misleading.</li>
 <li>Non-local dependencies are installed with <code>dependencies = NA</code> instead of <code>TRUE</code>, so their <code>Suggests</code> are no longer installed. Everything a component needs in order to run is still installed; what is no longer pulled in is the tooling those dependencies use for their own examples, tests and vignettes.</li>
+<li>Source-code guesses from <code>detect_implicit_dependencies()</code> are now diagnostic only. Dependencies declared by a component, or supplied explicitly through <code>additional_deps</code>/<code>force_deps</code>, remain binding; guessed packages must be opted in explicitly. This prevents comments and common function names from making a distributed meta-package depend on unrelated packages.</li>
 <li>The arguments added in this release come last in every signature, so a positional call written against 0.1.0 keeps binding to the same parameters. Positional calls are still a fragile way to call these functions: name the arguments.</li>
 </ul></div>
 <div class="section level3">
@@ -66,6 +67,10 @@
 <li>Generated helper examples use the requested meta-package name instead of an internal historical name.</li>
 <li>Paths returned in results use forward slashes on every platform, like the rest of the package. On Windows <code>result$path</code> came back in the platform convention and therefore did not compare equal to a path the caller had built with <code><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path()</a></code>. The containment checks normalise both sides the same way, so a destination that does not exist yet cannot be compared against one that does in a different convention.</li>
 <li>When a component is skipped because a non-local dependency is missing, the warning names the call that resolves it and the attachment step no longer follows it with a vaguer hint suggesting a bare re-run, which would have skipped the component again for the same reason.</li>
+<li>Component archive <code>Package</code> and <code>Version</code> fields are validated against their filenames, duplicate component versions and dependency cycles are rejected while generating, and generated installers verify the declared version.</li>
+<li>Already-installed messages now report the installed version rather than the version named by the archive.</li>
+<li>Component names matching standard R package paths no longer generate <code>.Rbuildignore</code> rules that could exclude the generated package’s own files or shipped archives.</li>
+<li>The source-code patterns require a namespace qualifier or a call for every package they guess at, so ordinary S4 code is no longer reported as needing <code>Matrix</code>, and an identifier beginning with <code>st_</code> no longer suggests <code>sf</code>.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="documentation-0-2-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-2-0"></a></h3>
