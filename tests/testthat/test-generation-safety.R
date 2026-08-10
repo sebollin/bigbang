@@ -307,4 +307,3 @@ test_that("already installed messages report the installed version", {
   expect_match(paste(output, collapse = "\n"), "installed version 9.9.9")
   expect_false(grepl("version 1.0.0", paste(output, collapse = "\n"), fixed = TRUE))
 })
-
