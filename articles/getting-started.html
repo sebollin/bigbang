@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -119,18 +119,18 @@ separately.</p>
 <span><span class="va">result</span></span>
 <span><span class="co">#&gt; &lt;bigbang metapackage&gt;</span></span>
 <span><span class="co">#&gt;   Package: toyverse</span></span>
-<span><span class="co">#&gt;   Path: /tmp/RtmphOzBPC/bigbang-vignette-1c7f2b985973/generated/toyverse</span></span>
+<span><span class="co">#&gt;   Path: /tmp/RtmpjSIi2W/bigbang-vignette-1c1f22bcb5e1/generated/toyverse</span></span>
 <span><span class="co">#&gt;   Components: toycomponent</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">list.files</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           </span></span>
-<span><span class="co">#&gt; [5] "NAMESPACE"      "po"             "R"              "toyverse.Rproj"</span></span>
-<span><span class="co">#&gt; [9] "vignettes"</span></span></code></pre></div>
+<span><span class="co">#&gt;  [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           </span></span>
+<span><span class="co">#&gt;  [5] "NAMESPACE"      "po"             "R"              "README.md"     </span></span>
+<span><span class="co">#&gt;  [9] "tests"          "toyverse.Rproj" "vignettes"</span></span></code></pre></div>
 <p>The generated tree can be scanned without loading it:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/scan_bigbang_artifact.html">scan_bigbang_artifact</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span></span>
 <span><span class="va">scan</span></span>
 <span><span class="co">#&gt; &lt;bigbang artifact scan&gt;</span></span>
-<span><span class="co">#&gt;   Path: /tmp/RtmphOzBPC/bigbang-vignette-1c7f2b985973/generated/toyverse</span></span>
+<span><span class="co">#&gt;   Path: /tmp/RtmpjSIi2W/bigbang-vignette-1c1f22bcb5e1/generated/toyverse</span></span>
 <span><span class="co">#&gt;   Type: source</span></span>
 <span><span class="co">#&gt;   Result: no deletion signatures found</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot</a></span><span class="op">(</span><span class="op">!</span><span class="va">scan</span><span class="op">$</span><span class="va">vulnerable</span><span class="op">)</span></span></code></pre></div>
@@ -145,11 +145,29 @@ components:</p>
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/system2.html" class="external-link">system2</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Rhome.html" class="external-link">R.home</a></span><span class="op">(</span><span class="st">"bin"</span><span class="op">)</span>, <span class="st">"R"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"CMD"</span>, <span class="st">"build"</span>, <span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"toyverse_0.1.0.tar.gz"</span>, repos <span class="op">=</span> <span class="cn">NULL</span>, type <span class="op">=</span> <span class="st">"source"</span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">toyverse</span><span class="op">)</span></span>
-<span><span class="fu">toyverse_install</span><span class="op">(</span>cran_deps <span class="op">=</span> <span class="st">"skip"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">toyverse_install</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p>Those four lines are also the whole procedure for someone else. The
+component archives were copied into the generated package, so
+<code>toyverse_0.1.0.tar.gz</code> is the only file that has to travel:
+whoever receives it installs it and calls
+<code>toyverse_install()</code>, with no archive directory beside it and
+no path agreed on in advance. The default <code>pkg_dir</code> is
+<code>system.file("archives", package = "toyverse")</code>, which is
+resolved when the installer runs and therefore points at the library it
+was installed into.</p>
+<p>Generate with <code>include_archives = FALSE</code> when the archives
+should stay in a location every recipient can already reach; then
+<code>toyverse_install()</code> requires an explicit
+<code>pkg_dir</code>.</p>
 <p><code>cran_deps = "skip"</code> is the offline default. Choose
 <code>"error"</code> for strict offline validation or
-<code>"install"</code> only when an explicit repository is
-available.</p>
+<code>"install"</code> only when an explicit repository is available.
+Use <code>upgrade = "always"</code> or <code>force = TRUE</code> for an
+explicit reinstall. Generated metapackages provide
+<code>&lt;meta&gt;_conflicts()</code> and honor
+<code>options(&lt;meta&gt;.quiet = TRUE)</code> for startup output.
+Their optional <code>cli</code> display falls back to a dependency-free
+ASCII banner.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
@@ -158,7 +176,7 @@ available.</p>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Sebastian Lucas.</p>
+  <p>Developed by Sebastián Lucas.</p>
 </div>
 
 <div class="pkgdown-footer-right">

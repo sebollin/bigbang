@@ -60,12 +60,12 @@ result <- create_metapackage(
 result
 #> <bigbang metapackage>
 #>   Package: toyverse
-#>   Path: /tmp/RtmphOzBPC/bigbang-vignette-1c7f2b985973/generated/toyverse
+#>   Path: /tmp/RtmpjSIi2W/bigbang-vignette-1c1f22bcb5e1/generated/toyverse
 #>   Components: toycomponent
 list.files(result$path)
-#> [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           
-#> [5] "NAMESPACE"      "po"             "R"              "toyverse.Rproj"
-#> [9] "vignettes"
+#>  [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           
+#>  [5] "NAMESPACE"      "po"             "R"              "README.md"     
+#>  [9] "tests"          "toyverse.Rproj" "vignettes"
 ```
 
 The generated tree can be scanned without loading it:
@@ -75,7 +75,7 @@ The generated tree can be scanned without loading it:
 scan <- scan_bigbang_artifact(result$path)
 scan
 #> <bigbang artifact scan>
-#>   Path: /tmp/RtmphOzBPC/bigbang-vignette-1c7f2b985973/generated/toyverse
+#>   Path: /tmp/RtmpjSIi2W/bigbang-vignette-1c1f22bcb5e1/generated/toyverse
 #>   Type: source
 #>   Result: no deletion signatures found
 stopifnot(!scan$vulnerable)
@@ -91,9 +91,25 @@ standard R workflow. Loading the metapackage never installs components:
 system2(file.path(R.home("bin"), "R"), c("CMD", "build", result$path))
 install.packages("toyverse_0.1.0.tar.gz", repos = NULL, type = "source")
 library(toyverse)
-toyverse_install(cran_deps = "skip")
+toyverse_install()
 ```
+
+Those four lines are also the whole procedure for someone else. The
+component archives were copied into the generated package, so
+`toyverse_0.1.0.tar.gz` is the only file that has to travel: whoever
+receives it installs it and calls `toyverse_install()`, with no archive
+directory beside it and no path agreed on in advance. The default
+`pkg_dir` is `system.file("archives", package = "toyverse")`, which is
+resolved when the installer runs and therefore points at the library it
+was installed into.
+
+Generate with `include_archives = FALSE` when the archives should stay
+in a location every recipient can already reach; then
+`toyverse_install()` requires an explicit `pkg_dir`.
 
 `cran_deps = "skip"` is the offline default. Choose `"error"` for strict
 offline validation or `"install"` only when an explicit repository is
-available.
+available. Use `upgrade = "always"` or `force = TRUE` for an explicit
+reinstall. Generated metapackages provide `<meta>_conflicts()` and honor
+`options(<meta>.quiet = TRUE)` for startup output. Their optional `cli`
+display falls back to a dependency-free ASCII banner.

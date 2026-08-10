@@ -30,7 +30,7 @@
 
     <a class="navbar-brand me-2" href="index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -63,7 +63,7 @@
 <blockquote>
 <p><strong>Create custom R metapackages from local packages.</strong></p>
 </blockquote>
-<p><a href="https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a> <a href="https://CRAN.R-project.org/package=bigbang" class="external-link"><img src="https://www.r-pkg.org/badges/version/bigbang" alt="CRAN status"></a> <a href="https://www.gnu.org/licenses/gpl-3.0" class="external-link"><img src="https://img.shields.io/badge/license-GPL%20(%3E%3D%203)-142839.svg" alt="License: GPL v3"></a> <a href="https://lifecycle.r-lib.org/articles/stages.html#experimental" class="external-link"><img src="https://img.shields.io/badge/lifecycle-experimental-8AB46A.svg" alt="Lifecycle: experimental"></a> <a href="https://github.com/sebollin/bigbang/blob/main/README.es.md" class="external-link"><img src="https://img.shields.io/badge/docs-espa%C3%B1ol-0D9786.svg" alt="docs: español"></a></p>
+<p><a href="https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a> <a href="https://CRAN.R-project.org/package=bigbang" class="external-link"><img src="https://www.r-pkg.org/badges/version/bigbang" alt="CRAN status"></a> <a href="https://sebollin.r-universe.dev/bigbang" class="external-link"><img src="https://sebollin.r-universe.dev/bigbang/badges/version" alt="r-universe"></a> <a href="https://www.gnu.org/licenses/gpl-3.0" class="external-link"><img src="https://img.shields.io/badge/license-GPL%20(%3E%3D%203)-142839.svg" alt="License: GPL v3"></a> <a href="https://lifecycle.r-lib.org/articles/stages.html#experimental" class="external-link"><img src="https://img.shields.io/badge/lifecycle-experimental-8AB46A.svg" alt="Lifecycle: experimental"></a> <a href="https://github.com/sebollin/bigbang/blob/main/README.es.md" class="external-link"><img src="https://img.shields.io/badge/docs-espa%C3%B1ol-0D9786.svg" alt="docs: español"></a></p>
 <p><strong>bigbang</strong> builds tidyverse-style metapackages from local package archives. Every metapackage ends in <em>-verse</em>—<code>tidyverse</code>, <code>teamverse</code>, yours. This package creates them: one function call, and a new <em>-verse</em> exists.</p>
 <p>Its reason to exist is <strong>distributing a set of packages as a single unit</strong>.</p>
 <p>Say you maintain four packages of your own that are used together and depend on each other. Someone joins the team, or another office asks for them. They are not on CRAN, so the way to hand them over is a folder of <code>.tar.gz</code> files.</p>
@@ -75,6 +75,7 @@
 <ul>
 <li>📦 <strong>One call, one -verse</strong> — <code><a href="reference/create_metapackage.html">create_metapackage()</a></code> scaffolds a complete, documented, CRAN-checkable metapackage from a directory of <code>.tar.gz</code>/<code>.zip</code> archives.</li>
 <li>🎯 <strong>A curated set, distributed as one</strong> — the metapackage records the exact archive versions it was built from, so the combination you tested is the combination that gets installed.</li>
+<li>📮 <strong>One artifact to hand over</strong> — the component archives travel inside the generated metapackage, so <code>&lt;meta&gt;_install()</code> works with no arguments and no path has to be agreed on between machines.</li>
 <li>🧭 <strong>Real dependency resolution</strong> — builds the local dependency graph, orders installation topologically, and refuses cycles up front. Nobody downstream has to work out what to install first.</li>
 <li>🔌 <strong>No repository required</strong> — every component is read from a directory of files, so installation needs no network at all; <code>cran_deps = "skip"</code> is the default. This is what makes bigbang work behind an institutional firewall, but it is just as useful for shipping a versioned bundle anywhere.</li>
 <li>🌐 <strong>Bilingual at runtime</strong> — English and Spanish messages through R’s native gettext support.</li>
@@ -94,15 +95,19 @@
 <p>The stable version is on CRAN:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"bigbang"</span><span class="op">)</span></span></code></pre></div>
-<p>The development version is on GitHub:</p>
+<p>The development version is served as a binary from r-universe, so it needs no compilation:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"bigbang"</span>, repos <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"https://sebollin.r-universe.dev"</span>,</span>
+<span>                                      <span class="st">"https://cloud.r-project.org"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p>Or from the sources on GitHub:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
 <span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"sebollin/bigbang"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># or</span></span>
 <span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"sebollin/bigbang"</span><span class="op">)</span></span></code></pre></div>
 <p>And true to the package’s offline spirit, a local source checkout installs without any network at all:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"path/to/bigbang"</span>, repos <span class="op">=</span> <span class="cn">NULL</span>, type <span class="op">=</span> <span class="st">"source"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -113,7 +118,7 @@
 ├── datahelpers_1.2.0.tar.gz
 └── reports_0.9.1.tar.gz</code></pre>
 <p>Create the metapackage in a new directory:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://sebollin.github.io/bigbang/">bigbang</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/create_metapackage.html">create_metapackage</a></span><span class="op">(</span></span>
@@ -125,10 +130,15 @@
 <span><span class="op">)</span></span>
 <span><span class="va">result</span></span></code></pre></div>
 <p>Build and install <code>teamverse</code> by the usual R package workflow. Component installation remains explicit:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">teamverse</span><span class="op">)</span>                 <span class="co"># attaches what is already installed</span></span>
-<span><span class="fu">teamverse_install</span><span class="op">(</span>cran_deps <span class="op">=</span> <span class="st">"skip"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">teamverse_install</span><span class="op">(</span><span class="op">)</span>                <span class="co"># installs them, in dependency order</span></span></code></pre></div>
+<p><code>teamverse</code> carries its components, so the call takes no arguments and that is all anyone who receives it has to do. Hand over the built <code>teamverse_0.1.0.tar.gz</code> and nothing else: no folder of archives alongside it, and no path to agree on beforehand. If the archives should stay in a shared location instead, generate with <code>include_archives = FALSE</code>; then <code>teamverse_install()</code> requires an explicit <code>pkg_dir</code>.</p>
 <p><code>cran_deps = "skip"</code> is the default and never accesses the network. Use <code>"error"</code> to fail immediately when a non-local dependency is missing, or <code>"install"</code> with an explicitly configured <code>repos</code> value to allow repository installation.</p>
+<p>Generated installers also accept <code>upgrade = "newer"</code> (the default), <code>"always"</code>, or <code>"never"</code>; <code>force = TRUE</code> is the concise form of <code>upgrade = "always"</code>. Generated metapackages use an optional <code>cli</code> two-column attachment message and fall back to their ASCII banner when <code>cli</code> is unavailable. Set <code>options(teamverse.quiet = TRUE)</code> to silence startup messages, or call <code>teamverse_conflicts()</code> to inspect masking conflicts.</p>
+<p>For an ordered pipeline guide, supply every component once in a named workflow:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">workflow</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Import"</span> <span class="op">=</span> <span class="st">"datahelpers"</span>, <span class="st">"Report"</span> <span class="op">=</span> <span class="st">"reports"</span><span class="op">)</span></span></code></pre></div>
 <p>See <code><a href="articles/getting-started.html">vignette("getting-started", package = "bigbang")</a></code> for a reproducible toy project created entirely under <code><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir()</a></code>.</p>
 </div>
 <div class="section level2">
@@ -144,7 +154,6 @@
 <li>
 <code><a href="reference/scan_bigbang_artifact.html">scan_bigbang_artifact()</a></code> scans old source trees, archives, or installed packages for historical deletion signatures without loading them.</li>
 </ul>
-<p>The former Spanish function names remain as deprecated transition aliases.</p>
 </div>
 <div class="section level2">
 <h2 id="clamp-zip-files-and-portability">🗜️ ZIP files and portability<a class="anchor" aria-label="anchor" href="#clamp-zip-files-and-portability"></a>
@@ -156,9 +165,19 @@
 <h2 id="earth_americas-english-and-spanish">🌎 English and Spanish<a class="anchor" aria-label="anchor" href="#earth_americas-english-and-spanish"></a>
 </h2>
 <p>English is the source language for code, help, and runtime messages. A complete Spanish runtime catalog is included through R’s gettext mechanism:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/gettext.html" class="external-link">Sys.setLanguage</a></span><span class="op">(</span><span class="st">"es"</span><span class="op">)</span>  <span class="co"># R &gt;= 4.2</span></span></code></pre></div>
 <p>On earlier R versions, set <code>LANGUAGE=es</code> before starting R. A complete Spanish guide is available in <code><a href="articles/bigbang-es.html">vignette("bigbang-es", package = "bigbang")</a></code> and as <a href="https://github.com/sebollin/bigbang/blob/main/README.es.md" class="external-link">README.es.md</a>. Rd help remains English because R has no stable native mechanism for translated help; a separate <code>bigbang.es</code> module can be considered if <code>rhelpi18n</code> becomes production-ready and reaches CRAN.</p>
+</div>
+<div class="section level2">
+<h2 id="telescope-related-projects">🔭 Related projects<a class="anchor" aria-label="anchor" href="#telescope-related-projects"></a>
+</h2>
+<ul>
+<li>
+<a href="https://github.com/pegeler/metapackage" class="external-link">pegeler/metapackage</a>, by Paul Egeler, is a declarative personal metapackage built around packages available from online repositories. bigbang instead generates metapackages from local package archives.</li>
+<li>
+<a href="https://rmetaverse.github.io/metaverse/" class="external-link">metaverse</a> is a community metapackage for evidence synthesis, modeled on tidyverse. The attachment message and <code>&lt;meta&gt;_packages()</code> design in bigbang-generated metapackages draw on tidyverse and on metaverse (Westgate and colleagues).</li>
+</ul>
 </div>
 <div class="section level2">
 <h2 id="compass-choosing-the-right-tool">🧭 Choosing the right tool<a class="anchor" aria-label="anchor" href="#compass-choosing-the-right-tool"></a>
@@ -196,7 +215,7 @@
 </h2>
 <p>An unreleased predecessor generated cleanup code that could remove directories named after components from the user’s working directory. The startup installer and all cwd-relative cleanup paths were removed before this CRAN submission and are covered by destructive regression tests that run only in disposable trees.</p>
 <p>Do not load or document an old generated artifact before classifying it:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scan</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/scan_bigbang_artifact.html">scan_bigbang_artifact</a></span><span class="op">(</span><span class="st">"path/to/artifact"</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">scan</span></span></code></pre></div>
 <p>If <code>scan$vulnerable</code> is true, quarantine the artifact and generate a new version in a new, empty destination. Never regenerate an unclassified source tree in place. The full remediation procedure is documented in the Spanish guide and in <code>RELEASE.md</code>.</p>
@@ -214,15 +233,15 @@
 <div class="section level2">
 <h2 id="open_book-citation">📖 Citation<a class="anchor" aria-label="anchor" href="#open_book-citation"></a>
 </h2>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"bigbang"</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb10"><pre class="sourceCode bibtex"><code class="sourceCode bibtex"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="va">@Manual</span>{<span class="ot">bigbang2026</span>,</span>
-<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  <span class="dt">title</span>  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},</span>
-<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>  <span class="dt">author</span> = {Sebastian Lucas},</span>
-<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="dt">note</span>   = {R package version 0.1.0},</span>
-<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  <span class="dt">year</span>   = {2026},</span>
-<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>  <span class="dt">url</span>    = {https://github.com/sebollin/bigbang},</span>
-<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode bibtex"><code class="sourceCode bibtex"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="va">@Manual</span>{<span class="ot">bigbang2026</span>,</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>  <span class="dt">title</span>  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>  <span class="dt">author</span> = {Sebastián Lucas},</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>  <span class="dt">note</span>   = {R package version 0.2.0},</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>  <span class="dt">year</span>   = {2026},</span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>  <span class="dt">url</span>    = {https://sebollin.github.io/bigbang/},</span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a>}</span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="microscope-development-status">🔬 Development status<a class="anchor" aria-label="anchor" href="#microscope-development-status"></a>
@@ -263,7 +282,7 @@
 <div class="developers">
 <h2 data-toc-skip>Developers</h2>
 <ul class="list-unstyled">
-<li>Sebastian Lucas <br><small class="roles"> Author, maintainer </small>   </li>
+<li>Sebastián Lucas <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0009-0009-9068-0276" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>  </li>
 <li><a href="authors.html">More about authors...</a></li>
 </ul>
 </div>
@@ -275,7 +294,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Sebastian Lucas.</p>
+  <p>Developed by Sebastián Lucas.</p>
 </div>
 
 <div class="pkgdown-footer-right">

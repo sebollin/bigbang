@@ -15,7 +15,7 @@ installed as source packages."><meta property="og:image" content="https://seboll
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,7 +57,9 @@ installed as source packages.</p>
 <span>  ext <span class="op">=</span> <span class="st">".tar.gz"</span>,</span>
 <span>  repos <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">getOption</a></span><span class="op">(</span><span class="st">"repos"</span><span class="op">)</span>,</span>
 <span>  cran_deps <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"skip"</span>, <span class="st">"error"</span>, <span class="st">"install"</span><span class="op">)</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">getOption</a></span><span class="op">(</span><span class="st">"bigbang.verbose"</span>, <span class="fu"><a href="https://rdrr.io/r/base/interactive.html" class="external-link">interactive</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span>
+<span>  verbose <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">getOption</a></span><span class="op">(</span><span class="st">"bigbang.verbose"</span>, <span class="fu"><a href="https://rdrr.io/r/base/interactive.html" class="external-link">interactive</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  force <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  upgrade <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"newer"</span>, <span class="st">"always"</span>, <span class="st">"never"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -92,10 +94,24 @@ accessing it, and <code>"install"</code> attempts installation from <code>repos<
 <dd><p>Logical. Whether to emit progress and summary messages. The
 default follows <code>getOption("bigbang.verbose", interactive())</code>.</p></dd>
 
+
+<dt id="arg-force">force<a class="anchor" aria-label="anchor" href="#arg-force"></a></dt>
+<dd><p>Logical. Reinstall every local archive. This is a convenience
+alias for <code>upgrade = "always"</code>.</p></dd>
+
+
+<dt id="arg-upgrade">upgrade<a class="anchor" aria-label="anchor" href="#arg-upgrade"></a></dt>
+<dd><p>Character. Installed-version policy: <code>"newer"</code> installs only
+when the archive is newer, <code>"always"</code> reinstalls, and <code>"never"</code> keeps any
+installed version. Explicitly combining <code>force = TRUE</code> with a value other
+than <code>"always"</code> is an error.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>Invisibly, a list describing installed, failed, and skipped packages.</p>
+    <p>Invisibly, a list describing installed, unchanged, failed, and
+skipped packages. Components that an upgrade policy left in place are
+reported in <code>unchanged</code>, not in <code>installed</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a></h2>
@@ -116,7 +132,7 @@ component installer.</p></div>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Sebastian Lucas.</p>
+  <p>Developed by Sebastián Lucas.</p>
 </div>
 
 <div class="pkgdown-footer-right">

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,7 +33,46 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="bigbang-development-version">bigbang (development version)<a class="anchor" aria-label="anchor" href="#bigbang-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.2.0" id="bigbang-020">bigbang 0.2.0<a class="anchor" aria-label="anchor" href="#bigbang-020"></a></h2>
+<p>Released on 2026-08-09.</p>
+<div class="section level3">
+<h3 id="breaking-changes-0-2-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-2-0"></a></h3>
+<ul><li>The deprecated Spanish aliases <code>crear_meta_paquete_local()</code>, <code>diagnosticar_dependencias()</code> and <code>install_loc_pkg_w_dep()</code> were removed. They existed to ease a rename inside the organisation the package grew in, while it was still unpublished. Use <code><a href="../reference/create_metapackage.html">create_metapackage()</a></code>, <code><a href="../reference/diagnose_dependencies.html">diagnose_dependencies()</a></code> and <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code>.</li>
+<li>In a generated meta-package built with <code>include_archives = FALSE</code>, <code>&lt;meta&gt;_install()</code> requires <code>pkg_dir</code>. In 0.1.0 that argument defaulted to the absolute archive path of the machine where the meta-package had been generated, which exists nowhere else. With the new default, <code>include_archives = TRUE</code>, the argument is optional again because the archives travel inside the package.</li>
+<li>Components that the installation policy left untouched are reported in a new <code>unchanged</code> element of the installation result instead of appearing in <code>installed</code> labelled “Already installed”. Reporting a package as installed when nothing was installed was misleading.</li>
+<li>Non-local dependencies are installed with <code>dependencies = NA</code> instead of <code>TRUE</code>, so their <code>Suggests</code> are no longer installed. Everything a component needs in order to run is still installed; what is no longer pulled in is the tooling those dependencies use for their own examples, tests and vignettes.</li>
+<li>The arguments added in this release come last in every signature, so a positional call written against 0.1.0 keeps binding to the same parameters. Positional calls are still a fragile way to call these functions: name the arguments.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="generated-meta-packages-are-self-contained-0-2-0">Generated meta-packages are self-contained<a class="anchor" aria-label="anchor" href="#generated-meta-packages-are-self-contained-0-2-0"></a></h3>
+<ul><li>
+<code><a href="../reference/create_metapackage.html">create_metapackage()</a></code> gained <code>include_archives</code>, <code>TRUE</code> by default, which copies the component archives into <code>inst/archives/</code> of the generated meta-package. Its installer then defaults <code>pkg_dir</code> to <code>system.file("archives", package = "&lt;meta&gt;")</code>, resolved when the installer is called, so the meta-package is the only artifact that has to be distributed and its components install with no arguments, with no path agreed on beforehand. Network access remains necessary only for components that depend on a package coming from a repository. Pass <code>include_archives = FALSE</code> to keep the archives in a shared location the recipient can reach.</li>
+<li>The build ignore rules of a generated meta-package exempt <code>inst/archives/</code>, so shipped components reach the tarball while every other archive anywhere in the tree is still excluded.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-0-2-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-2-0"></a></h3>
+<ul><li>Generated meta-packages provide an optional <code>cli</code> two-column startup message that falls back to the ASCII banner when <code>cli</code> is absent, a <code>&lt;meta&gt;.quiet</code> option, <code>&lt;meta&gt;_conflicts()</code> for masking conflicts, explicit reinstall and upgrade policies (<code>force</code>, and <code>upgrade = "newer" | "always" | "never"</code>), and an optional ordered workflow vignette through the <code>workflow</code> argument.</li>
+<li>Generated metadata records the component list in <code>Config/bigbang/packages</code>, and the generated package tests that the list agrees with what it exports.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-0-2-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-2-0"></a></h3>
+<ul><li>Generation no longer changes the process working directory; every scaffold writer receives an explicit absolute path.</li>
+<li>Fixed generation with relative <code>dest_dir</code> and <code>pkg_dir</code> paths, and roll back incomplete project trees created by a failed invocation.</li>
+<li>
+<code><a href="../reference/create_metapackage.html">create_metapackage()</a></code> validates <code>name</code> before writing anything: against the R package name grammar, and against the names R itself ships. A name carrying a path separator or a parent reference previously placed the generated tree outside <code>dest_dir</code> and still reported success.</li>
+<li>Non-local dependencies are installed with <code>dependencies = NA</code>, which covers Depends, Imports and LinkingTo, instead of <code>TRUE</code>, which also covered Suggests. Asking for one small dependency used to pull development tooling and its whole tree into the library.</li>
+<li>Restored the caller’s attached packages and loaded namespaces after automatic documentation, and report documentation success accurately.</li>
+<li>Fixed eleven Spanish runtime messages whose catalog keys had leading or trailing whitespace.</li>
+<li>Generated helper examples use the requested meta-package name instead of an internal historical name.</li>
+<li>When a component is skipped because a non-local dependency is missing, the warning names the call that resolves it and the attachment step no longer follows it with a vaguer hint suggesting a bare re-run, which would have skipped the component again for the same reason.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-0-2-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-2-0"></a></h3>
+<ul><li><p>The maintainer’s given name is spelled Sebastián, and the author entry now carries an ORCID identifier.</p></li>
+<li><p>Documented that distributing the component archives inside a meta-package is a redistribution, so their licenses have to allow it, and that a component still installs only where its format can.</p></li>
+<li><p>Documented related meta-package projects and design precedents.</p></li>
+<li><p>Added the r-universe version badge and the one-line install from the universe binaries.</p></li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.0" id="bigbang-010">bigbang 0.1.0<a class="anchor" aria-label="anchor" href="#bigbang-010"></a></h2><p class="text-muted">CRAN release: 2026-08-08</p>
@@ -65,7 +104,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Sebastian Lucas.</p>
+  <p>Developed by Sebastián Lucas.</p>
 </div>
 
 <div class="pkgdown-footer-right">

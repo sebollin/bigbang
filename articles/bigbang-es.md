@@ -51,14 +51,36 @@ instalar desde los archivos locales:
 ``` r
 
 library(equipoverse)
-equipoverse_install(cran_deps = "skip")
+equipoverse_install()
 ```
+
+El metapaquete generado lleva adentro los archivos de sus componentes,
+así que la llamada no necesita argumentos. Eso también significa que
+para entregarlo a otra persona alcanza con el `equipoverse_0.1.0.tar.gz`
+construido: lo instala y llama a `equipoverse_install()`, sin la carpeta
+de archivos al lado y sin acordar ninguna ruta de antemano. El valor
+predeterminado de `pkg_dir` es
+`system.file("archives", package = "equipoverse")`, que se resuelve al
+ejecutar el instalador y por eso apunta a la biblioteca donde quedó
+instalado.
+
+Genere con `include_archives = FALSE` cuando los archivos deban
+permanecer en una ubicación a la que todos los destinatarios ya tengan
+acceso; en ese caso `equipoverse_install()` va a pedir un `pkg_dir`
+explícito.
 
 La política predeterminada `cran_deps = "skip"` no accede a la red. Las
 alternativas son `"error"` (falla sin red) e `"install"` (intenta
 instalar desde `repos`). Los paquetes locales se instalan una sola vez
 en orden topológico; los ciclos producen una condición
 `bigbang_error_cycle`.
+
+`upgrade = "newer"` instala solo archivos más nuevos; `"always"`
+reinstala y `"never"` conserva cualquier versión instalada.
+`force = TRUE` equivale a `"always"`. Los metapaquetes generados ofrecen
+`<meta>_conflicts()` y respetan `options(<meta>.quiet = TRUE)`. Si `cli`
+no está disponible, el mensaje de arranque vuelve al banner ASCII sin
+fallar.
 
 ## Archivos ZIP
 

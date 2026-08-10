@@ -15,7 +15,9 @@ install_local_pkg(
   ext = ".tar.gz",
   repos = getOption("repos"),
   cran_deps = c("skip", "error", "install"),
-  verbose = getOption("bigbang.verbose", interactive())
+  verbose = getOption("bigbang.verbose", interactive()),
+  force = FALSE,
+  upgrade = c("newer", "always", "never")
 )
 ```
 
@@ -49,9 +51,23 @@ install_local_pkg(
   Logical. Whether to emit progress and summary messages. The default
   follows `getOption("bigbang.verbose", interactive())`.
 
+- force:
+
+  Logical. Reinstall every local archive. This is a convenience alias
+  for `upgrade = "always"`.
+
+- upgrade:
+
+  Character. Installed-version policy: `"newer"` installs only when the
+  archive is newer, `"always"` reinstalls, and `"never"` keeps any
+  installed version. Explicitly combining `force = TRUE` with a value
+  other than `"always"` is an error.
+
 ## Value
 
-Invisibly, a list describing installed, failed, and skipped packages.
+Invisibly, a list describing installed, unchanged, failed, and skipped
+packages. Components that an upgrade policy left in place are reported
+in `unchanged`, not in `installed`.
 
 ## Installation
 

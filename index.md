@@ -5,6 +5,7 @@
 [![R-CMD-check](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml)
 [![CRAN
 status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.org/package=bigbang)
+[![r-universe](https://sebollin.r-universe.dev/bigbang/badges/version)](https://sebollin.r-universe.dev/bigbang)
 [![License: GPL
 v3](https://img.shields.io/badge/license-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Lifecycle:
@@ -45,6 +46,9 @@ set you curated is the set they install, in a single line.
 - 🎯 **A curated set, distributed as one** — the metapackage records the
   exact archive versions it was built from, so the combination you
   tested is the combination that gets installed.
+- 📮 **One artifact to hand over** — the component archives travel
+  inside the generated metapackage, so `<meta>_install()` works with no
+  arguments and no path has to be agreed on between machines.
 - 🧭 **Real dependency resolution** — builds the local dependency graph,
   orders installation topologically, and refuses cycles up front. Nobody
   downstream has to work out what to install first.
@@ -75,7 +79,16 @@ The stable version is on CRAN:
 install.packages("bigbang")
 ```
 
-The development version is on GitHub:
+The development version is served as a binary from r-universe, so it
+needs no compilation:
+
+``` r
+
+install.packages("bigbang", repos = c("https://sebollin.r-universe.dev",
+                                      "https://cloud.r-project.org"))
+```
+
+Or from the sources on GitHub:
 
 ``` r
 
@@ -126,13 +139,37 @@ installation remains explicit:
 ``` r
 
 library(teamverse)                 # attaches what is already installed
-teamverse_install(cran_deps = "skip")
+teamverse_install()                # installs them, in dependency order
 ```
+
+`teamverse` carries its components, so the call takes no arguments and
+that is all anyone who receives it has to do. Hand over the built
+`teamverse_0.1.0.tar.gz` and nothing else: no folder of archives
+alongside it, and no path to agree on beforehand. If the archives should
+stay in a shared location instead, generate with
+`include_archives = FALSE`; then `teamverse_install()` requires an
+explicit `pkg_dir`.
 
 `cran_deps = "skip"` is the default and never accesses the network. Use
 `"error"` to fail immediately when a non-local dependency is missing, or
 `"install"` with an explicitly configured `repos` value to allow
 repository installation.
+
+Generated installers also accept `upgrade = "newer"` (the default),
+`"always"`, or `"never"`; `force = TRUE` is the concise form of
+`upgrade = "always"`. Generated metapackages use an optional `cli`
+two-column attachment message and fall back to their ASCII banner when
+`cli` is unavailable. Set `options(teamverse.quiet = TRUE)` to silence
+startup messages, or call `teamverse_conflicts()` to inspect masking
+conflicts.
+
+For an ordered pipeline guide, supply every component once in a named
+workflow:
+
+``` r
+
+workflow = c("Import" = "datahelpers", "Report" = "reports")
+```
 
 See
 [`vignette("getting-started", package = "bigbang")`](https://sebollin.github.io/bigbang/articles/getting-started.md)
@@ -150,9 +187,6 @@ for a reproducible toy project created entirely under
 - [`scan_bigbang_artifact()`](https://sebollin.github.io/bigbang/reference/scan_bigbang_artifact.md)
   scans old source trees, archives, or installed packages for historical
   deletion signatures without loading them.
-
-The former Spanish function names remain as deprecated transition
-aliases.
 
 ## 🗜️ ZIP files and portability
 
@@ -186,6 +220,18 @@ and as
 Rd help remains English because R has no stable native mechanism for
 translated help; a separate `bigbang.es` module can be considered if
 `rhelpi18n` becomes production-ready and reaches CRAN.
+
+## 🔭 Related projects
+
+- [pegeler/metapackage](https://github.com/pegeler/metapackage), by Paul
+  Egeler, is a declarative personal metapackage built around packages
+  available from online repositories. bigbang instead generates
+  metapackages from local package archives.
+- [metaverse](https://rmetaverse.github.io/metaverse/) is a community
+  metapackage for evidence synthesis, modeled on tidyverse. The
+  attachment message and `<meta>_packages()` design in bigbang-generated
+  metapackages draw on tidyverse and on metaverse (Westgate and
+  colleagues).
 
 ## 🧭 Choosing the right tool
 
@@ -252,10 +298,10 @@ citation("bigbang")
 ``` bibtex
 @Manual{bigbang2026,
   title  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},
-  author = {Sebastian Lucas},
-  note   = {R package version 0.1.0},
+  author = {Sebastián Lucas},
+  note   = {R package version 0.2.0},
   year   = {2026},
-  url    = {https://github.com/sebollin/bigbang},
+  url    = {https://sebollin.github.io/bigbang/},
 }
 ```
 

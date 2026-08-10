@@ -39,16 +39,26 @@ Complete this before announcing or distributing `bigbang`.
 Make TinyTeX visible and run the complete suite, destructive sandbox
 integration, lint, spelling, and coverage checks:
 
+`NOT_CRAN=true` is what makes this the complete suite: without it every
+`skip_on_cran()` test is skipped, which is exactly the set that installs
+packages, checks a generated meta-package, and verifies that a shipped
+meta-package installs its components on its own. The same variable
+belongs on the coverage run, otherwise the figure looks several points
+lower than the one CI reports.
+
 ``` sh
 export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH"
-Rscript --vanilla -e 'devtools::test(reporter = "summary")'
+NOT_CRAN=true Rscript --vanilla -e 'testthat::test_local(reporter = "summary", stop_on_failure = TRUE)'
 Rscript --vanilla tests/integration/data-loss-verification.R
 Rscript --vanilla -e 'print(lintr::lint_package())'
 Rscript --vanilla -e 'spelling::spell_check_package(".", vignettes = FALSE)'
-Rscript --vanilla -e 'print(covr::package_coverage(quiet = FALSE))'
+NOT_CRAN=true Rscript --vanilla -e 'print(covr::package_coverage(quiet = FALSE))'
 R CMD build .
 R CMD check --as-cran bigbang_*.tar.gz
 ```
+
+Confirm that the summary reports zero skips. A skip here means the
+variable did not reach the test process.
 
 Run the English and Spanish prose checks exactly as documented in
 `CONTRIBUTING.md`. Confirm in each check log that the manual PDF and

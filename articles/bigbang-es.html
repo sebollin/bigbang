@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -117,12 +117,34 @@ adjunta los componentes ya instalados e informa cuáles faltan. Para
 instalar desde los archivos locales:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">equipoverse</span><span class="op">)</span></span>
-<span><span class="fu">equipoverse_install</span><span class="op">(</span>cran_deps <span class="op">=</span> <span class="st">"skip"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">equipoverse_install</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p>El metapaquete generado lleva adentro los archivos de sus
+componentes, así que la llamada no necesita argumentos. Eso también
+significa que para entregarlo a otra persona alcanza con el
+<code>equipoverse_0.1.0.tar.gz</code> construido: lo instala y llama a
+<code>equipoverse_install()</code>, sin la carpeta de archivos al lado y
+sin acordar ninguna ruta de antemano. El valor predeterminado de
+<code>pkg_dir</code> es
+<code>system.file("archives", package = "equipoverse")</code>, que se
+resuelve al ejecutar el instalador y por eso apunta a la biblioteca
+donde quedó instalado.</p>
+<p>Genere con <code>include_archives = FALSE</code> cuando los archivos
+deban permanecer en una ubicación a la que todos los destinatarios ya
+tengan acceso; en ese caso <code>equipoverse_install()</code> va a pedir
+un <code>pkg_dir</code> explícito.</p>
 <p>La política predeterminada <code>cran_deps = "skip"</code> no accede
 a la red. Las alternativas son <code>"error"</code> (falla sin red) e
 <code>"install"</code> (intenta instalar desde <code>repos</code>). Los
 paquetes locales se instalan una sola vez en orden topológico; los
 ciclos producen una condición <code>bigbang_error_cycle</code>.</p>
+<p><code>upgrade = "newer"</code> instala solo archivos más nuevos;
+<code>"always"</code> reinstala y <code>"never"</code> conserva
+cualquier versión instalada. <code>force = TRUE</code> equivale a
+<code>"always"</code>. Los metapaquetes generados ofrecen
+<code>&lt;meta&gt;_conflicts()</code> y respetan
+<code>options(&lt;meta&gt;.quiet = TRUE)</code>. Si <code>cli</code> no
+está disponible, el mensaje de arranque vuelve al banner ASCII sin
+fallar.</p>
 </div>
 <div class="section level2">
 <h2 id="archivos-zip">Archivos ZIP<a class="anchor" aria-label="anchor" href="#archivos-zip"></a>
@@ -163,7 +185,7 @@ llegue a CRAN se evaluará publicar un módulo separado
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Sebastian Lucas.</p>
+  <p>Developed by Sebastián Lucas.</p>
 </div>
 
 <div class="pkgdown-footer-right">

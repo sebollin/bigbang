@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,14 +52,16 @@
 <div class="section level2">
 <h2 id="id_1-local-gates">1. Local gates<a class="anchor" aria-label="anchor" href="#id_1-local-gates"></a></h2>
 <p>Make TinyTeX visible and run the complete suite, destructive sandbox integration, lint, spelling, and coverage checks:</p>
+<p><code>NOT_CRAN=true</code> is what makes this the complete suite: without it every <code>skip_on_cran()</code> test is skipped, which is exactly the set that installs packages, checks a generated meta-package, and verifies that a shipped meta-package installs its components on its own. The same variable belongs on the coverage run, otherwise the figure looks several points lower than the one CI reports.</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span><span class="st">"</span><span class="va">$HOME</span><span class="st">/.TinyTeX/bin/x86_64-linux:</span><span class="va">$PATH</span><span class="st">"</span></span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">--vanilla</span> <span class="at">-e</span> <span class="st">'devtools::test(reporter = "summary")'</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="va">NOT_CRAN</span><span class="op">=</span>true <span class="ex">Rscript</span> <span class="at">--vanilla</span> <span class="at">-e</span> <span class="st">'testthat::test_local(reporter = "summary", stop_on_failure = TRUE)'</span></span>
 <span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">--vanilla</span> tests/integration/data-loss-verification.R</span>
 <span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">--vanilla</span> <span class="at">-e</span> <span class="st">'print(lintr::lint_package())'</span></span>
 <span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">--vanilla</span> <span class="at">-e</span> <span class="st">'spelling::spell_check_package(".", vignettes = FALSE)'</span></span>
-<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">--vanilla</span> <span class="at">-e</span> <span class="st">'print(covr::package_coverage(quiet = FALSE))'</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="va">NOT_CRAN</span><span class="op">=</span>true <span class="ex">Rscript</span> <span class="at">--vanilla</span> <span class="at">-e</span> <span class="st">'print(covr::package_coverage(quiet = FALSE))'</span></span>
 <span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="ex">R</span> CMD build .</span>
 <span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="ex">R</span> CMD check <span class="at">--as-cran</span> bigbang_<span class="pp">*</span>.tar.gz</span></code></pre></div>
+<p>Confirm that the summary reports zero skips. A skip here means the variable did not reach the test process.</p>
 <p>Run the English and Spanish prose checks exactly as documented in <code>CONTRIBUTING.md</code>. Confirm in each check log that the manual PDF and vignettes were actually built. The manual is enabled by default; <code>--manual</code> is not an <code>R CMD check</code> option (and <code>--no-manual</code> must not be used for this gate). Generate a representative metapackage in <code><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir()</a></code>, build it, scan its source and archive, and run the same <code>R CMD check --as-cran</code> gate on it.</p>
 </div>
 <div class="section level2">
@@ -96,7 +98,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Sebastian Lucas.</p>
+  <p>Developed by Sebastián Lucas.</p>
 </div>
 
 <div class="pkgdown-footer-right">

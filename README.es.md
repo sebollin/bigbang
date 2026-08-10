@@ -5,6 +5,7 @@
 [![R-CMD-check](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml)
 [![CRAN
 status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.org/package=bigbang)
+[![r-universe](https://sebollin.r-universe.dev/bigbang/badges/version)](https://sebollin.r-universe.dev/bigbang)
 [![Licencia: GPL
 v3](https://img.shields.io/badge/licencia-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![docs:
@@ -28,11 +29,13 @@ después este otro, esta versión va con aquella. Pero esas instrucciones
 son trabajo manual para quien recibe, y un documento más que mantener al
 día cada vez que cambia una versión o entra un paquete nuevo.
 
-bigbang pone ese conocimiento adentro del paquete. El orden sale del
-grafo real de dependencias y las versiones quedan registradas en el
-metapaquete generado, así que no hay nada que seguir a mano ni nada que
-pueda quedar desfasado del contenido de la carpeta. El conjunto que
-curaste es el conjunto que instalan, con una línea.
+bigbang pone ese conocimiento adentro del paquete, y también los
+archivos: el metapaquete generado lleva los `.tar.gz` de sus
+componentes. Le entregás un solo archivo y nada más —ni la carpeta al
+lado, ni una ruta que acordar— y del otro lado alcanza una línea. El
+orden sale del grafo real de dependencias y las versiones quedan
+registradas, así que no hay nada que seguir a mano ni nada que pueda
+quedar desfasado.
 
 Eso incluye a los equipos que trabajan detrás de un firewall
 institucional y no mantienen un repositorio de paquetes, pero no se
@@ -57,7 +60,16 @@ La versión estable está en CRAN:
 install.packages("bigbang")
 ```
 
-La versión de desarrollo está en GitHub:
+La versión de desarrollo se publica como binario en r-universe, así que
+no requiere compilar nada:
+
+``` r
+
+install.packages("bigbang", repos = c("https://sebollin.r-universe.dev",
+                                      "https://cloud.r-project.org"))
+```
+
+O desde las fuentes en GitHub:
 
 ``` r
 
@@ -99,12 +111,35 @@ Luego de construir e instalar `equipoverse` como cualquier paquete R:
 ``` r
 
 library(equipoverse)
-equipoverse_install(cran_deps = "skip")
+equipoverse_install()
 ```
+
+`equipoverse` lleva sus componentes adentro, así que la llamada no
+necesita argumentos y eso es todo lo que tiene que hacer quien lo
+recibe: le pasás el `equipoverse_0.1.0.tar.gz` construido y nada más. Si
+preferís que los archivos queden en una ubicación compartida, generá con
+`include_archives = FALSE` y entonces `equipoverse_install()` va a pedir
+un `pkg_dir` explícito.
 
 `"skip"` es el modo predeterminado y nunca usa la red. `"error"` falla
 si falta una dependencia no local; `"install"` permite instalar desde un
 `repos` configurado explícitamente.
+
+Los instaladores generados también aceptan `upgrade = "newer"`
+(predeterminado), `"always"` o `"never"`; `force = TRUE` equivale a
+`upgrade = "always"`. Los metapaquetes usan un mensaje opcional de dos
+columnas mediante `cli` y vuelven al banner ASCII cuando `cli` no está
+disponible. Use `options(equipoverse.quiet = TRUE)` para silenciar el
+arranque y `equipoverse_conflicts()` para revisar conflictos de
+enmascaramiento.
+
+Para generar una guía de flujo ordenada, indique cada componente una
+vez:
+
+``` r
+
+workflow = c("Importación" = "datos", "Informe" = "reportes")
+```
 
 ## 🧰 API
 
@@ -117,8 +152,7 @@ si falta una dependencia no local; `"install"` permite instalar desde un
 - [`scan_bigbang_artifact()`](https://sebollin.github.io/bigbang/reference/scan_bigbang_artifact.md)
   examina artefactos antiguos sin cargarlos.
 
-Los nombres españoles anteriores siguen disponibles como aliases
-deprecados de transición. La API canónica usa inglés snake_case.
+La API usa inglés snake_case.
 
 ## 🗜️ ZIP y portabilidad
 
@@ -144,6 +178,18 @@ guía completa está en
 [`vignette("bigbang-es", package = "bigbang")`](https://sebollin.github.io/bigbang/articles/bigbang-es.md).
 Cuando `rhelpi18n` madure y llegue a CRAN se podrá evaluar un módulo
 separado `bigbang.es` para la ayuda interactiva.
+
+## 🔭 Proyectos relacionados
+
+- [pegeler/metapackage](https://github.com/pegeler/metapackage), de Paul
+  Egeler, es un metapaquete personal declarativo basado en paquetes
+  disponibles en repositorios en línea. bigbang, en cambio, genera
+  metapaquetes a partir de archivos locales.
+- [metaverse](https://rmetaverse.github.io/metaverse/) es un metapaquete
+  comunitario para síntesis de evidencia, modelado sobre tidyverse. El
+  mensaje de adjunción y el diseño de `<meta>_packages()` en los
+  metapaquetes generados por bigbang se inspiran en tidyverse y en
+  metaverse (Westgate y colaboradores).
 
 ## 🧭 Diferencias con otras herramientas
 
@@ -202,9 +248,9 @@ citation("bigbang")
 ``` bibtex
 @Manual{bigbang2026,
   title  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},
-  author = {Sebastian Lucas},
-  note   = {R package version 0.1.0},
+  author = {Sebastián Lucas},
+  note   = {R package version 0.2.0},
   year   = {2026},
-  url    = {https://github.com/sebollin/bigbang},
+  url    = {https://sebollin.github.io/bigbang/},
 }
 ```

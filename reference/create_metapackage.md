@@ -27,7 +27,9 @@ create_metapackage(
   import_deps = c("data.table", "dplyr", "ggplot2", "readr", "tibble", "tidyr", "xts",
     "zoo"),
   force_deps = NULL,
-  debug = FALSE
+  debug = FALSE,
+  workflow = NULL,
+  include_archives = TRUE
 )
 ```
 
@@ -120,6 +122,28 @@ create_metapackage(
   Logical. If `TRUE`, emits detailed debugging messages. Defaults to
   `FALSE`.
 
+- workflow:
+
+  Optional named character vector mapping ordered stage labels to
+  component package names. When supplied, every component must appear
+  once and a pipeline vignette skeleton is generated.
+
+- include_archives:
+
+  Logical. If `TRUE`, the default, the component archives are copied
+  into `inst/archives/` of the generated meta-package, so that the
+  meta-package is the only artifact that has to be distributed and
+  `<meta>_install()` works with no arguments, without any path being
+  agreed on beforehand. Components still install only where they can: a
+  Windows binary archive is refused on other platforms. Shipping the
+  archives also means redistributing them, so their licenses have to
+  allow it, and it makes the generated tarball as large as its
+  components: CRAN prefers source tarballs under 10 MB and does not
+  accept binary executables in them, which matters only if a generated
+  meta-package is ever submitted there. Set it to `FALSE` when the
+  archives stay in a shared location that recipients can reach; then
+  `<meta>_install()` requires an explicit `pkg_dir`.
+
 ## Value
 
 Invisibly, a `bigbang_result` containing the generated path, component
@@ -169,6 +193,16 @@ user explicitly calls `<meta>_install()`. Loading it with
 packages. By default, the generated installer does not access a
 repository.
 
+With `include_archives = TRUE`, the default, the component archives
+travel inside the generated meta-package and `pkg_dir` defaults to
+`system.file("archives", package = "<meta>")`. That default is resolved
+when the installer is called, so it points at the library of whoever
+installed the meta-package: recipients need nothing beyond the
+meta-package itself, and no path has to be agreed on between machines.
+Network access is needed only when a component depends on a package that
+must come from a repository, which happens exclusively under
+`cran_deps = "install"`.
+
 If `reexport = TRUE`, a `reexports.R` file is generated so users can
 reach the component functions directly through the meta-package
 (`meta::fun()` instead of `component::fun()`), tidyverse style.
@@ -198,9 +232,9 @@ result <- create_metapackage(
   force_deps = character()
 )
 list.files(result$path)
-#> [1] "DESCRIPTION"    "LICENSE"        "NAMESPACE"      "R"             
-#> [5] "inst"           "man"            "po"             "toyverse.Rproj"
-#> [9] "vignettes"     
+#>  [1] "DESCRIPTION"    "LICENSE"        "NAMESPACE"      "R"             
+#>  [5] "README.md"      "inst"           "man"            "po"            
+#>  [9] "tests"          "toyverse.Rproj" "vignettes"     
 
 unlink(destination, recursive = TRUE)
 ```

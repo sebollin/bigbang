@@ -11,7 +11,7 @@ them with a graph-based (topologically ordered) approach."><meta property="og:im
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,7 +64,9 @@ them with a graph-based (topologically ordered) approach.</p>
 <span>  import_deps <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"data.table"</span>, <span class="st">"dplyr"</span>, <span class="st">"ggplot2"</span>, <span class="st">"readr"</span>, <span class="st">"tibble"</span>, <span class="st">"tidyr"</span>, <span class="st">"xts"</span>,</span>
 <span>    <span class="st">"zoo"</span><span class="op">)</span>,</span>
 <span>  force_deps <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  debug <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  debug <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  workflow <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  include_archives <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -155,6 +157,27 @@ meta-package's implicit dependencies.</p></dd>
 <dd><p>Logical. If <code>TRUE</code>, emits detailed debugging messages. Defaults
 to <code>FALSE</code>.</p></dd>
 
+
+<dt id="arg-workflow">workflow<a class="anchor" aria-label="anchor" href="#arg-workflow"></a></dt>
+<dd><p>Optional named character vector mapping ordered stage labels
+to component package names. When supplied, every component must appear once
+and a pipeline vignette skeleton is generated.</p></dd>
+
+
+<dt id="arg-include-archives">include_archives<a class="anchor" aria-label="anchor" href="#arg-include-archives"></a></dt>
+<dd><p>Logical. If <code>TRUE</code>, the default, the component
+archives are copied into <code>inst/archives/</code> of the generated meta-package, so
+that the meta-package is the only artifact that has to be distributed and
+<code>&lt;meta&gt;_install()</code> works with no arguments, without any path being agreed
+on beforehand. Components still install only where they can: a Windows
+binary archive is refused on other platforms. Shipping the archives also
+means redistributing them, so their licenses have to allow it, and it makes
+the generated tarball as large as its components: CRAN prefers source
+tarballs under 10 MB and does not accept binary executables in them, which
+matters only if a generated meta-package is ever submitted there. Set it to
+<code>FALSE</code> when the archives stay in a shared location that recipients can
+reach; then <code>&lt;meta&gt;_install()</code> requires an explicit <code>pkg_dir</code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -186,6 +209,14 @@ with a graph-based topological ordering that also detects circular dependencies.
 <p>The generated meta-package installs component packages only when the user
 explicitly calls <code>&lt;meta&gt;_install()</code>. Loading it with <code><a href="https://rdrr.io/r/base/library.html" class="external-link">library()</a></code> never installs
 packages. By default, the generated installer does not access a repository.</p>
+<p>With <code>include_archives = TRUE</code>, the default, the component archives travel
+inside the generated meta-package and <code>pkg_dir</code> defaults to
+<code>system.file("archives", package = "&lt;meta&gt;")</code>. That default is resolved when
+the installer is called, so it points at the library of whoever installed the
+meta-package: recipients need nothing beyond the meta-package itself, and no
+path has to be agreed on between machines. Network access is needed only when
+a component depends on a package that must come from a repository, which
+happens exclusively under <code>cran_deps = "install"</code>.</p>
 <p>If <code>reexport = TRUE</code>, a <code>reexports.R</code> file is generated so users can
 reach the component functions directly through the meta-package
 (<code>meta::fun()</code> instead of <code>component::fun()</code>), tidyverse style.</p>
@@ -216,9 +247,9 @@ reach the component functions directly through the meta-package
 <span class="r-in"><span>  force_deps <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">list.files</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "DESCRIPTION"    "LICENSE"        "NAMESPACE"      "R"             </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [5] "inst"           "man"            "po"             "toyverse.Rproj"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [9] "vignettes"     </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [1] "DESCRIPTION"    "LICENSE"        "NAMESPACE"      "R"             </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [5] "README.md"      "inst"           "man"            "po"            </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [9] "tests"          "toyverse.Rproj" "vignettes"     </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">destination</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
 </code></pre></div>
@@ -228,7 +259,7 @@ reach the component functions directly through the meta-package
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Sebastian Lucas.</p>
+  <p>Developed by Sebastián Lucas.</p>
 </div>
 
 <div class="pkgdown-footer-right">
