@@ -65,6 +65,13 @@ Released on 2026-08-09.
 
 ## Bug fixes
 
+- Rollback of a failed generation works when a component of the destination path
+  is a symbolic link. The project path was normalised before the directory
+  existed and therefore left unresolved, while the path it was compared against
+  was normalised after creation and resolved, so the two never matched and the
+  rollback declined silently. That is the situation on macOS, where `tempdir()`
+  sits under `/var`, itself a link to `/private/var`. Both sides are now
+  normalised at the same moment.
 - `create_metapackage(reexport = TRUE)` works. It previously failed for every
   input: a block that ran before the re-export writer iterated the versioned
   archive stems and called `asNamespace()` on them, which can never resolve, so

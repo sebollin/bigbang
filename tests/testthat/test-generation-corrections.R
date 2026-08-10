@@ -272,3 +272,44 @@ test_that("legal package names spanning the grammar are accepted", {
     )
   }
 })
+
+test_that("rollback works when a path component is a symbolic link", {
+  # This is the macOS situation on every platform: tempdir() there sits under
+  # /var, a link to /private/var. project_dir was normalised before creation and
+  # therefore left unresolved, while the expected path was normalised after
+  # creation and resolved, so the two never matched and the rollback declined
+  # without saying anything.
+  sandbox <- tempfile("bigbang-rollback-symlink-")
+  dir.create(sandbox)
+  real <- file.path(sandbox, "real")
+  link <- file.path(sandbox, "link")
+  archives <- file.path(sandbox, "archives")
+  dir.create(real)
+  dir.create(archives)
+  linked <- file.symlink(real, link)
+  skip_if_not(isTRUE(linked), "This platform cannot create symbolic links.")
+
+  destination <- file.path(link, "created-by-the-call")
+  expect_error(
+    create_metapackage(
+      "linkverse", "missing_0.1.0", archives,
+      dest_dir = destination, document = FALSE, verbose = FALSE
+    ),
+    "archives were not found"
+  )
+  expect_false(dir.exists(file.path(destination, "linkverse")))
+  expect_false(dir.exists(destination))
+
+  # A destination the call did not create is still left alone.
+  preexisting <- file.path(link, "preexisting")
+  dir.create(preexisting)
+  expect_error(
+    create_metapackage(
+      "linkverse", "missing_0.1.0", archives,
+      dest_dir = preexisting, document = FALSE, verbose = FALSE
+    ),
+    "archives were not found"
+  )
+  expect_false(dir.exists(file.path(preexisting, "linkverse")))
+  expect_true(dir.exists(preexisting))
+})

@@ -340,17 +340,29 @@ create_metapackage <- function(
 
     # Roll back only a project directory created by this exact invocation.
     # Pre-existing directories, including empty ones, are never removed.
+    #
+    # Both sides of the comparison are normalised here, at the same moment, and
+    # never against a value captured earlier. normalizePath() returns a path that
+    # does not exist unchanged and resolves one that does, so a value normalised
+    # before creation cannot be compared with one normalised after it: as soon as
+    # any component of the path is a symbolic link the two differ and the
+    # rollback silently declines. That is the situation on macOS, where tempdir()
+    # sits under /var, itself a link to /private/var.
+    actual_project <- normalizePath(
+      project_dir, winslash = "/", mustWork = FALSE
+    )
     expected_project <- normalizePath(
       file.path(dest_dir, name), winslash = "/", mustWork = FALSE
     )
-    owned_project <- project_created && identical(project_dir, expected_project) &&
-      is_path_inside(project_dir, dest_dir)
-    if (!generation_complete && owned_project && dir.exists(project_dir)) {
+    owned_project <- project_created &&
+      identical(actual_project, expected_project) &&
+      is_path_inside(actual_project, dest_dir)
+    if (!generation_complete && owned_project && dir.exists(actual_project)) {
       # unlink removes the directory entry itself and does not follow a
       # symlink replaced during this call's short TOCTOU window.
-      removal_status <- unlink(project_dir, recursive = TRUE, force = TRUE)
+      removal_status <- unlink(actual_project, recursive = TRUE, force = TRUE)
       if (removal_status != 0L) {
-        warning(.bb_trf("Could not remove completely: %s", project_dir),
+        warning(.bb_trf("Could not remove completely: %s", actual_project),
                 call. = FALSE)
       }
     }
