@@ -10,6 +10,8 @@
 #' @param component_packages Character component package names.
 #' @param description_path Character output path.
 #' @param verbose Logical debug toggle.
+#' @param r_requirement Optional R version requirement propagated from
+#'   component DESCRIPTION files.
 #'
 #' @return Invisible `NULL`; writes DESCRIPTION to `description_path`.
 #' @noRd
@@ -23,7 +25,8 @@ write_description_file <- function(
   license = "MIT + file LICENSE",
   component_packages = character(),
   description_path = "DESCRIPTION",
-  verbose = FALSE
+  verbose = FALSE,
+  r_requirement = list(op = ">=", version = "3.5.0")
 ) {
   # Use a minimal default when no implicit dependencies were supplied.
   if (is.null(implicit_deps)) {
@@ -54,7 +57,9 @@ write_description_file <- function(
 
 
   # Build Depends.
-  deps_section <- "    R (>= 3.5.0)"
+  deps_section <- paste0(
+    "    R (", r_requirement$op, " ", r_requirement$version, ")"
+  )
   if (length(deps_for_depends) > 0) {
     deps_section <- paste0(
       deps_section, ",\n    ",
@@ -114,14 +119,13 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
 #' Write a generated metapackage NAMESPACE
 #'
 #' @param name Character metapackage name.
-#' @param cran_packages Character non-local dependencies.
 #' @param namespace_path Character output path.
 #' @param implicit_deps Character implicit dependencies.
 #' @param import_deps Character dependencies placed in Imports.
 #' @return Invisible `NULL`; writes NAMESPACE.
 #' @noRd
 
-write_namespace_file <- function(name, cran_packages, namespace_path,
+write_namespace_file <- function(name, namespace_path,
                                  implicit_deps = NULL, import_deps = NULL,
                                  verbose = FALSE) {
   # Export the complete generated API without requiring roxygen at generation time.

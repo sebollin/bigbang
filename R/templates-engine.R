@@ -71,31 +71,91 @@ read_archive_metadata <- function(package, pkg_dir, ext = ".tar.gz") {{
   }}
 
   temp_dir <- tempfile("bigbang-deps-")
-  dir.create(temp_dir)
+  if (!dir.create(temp_dir)) stop(.meta_trf(
+    "Could not extract archive %s: could not create temporary directory.",
+    archive
+  ), call. = FALSE)
   on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
 
-  switch(
-    ext,
-    ".tar.gz" = utils::untar(archive, exdir = temp_dir),
-    ".tar" = utils::untar(archive, exdir = temp_dir),
-    ".zip" = utils::unzip(archive, exdir = temp_dir),
+  if (!identical(tolower(ext), ".zip") && !ext %in% c(".tar.gz", ".tar")) {{
     stop(.meta_trf("Unsupported archive format: %s", ext), call. = FALSE)
-  )
-
-  description_file <- list.files(
-    temp_dir, pattern = "^DESCRIPTION$", full.names = TRUE, recursive = TRUE
-  )
-  if (length(description_file) != 1L) {{
+  }}
+  listing <- tryCatch(suppressWarnings({{
+    if (identical(tolower(ext), ".zip")) utils::unzip(archive, list = TRUE)
+    else utils::untar(archive, list = TRUE)
+  }}), error = identity)
+  if (inherits(listing, "error")) {{
     stop(.meta_trf(
-      "Expected one DESCRIPTION in %s; found %d.",
-      archive, length(description_file)
+      "Could not extract archive %s: %s", archive, conditionMessage(listing)
     ), call. = FALSE)
+  }}
+  listing_status <- attr(listing, "status")
+  if (is.numeric(listing_status) && length(listing_status) == 1L &&
+      listing_status != 0) {{
+    stop(.meta_trf(
+      "Could not extract archive %s: extraction returned status %d.",
+      archive, listing_status
+    ), call. = FALSE)
+  }}
+  members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
+  members <- gsub("\\\\", "/", members, fixed = TRUE)
+  unsafe <- startsWith(members, "/") |
+    grepl("^[A-Za-z]:", members) |
+    grepl("(^|/)\\\\.\\\\.(/|$)", members, perl = TRUE)
+  if (any(unsafe)) {{
+    stop(.meta_trf(
+      "Archive contains unsafe absolute or parent-traversal paths: %s",
+      paste(utils::head(members[unsafe], 3L), collapse = ", ")
+    ), call. = FALSE)
+  }}
+  extraction <- tryCatch(suppressWarnings({{
+    if (identical(tolower(ext), ".zip")) utils::unzip(archive, exdir = temp_dir)
+    else utils::untar(archive, exdir = temp_dir)
+  }}), error = identity)
+  if (inherits(extraction, "error")) {{
+    stop(.meta_trf(
+      "Could not extract archive %s: %s", archive, conditionMessage(extraction)
+    ), call. = FALSE)
+  }}
+  if (is.numeric(extraction) && length(extraction) == 1L && extraction != 0) {{
+    stop(.meta_trf(
+      "Could not extract archive %s: extraction returned status %d.",
+      archive, extraction
+    ), call. = FALSE)
+  }}
+  extracted <- list.files(
+    temp_dir, recursive = TRUE, full.names = TRUE,
+    all.files = TRUE, include.dirs = TRUE, no.. = TRUE
+  )
+  if (length(extracted) > 0L && any(nzchar(Sys.readlink(extracted)))) {{
+    stop(.meta_trf(
+      "Archive %s contains symbolic links, which are not supported.", archive
+    ), call. = FALSE)
+  }}
+  roots <- list.files(temp_dir, all.files = TRUE, no.. = TRUE, include.dirs = TRUE)
+  flat_binary <- identical(tolower(ext), ".zip") &&
+    file.exists(file.path(temp_dir, "Meta", "package.rds"))
+  if (isTRUE(flat_binary) && file.exists(file.path(temp_dir, "DESCRIPTION"))) {{
+    package_root <- temp_dir
+  }} else if (length(roots) != 1L || !dir.exists(file.path(temp_dir, roots[[1L]]))) {{
+    stop(.meta_trf("Archive %s must contain one package root directory.", archive), call. = FALSE)
+  }} else {{
+    package_root <- file.path(temp_dir, roots[[1L]])
+  }}
+  description_file <- file.path(package_root, "DESCRIPTION")
+  if (!file.exists(description_file)) {{
+    stop(.meta_trf("Archive %s has no DESCRIPTION at the package root.", archive), call. = FALSE)
   }}
 
   desc <- read.dcf(
     description_file,
     fields = c("Package", "Version", "Depends", "Imports", "LinkingTo")
   )
+  if (nrow(desc) == 0L) {{
+    stop(.meta_trf(
+      "Archive %s must declare non-empty Package and Version fields.", archive
+    ), call. = FALSE)
+  }}
   field <- function(name) {{
     if (!name %in% colnames(desc)) return(NA_character_)
     value <- unname(desc[1L, name])
@@ -123,15 +183,33 @@ read_archive_metadata <- function(package, pkg_dir, ext = ".tar.gz") {{
       archive, declared_version, expected_version
     ), call. = FALSE)
   }}
-  dependencies <- unlist(lapply(c("Depends", "Imports", "LinkingTo"), function(name) {{
-    value <- field(name)
-    if (is.na(value) || !nzchar(value)) return(character())
-    trimws(gsub("\\\\s*\\\\([^)]*\\\\)", "", strsplit(value, ",", fixed = TRUE)[[1L]]))
-  }}), use.names = FALSE)
+  dependencies <- character()
+  constraints <- list()
+  for (value in vapply(c("Depends", "Imports", "LinkingTo"), field, character(1L))) {{
+    if (is.na(value) || !nzchar(value)) next
+    for (piece in strsplit(value, ",", fixed = TRUE)[[1L]]) {{
+      piece <- trimws(piece)
+      match <- regexec(
+        "^([A-Za-z][A-Za-z0-9.]*)[[:space:]]*\\\\(([<>=]+)[[:space:]]*([^)]*)\\\\)$",
+        piece, perl = TRUE
+      )
+      captures <- regmatches(piece, match)[[1L]]
+      if (length(captures) == 4L) {{
+        dependency <- captures[[2L]]
+        constraints[[length(constraints) + 1L]] <- list(
+          package = dependency, op = captures[[3L]], version = trimws(captures[[4L]])
+        )
+      }} else {{
+        dependency <- sub("[[:space:]].*$", "", piece)
+      }}
+      dependencies <- c(dependencies, dependency)
+    }}
+  }}
   list(
     package = declared_package,
     version = declared_version,
-    dependencies = unique(dependencies[nzchar(dependencies) & dependencies != "R"])
+    dependencies = unique(setdiff(dependencies[nzchar(dependencies)], "R")),
+    constraints = constraints
   )
 }}
 
@@ -214,10 +292,18 @@ install_local_archive <- function(package, pkg_dir, ext = ".tar.gz",
          installed_version >= base::package_version(version))
   )
   if (keep_installed) {{
-    message(.meta_trf(
-      "Package %s (installed version %s) is already installed.",
-      base_name, as.character(installed_version)
-    ))
+    newer <- installed_version > base::package_version(version)
+    message(if (newer) {{
+      .meta_trf(
+        "Package %s has installed version %s, newer than archive version %s; keeping the installed version.",
+        base_name, as.character(installed_version), version
+      )
+    }} else {{
+      .meta_trf(
+        "Package %s has installed version %s and archive version %s; keeping the installed version.",
+        base_name, as.character(installed_version), version
+      )
+    }})
     unchanged_message <- if (identical(upgrade, "never")) {{
       .meta_tr("Kept installed version because upgrade = \'never\'")
     }} else {{
@@ -324,18 +410,17 @@ install_local_archive <- function(package, pkg_dir, ext = ".tar.gz",
     dir.create(source_dir)
     on.exit(safe_unlink(source_dir, recursive = TRUE), add = TRUE)
     utils::unzip(archive, exdir = source_dir)
-    descriptions <- list.files(
-      source_dir, pattern = "^DESCRIPTION$", full.names = TRUE, recursive = TRUE
-    )
-    if (length(descriptions) != 1L) {{
-      return(list(
-        success = FALSE,
-        message = .meta_trf(
-          "Expected one DESCRIPTION in source ZIP; found %d", length(descriptions)
-        )
-      ))
+    roots <- list.files(source_dir, all.files = TRUE, no.. = TRUE, include.dirs = TRUE)
+    if (length(roots) != 1L || !dir.exists(file.path(source_dir, roots[[1L]]))) {{
+      return(list(success = FALSE,
+                  message = .meta_trf("Archive %s must contain one package root directory.", archive)))
     }}
-    install_target <- dirname(descriptions[[1L]])
+    package_root <- file.path(source_dir, roots[[1L]])
+    if (!file.exists(file.path(package_root, "DESCRIPTION"))) {{
+      return(list(success = FALSE,
+                  message = .meta_trf("Archive %s has no DESCRIPTION at the package root.", archive)))
+    }}
+    install_target <- package_root
   }}
 
   install_error <- NULL

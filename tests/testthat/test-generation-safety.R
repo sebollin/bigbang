@@ -1,7 +1,12 @@
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
 build_safety_archive <- function(name, version, source_root, archive_dir,
                                  code = NULL, imports = NULL,
-                                 filename_version = version) {
-  source_dir <- file.path(source_root, paste0(name, "-", version, "-src"))
+                                 filename_version = version,
+                                 root_name = NULL, nested_description = FALSE,
+                                 depends = NULL) {
+  root_name <- root_name %||% paste0(name, "-", version, "-src")
+  source_dir <- file.path(source_root, root_name)
   dir.create(file.path(source_dir, "R"), recursive = TRUE)
   code <- code %||% paste0(name, "_value <- function() \"", name, "\"")
   description <- c(
@@ -12,12 +17,17 @@ build_safety_archive <- function(name, version, source_root, archive_dir,
     "Authors@R: person('Test', 'Author', email = 'test@example.org', role = c('aut', 'cre'))",
     paste0("Description: Temporary component ", name, "."),
     "License: MIT",
+    if (is.null(depends)) character() else paste0("Depends: ", depends),
     "Encoding: UTF-8",
     if (is.null(imports)) character() else paste0("Imports: ", imports)
   )
   writeLines(description, file.path(source_dir, "DESCRIPTION"), useBytes = TRUE)
   writeLines(paste0("export(", name, "_value)"), file.path(source_dir, "NAMESPACE"), useBytes = TRUE)
   writeLines(code, file.path(source_dir, "R", "value.R"), useBytes = TRUE)
+  if (isTRUE(nested_description)) {
+    dir.create(file.path(source_dir, "tests"), showWarnings = FALSE)
+    writeLines("Nested: fixture", file.path(source_dir, "tests", "DESCRIPTION"), useBytes = TRUE)
+  }
 
   r_binary <- file.path(
     R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
@@ -33,8 +43,6 @@ build_safety_archive <- function(name, version, source_root, archive_dir,
   stopifnot(file.exists(built), file.rename(built, target))
   target
 }
-
-`%||%` <- function(x, y) if (is.null(x)) y else x
 
 test_that("default implicit scanning reports guesses without binding them", {
   sandbox <- tempfile("bigbang-implicit-default-")
@@ -92,6 +100,87 @@ test_that("default implicit scanning reports guesses without binding them", {
   expect_true(grepl("dplyr", opted_description[, "Imports"], fixed = TRUE))
 })
 
+test_that("dependency constraints are validated and R requirements propagate", {
+  sandbox <- tempfile("bigbang-constraints-")
+  source_root <- file.path(sandbox, "sources")
+  low_archives <- file.path(sandbox, "low")
+  good_archives <- file.path(sandbox, "good")
+  destination <- file.path(sandbox, "destination")
+  library_dir <- file.path(sandbox, "library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(low_archives)
+  dir.create(good_archives)
+  dir.create(destination)
+  dir.create(library_dir)
+  build_safety_archive("aaa", "1.0.0", source_root, low_archives)
+  build_safety_archive(
+    "needv2", "1.0.0", source_root, low_archives,
+    imports = "aaa (>= 2.0.0)", depends = "R (>= 4.3.0)"
+  )
+  expect_error(
+    create_metapackage(
+      "constraintverse", c("aaa_1.0.0", "needv2_1.0.0"), low_archives,
+      dest_dir = destination, document = FALSE, verbose = FALSE
+    ),
+    class = "bigbang_error_dependency_version",
+    regexp = "aaa.*>= 2.0.0.*1.0.0"
+  )
+  expect_length(list.files(destination, all.files = TRUE, no.. = TRUE), 0L)
+
+  build_safety_archive("aaa", "2.0.0", source_root, good_archives)
+  file.copy(
+    file.path(low_archives, "needv2_1.0.0.tar.gz"), good_archives,
+    overwrite = TRUE
+  )
+  result <- create_metapackage(
+    "constraintverse", c("aaa_2.0.0", "needv2_1.0.0"), good_archives,
+    dest_dir = destination, document = FALSE, verbose = FALSE
+  )
+  generated_description <- read.dcf(file.path(result$path, "DESCRIPTION"))
+  expect_match(generated_description[, "Depends"], "R \\(>= 4.3.0\\)")
+
+  skip_on_cran()
+  withr::local_libpaths(c(library_dir, .libPaths()))
+  installed <- install_local_pkg(
+    "needv2_1.0.0", good_archives, verbose = FALSE, upgrade = "always"
+  )
+  expect_length(installed$failed, 0L)
+  expect_true(requireNamespace("aaa", quietly = TRUE))
+  expect_true(requireNamespace("needv2", quietly = TRUE))
+})
+
+test_that("local dependencies outside the component set are rejected", {
+  sandbox <- tempfile("bigbang-orphan-dependency-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  dir.create(destination)
+  build_safety_archive("zzz", "1.0.0", source_root, archives)
+  build_safety_archive("orphan", "1.0.0", source_root, archives, imports = "zzz")
+  expect_error(
+    create_metapackage(
+      "orphanverse", "orphan_1.0.0", archives,
+      dest_dir = destination, document = FALSE, verbose = FALSE
+    ),
+    class = "bigbang_error_unincluded_dependency",
+    regexp = "orphan.*zzz.*zzz_1.0.0.tar.gz"
+  )
+
+  external <- file.path(sandbox, "external")
+  dir.create(external)
+  build_safety_archive(
+    "externalpkg", "1.0.0", source_root, external,
+    imports = "stats"
+  )
+  external_result <- create_metapackage(
+    "externalverse", "externalpkg_1.0.0", external,
+    dest_dir = destination, document = FALSE, verbose = FALSE
+  )
+  expect_true("stats" %in% external_result$cran_dependencies)
+})
+
 test_that("reserved component names cannot exclude generated package files", {
   sandbox <- tempfile("bigbang-reserved-components-")
   source_root <- file.path(sandbox, "sources")
@@ -129,6 +218,106 @@ test_that("reserved component names cannot exclude generated package files", {
     function(entry) entry %in% entries,
     logical(1L)
   )))
+})
+
+test_that("archive metadata uses the package root, not every DESCRIPTION", {
+  skip_on_cran()
+  sandbox <- tempfile("bigbang-root-metadata-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  library_dir <- file.path(sandbox, "library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  dir.create(destination)
+  dir.create(library_dir)
+  build_safety_archive(
+    "twodesc", "1.0.0", source_root, archives,
+    root_name = "unrelated-root", nested_description = TRUE
+  )
+  result <- create_metapackage(
+    "rootverse", "twodesc_1.0.0", archives,
+    dest_dir = destination, document = FALSE, verbose = FALSE
+  )
+  withr::local_libpaths(c(library_dir, .libPaths()))
+  installed <- install_local_pkg("twodesc_1.0.0", archives, verbose = FALSE)
+  expect_length(installed$failed, 0L)
+  expect_true(requireNamespace("twodesc", quietly = TRUE))
+  expect_true(file.exists(file.path(result$path, "DESCRIPTION")))
+})
+
+test_that("archives without a root DESCRIPTION and truncated archives fail clearly", {
+  sandbox <- tempfile("bigbang-invalid-archives-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  dir.create(destination)
+
+  invalid_root <- file.path(source_root, "notapkg-1.0.0")
+  dir.create(file.path(invalid_root, "tests"), recursive = TRUE)
+  writeLines("Nested: only", file.path(invalid_root, "tests", "DESCRIPTION"))
+  withr::with_dir(source_root, utils::tar(
+    file.path(archives, "noroot_1.0.0.tar.gz"), "notapkg-1.0.0", compression = "gzip"
+  ))
+  expect_error(
+    create_metapackage(
+      "norootverse", "noroot_1.0.0", archives,
+      dest_dir = destination, document = FALSE, verbose = FALSE
+    ),
+    "no DESCRIPTION at the package root"
+  )
+
+  empty_root <- file.path(source_root, "empty-1.0.0")
+  dir.create(empty_root, recursive = TRUE)
+  file.create(file.path(empty_root, "DESCRIPTION"))
+  withr::with_dir(source_root, utils::tar(
+    file.path(archives, "empty_1.0.0.tar.gz"), "empty-1.0.0", compression = "gzip"
+  ))
+  expect_error(
+    create_metapackage(
+      "emptyverse", "empty_1.0.0", archives,
+      dest_dir = destination, document = FALSE, verbose = FALSE
+    ),
+    "must declare non-empty Package and Version"
+  )
+
+  valid <- build_safety_archive("truncated", "1.0.0", source_root, archives)
+  bytes <- readBin(valid, "raw", n = file.info(valid)$size)
+  truncated <- file.path(archives, "truncated_bad_1.0.0.tar.gz")
+  writeBin(bytes[seq_len(max(1L, length(bytes) %/% 2L))], truncated)
+  unlink(valid)
+  file.rename(truncated, file.path(archives, "truncated_1.0.0.tar.gz"))
+  expect_error(
+    create_metapackage(
+      "truncatedverse", "truncated_1.0.0", archives,
+      dest_dir = destination, document = FALSE, verbose = FALSE
+    ),
+    "status [0-9]|extract|archive"
+  )
+  expect_error(.validate_archive_members(c("root/../escape")), "unsafe")
+})
+
+test_that("malformed R source is reported during heuristic scanning", {
+  sandbox <- tempfile("bigbang-parse-warning-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  dir.create(destination)
+  build_safety_archive(
+    "badparse", "1.0.0", source_root, archives,
+    code = "badparse_value <- function(x) {{{"
+  )
+  expect_warning(
+    create_metapackage(
+      "parseverse", "badparse_1.0.0", archives,
+      dest_dir = destination, document = FALSE, verbose = FALSE
+    ),
+    "Could not parse R source file"
+  )
 })
 
 test_that("a self-contained chain installs despite comment-only dependency words", {
@@ -304,6 +493,18 @@ test_that("already installed messages report the installed version", {
     type = "message"
   )
   expect_true(isTRUE(unchanged$unchanged))
-  expect_match(paste(output, collapse = "\n"), "installed version 9.9.9")
-  expect_false(grepl("version 1.0.0", paste(output, collapse = "\n"), fixed = TRUE))
+  expect_match(
+    paste(output, collapse = "\n"),
+    "installed version 9.9.9, newer than archive version 1.0.0"
+  )
+  direct_output <- capture.output(
+    install_local_pkg(
+      "versioned_1.0.0", archive_dir, verbose = TRUE, upgrade = "newer"
+    ),
+    type = "message"
+  )
+  expect_match(
+    paste(direct_output, collapse = "\n"),
+    "installed version 9.9.9, newer than archive version 1.0.0"
+  )
 })

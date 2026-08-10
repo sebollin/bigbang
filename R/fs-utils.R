@@ -44,6 +44,20 @@
   gsub(".", "\\.", x, fixed = TRUE)
 }
 
+.validate_archive_members <- function(members) {
+  members <- gsub("\\\\", "/", members)
+  unsafe <- startsWith(members, "/") |
+    grepl("^[A-Za-z]:", members) |
+    grepl("(^|/)\\.\\.(/|$)", members, perl = TRUE)
+  if (any(unsafe)) {
+    stop(.bb_trf(
+      "Archive contains unsafe absolute or parent-traversal paths: %s",
+      paste(utils::head(members[unsafe], 3L), collapse = ", ")
+    ), call. = FALSE)
+  }
+  invisible(members)
+}
+
 #' Remove owned files with defensive path checks
 #'
 #' Rejects roots, protected directories, suspiciously short paths, and
@@ -115,10 +129,9 @@ safe_unlink <- function(path, recursive = FALSE, force = FALSE, verify = TRUE) {
             has_man_dir <- dir.exists(file.path(p, "man"))
 
             if (has_desc && (has_r_dir || has_man_dir)) {
-              # Only known temporary package directories may pass.
-              is_temp_pkg <- grepl("^00LOCK-|^\\.Rcheck$|^tmp|^temp", basename(p))
-
-              if (!is_temp_pkg) {
+              # Location, not a basename, establishes that this is temporary.
+              # A name such as 'templates' is not evidence of ownership.
+              if (!is_path_inside(p, tempdir())) {
                 message(.bb_trf("SAFETY: Possible non-temporary R package directory: %s", p))
                 return(invisible(FALSE))
               }

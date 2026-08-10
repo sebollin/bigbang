@@ -28,6 +28,10 @@ Released on 2026-08-09.
   `additional_deps`/`force_deps`, remain binding; guessed packages must be opted
   in explicitly. This prevents comments and common function names from making
   a distributed meta-package depend on unrelated packages.
+- Generation now rejects a local dependency constraint that the included archive
+  cannot satisfy, and rejects a local archive that is present in `pkg_dir` but was
+  not included in `packages`. Component R version requirements are propagated to
+  the generated DESCRIPTION for enforcement on the recipient's R version.
 - The arguments added in this release come last in every signature, so a
   positional call written against 0.1.0 keeps binding to the same parameters.
   Positional calls are still a fragile way to call these functions: name the
@@ -97,6 +101,18 @@ Released on 2026-08-09.
 - Component names matching standard R package paths no longer generate
   `.Rbuildignore` rules that could exclude the generated package's own files or
   shipped archives.
+- Already-installed messages show both the installed and archive versions, and
+  explicitly flag when the installed version is newer.
+- Archive inspection now validates extraction status, member paths, symbolic
+  links, and the single package root before accepting an archive. Nested
+  `tests/DESCRIPTION` files are allowed, while a missing root DESCRIPTION is
+  reported clearly.
+- Malformed component R files produce a warning naming the source file while
+  generation continues, so a possible encoding issue is diagnosable without
+  turning generation into an unconditional rejection.
+- Rollback removes an empty destination directory created by the failed call,
+  and `safe_unlink()` uses temporary-directory containment rather than a broad
+  basename heuristic.
 - The source-code patterns require a namespace qualifier or a call for every
   package they guess at, so ordinary S4 code is no longer reported as needing
   `Matrix`, and an identifier beginning with `st_` no longer suggests `sf`.

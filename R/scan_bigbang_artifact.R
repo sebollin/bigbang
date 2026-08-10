@@ -228,20 +228,6 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
   result
 }
 
-.validate_archive_members <- function(members) {
-  members <- gsub("\\\\", "/", members)
-  unsafe <- startsWith(members, "/") |
-    grepl("^[A-Za-z]:", members) |
-    grepl("(^|/)\\.\\.(/|$)", members, perl = TRUE)
-  if (any(unsafe)) {
-    stop(.bb_trf(
-      "Archive contains unsafe absolute or parent-traversal paths: %s",
-      paste(utils::head(members[unsafe], 3L), collapse = ", ")
-    ), call. = FALSE)
-  }
-  invisible(members)
-}
-
 .scan_source_archive <- function(archive) {
   is_zip <- grepl("\\.zip$", archive, ignore.case = TRUE)
   members <- if (is_zip) {
@@ -268,23 +254,8 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
     stop("Refusing to scan an archive containing symbolic links.", call. = FALSE,
          domain = "R-bigbang")
   }
-  descriptions <- list.files(
-    extract_dir, pattern = "^DESCRIPTION$", recursive = TRUE, full.names = TRUE
-  )
-  if (length(descriptions) == 0L) {
-    stop("No DESCRIPTION found in source archive.", call. = FALSE,
-         domain = "R-bigbang")
-  }
-  depths <- lengths(strsplit(
-    substring(descriptions, nchar(extract_dir) + 2L), .Platform$file.sep,
-    fixed = TRUE
-  ))
-  descriptions <- descriptions[depths == min(depths)]
-  if (length(descriptions) != 1L) {
-    stop("Source archive has multiple candidate package roots.", call. = FALSE,
-         domain = "R-bigbang")
-  }
-  .scan_source_tree(dirname(descriptions))
+  package_root <- .find_archive_root(extract_dir, archive)
+  .scan_source_tree(package_root)
 }
 
 .scan_installed_lazydb <- function(root) {

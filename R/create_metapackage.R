@@ -327,6 +327,7 @@ create_metapackage <- function(
     file.path(dest_dir, name), winslash = "/", mustWork = FALSE
   )
   project_created <- FALSE
+  destination_created <- !dir.exists(dest_dir)
   generation_complete <- FALSE
   documentation_search <- NULL
   documentation_namespaces <- NULL
@@ -345,11 +346,19 @@ create_metapackage <- function(
     owned_project <- project_created && identical(project_dir, expected_project) &&
       is_path_inside(project_dir, dest_dir)
     if (!generation_complete && owned_project && dir.exists(project_dir)) {
+      # unlink removes the directory entry itself and does not follow a
+      # symlink replaced during this call's short TOCTOU window.
       removal_status <- unlink(project_dir, recursive = TRUE, force = TRUE)
       if (removal_status != 0L) {
         warning(.bb_trf("Could not remove completely: %s", project_dir),
                 call. = FALSE)
       }
+    }
+    if (!generation_complete && destination_created && dir.exists(dest_dir) &&
+          length(list.files(dest_dir, all.files = TRUE, no.. = TRUE)) == 0L) {
+      # The directory is known to be empty; recursive=TRUE is required by
+      # unlink() to remove an empty directory on all supported platforms.
+      unlink(dest_dir, recursive = TRUE, force = TRUE)
     }
   }, add = TRUE)
 
@@ -407,6 +416,7 @@ create_metapackage <- function(
   # generator (filename/description mismatches and cycles) away from the
   # recipient's installation step.
   archive_metadata <- .validate_component_archives(packages, pkg_dir, ext)
+  r_requirement <- .resolve_r_requirement(archive_metadata)
 
   # Ship the component archives inside the meta-package so that installing it
   # is enough to install the components wherever it is installed.
@@ -496,7 +506,9 @@ create_metapackage <- function(
   dependencies <- unlist(lapply(archive_metadata, `[[`, "dependencies"), use.names = FALSE)
 
   # Classify dependencies as local or repository-provided.
-  classified_deps <- classify_dependencies(dependencies, pkg_dir, ext)
+  classified_deps <- classify_dependencies(
+    dependencies, pkg_dir, ext, included_packages = component_packages
+  )
   cran_deps <- classified_deps$cran
   local_deps <- classified_deps$local
 
@@ -521,7 +533,8 @@ create_metapackage <- function(
     license = license,
     component_packages = component_packages,
     description_path = file.path(project_dir, "DESCRIPTION"),
-    verbose = debug
+    verbose = debug,
+    r_requirement = r_requirement
   )
 
 
@@ -540,7 +553,6 @@ create_metapackage <- function(
   # Write NAMESPACE with explicitly selected additional dependencies.
   write_namespace_file(
     name = name,
-    cran_packages = cran_deps,
     namespace_path = file.path(project_dir, "NAMESPACE"),
     implicit_deps = hard_implicit_deps,
     import_deps = import_deps,

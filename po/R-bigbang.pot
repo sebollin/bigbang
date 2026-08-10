@@ -31,6 +31,42 @@ msgstr ""
 msgid "Package archive does not exist: %s"
 msgstr ""
 
+msgid "Could not create temporary directory for %s"
+msgstr ""
+
+msgid "Could not extract archive %s: %s"
+msgstr ""
+
+msgid "Could not extract archive %s: could not create temporary directory."
+msgstr ""
+
+msgid "Could not extract archive %s: extraction returned status %d."
+msgstr ""
+
+msgid "Archive %s must contain one package root directory."
+msgstr ""
+
+msgid "Archive %s has no DESCRIPTION at the package root."
+msgstr ""
+
+msgid "Archive %s contains symbolic links, which are not supported."
+msgstr ""
+
+msgid "Component %s requires %s %s %s, but the included archive provides version %s."
+msgstr ""
+
+msgid "Component %s declares dependency %s, available as %s in pkg_dir but not included. Add it to packages or remove the dependency."
+msgstr ""
+
+msgid "Component %s declares R constraint %s %s; only >= and > constraints are propagated."
+msgstr ""
+
+msgid "Component %s declares an invalid R version constraint: %s %s."
+msgstr ""
+
+msgid "Could not parse R source file: %s"
+msgstr ""
+
 msgid "Expected one DESCRIPTION in %s; found %d."
 msgstr ""
 
@@ -191,6 +227,12 @@ msgid "Unsupported archive format: %s"
 msgstr ""
 
 msgid "Installed local package: %s"
+msgstr ""
+
+msgid "Package %s has installed version %s, newer than archive version %s; keeping the installed version."
+msgstr ""
+
+msgid "Package %s has installed version %s and archive version %s; keeping the installed version."
 msgstr ""
 
 msgid "Packages that failed: %s"

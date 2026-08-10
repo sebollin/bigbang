@@ -12,7 +12,7 @@ test_that("install_local_pkg removes its temporary directory after early exit", 
   before <- list.dirs(tempdir(), recursive = FALSE, full.names = TRUE)
   result <- install_local_pkg("roto_0.1.0", sandbox)
   expect_named(result$failed, "roto_0.1.0")
-  expect_match(result$failed[[1L]], "Expected one DESCRIPTION")
+  expect_match(result$failed[[1L]], "one package root directory")
   after <- list.dirs(tempdir(), recursive = FALSE, full.names = TRUE)
   expect_setequal(after, before)
 })

@@ -122,6 +122,20 @@ install_local_pkg <- function(
            installed_version >= base::package_version(version_text))
     )
     if (keep_installed) {
+      if (isTRUE(verbose)) {
+        newer <- installed_version > base::package_version(version_text)
+        message(if (newer) {
+          .bb_trf(
+            "Package %s has installed version %s, newer than archive version %s; keeping the installed version.",
+            base_name, as.character(installed_version), version_text
+          )
+        } else {
+          .bb_trf(
+            "Package %s has installed version %s and archive version %s; keeping the installed version.",
+            base_name, as.character(installed_version), version_text
+          )
+        })
+      }
       state$unchanged[[stem]] <- if (identical(upgrade, "never")) {
         .bb_tr("Kept installed version because upgrade = 'never'")
       } else {
@@ -136,13 +150,7 @@ install_local_pkg <- function(
     dir.create(extracted)
     on.exit(safe_unlink(extracted, recursive = TRUE), add = TRUE)
     extraction_error <- tryCatch({
-      if (ext %in% c(".tar.gz", ".tar")) {
-        utils::untar(archive, exdir = extracted)
-      } else if (identical(tolower(ext), ".zip")) {
-        utils::unzip(archive, exdir = extracted)
-      } else {
-        stop(.bb_trf("Unsupported archive format: %s", ext), call. = FALSE)
-      }
+      .extract_archive_checked(archive, ext, extracted)
       NULL
     }, error = identity)
     if (inherits(extraction_error, "error")) {
@@ -150,18 +158,34 @@ install_local_pkg <- function(
       return(FALSE)
     }
 
-    descriptions <- list.files(
-      extracted, pattern = "^DESCRIPTION$", full.names = TRUE, recursive = TRUE
-    )
-    if (length(descriptions) != 1L) {
-      state$failed[[stem]] <- paste(
-        "Expected one DESCRIPTION in archive; found", length(descriptions)
-      )
+    archive_kind <- tryCatch(.classify_local_archive(archive, ext), error = identity)
+    if (inherits(archive_kind, "error")) {
+      state$failed[[stem]] <- conditionMessage(archive_kind)
       return(FALSE)
     }
+    binary_zip <- identical(archive_kind, "win.binary")
+    if (binary_zip && .Platform$OS.type != "windows") {
+      state$failed[[stem]] <- "Windows binary ZIP packages can only be installed on Windows"
+      return(FALSE)
+    }
+    package_root <- tryCatch(
+      .find_archive_root(extracted, archive, allow_flat = binary_zip),
+      error = identity
+    )
+    if (inherits(package_root, "error")) {
+      state$failed[[stem]] <- conditionMessage(package_root)
+      return(FALSE)
+    }
+    descriptions <- file.path(package_root, "DESCRIPTION")
     desc <- read.dcf(
       descriptions, fields = c("Package", "Version", "Depends", "Imports", "LinkingTo")
     )
+    if (nrow(desc) == 0L) {
+      state$failed[[stem]] <- .bb_trf(
+        "Archive %s must declare non-empty Package and Version fields.", archive
+      )
+      return(FALSE)
+    }
     declared_package <- if ("Package" %in% colnames(desc)) {
       trimws(unname(desc[1L, "Package"]))
     } else {
@@ -198,6 +222,20 @@ install_local_pkg <- function(
            installed_version >= base::package_version(version_text))
     )
     if (keep_installed) {
+      if (isTRUE(verbose)) {
+        newer <- installed_version > base::package_version(version_text)
+        message(if (newer) {
+          .bb_trf(
+            "Package %s has installed version %s, newer than archive version %s; keeping the installed version.",
+            base_name, as.character(installed_version), version_text
+          )
+        } else {
+          .bb_trf(
+            "Package %s has installed version %s and archive version %s; keeping the installed version.",
+            base_name, as.character(installed_version), version_text
+          )
+        })
+      }
       state$unchanged[[stem]] <- if (identical(upgrade, "never")) {
         .bb_tr("Kept installed version because upgrade = 'never'")
       } else {
@@ -275,18 +313,8 @@ install_local_pkg <- function(
       }
     }
 
-    archive_kind <- tryCatch(.classify_local_archive(archive, ext), error = identity)
-    if (inherits(archive_kind, "error")) {
-      state$failed[[stem]] <- conditionMessage(archive_kind)
-      return(FALSE)
-    }
-    binary_zip <- identical(archive_kind, "win.binary")
-    if (binary_zip && .Platform$OS.type != "windows") {
-      state$failed[[stem]] <- "Windows binary ZIP packages can only be installed on Windows"
-      return(FALSE)
-    }
     install_target <- if (identical(archive_kind, "source.zip")) {
-      dirname(descriptions[[1L]])
+      package_root
     } else {
       archive
     }

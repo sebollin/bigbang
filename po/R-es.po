@@ -31,6 +31,42 @@ msgstr "Extensión de archivo no compatible: %s"
 msgid "Package archive does not exist: %s"
 msgstr "El archivo del paquete no existe: %s"
 
+msgid "Could not create temporary directory for %s"
+msgstr "No se pudo crear el directorio temporal para %s"
+
+msgid "Could not extract archive %s: %s"
+msgstr "No se pudo extraer el archivo %s: %s"
+
+msgid "Could not extract archive %s: could not create temporary directory."
+msgstr "No se pudo extraer el archivo %s: no se pudo crear el directorio temporal."
+
+msgid "Could not extract archive %s: extraction returned status %d."
+msgstr "No se pudo extraer el archivo %s: la extracción devolvió el estado %d."
+
+msgid "Archive %s must contain one package root directory."
+msgstr "El archivo %s debe contener un único directorio raíz del paquete."
+
+msgid "Archive %s has no DESCRIPTION at the package root."
+msgstr "El archivo %s no tiene DESCRIPTION en la raíz del paquete."
+
+msgid "Archive %s contains symbolic links, which are not supported."
+msgstr "El archivo %s contiene enlaces simbólicos, que no son compatibles."
+
+msgid "Component %s requires %s %s %s, but the included archive provides version %s."
+msgstr "El componente %s requiere %s %s %s, pero el archivo incluido proporciona la versión %s."
+
+msgid "Component %s declares dependency %s, available as %s in pkg_dir but not included. Add it to packages or remove the dependency."
+msgstr "El componente %s declara la dependencia %s, disponible como %s en pkg_dir pero no incluida. Agréguela a packages o quite la dependencia."
+
+msgid "Component %s declares R constraint %s %s; only >= and > constraints are propagated."
+msgstr "El componente %s declara la restricción de R %s %s; solo se propagan las restricciones >= y >."
+
+msgid "Component %s declares an invalid R version constraint: %s %s."
+msgstr "El componente %s declara una restricción de versión de R no válida: %s %s."
+
+msgid "Could not parse R source file: %s"
+msgstr "No se pudo analizar el archivo fuente R: %s"
+
 msgid "Expected one DESCRIPTION in %s; found %d."
 msgstr "Se esperaba un DESCRIPTION en %s; se encontraron %d."
 
@@ -192,6 +228,12 @@ msgstr "Formato de archivo no compatible: %s"
 
 msgid "Installed local package: %s"
 msgstr "Paquete local instalado: %s"
+
+msgid "Package %s has installed version %s, newer than archive version %s; keeping the installed version."
+msgstr "El paquete %s tiene instalada la versión %s, más nueva que la versión %s del archivo; se conservará la versión instalada."
+
+msgid "Package %s has installed version %s and archive version %s; keeping the installed version."
+msgstr "El paquete %s tiene instalada la versión %s y la versión %s del archivo; se conservará la versión instalada."
 
 msgid "Packages that failed: %s"
 msgstr "Paquetes que fallaron: %s"

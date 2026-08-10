@@ -21,30 +21,26 @@
   }
 
   temp_dir <- tempfile("bigbang-metadata-")
-  dir.create(temp_dir)
+  if (!dir.create(temp_dir)) {
+    stop(.bb_trf("Could not create temporary directory for %s", archive), call. = FALSE)
+  }
   on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
 
-  if (ext %in% c(".tar.gz", ".tar")) {
-    utils::untar(archive, exdir = temp_dir)
-  } else if (identical(tolower(ext), ".zip")) {
-    utils::unzip(archive, exdir = temp_dir)
-  } else {
-    stop(.bb_trf("Unsupported archive extension: %s", ext), call. = FALSE)
-  }
-
-  desc_file <- list.files(
-    temp_dir, pattern = "^DESCRIPTION$", full.names = TRUE, recursive = TRUE
-  )
-  if (length(desc_file) != 1L) {
-    stop(.bb_trf(
-      "Expected one DESCRIPTION in %s; found %d.", archive, length(desc_file)
-    ), call. = FALSE)
-  }
+  .extract_archive_checked(archive, ext, temp_dir)
+  allow_flat <- identical(tolower(ext), ".zip") &&
+    file.exists(file.path(temp_dir, "Meta", "package.rds"))
+  package_root <- .find_archive_root(temp_dir, archive, allow_flat = allow_flat)
+  desc_file <- file.path(package_root, "DESCRIPTION")
 
   desc <- read.dcf(
     desc_file,
     fields = c("Package", "Version", "Depends", "Imports", "LinkingTo")
   )
+  if (nrow(desc) == 0L) {
+    stop(.bb_trf(
+      "Archive %s must declare non-empty Package and Version fields.", archive
+    ), call. = FALSE)
+  }
   field <- function(name) {
     if (!name %in% colnames(desc)) return(NA_character_)
     value <- unname(desc[1L, name])
@@ -59,17 +55,147 @@
     ), call. = FALSE)
   }
 
-  dependencies <- unlist(lapply(c("Depends", "Imports", "LinkingTo"), function(name) {
-    value <- field(name)
-    if (is.na(value) || !nzchar(value)) return(character())
-    trimws(gsub("\\s*\\([^)]*\\)", "", strsplit(value, ",", fixed = TRUE)[[1L]]))
-  }), use.names = FALSE)
+  parsed_dependencies <- .parse_dependency_constraints(
+    vapply(c("Depends", "Imports", "LinkingTo"), field, character(1L))
+  )
 
   list(
     package = declared_package,
     version = declared_version,
-    dependencies = unique(dependencies[nzchar(dependencies) & dependencies != "R"])
+    dependencies = parsed_dependencies$dependencies,
+    constraints = parsed_dependencies$constraints
   )
+}
+
+.parse_dependency_constraints <- function(values) {
+  dependencies <- character()
+  constraints <- list()
+  for (value in values) {
+    if (is.na(value) || !nzchar(value)) next
+    pieces <- strsplit(value, ",", fixed = TRUE)[[1L]]
+    for (piece in pieces) {
+      piece <- trimws(piece)
+      if (!nzchar(piece)) next
+      match <- regexec(
+        "^([A-Za-z][A-Za-z0-9.]*)[[:space:]]*\\(([<>=]+)[[:space:]]*([^)]*)\\)$",
+        piece, perl = TRUE
+      )
+      captures <- regmatches(piece, match)[[1L]]
+      if (length(captures) == 4L) {
+        dependency <- captures[[2L]]
+        constraints[[length(constraints) + 1L]] <- list(
+          package = dependency,
+          op = captures[[3L]],
+          version = trimws(captures[[4L]])
+        )
+      } else {
+        dependency <- sub("[[:space:]].*$", "", piece)
+      }
+      dependencies <- c(dependencies, dependency)
+    }
+  }
+  list(
+    dependencies = unique(setdiff(dependencies[nzchar(dependencies)], "R")),
+    constraints = constraints
+  )
+}
+
+.version_satisfies <- function(actual, op, required) {
+  tryCatch({
+    actual <- base::package_version(actual)
+    required <- base::package_version(required)
+    switch(
+      op,
+      ">=" = actual >= required,
+      ">" = actual > required,
+      "<=" = actual <= required,
+      "<" = actual < required,
+      "==" = actual == required,
+      FALSE
+    )
+  }, error = function(e) FALSE)
+}
+
+.find_archive_root <- function(extract_dir, archive, allow_flat = FALSE) {
+  entries <- list.files(
+    extract_dir, all.files = TRUE, no.. = TRUE, include.dirs = TRUE
+  )
+  if (isTRUE(allow_flat) && file.exists(file.path(extract_dir, "DESCRIPTION"))) {
+    return(extract_dir)
+  }
+  if (length(entries) != 1L || !dir.exists(file.path(extract_dir, entries[[1L]]))) {
+    stop(.bb_trf(
+      "Archive %s must contain one package root directory.", archive
+    ), call. = FALSE)
+  }
+  root <- file.path(extract_dir, entries[[1L]])
+  if (!file.exists(file.path(root, "DESCRIPTION"))) {
+    stop(.bb_trf(
+      "Archive %s has no DESCRIPTION at the package root.", archive
+    ), call. = FALSE)
+  }
+  root
+}
+
+.validate_extracted_links <- function(extract_dir, archive) {
+  entries <- list.files(
+    extract_dir, recursive = TRUE, full.names = TRUE,
+    all.files = TRUE, include.dirs = TRUE, no.. = TRUE
+  )
+  if (length(entries) > 0L && any(nzchar(Sys.readlink(entries)))) {
+    stop(.bb_trf(
+      "Archive %s contains symbolic links, which are not supported.", archive
+    ), call. = FALSE)
+  }
+  invisible(entries)
+}
+
+.extract_archive_checked <- function(archive, ext, extract_dir) {
+  if (!identical(tolower(ext), ".zip") && !ext %in% c(".tar.gz", ".tar")) {
+    stop(.bb_trf("Unsupported archive format: %s", ext), call. = FALSE)
+  }
+  listing <- tryCatch(suppressWarnings({
+    if (identical(tolower(ext), ".zip")) {
+      utils::unzip(archive, list = TRUE)
+    } else if (ext %in% c(".tar.gz", ".tar")) {
+      utils::untar(archive, list = TRUE)
+    }
+  }), error = identity)
+  if (inherits(listing, "error")) {
+    stop(.bb_trf(
+      "Could not extract archive %s: %s", archive, conditionMessage(listing)
+    ), call. = FALSE)
+  }
+  listing_status <- attr(listing, "status")
+  if (is.numeric(listing_status) && length(listing_status) == 1L &&
+        listing_status != 0) {
+    stop(.bb_trf(
+      "Could not extract archive %s: extraction returned status %d.",
+      archive, listing_status
+    ), call. = FALSE)
+  }
+  members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
+  .validate_archive_members(members)
+  extraction <- tryCatch(suppressWarnings({
+    if (identical(tolower(ext), ".zip")) {
+      utils::unzip(archive, exdir = extract_dir)
+    } else {
+      utils::untar(archive, exdir = extract_dir)
+    }
+  }), error = identity)
+  if (inherits(extraction, "error")) {
+    stop(.bb_trf(
+      "Could not extract archive %s: %s", archive, conditionMessage(extraction)
+    ), call. = FALSE)
+  }
+  if (is.numeric(extraction) && length(extraction) == 1L && extraction != 0) {
+    stop(.bb_trf(
+      "Could not extract archive %s: extraction returned status %d.",
+      archive, extraction
+    ), call. = FALSE)
+  }
+  .validate_extracted_links(extract_dir, archive)
+  invisible(extraction)
 }
 
 .version_matches <- function(left, right) {
@@ -144,6 +270,121 @@
   character()
 }
 
+.validate_constraints <- function(archive_stems, metadata) {
+  included <- sub("_.*", "", archive_stems)
+  versions <- vapply(metadata, `[[`, character(1L), "version")
+  names(versions) <- included
+  for (index in seq_along(metadata)) {
+    constraints <- metadata[[index]]$constraints
+    local_constraints <- constraints[vapply(
+      constraints,
+      function(x) x$package %in% included,
+      logical(1L)
+    )]
+    for (constraint in local_constraints) {
+      actual <- unname(versions[[constraint$package]])
+      if (!.version_satisfies(actual, constraint$op, constraint$version)) {
+        .bigbang_abort(
+          "bigbang_error_dependency_version",
+          .bb_trf(
+            "Component %s requires %s %s %s, but the included archive provides version %s.",
+            metadata[[index]]$package, constraint$package, constraint$op,
+            constraint$version, actual
+          ),
+          component = metadata[[index]]$package,
+          dependency = constraint$package,
+          required = constraint,
+          actual = actual
+        )
+      }
+    }
+  }
+  invisible(metadata)
+}
+
+.archive_inventory <- function(pkg_dir, ext) {
+  archives <- list.files(pkg_dir)
+  archives <- archives[endsWith(tolower(archives), tolower(ext))]
+  stems <- substr(archives, 1L, nchar(archives) - nchar(ext))
+  list(files = archives, stems = stems, packages = sub("_.*", "", stems))
+}
+
+.validate_unincluded_deps <- function(archive_stems, metadata, pkg_dir, ext) {
+  included <- sub("_.*", "", archive_stems)
+  inventory <- .archive_inventory(pkg_dir, ext)
+  for (item in metadata) {
+    candidates <- setdiff(item$dependencies, included)
+    for (dependency in candidates) {
+      match <- which(inventory$packages == dependency)
+      if (length(match) > 0L) {
+        .bigbang_abort(
+          "bigbang_error_unincluded_dependency",
+          .bb_trf(
+            paste0(
+              "Component %s declares dependency %s, available as %s in ",
+              "pkg_dir but not included. Add it to packages or remove the ",
+              "dependency."
+            ),
+            item$package, dependency, inventory$files[[match[[1L]]]]
+          ),
+          component = item$package,
+          dependency = dependency,
+          archive = inventory$files[[match[[1L]]]]
+        )
+      }
+    }
+  }
+  invisible(metadata)
+}
+
+classify_dependencies <- function(dependencies, pkg_dir, ext = ".tar.gz",
+                                  included_packages = NULL) {
+  local_names <- if (is.null(included_packages)) {
+    inventory <- .archive_inventory(pkg_dir, ext)
+    unique(c(inventory$stems, inventory$packages))
+  } else {
+    sub("_.*", "", included_packages)
+  }
+  is_local <- dependencies %in% unique(local_names)
+
+  list(
+    local = unique(dependencies[is_local]),
+    cran = unique(dependencies[!is_local])
+  )
+}
+
+.resolve_r_requirement <- function(metadata, floor = "3.5.0") {
+  candidates <- list(list(op = ">=", version = floor))
+  for (item in metadata) {
+    constraints <- item$constraints[
+      vapply(item$constraints, function(x) identical(x$package, "R"), logical(1L))
+    ]
+    for (constraint in constraints) {
+      if (!constraint$op %in% c(">=", ">")) {
+        warning(.bb_trf(
+          "Component %s declares R constraint %s %s; only >= and > constraints are propagated.",
+          item$package, constraint$op, constraint$version
+        ), call. = FALSE)
+      } else if (.version_satisfies(constraint$version, ">=", "0.0.0")) {
+        candidates[[length(candidates) + 1L]] <- constraint
+      } else {
+        warning(.bb_trf(
+          "Component %s declares an invalid R version constraint: %s %s.",
+          item$package, constraint$op, constraint$version
+        ), call. = FALSE)
+      }
+    }
+  }
+  best <- candidates[[1L]]
+  for (candidate in candidates[-1L]) {
+    newer <- .version_satisfies(candidate$version, ">", best$version)
+    same_stricter <- .version_satisfies(candidate$version, "==", best$version) &&
+      identical(candidate$op, ">") && identical(best$op, ">=")
+    if (newer || same_stricter) best <- candidate
+  }
+  best
+}
+
 .validate_component_archives <- function(archive_stems, pkg_dir, ext) {
   names_only <- sub("_.*", "", archive_stems)
   duplicates <- unique(names_only[duplicated(names_only)])
@@ -162,6 +403,8 @@
   for (index in seq_along(archive_stems)) {
     .validate_archive_metadata(archive_stems[[index]], metadata[[index]], ext)
   }
+  .validate_constraints(archive_stems, metadata)
+  .validate_unincluded_deps(archive_stems, metadata, pkg_dir, ext)
   cycle <- .component_dependency_cycle(archive_stems, metadata)
   if (length(cycle) > 0L) {
     .bigbang_abort(
@@ -182,7 +425,7 @@ extract_dependencies <- function(package, pkg_dir, ext = ".tar.gz") {
   .read_archive_metadata(package, pkg_dir, ext)$dependencies
 }
 
-.strip_r_comments_and_strings <- function(lines) {
+.strip_r_comments_and_strings <- function(lines, source_file = NULL) {
   parsed <- try(parse(text = lines, keep.source = TRUE), silent = TRUE)
   if (!inherits(parsed, "try-error")) {
     parse_data <- utils::getParseData(parsed)
@@ -194,37 +437,13 @@ extract_dependencies <- function(package, pkg_dir, ext = ".tar.gz") {
   # A malformed source file should still be diagnosable. This fallback is
   # intentionally conservative: it removes ordinary comments and quoted
   # strings without changing the generator's control flow.
+  if (!is.null(source_file)) {
+    warning(.bb_trf("Could not parse R source file: %s", source_file), call. = FALSE)
+  }
   content <- paste(lines, collapse = "\n")
   content <- gsub("(?m)#[^\\n]*$", "", content, perl = TRUE)
   gsub("'(?:\\\\.|[^'\\\\])*'|\"(?:\\\\.|[^\"\\\\])*\"", "", content, perl = TRUE)
 }
-
-#' Classify local and repository dependencies
-#'
-#' @param dependencies Character dependency names.
-#' @param pkg_dir Character archive directory.
-#' @param ext Character archive extension.
-#'
-#' @return A list with two elements:
-#' \describe{
-#'   \item{local}{Dependencies available as local archives.}
-#'   \item{cran}{Dependencies expected from a configured repository.}
-#' }
-#' @noRd
-classify_dependencies <- function(dependencies, pkg_dir, ext = ".tar.gz") {
-  archives <- list.files(pkg_dir)
-  archives <- archives[endsWith(tolower(archives), tolower(ext))]
-  stems <- substr(archives, 1L, nchar(archives) - nchar(ext))
-  local_names <- unique(c(stems, sub("_.*", "", stems)))
-  is_local <- dependencies %in% local_names
-
-  list(
-    local = unique(dependencies[is_local]),
-    cran = unique(dependencies[!is_local])
-  )
-}
-
-
 
 #' Diagnose implicit dependencies of local packages
 #'
@@ -280,9 +499,10 @@ diagnose_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
       utils::unzip(archive, exdir = temp_dir)
     }
 
-    # Locate references to Matrix and class APIs.
-    base_name <- sub("_.*", "", package)
-    r_dir <- file.path(temp_dir, base_name, "R")
+    # Locate references to Matrix and class APIs from the archive root rather
+    # than assuming that the root directory has the package name.
+    package_root <- .find_archive_root(temp_dir, archive)
+    r_dir <- file.path(package_root, "R")
 
     if (!dir.exists(r_dir)) {
       message(.bb_trf("No R directory found for package: %s", package))
@@ -404,8 +624,8 @@ detect_implicit_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
         utils::unzip(archive, exdir = temp_dir)
       }
 
-      base_name <- sub("_.*", "", package)
-      r_dir <- file.path(temp_dir, base_name, "R")
+      package_root <- .find_archive_root(temp_dir, archive)
+      r_dir <- file.path(package_root, "R")
 
       if (!dir.exists(r_dir)) {
         warning(.bb_trf("No R directory found for package: %s", package), call. = FALSE)
@@ -420,7 +640,11 @@ detect_implicit_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
       # meta-package.
       content <- paste(vapply(
         r_files,
-        function(file) .strip_r_comments_and_strings(readLines(file, warn = FALSE)),
+        function(file) {
+          .strip_r_comments_and_strings(
+            readLines(file, warn = FALSE), source_file = file
+          )
+        },
         character(1L)
       ), collapse = " ")
 

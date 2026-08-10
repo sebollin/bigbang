@@ -93,6 +93,16 @@ test_that("failed generation restores cwd and rolls back only its own project", 
   expect_identical(getwd(), cwd_before)
   expect_false(dir.exists(file.path(destination, "retryverse")))
 
+  newly_created_parent <- file.path(sandbox, "output-created-by-call")
+  expect_error(
+    create_metapackage(
+      "parentverse", "missing_0.1.0", archives,
+      dest_dir = newly_created_parent, document = FALSE, verbose = FALSE
+    ),
+    "archives were not found"
+  )
+  expect_false(dir.exists(newly_created_parent))
+
   copy_toy_archive(archives)
   result <- generate_toy_metapackage(
     "retryverse", archives, destination, document = FALSE
@@ -112,6 +122,25 @@ test_that("failed generation restores cwd and rolls back only its own project", 
   expect_true(dir.exists(preexisting))
   expect_true(dir.exists(file.path(preexisting, "R")))
   expect_identical(getwd(), cwd_before)
+})
+
+test_that("safe_unlink uses temporary location rather than a basename", {
+  sandbox <- tempfile("bigbang-safe-unlink-")
+  source_tree <- file.path(sandbox, "templates")
+  dir.create(file.path(source_tree, "R"), recursive = TRUE)
+  writeLines(c("Package: templates", "Version: 1.0.0"),
+             file.path(source_tree, "DESCRIPTION"))
+  # A basename such as 'templates' is acceptable when the complete path is
+  # inside the session's temporary directory.
+  expect_identical(safe_unlink(source_tree, recursive = TRUE, force = TRUE), 0L)
+  expect_false(dir.exists(source_tree))
+
+  temporary_tree <- file.path(tempdir(), paste0("bigbang-safe-template-", as.integer(Sys.time())))
+  dir.create(file.path(temporary_tree, "R"), recursive = TRUE)
+  writeLines(c("Package: temporary", "Version: 1.0.0"),
+             file.path(temporary_tree, "DESCRIPTION"))
+  expect_identical(safe_unlink(temporary_tree, recursive = TRUE, force = TRUE), 0L)
+  expect_false(dir.exists(temporary_tree))
 })
 
 test_that("successful documentation restores the caller session", {
