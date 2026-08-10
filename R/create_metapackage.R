@@ -559,35 +559,13 @@ create_metapackage <- function(
     verbose = debug
   )
 
-  if (reexport) {
-    namespace_additions <- character()
-    for (pkg in packages) {
-      exports <- getNamespaceExports(asNamespace(pkg))
-      for (func in exports) {
-        namespace_additions <- c(
-          namespace_additions,
-          paste0("S3method(", func, ", default)")
-        )
-      }
-    }
-  }
-
-  # Append generated S3 method directives when present.
-  if (exists("namespace_additions") && length(namespace_additions) > 0) {
-    # Read the current NAMESPACE.
-    namespace_file <- file.path(project_dir, "NAMESPACE")
-    namespace_content <- readLines(namespace_file)
-
-    # Append S3 method directives.
-    namespace_content <- c(namespace_content, "", "# S3 methods from reexports", namespace_additions)
-
-    # Write the updated NAMESPACE.
-    .write_utf8(namespace_content, namespace_file)
-
-    if (debug) {
-      log_debug(paste("Added", length(namespace_additions), "S3 methods to NAMESPACE"))
-    }
-  }
+  # Re-exports are written by write_reexports_file(), reached through
+  # write_metapackage_files() below. It receives component names, resolves each
+  # namespace, and distinguishes S3 generics from ordinary functions. An earlier
+  # block here duplicated that work incorrectly: it iterated the versioned
+  # archive stems, so asNamespace() could never resolve them and every
+  # reexport = TRUE call failed before reaching the working path, and it declared
+  # S3method(<name>, default) for every export whether or not it was a generic.
 
   log_debug("NAMESPACE file created")
 

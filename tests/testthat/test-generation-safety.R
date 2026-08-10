@@ -521,3 +521,128 @@ test_that("already installed messages report the installed version", {
     "installed version 9.9.9, newer than archive version 1.0.0"
   )
 })
+
+test_that("reexport = TRUE generates re-exports instead of failing", {
+  skip_on_cran()
+  sandbox <- tempfile("bigbang-reexport-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  component_lib <- file.path(sandbox, "lib")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  dir.create(destination)
+  dir.create(component_lib)
+  build_safety_archive("rexa", "1.0.0", source_root, archives)
+  build_safety_archive("rexb", "1.0.0", source_root, archives)
+
+  # The working re-export writer resolves component namespaces, so the
+  # components have to be installed for it to find anything to re-export.
+  for (stem in c("rexa_1.0.0", "rexb_1.0.0")) {
+    installed <- system2(
+      file.path(R.home("bin"), "R"),
+      c("CMD", "INSTALL", "-l", shQuote(component_lib),
+        shQuote(file.path(archives, paste0(stem, ".tar.gz")))),
+      stdout = FALSE, stderr = FALSE
+    )
+    expect_equal(installed, 0L)
+  }
+  old_libs <- .libPaths()
+  on.exit(.libPaths(old_libs), add = TRUE)
+  .libPaths(c(component_lib, old_libs))
+
+  # Every reexport = TRUE call used to abort here: the aborted block iterated the
+  # versioned archive stems, and asNamespace("rexa_1.0.0") cannot resolve.
+  result <- create_metapackage(
+    "reexportverse", c("rexa_1.0.0", "rexb_1.0.0"), archives,
+    dest_dir = destination, reexport = TRUE, document = FALSE, verbose = FALSE
+  )
+  reexports <- file.path(result$path, "R", "reexports.R")
+  expect_true(file.exists(reexports))
+  contents <- paste(readLines(reexports, warn = FALSE), collapse = "\n")
+  expect_match(contents, "rexa", fixed = TRUE)
+  expect_match(contents, "rexb", fixed = TRUE)
+
+  # S3method(<name>, default) for every export was never right: it declares a
+  # method for a generic that does not exist.
+  namespace <- paste(
+    readLines(file.path(result$path, "NAMESPACE"), warn = FALSE), collapse = "\n"
+  )
+  expect_false(grepl("S3method(rexa_value, default)", namespace, fixed = TRUE))
+})
+
+test_that("an AppleDouble sibling does not hide the package root", {
+  sandbox <- tempfile("bigbang-appledouble-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  dir.create(destination)
+  build_safety_archive("apdouble", "1.0.0", source_root, archives)
+
+  # Archiving a package directory on macOS with extended attributes emits a
+  # "._<dir>" member beside it. R installs such an archive, so rejecting it
+  # would reject a working package.
+  rebuilt <- file.path(sandbox, "rebuild")
+  dir.create(rebuilt)
+  archive <- file.path(archives, "apdouble_1.0.0.tar.gz")
+  untar(archive, exdir = rebuilt)
+  root <- list.files(rebuilt)
+  expect_length(root, 1L)
+  writeLines("apple double metadata", file.path(rebuilt, paste0("._", root)))
+  old <- setwd(rebuilt)
+  on.exit(setwd(old), add = TRUE)
+  expect_equal(
+    utils::tar(archive, files = c(root, paste0("._", root)), compression = "gzip"),
+    0L
+  )
+  setwd(old)
+  expect_true(paste0("._", root) %in% untar(archive, list = TRUE))
+
+  result <- create_metapackage(
+    "appleverse", "apdouble_1.0.0", archives,
+    dest_dir = destination, document = FALSE, verbose = FALSE
+  )
+  expect_true(dir.exists(result$path))
+})
+
+test_that("diagnose_dependencies refuses an archive carrying symbolic links", {
+  sandbox <- tempfile("bigbang-diagnose-symlink-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  secret_dir <- file.path(sandbox, "secret")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  dir.create(secret_dir)
+  secret <- file.path(secret_dir, "credentials.txt")
+  writeLines("class = sentinel_must_not_leak", secret)
+
+  source_dir <- file.path(source_root, "spy")
+  dir.create(file.path(source_dir, "R"), recursive = TRUE)
+  writeLines(
+    c("Package: spy", "Version: 1.0.0", "Title: Spy", "Description: Spy.",
+      "License: GPL-3", "Author: A", "Maintainer: A <a@b.c>"),
+    file.path(source_dir, "DESCRIPTION")
+  )
+  writeLines("export(f)", file.path(source_dir, "NAMESPACE"))
+  linked <- file.symlink(secret, file.path(source_dir, "R", "f.R"))
+  skip_if_not(isTRUE(linked), "This platform cannot create symbolic links.")
+
+  old <- setwd(source_root)
+  on.exit(setwd(old), add = TRUE)
+  expect_equal(
+    utils::tar(
+      file.path(archives, "spy_1.0.0.tar.gz"), files = "spy", compression = "gzip"
+    ),
+    0L
+  )
+  setwd(old)
+
+  # The scanner used to read through the link and return the contents of an
+  # unrelated file in its result.
+  expect_error(
+    diagnose_dependencies("spy_1.0.0", pkg_dir = archives),
+    "symbolic links"
+  )
+})

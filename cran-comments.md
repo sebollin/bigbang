@@ -38,6 +38,13 @@ and what to do about it. One input that 0.1.0 rejected is now accepted: a
 component whose tarball contains a nested `DESCRIPTION`, which many CRAN packages
 ship as an example or test fixture.
 
+One documented argument never worked. `create_metapackage(reexport = TRUE)`
+failed for every input in 0.1.0, because a block that ran before the re-export
+writer called `asNamespace()` on versioned archive stems, which can never
+resolve. The block was redundant as well as wrong and has been removed. There is
+now a test that calls the argument; the previous suite only referenced it by
+name.
+
 Mechanically: the archives are copied into `inst/archives/` of the generated
 meta-package, and its installer defaults the archive directory to
 `system.file("archives", package = "<meta>")`, which is resolved when the

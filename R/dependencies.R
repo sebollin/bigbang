@@ -123,6 +123,12 @@
   if (isTRUE(allow_flat) && file.exists(file.path(extract_dir, "DESCRIPTION"))) {
     return(extract_dir)
   }
+  # Ignore AppleDouble siblings. Archiving a package directory on macOS with
+  # extended attributes emits a "._<dir>" member next to it, and R installs such
+  # an archive without complaint, so rejecting it would reject a working package.
+  # Only this specific metadata convention is ignored: any other extra entry
+  # still means the archive is not a single package root.
+  entries <- entries[!startsWith(entries, "._") & entries != ".DS_Store"]
   if (length(entries) != 1L || !dir.exists(file.path(extract_dir, entries[[1L]]))) {
     stop(.bb_trf(
       "Archive %s must contain one package root directory.", archive
@@ -493,11 +499,11 @@ diagnose_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
       next
     }
 
-    if (ext == ".tar.gz" || ext == ".tar") {
-      utils::untar(archive, exdir = temp_dir)
-    } else if (ext == ".zip") {
-      utils::unzip(archive, exdir = temp_dir)
-    }
+    # This is an exported entry point, so it gets the same extraction guards as
+    # generation. Without them a component carrying a symbolic link made the
+    # scanner read a file outside the archive and return its contents in the
+    # result, which is how an unrelated file ends up in a diagnostic report.
+    .extract_archive_checked(archive, ext, temp_dir)
 
     # Locate references to Matrix and class APIs from the archive root rather
     # than assuming that the root directory has the package name.
@@ -618,11 +624,11 @@ detect_implicit_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
     }
 
     tryCatch({
-      if (ext == ".tar.gz" || ext == ".tar") {
-        utils::untar(archive, exdir = temp_dir)
-      } else if (ext == ".zip") {
-        utils::unzip(archive, exdir = temp_dir)
-      }
+      # Generation validates every component archive before reaching this
+      # scanner, so a hostile archive cannot get here today. Extract through the
+      # guarded path anyway: this is a helper that could be called from
+      # somewhere else later, and the guard costs nothing.
+      .extract_archive_checked(archive, ext, temp_dir)
 
       package_root <- .find_archive_root(temp_dir, archive)
       r_dir <- file.path(package_root, "R")
