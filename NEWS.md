@@ -97,6 +97,9 @@ Released on 2026-08-09.
 - Component names matching standard R package paths no longer generate
   `.Rbuildignore` rules that could exclude the generated package's own files or
   shipped archives.
+- The source-code patterns require a namespace qualifier or a call for every
+  package they guess at, so ordinary S4 code is no longer reported as needing
+  `Matrix`, and an identifier beginning with `st_` no longer suggests `sf`.
 
 ## Documentation
 

@@ -343,15 +343,18 @@ detect_implicit_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
   # Conservative patterns for common implicit dependencies.
   package_patterns <- list(
     # Special matrix handling
+    # Evidence has to point at Matrix itself. The S4 helpers that used to be
+    # listed here (setClass, new, representation) belong to `methods`, so any
+    # S4 code was reported as needing Matrix.
     "Matrix" = paste0(
-      "sparse|[dstz][gsd]Matrix|Matrix\\.|setClass|setGeneric|setMethod|",
-      "setValidity|representation|prototype|new\\("
+      "\\bMatrix\\s*::|\\bMatrix\\s*\\(|\\bsparseMatrix\\s*\\(|",
+      "[dstz][gsd]Matrix"
     ),
 
     # Statistical analysis
-    "class" = "\\bknn\\b|\\bLDA\\b|\\bQDA\\b|\\bnaiveBayes\\b",
-    "MASS" = "\\blda\\b|\\bqda\\b|\\bridgeReg\\b|\\blogistic\\b|\\bboxcox\\b|\\bVIF\\b",
-    "cluster" = "\\bkmeans\\b|\\bpam\\b|\\bclara\\b|\\bfanny\\b|\\bsilhouette\\b",
+    "class" = "\\bclass\\s*::|\\b(?:knn|naiveBayes)\\s*\\(",
+    "MASS" = "\\bMASS\\s*::|\\b(?:lda|qda|ridgeReg|boxcox)\\s*\\(",
+    "cluster" = "\\bcluster\\s*::|\\b(?:pam|clara|fanny|silhouette)\\s*\\(",
 
     # Graphics
     "lattice" = "\\bxyplot\\b|\\bbwplot\\b|\\bcontourplot\\b|\\blevelplot\\b|\\bwireframe\\b",
@@ -361,18 +364,21 @@ detect_implicit_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
     # not sufficient evidence: require a namespace qualifier or a pipe.
     "data.table" = "\\bdata\\.table\\s*\\(|\\bdt\\[|\\bsetkey\\s*\\(|\\bfread\\s*\\(|\\bfwrite\\s*\\(",
     "dplyr" = "(?:\\bdplyr\\s*::\\s*|%>%\\s*|\\|>\\s*)\\b(?:filter|arrange|select|mutate|group_by|summarise)\\s*\\(",
-    "tidyr" = "\\bgather\\b|\\bspread\\b|\\bseparate\\b|\\bunite\\b|\\bpivot_longer\\b|\\bpivot_wider\\b",
+    "tidyr" = paste0(
+      "\\btidyr\\s*::|",
+      "\\b(?:gather|spread|separate|unite|pivot_longer|pivot_wider)\\s*\\("
+    ),
 
     # Time series
     "zoo" = "\\bzoo\\s*\\(|\\bzoo\\s*::|\\bcoredata\\s*\\(|\\brollapply\\s*\\(",
-    "xts" = "\\bxts\\b|\\bindexClass\\b|\\bperiodicity\\b",
+    "xts" = "\\bxts\\s*::|\\bxts\\s*\\(|\\b(?:indexClass|periodicity)\\s*\\(",
 
     # Spatial statistics
     "sp" = "\\b(?:sp\\s*::\\s*)?(?:SpatialPoints|SpatialPolygons|spplot)\\s*\\(|\\bsp\\s*::\\s*over\\s*\\(",
-    "sf" = "\\bst_\\b|\\bsf::st_\\b|\\bsf_\\b",
+    "sf" = "\\bsf\\s*::|\\bst_\\w+\\s*\\(",
 
     # Other commonly used packages
-    "tibble" = "\\btibble\\b|as_tibble|\\btbl_|tibble::",
+    "tibble" = "\\btibble\\s*::|\\btibble\\s*\\(|\\bas_tibble\\s*\\(",
     "readr" = "\\bread_csv\\b|\\bwrite_csv\\b|\\bread_delim\\b|readr::",
     "jsonlite" = "\\bfromJSON\\b|\\btoJSON\\b|jsonlite::",
     "ggplot2" = "\\bggplot2\\s*::|\\bggplot\\s*\\(|\\bgeom_\\w+\\s*\\(|\\bfacet_\\w+\\s*\\(",
