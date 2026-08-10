@@ -60,7 +60,9 @@ test_that("default implicit scanning reports guesses without binding them", {
   description <- read.dcf(file.path(result$path, "DESCRIPTION"))
   namespace <- readLines(file.path(result$path, "NAMESPACE"), warn = FALSE)
 
-  expect_true(all(c("dplyr", "ggplot2", "sp", "zoo") %notin% result$implicit_dependencies))
+  expect_false(any(
+    c("dplyr", "ggplot2", "sp", "zoo") %in% result$implicit_dependencies
+  ))
   expect_false(any(grepl("dplyr|ggplot2|sp|zoo", description[, "Imports"], perl = TRUE)))
   expect_false(any(grepl("import\\((dplyr|ggplot2|sp|zoo)", namespace, perl = TRUE)))
 
@@ -306,4 +308,3 @@ test_that("already installed messages report the installed version", {
   expect_false(grepl("version 1.0.0", paste(output, collapse = "\n"), fixed = TRUE))
 })
 
-`%notin%` <- function(x, table) !(x %in% table)
