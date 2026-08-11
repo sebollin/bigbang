@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,15 +33,17 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="bigbang-development-version">bigbang (development version)<a class="anchor" aria-label="anchor" href="#bigbang-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.3.0" id="bigbang-030">bigbang 0.3.0<a class="anchor" aria-label="anchor" href="#bigbang-030"></a></h2>
+<p>This release makes the package accept component packages as an organisation actually keeps them, instead of requiring one directory, one archive extension, and a version in every filename. Package identity now comes from each archive’s <code>DESCRIPTION</code> rather than from its filename, generation can report a plan without writing anything, and the checks that concern project tidiness can be relaxed individually. The checks that protect whoever installs the generated meta-package cannot: they remain hard errors during generation.</p>
+<p>It also supersedes 0.2.0, which was prepared and verified but never submitted. Everything listed under 0.2.0 below reaches CRAN for the first time here, so a user updating from 0.1.0 should read both sections.</p>
 <div class="section level3">
-<h3 id="new-capabilities-development-version">New capabilities<a class="anchor" aria-label="anchor" href="#new-capabilities-development-version"></a></h3>
+<h3 id="new-capabilities-0-3-0">New capabilities<a class="anchor" aria-label="anchor" href="#new-capabilities-0-3-0"></a></h3>
 <ul><li>The generator supports read-only dry-run reports, explicit component-error policies, package source directories, component manifests, and guarded update regeneration through a generation manifest.</li>
 <li>Generated installers accept component subsets and an explicit installation library, and the generator can set their default upgrade policy.</li>
 <li>Source-directory components must use include_archives = TRUE because their temporary build archive cannot be reused as an external installation source.</li>
 </ul></div>
 <div class="section level3">
-<h3 id="component-input-and-resolution-development-version">Component input and resolution<a class="anchor" aria-label="anchor" href="#component-input-and-resolution-development-version"></a></h3>
+<h3 id="component-input-and-resolution-0-3-0">Component input and resolution<a class="anchor" aria-label="anchor" href="#component-input-and-resolution-0-3-0"></a></h3>
 <ul><li>Component archives may be supplied as existing paths from multiple directories, with mixed <code>.tar.gz</code>, <code>.tar</code>, and <code>.zip</code> extensions. Stems remain supported through the optional <code>pkg_dir</code> fallback.</li>
 <li>Package identity and version now come from the archive <code>DESCRIPTION</code>. Filename mismatches are warned about, while empty metadata, duplicate components, invalid archives, cycles, and unsatisfied local constraints remain hard errors.</li>
 <li>Generated installers accept a vector of archive directories when archives are not shipped; archives shipped inside a generated meta-package remain portable and contain no source-machine paths.</li>
@@ -51,7 +53,7 @@
 <li>The validation documentation now distinguishes non-negotiable recipient protections from optional project-tidiness checks, and states explicitly that bigbang does not run <code>R CMD check</code> on component packages.</li>
 </ul></div>
 <div class="section level3">
-<h3 id="bug-fixes-development-version">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-development-version"></a></h3>
+<h3 id="bug-fixes-0-3-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-3-0"></a></h3>
 <ul><li>Component manifests now resolve bare archive filenames from the supplied <code>pkg_dir</code> directories when the files are not beside the manifest, and missing entries report every directory that was searched.</li>
 <li>Installation messages now name both the declared package identity and the archive stem when those differ.</li>
 <li>Installing an already present package no longer requires reading an archive when <code>upgrade = "never"</code>; under the default policy, only its DESCRIPTION is read before deciding whether the archive needs to be used. An unreadable archive is reported as unchanged when the installed package can be retained.</li>
@@ -65,7 +67,7 @@
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.2.0" id="bigbang-020">bigbang 0.2.0<a class="anchor" aria-label="anchor" href="#bigbang-020"></a></h2>
-<p>Released on 2026-08-09.</p>
+<p>Prepared and verified but never submitted: CRAN submissions were closed between 2026-08-05 and 2026-08-19. These changes are released as part of 0.3.0.</p>
 <div class="section level3">
 <h3 id="breaking-changes-0-2-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-2-0"></a></h3>
 <ul><li>The deprecated Spanish aliases <code>crear_meta_paquete_local()</code>, <code>diagnosticar_dependencias()</code> and <code>install_loc_pkg_w_dep()</code> were removed. They existed to ease a rename inside the organisation the package grew in, while it was still unpublished. Use <code><a href="../reference/create_metapackage.html">create_metapackage()</a></code>, <code><a href="../reference/diagnose_dependencies.html">diagnose_dependencies()</a></code> and <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code>.</li>

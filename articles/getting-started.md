@@ -60,7 +60,7 @@ result <- create_metapackage(
 result
 #> <bigbang metapackage>
 #>   Package: toyverse
-#>   Path: /tmp/Rtmpvtpb35/bigbang-vignette-1b2c18bcc119/generated/toyverse
+#>   Path: /tmp/RtmprhjKgV/bigbang-vignette-1b283a02caa9/generated/toyverse
 #>   Components: toycomponent
 list.files(result$path)
 #>  [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           
@@ -75,7 +75,7 @@ The generated tree can be scanned without loading it:
 scan <- scan_bigbang_artifact(result$path)
 scan
 #> <bigbang artifact scan>
-#>   Path: /tmp/Rtmpvtpb35/bigbang-vignette-1b2c18bcc119/generated/toyverse
+#>   Path: /tmp/RtmprhjKgV/bigbang-vignette-1b283a02caa9/generated/toyverse
 #>   Type: source
 #>   Result: no deletion signatures found
 stopifnot(!scan$vulnerable)
