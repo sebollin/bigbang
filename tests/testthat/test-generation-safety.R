@@ -543,7 +543,7 @@ test_that("duplicate components and cycles are rejected by the generator", {
   expect_length(list.files(destination, all.files = TRUE, no.. = TRUE), 0L)
 })
 
-test_that("tolerations cannot disable recipient protection invariants", {
+test_that("generation tolerations cannot disable recipient protection invariants", {
   sandbox <- tempfile("bigbang-tolerance-invariant-")
   source_root <- file.path(sandbox, "sources")
   destination <- file.path(sandbox, "destination")

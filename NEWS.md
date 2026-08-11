@@ -44,6 +44,15 @@
   reading metadata, matching the full archive validation path.
 - The installation help now explains that `upgrade = "never"` identifies a
   component from its filename because the archive is intentionally not read.
+- Component archives whose extensions use upper-case letters are copied under
+  canonical names so generated installers find them on case-sensitive systems;
+  archive names that collide only by case are rejected.
+- Unreadable unrelated archives in a supplied source directory are excluded
+  from the inventory with a warning, including a specific diagnostic when a
+  declared dependency appears to match one.
+- Vector resolution failures retain the requested component names in the
+  installation result, and generated installers report the package identity
+  declared by DESCRIPTION after installation.
 
 # bigbang 0.2.0
 

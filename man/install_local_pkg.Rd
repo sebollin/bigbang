@@ -17,7 +17,8 @@ install_local_pkg(
 }
 \arguments{
 \item{package}{Character. An existing archive path, or a package stem such
-as \code{"uspr_0.8.5"} to resolve in \code{pkg_dir}.}
+as \code{"uspr_0.8.5"} to resolve in \code{pkg_dir}. An existing file is always
+treated as a path; only a non-existing element is resolved as a stem.}
 
 \item{pkg_dir}{Character. Optional directory or directories containing local
 archives. It is not needed when \code{package} is an existing path.}

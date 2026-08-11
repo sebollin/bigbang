@@ -74,7 +74,8 @@
 #' installed as source packages.
 #'
 #' @param package Character. An existing archive path, or a package stem such
-#'   as `"uspr_0.8.5"` to resolve in `pkg_dir`.
+#'   as `"uspr_0.8.5"` to resolve in `pkg_dir`. An existing file is always
+#'   treated as a path; only a non-existing element is resolved as a stem.
 #' @param pkg_dir Character. Optional directory or directories containing local
 #'   archives. It is not needed when `package` is an existing path.
 #' @param ext Character. Fallback archive extension for stems; existing paths
@@ -124,6 +125,29 @@ install_local_pkg <- function(
 ) {
   cran_deps <- match.arg(cran_deps)
   upgrade <- .resolve_upgrade_policy(force, upgrade, missing(upgrade))
+  failure_names <- if (is.character(package) && length(package) > 0L) {
+    package
+  } else {
+    "package"
+  }
+  resolution_failure <- function(error) {
+    if (isTRUE(verbose)) {
+      message(.bb_trf(
+        "Packages that failed: %s", paste(failure_names, collapse = ", ")
+      ))
+    }
+    invisible(structure(
+      list(
+        installed = list(), unchanged = list(),
+        failed = stats::setNames(
+          rep(list(conditionMessage(error)), length(failure_names)),
+          failure_names
+        ),
+        skipped = list()
+      ),
+      class = "bigbang_install_result"
+    ))
+  }
   candidate <- tryCatch({
     path <- .resolve_archive_input(package, pkg_dir, ext)
     actual_ext <- .archive_extension(path)
@@ -134,18 +158,7 @@ install_local_pkg <- function(
     )
   }, error = identity)
   if (inherits(candidate, "error")) {
-    stem <- if (length(package) == 1L && is.character(package)) package else "package"
-    if (isTRUE(verbose)) {
-      message(.bb_trf("Packages that failed: %s", stem))
-    }
-    return(invisible(structure(
-      list(
-        installed = list(), unchanged = list(),
-        failed = stats::setNames(list(conditionMessage(candidate)), stem),
-        skipped = list()
-      ),
-      class = "bigbang_install_result"
-    )))
+    return(resolution_failure(candidate))
   }
 
   candidate_name <- sub("_.*", "", candidate$stem)
@@ -207,18 +220,7 @@ install_local_pkg <- function(
     error = function(error) error
   )
   if (inherits(resolved, "error")) {
-    stem <- if (length(package) == 1L && is.character(package)) package else "package"
-    if (isTRUE(verbose)) {
-      message(.bb_trf("Packages that failed: %s", stem))
-    }
-    return(invisible(structure(
-      list(
-        installed = list(), unchanged = list(),
-        failed = stats::setNames(list(conditionMessage(resolved)), stem),
-        skipped = list()
-      ),
-      class = "bigbang_install_result"
-    )))
+    return(resolution_failure(resolved))
   }
   components <- resolved$components
   inventory <- resolved$inventory

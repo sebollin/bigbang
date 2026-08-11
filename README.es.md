@@ -145,6 +145,13 @@ de `packages`. Cada relajación aplicada queda en `result$tolerated`; los nombre
 desconocidos son un error. No existe un interruptor que desactive toda la
 validación.
 
+Durante la generación, bigbang valida todo lo que protege al receptor del
+metapaquete generado. Los archivos inseguros o malformados, la metadata inválida,
+los componentes duplicados, las restricciones de versión locales insatisfechas y
+los ciclos de dependencias siempre son errores duros. La instalación es más
+tolerante: puede conservar un componente ya instalado si no puede leer un archivo
+que no va a usar, e informa el motivo.
+
 bigbang **no** ejecuta `R CMD check` sobre los paquetes componentes. Un
 componente con warnings o notes puede incluirse: las validaciones se limitan a
 que el metapaquete distribuido pueda identificar e instalar sus componentes de

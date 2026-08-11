@@ -92,6 +92,13 @@ resolve_component_archive <- function(package, pkg_dir, ext = NULL) {{
   candidates <- file.path(dirs, paste0(spec$stem, spec$ext))
   found <- candidates[file.exists(candidates) & !dir.exists(candidates)]
   if (length(found) == 0L) {{
+    expected <- tolower(basename(candidates))
+    found <- unlist(lapply(dirs, function(dir) {{
+      files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
+      files[tolower(basename(files)) %in% expected & !dir.exists(files)]
+    }}), use.names = FALSE)
+  }}
+  if (length(found) == 0L) {{
     stop(.meta_trf(
       "Could not resolve component \'%s\' in the supplied archive directories.",
       package
@@ -562,7 +569,7 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
     ))
   }}
 
-  message(.meta_trf("Installed package %s successfully.", package))
+  message(.meta_trf("Installed package %s successfully.", base_name))
   list(
     success = TRUE,
     message = .meta_tr("Installed successfully"),

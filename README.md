@@ -153,10 +153,12 @@ workflow = c("Import" = "datahelpers", "Report" = "reports")
 
 ## Validation and explicit tolerances
 
-bigbang validates everything that protects the recipient of a generated
-metapackage. Unsafe or malformed archives, invalid component metadata,
+During generation, bigbang validates everything that protects the recipient of a
+generated metapackage. Unsafe or malformed archives, invalid component metadata,
 duplicate components, unsatisfied local version constraints, and dependency
-cycles are always hard errors and cannot be disabled.
+cycles are always hard errors and cannot be disabled. Installation is more
+tolerant: an already installed component can be kept when an archive it will
+not use cannot be read, and the reason is reported.
 
 Checks about project tidiness can be relaxed individually and explicitly:
 

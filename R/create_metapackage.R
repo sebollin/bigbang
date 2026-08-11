@@ -63,7 +63,7 @@
   if (isTRUE(include_archives) && length(components) > 0L) {
     files <- c(files, file.path(
       "inst", .archive_subdir,
-      vapply(components, function(x) basename(x$path), character(1L))
+      vapply(components, .canonical_archive_name, character(1L))
     ))
   }
   unique(files)
@@ -240,8 +240,9 @@
 #' @param name Character. Name of the meta-package to create (must not contain
 #'   underscores `_`).
 #' @param packages Character vector. Archive paths or stems of the local
-#'   packages to include. Existing paths may come from different directories;
-#'   stems are resolved in `pkg_dir`, e.g. `"myPackage_1.0.0"`.
+#'   packages to include. An existing file is always used as a path; otherwise
+#'   the element is resolved as a stem in `pkg_dir`, e.g. `"myPackage_1.0.0"`.
+#'   Existing paths may come from different directories.
 #' @param pkg_dir Character. Optional directory or directories containing local
 #'   archives used to resolve stems. It is not needed when every `packages`
 #'   element is an existing archive path.
@@ -375,6 +376,10 @@
 #' - Each component must be an existing archive path or a stem resolvable in
 #'   one of the optional `pkg_dir` directories; `ext` is only a fallback for
 #'   stems.
+#' - Files in the supplied archive directories that cannot be read are excluded
+#'   from the inventory with a warning. A requested component still fails
+#'   validation, while an unreadable file matching a declared dependency is
+#'   reported as an unavailable local archive.
 #' - Automatic documentation (`document = TRUE`) requires the
 #'   `devtools` package.
 #'
@@ -508,7 +513,7 @@ create_metapackage <- function(
   component_packages <- vapply(components, `[[`, character(1L), "package")
   archive_stems <- vapply(components, `[[`, character(1L), "stem")
   archive_paths <- vapply(components, `[[`, character(1L), "path")
-  archive_basenames <- basename(archive_paths)
+  archive_names <- vapply(components, .canonical_archive_name, character(1L))
   source_components <- vapply(
     components, function(x) !is.null(x$source_dir), logical(1L)
   )
@@ -759,11 +764,13 @@ create_metapackage <- function(
           !dir.exists(archive_dir)) {
       stop(.bb_trf("Could not create directory: %s", archive_dir), call. = FALSE)
     }
-    copied <- file.copy(archive_paths, archive_dir, overwrite = TRUE)
+    copied <- file.copy(
+      archive_paths, file.path(archive_dir, archive_names), overwrite = TRUE
+    )
     if (!all(copied)) {
       stop(.bb_trf(
         "Could not copy the component archives into the meta-package: %s",
-        paste(archive_basenames[!copied], collapse = ", ")
+        paste(archive_names[!copied], collapse = ", ")
       ), call. = FALSE)
     }
     total_bytes <- sum(file.size(archive_paths), na.rm = TRUE)

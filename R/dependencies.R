@@ -35,6 +35,10 @@
   substr(basename, 1L, nchar(basename) - nchar(ext))
 }
 
+.canonical_archive_name <- function(component) {
+  paste0(component$stem, component$ext)
+}
+
 .expand_package_manifest <- function(packages, pkg_dir = NULL) {
   if (!is.character(packages) || length(packages) != 1L ||
         !file.exists(packages) || dir.exists(packages)) {
@@ -711,6 +715,7 @@
   } else {
     vapply(known, `[[`, character(1L), "path")
   }
+  unreadable <- list()
   entries <- lapply(paths, function(path) {
     known_index <- match(path, known_paths)
     if (!is.na(known_index)) {
@@ -719,9 +724,20 @@
       actual_ext <- .archive_extension(path)
       metadata <- tryCatch(
         .read_archive_metadata(path, ext = actual_ext),
-        error = function(e) NULL
+        error = identity
       )
-      if (is.null(metadata)) return(NULL)
+      if (inherits(metadata, "error")) {
+        reason <- conditionMessage(metadata)
+        guessed_package <- sub("_.*", "", .archive_stem(path, actual_ext))
+        warning(.bb_trf(
+          "Could not read archive %s; excluding it from the archive inventory: %s",
+          path, reason
+        ), call. = FALSE)
+        unreadable[[length(unreadable) + 1L]] <<- list(
+          path = path, package = guessed_package, reason = reason
+        )
+        return(NULL)
+      }
       list(
         path = path,
         ext = actual_ext,
@@ -744,7 +760,10 @@
   } else {
     vapply(entries, `[[`, character(1L), "package")
   }
-  list(entries = entries, files = paths, stems = stems, packages = packages)
+  list(
+    entries = entries, files = paths, stems = stems, packages = packages,
+    unreadable = unreadable
+  )
 }
 
 .validate_unincluded_deps <- function(components, inventory,
@@ -756,7 +775,7 @@
     for (dependency in candidates) {
       match <- which(inventory$packages == dependency)
       if (length(match) > 0L) {
-        archive <- inventory$files[[match[[1L]]]]
+        archive <- inventory$entries[[match[[1L]]]]$path
         reason <- .bb_trf(
           paste0(
             "Component %s declares dependency %s, available at %s but not ",
@@ -780,6 +799,20 @@
             dependency = dependency,
             archive = archive
           )
+        }
+      } else if (length(inventory$unreadable) > 0L) {
+        unreadable <- Filter(
+          function(item) identical(item$package, dependency),
+          inventory$unreadable
+        )
+        for (archive in unreadable) {
+          warning(.bb_trf(
+            paste0(
+              "Component %s declares dependency %s, but archive %s could not ",
+              "be read and was excluded from the inventory: %s"
+            ),
+            item$package, dependency, archive$path, archive$reason
+          ), call. = FALSE)
         }
       }
     }
@@ -921,10 +954,13 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   archive_paths <- vapply(
     resolved$components, function(x) x[["path"]], character(1L)
   )
-  archive_basenames <- basename(archive_paths)
-  if (anyDuplicated(archive_basenames)) {
-    duplicate_names <- unique(archive_basenames[duplicated(archive_basenames)])
-    duplicate_paths <- archive_paths[archive_basenames %in% duplicate_names]
+  archive_names <- vapply(
+    resolved$components, .canonical_archive_name, character(1L)
+  )
+  archive_keys <- tolower(archive_names)
+  if (anyDuplicated(archive_keys)) {
+    duplicate_names <- unique(archive_names[duplicated(archive_keys)])
+    duplicate_paths <- archive_paths[archive_keys %in% tolower(duplicate_names)]
     .bigbang_abort(
       "bigbang_error_archive_basename_collision",
       .bb_trf(

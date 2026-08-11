@@ -67,6 +67,12 @@ msgstr "No se pudo extraer el archivo %s: no se pudo crear el directorio tempora
 msgid "Could not extract archive %s: extraction returned status %d."
 msgstr "No se pudo extraer el archivo %s: la extracción devolvió el estado %d."
 
+msgid "Could not read archive %s; excluding it from the archive inventory: %s"
+msgstr "No se pudo leer el archivo %s; se excluye del inventario de archivos: %s"
+
+msgid "Component %s declares dependency %s, but archive %s could not be read and was excluded from the inventory: %s"
+msgstr "El componente %s declara la dependencia %s, pero no se pudo leer el archivo %s y se excluyó del inventario: %s"
+
 msgid "Archive %s must contain one package root directory."
 msgstr "El archivo %s debe contener un único directorio raíz del paquete."
 

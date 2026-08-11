@@ -38,8 +38,9 @@ create_metapackage(
 underscores \verb{_}).}
 
 \item{packages}{Character vector. Archive paths or stems of the local
-packages to include. Existing paths may come from different directories;
-stems are resolved in \code{pkg_dir}, e.g. \code{"myPackage_1.0.0"}.}
+packages to include. An existing file is always used as a path; otherwise
+the element is resolved as a stem in \code{pkg_dir}, e.g. \code{"myPackage_1.0.0"}.
+Existing paths may come from different directories.}
 
 \item{pkg_dir}{Character. Optional directory or directories containing local
 archives used to resolve stems. It is not needed when every \code{packages}
@@ -210,6 +211,10 @@ reach the component functions directly through the meta-package
 \item Each component must be an existing archive path or a stem resolvable in
 one of the optional \code{pkg_dir} directories; \code{ext} is only a fallback for
 stems.
+\item Files in the supplied archive directories that cannot be read are excluded
+from the inventory with a warning. A requested component still fails
+validation, while an unreadable file matching a declared dependency is
+reported as an unavailable local archive.
 \item Automatic documentation (\code{document = TRUE}) requires the
 \code{devtools} package.
 }

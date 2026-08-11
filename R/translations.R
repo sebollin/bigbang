@@ -22,6 +22,8 @@
     "Could not extract archive %s: %s" = "No se pudo extraer el archivo %s: %s",
     "Could not extract archive %s: could not create temporary directory." = "No se pudo extraer el archivo %s: no se pudo crear el directorio temporal.",
     "Could not extract archive %s: extraction returned status %d." = "No se pudo extraer el archivo %s: la extracci\u00f3n devolvi\u00f3 el estado %d.",
+    "Could not read archive %s; excluding it from the archive inventory: %s" = "No se pudo leer el archivo %s; se excluye del inventario de archivos: %s",
+    "Component %s declares dependency %s, but archive %s could not be read and was excluded from the inventory: %s" = "El componente %s declara la dependencia %s, pero no se pudo leer el archivo %s y se excluy\u00f3 del inventario: %s",
     "Archive %s must contain one package root directory." = "El archivo %s debe contener un \u00fanico directorio ra\u00edz del paquete.",
     "Archive %s has no DESCRIPTION at the package root." = "El archivo %s no tiene DESCRIPTION en la ra\u00edz del paquete.",
     "Archive %s contains symbolic links, which are not supported." = "El archivo %s contiene enlaces simb\u00f3licos, que no son compatibles.",

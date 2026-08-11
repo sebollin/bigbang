@@ -67,6 +67,12 @@ msgstr ""
 msgid "Could not extract archive %s: extraction returned status %d."
 msgstr ""
 
+msgid "Could not read archive %s; excluding it from the archive inventory: %s"
+msgstr ""
+
+msgid "Component %s declares dependency %s, but archive %s could not be read and was excluded from the inventory: %s"
+msgstr ""
+
 msgid "Archive %s must contain one package root directory."
 msgstr ""
 
