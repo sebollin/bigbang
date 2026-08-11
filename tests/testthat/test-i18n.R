@@ -184,6 +184,11 @@ test_that("Spanish catalogs are complete and preserve format placeholders", {
   expect_true(all(grepl(
     "catalogverse_install", unname(meta_catalog[install_messages]), fixed = TRUE
   )))
+  stem_collision <- "More than one archive was found for component stem '%s': %s."
+  expect_identical(
+    unname(meta_catalog[stem_collision]),
+    "Se encontr\u00f3 m\u00e1s de un archivo para el stem componente '%s': %s."
+  )
 })
 
 test_that("messages formerly keyed with edge whitespace translate at runtime", {

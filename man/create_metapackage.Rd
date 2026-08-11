@@ -134,6 +134,12 @@ that are already installed and reports which ones are missing, but does not
 install anything or delete any files. To install the components from the local
 archives, the user calls \verb{<meta>_install()}. Installation resolves dependencies
 with a graph-based topological ordering that also detects circular dependencies.
+
+Generation validates every supplied component and its dependency graph eagerly
+before writing the metapackage. This hard validation protects an artifact that
+will be distributed to another machine. The installer is more tolerant: when
+an already installed component does not need to be changed, it can retain that
+installation without reading an archive that will not be used.
 }
 \section{Component installation}{
 

@@ -59,6 +59,10 @@ installed as source packages.
 This function installs packages into the user's active R library. Installation
 occurs only when the user calls the function; loading \code{bigbang} never installs
 packages. With the default \code{cran_deps = "skip"}, it does not access the network.
+An installed package can be kept without reading its archive when
+\code{upgrade = "never"}. Under the default policy, bigbang reads only the archive
+\code{DESCRIPTION} first; if that metadata cannot be verified for an already
+installed package, the installed package is kept and the reason is reported.
 }
 
 \seealso{

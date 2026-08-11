@@ -68,6 +68,35 @@ test_that("install_local_pkg recognizes a package version already installed", {
   expect_true(file.exists(archive))
 })
 
+test_that("an installed package is kept without reading an unreadable archive", {
+  sandbox <- tempfile("install-helper-unreadable-")
+  dir.create(sandbox)
+  archive <- file.path(sandbox, "stats_0.0.0.tar.gz")
+  file.create(archive)
+  installed_version <- as.character(utils::packageVersion("stats"))
+
+  never <- install_local_pkg(
+    archive, verbose = FALSE, upgrade = "never"
+  )
+  expect_length(never$failed, 0L)
+  expect_match(never$unchanged[["stats_0.0.0"]], "archive was not read", fixed = TRUE)
+  expect_match(never$unchanged[["stats_0.0.0"]], installed_version, fixed = TRUE)
+
+  newer <- install_local_pkg(archive, verbose = FALSE, upgrade = "newer")
+  expect_length(newer$failed, 0L)
+  expect_match(
+    newer$unchanged[["stats_0.0.0"]],
+    "archive metadata could not be verified",
+    fixed = TRUE
+  )
+  expect_match(newer$unchanged[["stats_0.0.0"]], installed_version, fixed = TRUE)
+
+  always <- install_local_pkg(archive, verbose = FALSE, upgrade = "always")
+  expect_length(always$installed, 0L)
+  expect_length(always$failed, 1L)
+  expect_match(always$failed[[1L]], "Could not extract archive", fixed = TRUE)
+})
+
 test_that("force and upgrade policies control local reinstallation", {
   skip_on_cran()
   sandbox <- tempfile("install-helper-upgrade-")
@@ -136,6 +165,24 @@ test_that("force rejects an explicitly conflicting upgrade policy", {
   expect_error(
     install_local_pkg("unused_0.1.0", tempdir(), force = NA),
     class = "bigbang_error_install_policy"
+  )
+})
+
+test_that("unchanged reasons distinguish upgrade policies and versions", {
+  expect_match(
+    .unchanged_reason(package_version("2.0.0"), "1.0.0", "never", TRUE),
+    "upgrade = 'never'",
+    fixed = TRUE
+  )
+  expect_match(
+    .unchanged_reason(package_version("2.0.0"), "1.0.0", "newer", TRUE),
+    "newer than archive version",
+    fixed = TRUE
+  )
+  expect_match(
+    .unchanged_reason(package_version("1.0.0"), "1.0.0", "newer", FALSE),
+    "matching archive version",
+    fixed = TRUE
   )
 })
 

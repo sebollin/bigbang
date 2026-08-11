@@ -48,6 +48,12 @@
   stop(condition)
 }
 
+# Keep rollback's filesystem operation behind a package binding so its
+# defensive failure path can be tested without replacing base::unlink globally.
+.rollback_unlink <- function(path) {
+  unlink(path, recursive = TRUE, force = TRUE)
+}
+
 .restore_documentation_session <- function(search_before, namespaces_before,
                                            generated_name) {
   new_search_entries <- setdiff(search(), search_before)
@@ -161,6 +167,12 @@
 #' install anything or delete any files. To install the components from the local
 #' archives, the user calls `<meta>_install()`. Installation resolves dependencies
 #' with a graph-based topological ordering that also detects circular dependencies.
+#'
+#' Generation validates every supplied component and its dependency graph eagerly
+#' before writing the metapackage. This hard validation protects an artifact that
+#' will be distributed to another machine. The installer is more tolerant: when
+#' an already installed component does not need to be changed, it can retain that
+#' installation without reading an archive that will not be used.
 #'
 #' @section Component installation:
 #' The generated meta-package installs component packages only when the user
@@ -378,7 +390,7 @@ create_metapackage <- function(
     if (!generation_complete && owned_project && dir.exists(actual_project)) {
       # unlink removes the directory entry itself and does not follow a
       # symlink replaced during this call's short TOCTOU window.
-      removal_status <- unlink(actual_project, recursive = TRUE, force = TRUE)
+      removal_status <- .rollback_unlink(actual_project)
       if (removal_status != 0L) {
         warning(.bb_trf("Could not remove completely: %s", actual_project),
                 call. = FALSE)
@@ -388,7 +400,7 @@ create_metapackage <- function(
           length(list.files(dest_dir, all.files = TRUE, no.. = TRUE)) == 0L) {
       # The directory is known to be empty; recursive=TRUE is required by
       # unlink() to remove an empty directory on all supported platforms.
-      unlink(dest_dir, recursive = TRUE, force = TRUE)
+      .rollback_unlink(dest_dir)
     }
   }, add = TRUE)
 

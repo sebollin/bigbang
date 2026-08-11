@@ -55,6 +55,56 @@ test_that("component archives travel inside the meta-package by default", {
   expect_false(any(grepl(normalizePath(sandbox), signature, fixed = TRUE)))
 })
 
+test_that("shipped archives do not leak any source directory", {
+  sandbox <- tempfile("bigbang-source-paths-")
+  first_dir <- file.path(sandbox, "origin-alpha-distinct")
+  second_dir <- file.path(sandbox, "origin-beta-distinct")
+  source_root <- file.path(sandbox, "sources")
+  destination <- file.path(sandbox, "destination")
+  dir.create(first_dir, recursive = TRUE)
+  dir.create(second_dir)
+  dir.create(source_root)
+  dir.create(destination)
+
+  first <- file.path(first_dir, "toycomponent_0.1.0.tar.gz")
+  toy <- system.file("extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang")
+  if (!nzchar(toy)) toy <- testthat::test_path(
+    "..", "..", "inst", "extdata", "toycomponent_0.1.0.tar.gz"
+  )
+  file.copy(toy, first)
+  second_source <- file.path(source_root, "secondpkg")
+  dir.create(file.path(second_source, "R"), recursive = TRUE)
+  writeLines(c(
+    "Package: secondpkg", "Version: 1.0.0", "Title: Second fixture",
+    "Description: A temporary second fixture.", "License: MIT"
+  ), file.path(second_source, "DESCRIPTION"))
+  writeLines("secondpkg_value <- function() 1L",
+             file.path(second_source, "R", "value.R"))
+  writeLines("export(secondpkg_value)", file.path(second_source, "NAMESPACE"))
+  second <- file.path(second_dir, "secondpkg_1.0.0.tar.gz")
+  withr::with_dir(source_root, utils::tar(
+    second, "secondpkg", compression = "gzip"
+  ))
+  result <- create_metapackage(
+    "pathverse", c(first, second), dest_dir = destination,
+    document = FALSE, verbose = FALSE, force_deps = character()
+  )
+  files <- list.files(
+    result$path, recursive = TRUE, full.names = TRUE, all.files = TRUE,
+    no.. = TRUE
+  )
+  text_files <- files[
+    !dir.exists(files) & !grepl("\\.(mo|tar\\.gz|zip|tar)$", files,
+                                ignore.case = TRUE)
+  ]
+  text <- paste(
+    unlist(lapply(text_files, readLines, warn = FALSE), use.names = FALSE),
+    collapse = "\n"
+  )
+  expect_false(grepl(normalizePath(first_dir, winslash = "/"), text, fixed = TRUE))
+  expect_false(grepl(normalizePath(second_dir, winslash = "/"), text, fixed = TRUE))
+})
+
 test_that("the build ignore rules keep shipped archives and drop stray ones", {
   sandbox <- tempfile("bigbang-buildignore-")
   archives <- file.path(sandbox, "archives")

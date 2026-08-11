@@ -106,6 +106,9 @@ msgstr "El archivo %s declara la versión %s, pero su nombre sugiere la versión
 msgid "More than one archive was supplied for component package(s): %s."
 msgstr "Se proporcionó más de un archivo para los paquetes componentes: %s."
 
+msgid "More than one archive was found for component stem '%s': %s."
+msgstr "Se encontró más de un archivo para el stem componente '%s': %s."
+
 msgid "Circular dependencies detected: %s. A clean installation has no valid topological order."
 msgstr "Dependencias circulares detectadas: %s. Una instalación limpia no tiene un orden topológico válido."
 
@@ -300,6 +303,18 @@ msgstr "Se conservó la versión instalada %s, más nueva que la versión %s del
 
 msgid "Kept installed version %s, matching archive version %s"
 msgstr "Se conservó la versión instalada %s, igual a la versión %s del archivo"
+
+msgid "Kept installed version %s; %s"
+msgstr "Se conservó la versión instalada %s; %s"
+
+msgid "Package %s is already installed; %s"
+msgstr "El paquete %s ya está instalado; %s"
+
+msgid "the archive was not read because upgrade = 'never'"
+msgstr "no se leyó el archivo porque upgrade = 'never'"
+
+msgid "archive metadata could not be verified: %s"
+msgstr "no se pudieron verificar los metadatos del archivo: %s"
 
 msgid "Use force = TRUE or upgrade = 'always' to reinstall unchanged packages: %s"
 msgstr "Use force = TRUE o upgrade = 'always' para reinstalar paquetes sin cambios: %s"

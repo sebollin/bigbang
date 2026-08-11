@@ -204,6 +204,37 @@ test_that("stems retain the old fallback while pkg_dir is optional for paths", {
   expect_true(file.exists(archive))
 })
 
+test_that("a stem collision across archive formats names the stem", {
+  sandbox <- tempfile("bigbang-stem-collision-")
+  first_source <- file.path(sandbox, "first-source")
+  second_source <- file.path(sandbox, "second-source")
+  first_dir <- file.path(sandbox, "first")
+  second_dir <- file.path(sandbox, "second")
+  destination <- file.path(sandbox, "destination")
+  dir.create(first_source, recursive = TRUE)
+  dir.create(second_source, recursive = TRUE)
+  dir.create(first_dir)
+  dir.create(second_dir)
+  dir.create(destination)
+  make_input_archive(
+    "stemcollision", "1.0.0",
+    file.path(first_dir, "stemcollision_1.0.0.tar.gz"), first_source
+  )
+  make_input_archive(
+    "stemcollision", "1.0.0",
+    file.path(second_dir, "stemcollision_1.0.0.zip"), second_source
+  )
+  expect_error(
+    create_metapackage(
+      "collisionverse", "stemcollision_1.0.0",
+      pkg_dir = c(first_dir, second_dir), dest_dir = destination,
+      document = FALSE, verbose = FALSE, force_deps = character()
+    ),
+    regexp = "More than one archive was found for component stem",
+    class = "bigbang_error_duplicate_component"
+  )
+})
+
 test_that("generated metadata validation rejects empty DESCRIPTION fields", {
   sandbox <- tempfile("bigbang-generated-metadata-")
   source_root <- file.path(sandbox, "sources")

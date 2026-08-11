@@ -64,23 +64,21 @@
   }
   candidates <- file.path(dirs, paste0(input, ext))
   found <- candidates[file.exists(candidates) & !dir.exists(candidates)]
-  if (length(found) == 0L) {
-    # `ext` is a fallback, not a restriction: a stem may resolve to a source
-    # archive with any supported extension. This permits mixed .tar.gz and
-    # .zip inputs while keeping the old scalar-ext call unchanged.
-    expected_names <- tolower(paste0(input, .archive_extensions))
-    discovered <- unlist(lapply(dirs, function(dir) {
-      files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
-      files[tolower(basename(files)) %in% expected_names & !dir.exists(files)]
-    }), use.names = FALSE)
-    found <- unique(discovered)
-  }
+  # `ext` is a fallback, not a restriction: a stem may resolve to a source
+  # archive with any supported extension. Discover all matches even when the
+  # fallback exists, so a second format cannot be silently ignored.
+  expected_names <- tolower(paste0(input, .archive_extensions))
+  discovered <- unlist(lapply(dirs, function(dir) {
+    files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
+    files[tolower(basename(files)) %in% expected_names & !dir.exists(files)]
+  }), use.names = FALSE)
+  found <- unique(c(found, discovered))
   if (length(found) > 1L) {
     .bigbang_abort(
       "bigbang_error_duplicate_component",
       .bb_trf(
-        "More than one archive was supplied for component package(s): %s.",
-        paste(found, collapse = "; ")
+        "More than one archive was found for component stem '%s': %s.",
+        input, paste(found, collapse = "; ")
       ),
       packages = found
     )
@@ -181,6 +179,99 @@
     dependencies = parsed_dependencies$dependencies,
     constraints = parsed_dependencies$constraints
   )
+}
+
+.read_archive_version <- function(archive, ext) {
+  temp_dir <- tempfile("bigbang-version-")
+  if (!dir.create(temp_dir)) {
+    stop(.bb_trf("Could not create temporary directory for %s", archive),
+         call. = FALSE)
+  }
+  on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
+
+  listing <- tryCatch(suppressWarnings({
+    if (identical(tolower(ext), ".zip")) {
+      utils::unzip(archive, list = TRUE)
+    } else {
+      utils::untar(archive, list = TRUE)
+    }
+  }), error = identity)
+  if (inherits(listing, "error")) {
+    stop(.bb_trf(
+      "Could not extract archive %s: %s", archive, conditionMessage(listing)
+    ), call. = FALSE)
+  }
+  listing_status <- attr(listing, "status")
+  if (is.numeric(listing_status) && length(listing_status) == 1L &&
+        listing_status != 0) {
+    stop(.bb_trf(
+      "Could not extract archive %s: extraction returned status %d.",
+      archive, listing_status
+    ), call. = FALSE)
+  }
+  members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
+  members <- as.character(members)
+  .validate_archive_members(members)
+  normalized_members <- sub("^\\./", "", gsub("\\\\", "/", members))
+  candidate <- which(
+    normalized_members == "DESCRIPTION" |
+      grepl("^[^/]+/DESCRIPTION$", normalized_members)
+  )
+  if (length(candidate) != 1L) {
+    stop(.bb_trf(
+      "Archive %s has no DESCRIPTION at the package root.", archive
+    ), call. = FALSE)
+  }
+  member <- members[[candidate[[1L]]]]
+  extraction <- tryCatch(suppressWarnings({
+    if (identical(tolower(ext), ".zip")) {
+      utils::unzip(archive, files = member, exdir = temp_dir)
+    } else {
+      utils::untar(archive, files = member, exdir = temp_dir)
+    }
+  }), error = identity)
+  if (inherits(extraction, "error")) {
+    stop(.bb_trf(
+      "Could not extract archive %s: %s", archive, conditionMessage(extraction)
+    ), call. = FALSE)
+  }
+  if (is.numeric(extraction) && length(extraction) == 1L && extraction != 0) {
+    stop(.bb_trf(
+      "Could not extract archive %s: extraction returned status %d.",
+      archive, extraction
+    ), call. = FALSE)
+  }
+  description_files <- list.files(
+    temp_dir, pattern = "^DESCRIPTION$", recursive = TRUE,
+    full.names = TRUE, all.files = TRUE
+  )
+  if (length(description_files) != 1L) {
+    stop(.bb_trf(
+      "Archive %s has no DESCRIPTION at the package root.", archive
+    ), call. = FALSE)
+  }
+  description <- read.dcf(
+    description_files[[1L]], fields = c("Package", "Version")
+  )
+  if (nrow(description) == 0L) {
+    stop(.bb_trf(
+      "Archive %s must declare non-empty Package and Version fields.", archive
+    ), call. = FALSE)
+  }
+  field <- function(name) {
+    if (!name %in% colnames(description)) return(NA_character_)
+    value <- unname(description[1L, name])
+    if (is.na(value)) NA_character_ else trimws(value)
+  }
+  declared_package <- field("Package")
+  declared_version <- field("Version")
+  if (is.na(declared_package) || !nzchar(declared_package) ||
+        is.na(declared_version) || !nzchar(declared_version)) {
+    stop(.bb_trf(
+      "Archive %s must declare non-empty Package and Version fields.", archive
+    ), call. = FALSE)
+  }
+  list(package = declared_package, version = declared_version)
 }
 
 .parse_dependency_constraints <- function(values) {

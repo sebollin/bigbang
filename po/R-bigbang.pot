@@ -106,6 +106,9 @@ msgstr ""
 msgid "More than one archive was supplied for component package(s): %s."
 msgstr ""
 
+msgid "More than one archive was found for component stem '%s': %s."
+msgstr ""
+
 msgid "Circular dependencies detected: %s. A clean installation has no valid topological order."
 msgstr ""
 
@@ -299,6 +302,18 @@ msgid "Kept installed version %s, newer than archive version %s"
 msgstr ""
 
 msgid "Kept installed version %s, matching archive version %s"
+msgstr ""
+
+msgid "Kept installed version %s; %s"
+msgstr ""
+
+msgid "Package %s is already installed; %s"
+msgstr ""
+
+msgid "the archive was not read because upgrade = 'never'"
+msgstr ""
+
+msgid "archive metadata could not be verified: %s"
 msgstr ""
 
 msgid "Use force = TRUE or upgrade = 'always' to reinstall unchanged packages: %s"

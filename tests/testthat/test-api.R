@@ -24,6 +24,13 @@ test_that("the public API uses English snake_case names", {
   expect_named(formals(diagnose_dependencies), c("packages", "pkg_dir", "ext"))
 })
 
+test_that("generated provenance uses the installed package version", {
+  expect_identical(
+    .bb_generator_version(),
+    as.character(utils::packageVersion("bigbang"))
+  )
+})
+
 test_that("the Spanish transition aliases are gone", {
   removed <- c(
     "crear_meta_paquete_local", "diagnosticar_dependencias",

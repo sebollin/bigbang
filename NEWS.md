@@ -1,6 +1,6 @@
 # bigbang (development version)
 
-### Component input and resolution
+## Component input and resolution
 
 - Component archives may be supplied as existing paths from multiple
   directories, with mixed `.tar.gz`, `.tar`, and `.zip` extensions. Stems remain
@@ -13,11 +13,20 @@
   not shipped; archives shipped inside a generated meta-package remain portable
   and contain no source-machine paths.
 
-## bigbang 0.2.0
+## Bug fixes
+
+- Installing an already present package no longer requires reading an archive
+  when `upgrade = "never"`; under the default policy, only its DESCRIPTION is
+  read before deciding whether the archive needs to be used. An unreadable
+  archive is reported as unchanged when the installed package can be retained.
+- Rollback paths after a post-scaffold generation error are covered, including
+  destinations reached through a symbolic link and unsuccessful removal.
+
+# bigbang 0.2.0
 
 Released on 2026-08-09.
 
-### Breaking changes
+## Breaking changes
 
 - The deprecated Spanish aliases `crear_meta_paquete_local()`,
   `diagnosticar_dependencias()` and `install_loc_pkg_w_dep()` were removed. They
@@ -52,7 +61,7 @@ Released on 2026-08-09.
   Positional calls are still a fragile way to call these functions: name the
   arguments.
 
-### Generated meta-packages are self-contained
+## Generated meta-packages are self-contained
 
 - `create_metapackage()` gained `include_archives`, `TRUE` by default, which
   copies the component archives into `inst/archives/` of the generated
@@ -67,7 +76,7 @@ Released on 2026-08-09.
   shipped components reach the tarball while every other archive anywhere in the
   tree is still excluded.
 
-### New features
+## New features
 
 - Generated meta-packages provide an optional `cli` two-column startup message
   that falls back to the ASCII banner when `cli` is absent, a
@@ -78,7 +87,7 @@ Released on 2026-08-09.
 - Generated metadata records the component list in `Config/bigbang/packages`,
   and the generated package tests that the list agrees with what it exports.
 
-### Bug fixes
+## Bug fixes
 
 - Rollback of a failed generation works when a component of the destination path
   is a symbolic link. The project path was normalised before the directory
@@ -159,7 +168,7 @@ Released on 2026-08-09.
   package they guess at, so ordinary S4 code is no longer reported as needing
   `Matrix`, and an identifier beginning with `st_` no longer suggests `sf`.
 
-### Documentation
+## Documentation
 
 - The maintainer's given name is spelled Sebastián, and the author entry now
   carries an ORCID identifier.
@@ -177,7 +186,7 @@ First release on CRAN, accepted on 2026-08-08.
 
 **bigbang — create custom R metapackages from local packages**
 
-### Data-safety architecture
+## Data-safety architecture
 
 - Removed all generated startup installation and cwd-relative cleanup. Generated
   `.onLoad()` hooks are side-effect free; component installation is explicit via
@@ -191,7 +200,7 @@ First release on CRAN, accepted on 2026-08-08.
 - Generated projects must use a new or empty destination, preventing unsafe
   in-place regeneration of unclassified historical sources.
 
-### Installation and portability
+## Installation and portability
 
 - Component archives are installed once in topological dependency order; cycles
   raise a typed `bigbang_error_cycle` condition.
@@ -200,7 +209,7 @@ First release on CRAN, accepted on 2026-08-08.
 - All generated text is written as UTF-8, R literals and paths are emitted safely,
   and CI covers Linux, Windows, and macOS configurations.
 
-### API, language, and documentation
+## API, language, and documentation
 
 - Added the English snake_case API: `create_metapackage()`,
   `install_local_pkg()`, and `diagnose_dependencies()`. Spanish aliases remain

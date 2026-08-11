@@ -126,6 +126,74 @@ test_that("failed generation restores cwd and rolls back only its own project", 
   expect_identical(getwd(), cwd_before)
 })
 
+test_that("post-scaffold failures exercise the project and parent rollback", {
+  sandbox <- tempfile("bigbang-post-scaffold-rollback-")
+  dir.create(sandbox)
+  archives <- file.path(sandbox, "archives")
+  copy_toy_archive(archives)
+
+  testthat::local_mocked_bindings(
+    write_basic_vignette = function(...) stop("forced post-scaffold failure"),
+    .package = "bigbang"
+  )
+
+  existing_parent <- file.path(sandbox, "existing-parent")
+  dir.create(existing_parent)
+  expect_error(
+    create_metapackage(
+      "postscaffoldverse", "toycomponent_0.1.0", archives,
+      dest_dir = existing_parent, document = FALSE, verbose = FALSE,
+      import_deps = character(), force_deps = character()
+    ),
+    "forced post-scaffold failure"
+  )
+  expect_false(dir.exists(file.path(existing_parent, "postscaffoldverse")))
+  expect_true(dir.exists(existing_parent))
+
+  new_parent <- file.path(sandbox, "new-parent")
+  expect_error(
+    create_metapackage(
+      "newpostscaffoldverse", "toycomponent_0.1.0", archives,
+      dest_dir = new_parent, document = FALSE, verbose = FALSE,
+      import_deps = character(), force_deps = character()
+    ),
+    "forced post-scaffold failure"
+  )
+  expect_false(dir.exists(new_parent))
+})
+
+test_that("rollback reports an unsuccessful unlink", {
+  sandbox <- tempfile("bigbang-unlink-rollback-")
+  dir.create(sandbox)
+  archives <- file.path(sandbox, "archives")
+  copy_toy_archive(archives)
+  parent <- file.path(sandbox, "parent")
+  dir.create(parent)
+
+  testthat::local_mocked_bindings(
+    write_basic_vignette = function(...) stop("forced unlink failure"),
+    .rollback_unlink = function(...) 1L,
+    .package = "bigbang"
+  )
+  expect_warning(
+    expect_error(
+      create_metapackage(
+        "unlinkfailureverse", "toycomponent_0.1.0", archives,
+        dest_dir = parent, document = FALSE, verbose = FALSE,
+        import_deps = character(), force_deps = character()
+      ),
+      "forced unlink failure"
+    ),
+    "Could not remove completely"
+  )
+
+  # The mocked function deliberately left the tree in place; clean it with the
+  # base binding after the safety branch has been exercised.
+  base::unlink(file.path(parent, "unlinkfailureverse"),
+               recursive = TRUE, force = TRUE)
+  expect_true(dir.exists(parent))
+})
+
 test_that("safe_unlink uses temporary location rather than a basename", {
   sandbox <- tempfile("bigbang-safe-unlink-")
   source_tree <- file.path(sandbox, "templates")
@@ -277,10 +345,8 @@ test_that("legal package names spanning the grammar are accepted", {
 
 test_that("rollback works when a path component is a symbolic link", {
   # This is the macOS situation on every platform: tempdir() there sits under
-  # /var, a link to /private/var. project_dir was normalised before creation and
-  # therefore left unresolved, while the expected path was normalised after
-  # creation and resolved, so the two never matched and the rollback declined
-  # without saying anything.
+  # /var, a link to /private/var. Both sides of the ownership comparison must
+  # be normalised symmetrically after the project has been created.
   sandbox <- tempfile("bigbang-rollback-symlink-")
   dir.create(sandbox)
   real <- file.path(sandbox, "real")
@@ -291,13 +357,19 @@ test_that("rollback works when a path component is a symbolic link", {
   linked <- file.symlink(real, link)
   skip_if_not(isTRUE(linked), "This platform cannot create symbolic links.")
 
+  copy_toy_archive(archives)
   destination <- file.path(link, "created-by-the-call")
+  testthat::local_mocked_bindings(
+    write_basic_vignette = function(...) stop("forced symlink rollback failure"),
+    .package = "bigbang"
+  )
   expect_error(
     create_metapackage(
-      "linkverse", "missing_0.1.0", archives,
-      dest_dir = destination, document = FALSE, verbose = FALSE
+      "linkverse", "toycomponent_0.1.0", archives,
+      dest_dir = destination, document = FALSE, verbose = FALSE,
+      import_deps = character(), force_deps = character()
     ),
-    "archives were not found"
+    "forced symlink rollback failure"
   )
   expect_false(dir.exists(file.path(destination, "linkverse")))
   expect_false(dir.exists(destination))

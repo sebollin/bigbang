@@ -565,7 +565,7 @@ write_basic_vignette <- function(name, packages, project_dir,
   }
 
   tryCatch({
-    base_packages <- unique(sub("_.*", "", packages))
+    base_packages <- unique(packages)
 
     # Build the generated English introduction.
     vignette_content <- paste0(

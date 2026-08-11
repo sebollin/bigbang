@@ -58,6 +58,13 @@
   }
 }
 
+.unchanged_without_archive <- function(installed_version, reason) {
+  .bb_trf(
+    "Kept installed version %s; %s",
+    as.character(installed_version), reason
+  )
+}
+
 #' Install a local package together with its dependencies
 #'
 #' Installs a package from a local archive. Dependencies available as local
@@ -89,6 +96,10 @@
 #' This function installs packages into the user's active R library. Installation
 #' occurs only when the user calls the function; loading `bigbang` never installs
 #' packages. With the default `cran_deps = "skip"`, it does not access the network.
+#' An installed package can be kept without reading its archive when
+#' `upgrade = "never"`. Under the default policy, bigbang reads only the archive
+#' `DESCRIPTION` first; if that metadata cannot be verified for an already
+#' installed package, the installed package is kept and the reason is reported.
 #'
 #' @return Invisibly, a list describing installed, unchanged, failed, and
 #'   skipped packages. Components that an upgrade policy left in place are
@@ -110,6 +121,95 @@ install_local_pkg <- function(
 ) {
   cran_deps <- match.arg(cran_deps)
   upgrade <- .resolve_upgrade_policy(force, upgrade, missing(upgrade))
+  candidate <- tryCatch({
+    path <- .resolve_archive_input(package, pkg_dir, ext)
+    actual_ext <- .archive_extension(path)
+    list(
+      path = path,
+      ext = actual_ext,
+      stem = .archive_stem(path, actual_ext)
+    )
+  }, error = identity)
+  if (inherits(candidate, "error")) {
+    stem <- if (length(package) == 1L && is.character(package)) package else "package"
+    if (isTRUE(verbose)) {
+      message(.bb_trf("Packages that failed: %s", stem))
+    }
+    return(invisible(structure(
+      list(
+        installed = list(), unchanged = list(),
+        failed = stats::setNames(list(conditionMessage(candidate)), stem),
+        skipped = list()
+      ),
+      class = "bigbang_install_result"
+    )))
+  }
+
+  candidate_name <- sub("_.*", "", candidate$stem)
+  installed_candidate <- tryCatch(
+    utils::packageVersion(candidate_name), error = function(e) NULL
+  )
+  unchanged_result <- function(reason) {
+    if (isTRUE(verbose)) message(.bb_trf(
+      "Package %s is already installed; %s", candidate_name, reason
+    ))
+    invisible(structure(
+      list(
+        installed = list(),
+        unchanged = stats::setNames(list(reason), candidate$stem),
+        failed = list(),
+        skipped = list()
+      ),
+      class = "bigbang_install_result"
+    ))
+  }
+
+  if (!is.null(installed_candidate) && identical(upgrade, "never")) {
+    return(unchanged_result(.unchanged_without_archive(
+      installed_candidate,
+      .bb_tr("the archive was not read because upgrade = 'never'")
+    )))
+  }
+
+  if (!is.null(installed_candidate) && identical(upgrade, "newer")) {
+    candidate_metadata <- tryCatch(
+      .read_archive_version(candidate$path, candidate$ext),
+      error = identity
+    )
+    if (inherits(candidate_metadata, "error")) {
+      reason <- .unchanged_without_archive(
+        installed_candidate,
+        .bb_trf(
+          "archive metadata could not be verified: %s",
+          conditionMessage(candidate_metadata)
+        )
+      )
+      if (isTRUE(verbose)) message(.bb_trf(
+        "Package %s is already installed; %s", candidate_name, reason
+      ))
+      return(invisible(structure(
+        list(
+          installed = list(),
+          unchanged = stats::setNames(list(reason), candidate$stem),
+          failed = list(),
+          skipped = list()
+        ),
+        class = "bigbang_install_result"
+      )))
+    }
+    if (identical(candidate_metadata$package, candidate_name) &&
+      tryCatch(
+        installed_candidate >= base::package_version(candidate_metadata$version),
+        error = function(e) FALSE
+      )) {
+      reason <- .unchanged_reason(
+        installed_candidate, candidate_metadata$version, upgrade,
+        installed_candidate > base::package_version(candidate_metadata$version)
+      )
+      return(unchanged_result(reason))
+    }
+  }
+
   resolved <- tryCatch(
     .resolve_components(package, pkg_dir, ext),
     error = function(error) error
