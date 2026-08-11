@@ -26,7 +26,11 @@ create_metapackage(
   debug = FALSE,
   workflow = NULL,
   include_archives = TRUE,
-  tolerate = character()
+  tolerate = character(),
+  dry_run = FALSE,
+  on_component_error = c("abort", "skip"),
+  update = FALSE,
+  install_upgrade = c("newer", "always", "never")
 )
 }
 \arguments{
@@ -107,6 +111,23 @@ Use \code{"filename_mismatch"} to silence filename-versus-DESCRIPTION mismatch
 warnings, or \code{"unincluded_local_dep"} to turn an available-but-unincluded
 local dependency error into a warning. Unknown names are errors. Each
 applied relaxation is recorded in the returned \code{tolerated} table.}
+
+\item{dry_run}{Logical. If TRUE, resolves and validates components and
+returns the planned generation without creating dest_dir or writing a
+project.}
+
+\item{on_component_error}{Character policy for component-level failures:
+"abort" (default) stops generation, while "skip" omits the failed
+component and transitively omits components that depend on it.}
+
+\item{update}{Logical. If TRUE, update a previously generated project only
+when its bigbang manifest is present and all generated files are unchanged.
+Files outside that manifest are never touched.}
+
+\item{install_upgrade}{Character default upgrade policy emitted in the
+generated installer function: "newer", "always", or "never".
+This controls whether a generated installer keeps newer installed
+versions, reinstalls every component, or skips archive inspection.}
 }
 \value{
 Invisibly, a \code{bigbang_result} containing the generated path,
@@ -158,6 +179,9 @@ project tidiness can be relaxed individually through \code{tolerate}; there is n
 switch that disables validation as a whole. bigbang does not run
 \verb{R CMD check} on component packages, so component warnings and notes do not
 prevent generation.
+Component source directories are built in a temporary directory with the
+optional pkgbuild package; passing an already built archive avoids that
+optional dependency.
 }
 
 \section{Component installation}{

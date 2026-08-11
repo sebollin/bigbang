@@ -1,5 +1,15 @@
 # bigbang (development version)
 
+## New capabilities
+
+- The generator supports read-only dry-run reports, explicit component-error
+  policies, package source directories, component manifests, and guarded
+  update regeneration through a generation manifest.
+- Generated installers accept component subsets and an explicit installation
+  library, and the generator can set their default upgrade policy.
+- Source-directory components must use include_archives = TRUE because their
+  temporary build archive cannot be reused as an external installation source.
+
 ## Component input and resolution
 
 - Component archives may be supplied as existing paths from multiple

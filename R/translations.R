@@ -119,7 +119,21 @@
     "No DESCRIPTION found in source archive." = "No se encontr\u00f3 DESCRIPTION en el archivo fuente.",
     "Source archive has multiple candidate package roots." = "El archivo fuente tiene varias ra\u00edces de paquete candidatas.",
     "Installed package has no valid Package field." = "El paquete instalado no tiene un campo Package v\u00e1lido.",
-    "Could not identify the installed lazy-load database." = "No se pudo identificar la base lazy-load instalada."
+    "Could not identify the installed lazy-load database." = "No se pudo identificar la base lazy-load instalada.",
+    "The component manifest does not list any packages." = "El manifiesto de componentes no lista ning\u00fan paquete.",
+    "Component directories require the 'pkgbuild' package. Install 'pkgbuild' or pass a built archive instead." = "Los directorios de componentes requieren el paquete 'pkgbuild'. Instale 'pkgbuild' o pase un archivo ya construido.",
+    "Could not build component source directory %s: %s" = "No se pudo construir el directorio fuente del componente %s: %s",
+    "Could not find the archive built from component directory %s." = "No se encontr\u00f3 el archivo construido desde el directorio de componentes %s.",
+    "Cannot update %s because it has no valid bigbang generation manifest." = "No se puede actualizar %s porque no tiene un manifiesto de generaci\u00f3n v\u00e1lido de bigbang.",
+    "Cannot update %s because generated files were modified or removed: %s." = "No se puede actualizar %s porque se modificaron o eliminaron archivos generados: %s.",
+    "Cannot update a project that does not exist or has no bigbang generation manifest." = "No se puede actualizar un proyecto que no existe o no tiene un manifiesto de generaci\u00f3n de bigbang.",
+    "The installation library must be one non-empty path." = "La biblioteca de instalaci\u00f3n debe ser una ruta no vac\u00eda.",
+    "Could not create installation library: %s" = "No se pudo crear la biblioteca de instalaci\u00f3n: %s",
+    "'only' must contain component package names." = "'only' debe contener nombres de paquetes componentes.",
+    "Unknown component(s) in 'only': %s." = "Componente(s) desconocido(s) en 'only': %s.",
+    "Added local dependencies of selected components: %s" = "Se agregaron dependencias locales de los componentes seleccionados: %s",
+    "Source directory components require include_archives = TRUE because their temporary build archive cannot be reused." = "Los componentes de directorio fuente requieren include_archives = TRUE porque su archivo temporal no se puede reutilizar.",
+    "Cannot update %s because requested generated files are not in its manifest: %s." = "No se puede actualizar %s porque los archivos generados solicitados no est\u00e1n en su manifiesto: %s."
   )
 }
 
@@ -216,7 +230,12 @@
       "No se pudo resolver el componente '%s' en los directorios de archivos proporcionados.",
       "El archivo %s declara el paquete %s, pero su nombre sugiere %s.",
       "El archivo %s declara la versi\u00f3n %s, pero su nombre sugiere la versi\u00f3n %s.",
-      "El componente %s requiere %s %s %s, pero el archivo incluido proporciona la versi\u00f3n %s."
+      "El componente %s requiere %s %s %s, pero el archivo incluido proporciona la versi\u00f3n %s.",
+      "La biblioteca de instalaci\u00f3n debe ser una ruta no vac\u00eda.",
+      "No se pudo crear la biblioteca de instalaci\u00f3n: %s",
+      "'only' debe contener nombres de paquetes componentes.",
+      "Componente(s) desconocido(s) en 'only': %s.",
+      "Se agregaron dependencias locales de los componentes seleccionados: %s"
     ),
     c(
       "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives.",
@@ -286,7 +305,12 @@
       "Could not resolve component '%s' in the supplied archive directories.",
       "Archive %s declares package %s, but its filename suggests %s.",
       "Archive %s declares version %s, but its filename suggests version %s.",
-      "Component %s requires %s %s %s, but the included archive provides version %s."
+      "Component %s requires %s %s %s, but the included archive provides version %s.",
+      "The installation library must be one non-empty path.",
+      "Could not create installation library: %s",
+      "'only' must contain component package names.",
+      "Unknown component(s) in 'only': %s.",
+      "Added local dependencies of selected components: %s"
     )
   )
 }

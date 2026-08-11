@@ -360,3 +360,45 @@ msgstr ""
 
 msgid "Could not identify the installed lazy-load database."
 msgstr ""
+
+msgid "The component manifest does not list any packages."
+msgstr ""
+
+msgid "Component directories require the 'pkgbuild' package. Install 'pkgbuild' or pass a built archive instead."
+msgstr ""
+
+msgid "Could not build component source directory %s: %s"
+msgstr ""
+
+msgid "Could not find the archive built from component directory %s."
+msgstr ""
+
+msgid "Cannot update %s because it has no valid bigbang generation manifest."
+msgstr ""
+
+msgid "Cannot update %s because generated files were modified or removed: %s."
+msgstr ""
+
+msgid "Cannot update a project that does not exist or has no bigbang generation manifest."
+msgstr ""
+
+msgid "The installation library must be one non-empty path."
+msgstr ""
+
+msgid "Could not create installation library: %s"
+msgstr ""
+
+msgid "'only' must contain component package names."
+msgstr ""
+
+msgid "Unknown component(s) in 'only': %s."
+msgstr ""
+
+msgid "Added local dependencies of selected components: %s"
+msgstr ""
+
+msgid "Source directory components require include_archives = TRUE because their temporary build archive cannot be reused."
+msgstr ""
+
+msgid "Cannot update %s because requested generated files are not in its manifest: %s."
+msgstr ""

@@ -59,6 +59,7 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
   text_files <- text_files[!dir.exists(text_files)]
   # Compiled gettext catalogs are binary, not emitted text files.
   text_files <- text_files[!grepl("\\.mo$", text_files)]
+  text_files <- text_files[!grepl("\\.bigbang-manifest\\.rds$", text_files)]
   # Component archives are copied verbatim into the meta-package; they are
   # binary payload rather than generated text. Only the archives themselves are
   # exempt, so anything else appearing there is still validated.
@@ -83,7 +84,8 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
   sys.source(file.path(project, "R", "install_packages.R"), envir = attach_env)
   expect_named(
     formals(attach_env$portablemeta_install),
-    c("pkg_dir", "ext", "cran_deps", "repos", "verbose", "force", "upgrade")
+    c("pkg_dir", "ext", "cran_deps", "repos", "verbose", "force", "upgrade",
+      "only", "lib")
   )
   # The archives ship inside the meta-package, so both entry points default to
   # the shipped directory. The default is a call, resolved when the function

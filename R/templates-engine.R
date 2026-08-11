@@ -19,7 +19,8 @@
 #' @noRd
 .archive_subdir <- "archives"
 
-.render_install_engine <- function(name, components, pkg_dir_default = "") {
+.render_install_engine <- function(name, components, pkg_dir_default = "",
+                                   install_upgrade = "newer") {
   packages <- vapply(components, `[[`, character(1L), "package")
   archive_stems <- vapply(components, `[[`, character(1L), "stem")
   component_specs <- stats::setNames(lapply(components, function(component) {
@@ -48,7 +49,7 @@ resolve_upgrade_policy <- function(force, upgrade, upgrade_missing) {{
       .meta_tr("\'force\' must be TRUE or FALSE")
     )
   }}
-  upgrade <- match.arg(upgrade, c("newer", "always", "never"))
+    upgrade <- match.arg(upgrade, c("newer", "always", "never"))
   if (isTRUE(force)) {{
     if (!isTRUE(upgrade_missing) && !identical(upgrade, "always")) {{
       .bigbang_abort(
@@ -353,11 +354,13 @@ classify_package_archive <- function(archive, ext) {{
 #\'   never access the network; `"install"` uses `repos`.
 #\'
 #\' @return A list with installation status and detected dependencies.
+#\' @param lib Character library in which to install and verify the package.
 #\' @keywords internal
 install_local_archive <- function(package, pkg_dir, ext = NULL,
                                    repos = getOption("repos"),
                                    cran_deps = c("skip", "error", "install"),
-                                   upgrade = c("newer", "always", "never")) {{
+                                   upgrade = c("newer", "always", "never"),
+                                   lib = .libPaths()[[1L]]) {{
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
   resolved <- tryCatch(
@@ -381,7 +384,7 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
   dependencies <- metadata$dependencies
 
   installed_version <- tryCatch(
-    utils::packageVersion(base_name), error = function(e) NULL
+    utils::packageVersion(base_name, lib.loc = lib), error = function(e) NULL
   )
   keep_installed <- !is.null(installed_version) && (
     identical(upgrade, "never") ||
@@ -433,7 +436,8 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
   # branch resolves only dependencies not provided by local archives.
   missing_nonlocal <- setdiff(dependencies, local_names)
   missing_nonlocal <- missing_nonlocal[!vapply(
-    missing_nonlocal, requireNamespace, logical(1), quietly = TRUE
+    missing_nonlocal, requireNamespace, logical(1), quietly = TRUE,
+    lib.loc = lib
   )]
   if (length(missing_nonlocal) > 0L && cran_deps != "install") {{
     detail <- paste(missing_nonlocal, collapse = ", ")
@@ -475,14 +479,15 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
         # NA is what is needed to use the package: Depends, Imports and
         # LinkingTo. TRUE would add Suggests, pulling development tooling
         # into environments that asked for one dependency.
-        utils::install.packages(dep, dependencies = NA, repos = repos),
+        utils::install.packages(dep, dependencies = NA, repos = repos, lib = lib),
         error = function(e) warning(conditionMessage(e), call. = FALSE)
       )
     }}
   }}
 
   missing <- dependencies[!vapply(
-    dependencies, requireNamespace, logical(1), quietly = TRUE
+    dependencies, requireNamespace, logical(1), quietly = TRUE,
+    lib.loc = lib
   )]
   if (length(missing) > 0L) {{
     return(list(
@@ -532,13 +537,15 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
   install_error <- NULL
   tryCatch(
     utils::install.packages(
-      install_target, repos = NULL, type = install_type, dependencies = FALSE
+      install_target, repos = NULL, type = install_type, dependencies = FALSE,
+      lib = lib
     ),
     error = function(e) install_error <<- conditionMessage(e)
   )
 
   installed <- is.null(install_error) && tryCatch(
-    utils::packageVersion(base_name) == base::package_version(version),
+    utils::packageVersion(base_name, lib.loc = lib) ==
+      base::package_version(version),
     error = function(e) FALSE
   )
   if (!installed) {{
@@ -752,6 +759,8 @@ topological_order <- function(adjacency) {{
 #\' @param ext Character archive extension.
 #\' @param verbose Logical progress toggle.
 #\' @return Invisibly, installation, failure, skip, and order information.
+#\' @param only Optional component names; local dependencies are added.
+#\' @param lib Character library in which to install and verify components.
 #\' @keywords internal
 #\'
 #\' @examples
@@ -767,9 +776,45 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
                                       verbose = TRUE,
                                       repos = getOption("repos"),
                                       cran_deps = c("skip", "error", "install"),
-                                      upgrade = c("newer", "always", "never")) {{
+                                      upgrade = c("newer", "always", "never"),
+                                      only = NULL,
+                                      lib = .libPaths()[[1L]]) {{
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
+  if (!is.character(lib) || length(lib) != 1L || is.na(lib) || !nzchar(lib)) {{
+    stop(.meta_tr("The installation library must be one non-empty path."),
+         call. = FALSE)
+  }}
+  if (!dir.exists(lib) && !dir.create(lib, recursive = TRUE)) {{
+    stop(.meta_trf("Could not create installation library: %s", lib),
+         call. = FALSE)
+  }}
+  if (!is.null(only)) {{
+    if (!is.character(only) || anyNA(only) || any(!nzchar(only))) {{
+      stop(.meta_tr("\'only\' must contain component package names."),
+           call. = FALSE)
+    }}
+    unknown <- setdiff(only, .component_names)
+    if (length(unknown) > 0L) {{
+      condition <- structure(
+        list(message = .meta_trf("Unknown component(s) in \'only\': %s.",
+                                 paste(unknown, collapse = ", ")),
+             call = NULL, unknown = unknown),
+        class = c("bigbang_error_only", "bigbang_error", "error", "condition")
+      )
+      stop(condition)
+    }}
+    selected <- unique(only)
+    repeat {{
+      dependencies <- unlist(lapply(selected, read_archive_dependencies,
+                                    pkg_dir = pkg_dir, ext = ext),
+                             use.names = FALSE)
+      pulled <- setdiff(intersect(dependencies, .component_names), selected)
+      if (length(pulled) == 0L) break
+      selected <- c(selected, pulled)
+    }}
+    packages <- selected
+  }}
   adjacency <- build_dependency_graph(packages, pkg_dir, ext)
   install_order <- topological_order(adjacency)
 
@@ -793,7 +838,7 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     result <- tryCatch(
       install_local_archive(
         package, pkg_dir, ext, repos = repos, cran_deps = cran_deps,
-        upgrade = upgrade
+        upgrade = upgrade, lib = lib
       ),
       error = function(e) list(success = FALSE, message = conditionMessage(e))
     )
@@ -823,7 +868,9 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     unchanged = unchanged_packages,
     failed = failed_packages,
     skipped = skipped_packages,
-    order = packages[install_order]
+    order = packages[install_order],
+    selected = packages,
+    pulled_in = if (is.null(only)) character() else setdiff(packages, only)
   ))
 }}
 
@@ -881,7 +928,9 @@ write_metapackage_files <- function(
     description = "Local Package Metapackage",
     license = "MIT + file LICENSE",
     include_archives = FALSE,
-    verbose = FALSE
+    verbose = FALSE,
+    overwrite = FALSE,
+    install_upgrade = "newer"
 ) {
 
   log_debug <- function(debug_message) {
@@ -897,6 +946,7 @@ write_metapackage_files <- function(
     local_packages = .r_literal(archive_stems),
     extension = "NULL",
     pkg_dir_default = .archive_dir_default(name, include_archives),
+    install_upgrade = install_upgrade,
     install_call = if (isTRUE(include_archives)) {
       paste0(name, "_install()")
     } else {
@@ -928,10 +978,12 @@ utils::globalVariables(".pkgs")
 .pkgs <- {{{ package_list }}}
 .component_names <- .pkgs
 
-attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
+attach_installed_packages <- function(pkgs, warn_missing = TRUE,
+                                      lib.loc = .libPaths()) {
   already_attached <- gsub("^package:", "", search())
   to_load <- setdiff(pkgs, already_attached)
-  missing <- to_load[!vapply(to_load, requireNamespace, logical(1), quietly = TRUE)]
+  missing <- to_load[!vapply(to_load, requireNamespace, logical(1),
+                             quietly = TRUE, lib.loc = lib.loc)]
   if (warn_missing && length(missing) > 0) {
     warning(gettextf(
       "Not installed: %s. Run {{{ install_call }}} to install them.",
@@ -941,7 +993,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
   to_load <- setdiff(to_load, missing)
   if (length(to_load) > 0) {
     suppressPackageStartupMessages(
-      lapply(to_load, library, character.only = TRUE)
+      lapply(to_load, library, character.only = TRUE, lib.loc = lib.loc)
     )
   }
   invisible(list(attached = to_load, missing = missing))
@@ -981,6 +1033,8 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
 #\'   `"always"` is an error.
 #\' @param verbose Logical progress toggle.
 #\'
+#\' @param only Optional component names; local dependencies are added automatically.
+#\' @param lib Character library in which to install and verify components.
 #\' @return Invisibly, structured installation results.
 #\' @export
 #\'
@@ -994,7 +1048,9 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
                                repos = getOption("repos"),
                                verbose = getOption("bigbang.verbose", interactive()),
                                force = FALSE,
-                               upgrade = c("newer", "always", "never")) {
+                               upgrade = "{{ install_upgrade }}",
+                               only = NULL,
+                               lib = .libPaths()[[1L]]) {
   cran_deps <- match.arg(cran_deps)
   upgrade <- resolve_upgrade_policy(force, upgrade, missing(upgrade))
   # An empty pkg_dir means the shipped archive directory was not found, which
@@ -1014,7 +1070,8 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
   packages <- {{{ local_packages }}}
   result <- install_packages_in_order(
     packages, pkg_dir, ext, verbose = verbose,
-    repos = repos, cran_deps = cran_deps, upgrade = upgrade
+    repos = repos, cran_deps = cran_deps, upgrade = upgrade,
+    only = only, lib = lib
   )
   if (length(result$failed) > 0) {
     details <- paste0(
@@ -1039,6 +1096,12 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
       paste(names(result$skipped), collapse = ", "), domain = "R-{{ name }}"
     ), call. = FALSE)
   }
+  if (isTRUE(verbose) && length(result$pulled_in) > 0L) {
+    message(.meta_trf(
+      "Added local dependencies of selected components: %s",
+      paste(result$pulled_in, collapse = ", ")
+    ))
+  }
   if (isTRUE(verbose) && interactive() && length(result$unchanged) > 0L) {
     message(.meta_trf(
       "Use force = TRUE or upgrade = \'always\' to reinstall unchanged packages: %s",
@@ -1047,9 +1110,15 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
   }
   # A skipped component was just reported with its reason and the call that
   # fixes it, so attaching must not follow it with a vaguer hint.
+  attach_names <- vapply(
+    result$selected,
+    function(item) resolve_component_spec(item, ext)$package,
+    character(1L)
+  )
   attach_installed_packages(
-    .component_names,
-    warn_missing = length(result$skipped) == 0L
+    attach_names,
+    warn_missing = length(result$skipped) == 0L,
+    lib.loc = lib
   )
   invisible(result)
 }
@@ -1537,7 +1606,7 @@ zzz = '
   for (file_name in names(templates)) {
     file_path <- file.path(dest_dir, paste0(file_name, ".R"))
 
-    if (!file.exists(file_path)) {
+    if (isTRUE(overwrite) || !file.exists(file_path)) {
       tryCatch({
         content <- whisker::whisker.render(
           template = templates[[file_name]],

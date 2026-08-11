@@ -35,6 +35,130 @@
 )
 .template_safety_schema <- "2"
 .allowed_tolerations <- c("filename_mismatch", "unincluded_local_dep")
+.generation_manifest_name <- ".bigbang-manifest.rds"
+
+.planned_generation_files <- function(name, components, workflow = NULL,
+                                      reexport = FALSE,
+                                      include_archives = TRUE,
+                                      license = "MIT + file LICENSE") {
+  files <- c(
+    "DESCRIPTION", "NAMESPACE", "README.md", ".Rbuildignore", ".gitignore",
+    ".BBSoptions", paste0(name, ".Rproj"),
+    file.path("R", c("attach.R", "utils.R", "zzz.R", "install_packages.R")),
+    file.path("vignettes", paste0("introduction-", name, ".Rmd")),
+    file.path("vignettes", ".gitignore"),
+    file.path("tests", "component-consistency.R"),
+    file.path("po", paste0("R-", name, ".pot")),
+    file.path("po", "R-es.po"),
+    file.path("inst", "po", "es", "LC_MESSAGES", paste0("R-", name, ".mo")),
+    .generation_manifest_name
+  )
+  if (isTRUE(reexport)) files <- c(files, file.path("R", "reexports.R"))
+  if (grepl("file[[:space:]]+LICENSE", license, ignore.case = TRUE)) {
+    files <- c(files, "LICENSE")
+  }
+  if (!is.null(workflow)) {
+    files <- c(files, file.path("vignettes", paste0("workflow-", name, ".Rmd")))
+  }
+  if (isTRUE(include_archives) && length(components) > 0L) {
+    files <- c(files, file.path(
+      "inst", .archive_subdir,
+      vapply(components, function(x) basename(x$path), character(1L))
+    ))
+  }
+  unique(files)
+}
+
+.file_digest <- function(path) {
+  if (!file.exists(path) || dir.exists(path)) return(NA_character_)
+  unname(as.character(tools::md5sum(path)))
+}
+
+.manifest_records <- function(project_dir, exclude = character()) {
+  paths <- list.files(project_dir, recursive = TRUE, all.files = TRUE,
+                      full.names = TRUE, no.. = TRUE, include.dirs = FALSE)
+  paths <- normalizePath(paths, winslash = "/", mustWork = TRUE)
+  root <- normalizePath(project_dir, winslash = "/", mustWork = TRUE)
+  rel <- substring(paths, nchar(root) + 2L)
+  keep <- !rel %in% exclude
+  rel <- rel[keep]
+  paths <- paths[keep]
+  hashes <- vapply(paths, .file_digest, character(1L))
+  list(schema = 1L, files = rel, hashes = stats::setNames(hashes, rel))
+}
+
+.read_generation_manifest <- function(project_dir) {
+  path <- file.path(project_dir, .generation_manifest_name)
+  if (!file.exists(path)) return(NULL)
+  tryCatch(readRDS(path), error = function(e) NULL)
+}
+
+.validate_update_manifest <- function(project_dir) {
+  manifest <- .read_generation_manifest(project_dir)
+  if (is.null(manifest) || !is.character(manifest$files) ||
+        !is.character(manifest$hashes)) {
+    .bigbang_abort(
+      "bigbang_error_missing_manifest",
+      .bb_trf(
+        "Cannot update %s because it has no valid bigbang generation manifest.",
+        project_dir
+      ),
+      path = project_dir
+    )
+  }
+  paths <- file.path(project_dir, manifest$files)
+  changed <- manifest$files[
+    !file.exists(paths) | vapply(seq_along(paths), function(i) {
+      !identical(.file_digest(paths[[i]]), unname(manifest$hashes[[manifest$files[[i]]]]))
+    }, logical(1L))
+  ]
+  if (length(changed) > 0L) {
+    .bigbang_abort(
+      "bigbang_error_modified_generated_file",
+      .bb_trf(
+        "Cannot update %s because generated files were modified or removed: %s.",
+        project_dir, paste(changed, collapse = ", ")
+      ),
+      path = project_dir, files = changed
+    )
+  }
+  manifest
+}
+
+.generation_metadata_findings <- function(components, tolerate = character()) {
+  rows <- lapply(components, function(component) {
+    stem <- component$stem
+    expected_name <- sub("_.*", "", stem)
+    has_version <- grepl("_", stem, fixed = TRUE)
+    expected_version <- if (has_version) {
+      sub("^[^_]+_", "", stem)
+    } else {
+      NA_character_
+    }
+    mismatch <- !identical(component$package, expected_name) ||
+      (has_version && !.version_matches(component$version, expected_version))
+    if (!mismatch) return(NULL)
+    data.frame(
+      relaxation = "filename_mismatch",
+      component = component$package,
+      tolerated = "filename_mismatch" %in% tolerate,
+      reason = .bb_trf(
+        "Archive %s does not match its DESCRIPTION identity (%s %s).",
+        component$path, component$package, component$version
+      ),
+      stringsAsFactors = FALSE
+    )
+  })
+  rows <- Filter(Negate(is.null), rows)
+  if (length(rows) == 0L) {
+    return(data.frame(
+      relaxation = character(), component = character(),
+      tolerated = logical(), reason = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  do.call(rbind, rows)
+}
 
 .bigbang_condition <- function(class, message, ..., call = NULL) {
   structure(
@@ -169,6 +293,19 @@
 #'   warnings, or `"unincluded_local_dep"` to turn an available-but-unincluded
 #'   local dependency error into a warning. Unknown names are errors. Each
 #'   applied relaxation is recorded in the returned `tolerated` table.
+#' @param dry_run Logical. If TRUE, resolves and validates components and
+#'   returns the planned generation without creating dest_dir or writing a
+#'   project.
+#' @param on_component_error Character policy for component-level failures:
+#'   "abort" (default) stops generation, while "skip" omits the failed
+#'   component and transitively omits components that depend on it.
+#' @param update Logical. If TRUE, update a previously generated project only
+#'   when its bigbang manifest is present and all generated files are unchanged.
+#'   Files outside that manifest are never touched.
+#' @param install_upgrade Character default upgrade policy emitted in the
+#'   generated installer function: "newer", "always", or "never".
+#'   This controls whether a generated installer keeps newer installed
+#'   versions, reinstalls every component, or skips archive inspection.
 #' @param debug Logical. If `TRUE`, emits detailed debugging messages. Defaults
 #'   to `FALSE`.
 #'
@@ -212,6 +349,9 @@
 #' switch that disables validation as a whole. bigbang does not run
 #' `R CMD check` on component packages, so component warnings and notes do not
 #' prevent generation.
+#' Component source directories are built in a temporary directory with the
+#' optional pkgbuild package; passing an already built archive avoids that
+#' optional dependency.
 #'
 #' @section Component installation:
 #' The generated meta-package installs component packages only when the user
@@ -280,10 +420,16 @@ create_metapackage <- function(
   # against 0.1.0 keeps binding to the same parameters.
   workflow = NULL,
   include_archives = TRUE,
-  tolerate = character()
+  tolerate = character(),
+  dry_run = FALSE,
+  on_component_error = c("abort", "skip"),
+  update = FALSE,
+  install_upgrade = c("newer", "always", "never")
 ) {
   verbose <- isTRUE(verbose)
   debug <- isTRUE(debug)
+  on_component_error <- match.arg(on_component_error)
+  install_upgrade <- match.arg(install_upgrade)
 
   # Validate public arguments before touching the filesystem.
   if (missing(dest_dir) || is.null(dest_dir) ||
@@ -309,6 +455,12 @@ create_metapackage <- function(
     stop(.bb_tr("'include_archives' must be TRUE or FALSE"), call. = FALSE)
   }
   tolerate <- .validate_tolerate(tolerate)
+  if (!is.logical(dry_run) || length(dry_run) != 1L || is.na(dry_run)) {
+    stop(.bb_tr("'dry_run' must be TRUE or FALSE"), call. = FALSE)
+  }
+  if (!is.logical(update) || length(update) != 1L || is.na(update)) {
+    stop(.bb_tr("'update' must be TRUE or FALSE"), call. = FALSE)
+  }
 
   # Resolve caller-supplied paths before any generated files are written. A
   # component may be an existing archive path or a stem resolved in pkg_dir.
@@ -341,28 +493,30 @@ create_metapackage <- function(
     ), name), call. = FALSE)
   }
 
-  resolved_components <- .resolve_components(packages, pkg_dir, ext)
-  validation <- .validate_component_archives(
-    resolved_components, tolerate = tolerate
+  resolved_components <- .resolve_components(
+    packages, pkg_dir, ext, on_component_error = on_component_error
   )
+  validated <- .validate_generation(
+    resolved_components, tolerate = tolerate,
+    on_component_error = on_component_error
+  )
+  resolved_components <- validated$resolved
+  validation <- validated$validation
+  omitted <- validated$omitted
   components <- validation$components
   tolerated <- validation$tolerated
   component_packages <- vapply(components, `[[`, character(1L), "package")
   archive_stems <- vapply(components, `[[`, character(1L), "stem")
   archive_paths <- vapply(components, `[[`, character(1L), "path")
   archive_basenames <- basename(archive_paths)
-  if (anyDuplicated(archive_basenames)) {
-    duplicate_names <- unique(archive_basenames[duplicated(archive_basenames)])
-    duplicate_paths <- archive_paths[archive_basenames %in% duplicate_names]
-    .bigbang_abort(
-      "bigbang_error_archive_basename_collision",
-      .bb_trf(
-        "Cannot use component archives with the same basename (%s): %s.",
-        paste(duplicate_names, collapse = ", "),
-        paste(duplicate_paths, collapse = "; ")
-      ),
-      paths = duplicate_paths
-    )
+  source_components <- vapply(
+    components, function(x) !is.null(x$source_dir), logical(1L)
+  )
+  if (!isTRUE(include_archives) && any(source_components)) {
+    stop(.bb_tr(paste0(
+      "Source directory components require include_archives = TRUE because their ",
+      "temporary build archive cannot be reused."
+    )), call. = FALSE)
   }
   if (!is.null(workflow)) {
     valid_workflow <- is.character(workflow) && length(workflow) > 0L &&
@@ -389,6 +543,85 @@ create_metapackage <- function(
       paste(resolved_components$source_dirs, collapse = ", ")
     ), call. = FALSE)
   }
+
+  # Resolve dependency diagnostics before creating the destination. This keeps
+  # dry_run genuinely read-only and ensures all preflight failures happen before
+  # the generated project exists.
+  if (!is.null(force_deps)) {
+    detected_implicit_deps <- character()
+  } else {
+    detected_implicit_deps <- detect_implicit_dependencies(
+      resolved_components$packages, resolved_components$pkg_dir, ext,
+      components = components
+    )
+  }
+  hard_implicit_deps <- unique(c(
+    if (is.null(force_deps)) character() else force_deps,
+    if (is.null(additional_deps)) character() else additional_deps
+  ))
+  if (!is.null(ignore_deps) && length(ignore_deps) > 0L) {
+    hard_implicit_deps <- setdiff(hard_implicit_deps, ignore_deps)
+    if (is.null(force_deps)) {
+      detected_implicit_deps <- setdiff(detected_implicit_deps, ignore_deps)
+    }
+  }
+  dependencies <- unlist(lapply(components, function(x) x$dependencies),
+                         use.names = FALSE)
+  classified_deps <- classify_dependencies(
+    dependencies, included_packages = component_packages
+  )
+  cran_deps <- unique(setdiff(classified_deps$cran, "utils"))
+  local_deps <- classified_deps$local
+
+  if (verbose) {
+    if (!is.null(force_deps)) {
+      message(.bb_trf(
+        "Using explicitly supplied dependencies: %s",
+        paste(force_deps, collapse = ", ")
+      ))
+    } else {
+      message(.bb_tr("Scanning local packages for implicit dependencies..."))
+      message(.bb_trf(
+        "Detected implicit dependencies: %s",
+        paste(detected_implicit_deps, collapse = ", ")
+      ))
+    }
+  }
+
+  project_dir <- normalizePath(
+    file.path(dest_dir, name), winslash = "/", mustWork = FALSE
+  )
+  generation_findings <- list(
+    metadata = .generation_metadata_findings(components, tolerate),
+    tolerated = tolerated,
+    omitted = omitted
+  )
+  if (isTRUE(dry_run)) {
+    result <- structure(list(
+      path = project_dir,
+      name = name,
+      packages = component_packages,
+      archives = archive_stems,
+      components = components,
+      order = .component_topological_order(components),
+      files = .planned_generation_files(
+        name, components, workflow, reexport, include_archives,
+        license = license
+      ),
+      findings = generation_findings,
+      local_dependencies = local_deps,
+      cran_dependencies = cran_deps,
+      implicit_dependencies = detected_implicit_deps,
+      tolerated = tolerated,
+      omitted = omitted,
+      workflow = workflow,
+      documented = FALSE,
+      dry_run = TRUE,
+      updated = FALSE
+    ), class = "bigbang_result")
+    return(invisible(result))
+  }
+
   # Debug logger.
   log_debug <- function(debug_message) {
     if (debug) message(paste0("DEBUG: ", debug_message))
@@ -397,13 +630,40 @@ create_metapackage <- function(
   log_debug("Starting create_metapackage()")
 
 
-  # Resolve the generated project path.
-  project_dir <- normalizePath(
-    file.path(dest_dir, name), winslash = "/", mustWork = FALSE
-  )
   project_created <- FALSE
   destination_created <- !dir.exists(dest_dir)
   generation_complete <- FALSE
+  update_manifest <- NULL
+  if (isTRUE(update)) {
+    if (!dir.exists(project_dir)) {
+      .bigbang_abort(
+        "bigbang_error_missing_manifest",
+        .bb_tr(
+          "Cannot update a project that does not exist or has no bigbang generation manifest."
+        ),
+        path = project_dir
+      )
+    }
+    update_manifest <- .validate_update_manifest(project_dir)
+    requested_files <- setdiff(
+      .planned_generation_files(
+        name, resolved_components$components, workflow, reexport,
+        include_archives, license = license
+      ),
+      .generation_manifest_name
+    )
+    untracked <- setdiff(requested_files, update_manifest$files)
+    if (length(untracked) > 0L) {
+      .bigbang_abort(
+        "bigbang_error_modified_generated_file",
+        .bb_trf(
+          "Cannot update %s because requested generated files are not in its manifest: %s.",
+          project_dir, paste(untracked, collapse = ", ")
+        ),
+        path = project_dir, files = untracked
+      )
+    }
+  }
   documentation_search <- NULL
   documentation_namespaces <- NULL
   on.exit({
@@ -451,9 +711,11 @@ create_metapackage <- function(
 
   log_debug(glue::glue("New project path: {project_dir}"))
 
-  # In-place regeneration could preserve unsafe historical hooks or overwrite
-  # user content. Only a new or completely empty destination is accepted.
-  if (dir.exists(project_dir)) {
+  # In-place regeneration is allowed only when a matching manifest was
+  # validated above. Without update=TRUE, the historical safety rule remains.
+  if (isTRUE(update)) {
+    project_created <- FALSE
+  } else if (dir.exists(project_dir)) {
     existing_entries <- list.files(
       project_dir, all.files = TRUE, no.. = TRUE
     )
@@ -531,65 +793,6 @@ create_metapackage <- function(
     }
   }
 
-  # Source-code guesses are diagnostic by default. Only explicitly supplied
-  # dependencies (`force_deps` or `additional_deps`) become hard dependencies
-  # in the generated DESCRIPTION/NAMESPACE. Supplying even an empty
-  # `force_deps` intentionally disables the heuristic for reproducible builds.
-  if (!is.null(force_deps)) {
-    detected_implicit_deps <- character()
-
-    if (verbose) {
-      message(.bb_trf(
-        "Using explicitly supplied dependencies: %s",
-        paste(force_deps, collapse = ", ")
-      ))
-    }
-  } else {
-    # Detect implicit dependencies.
-    if (verbose) {
-      message(.bb_tr("Scanning local packages for implicit dependencies..."))
-    }
-
-    detected_implicit_deps <- detect_implicit_dependencies(
-      packages, pkg_dir, ext, components = components
-    )
-
-    if (verbose) {
-      message(.bb_trf(
-        "Detected implicit dependencies: %s",
-        paste(detected_implicit_deps, collapse = ", ")
-      ))
-    }
-
-  }
-
-  hard_implicit_deps <- unique(c(
-    if (is.null(force_deps)) character() else force_deps,
-    if (is.null(additional_deps)) character() else additional_deps
-  ))
-  if (!is.null(ignore_deps) && length(ignore_deps) > 0L) {
-    hard_implicit_deps <- setdiff(hard_implicit_deps, ignore_deps)
-  }
-  if (is.null(force_deps) && !is.null(ignore_deps) && length(ignore_deps) > 0L) {
-    detected_implicit_deps <- setdiff(detected_implicit_deps, ignore_deps)
-  }
-
-  # Extract explicit dependencies from local archives.
-  dependencies <- unlist(lapply(components, `[[`, "dependencies"), use.names = FALSE)
-
-  # Classify dependencies as local or repository-provided.
-  classified_deps <- classify_dependencies(
-    dependencies, included_packages = component_packages
-  )
-  cran_deps <- classified_deps$cran
-  local_deps <- classified_deps$local
-
-  # Remove utils because the generated package already imports it.
-  cran_deps <- setdiff(cran_deps, "utils")
-
-  # Deduplicate dependencies before writing DESCRIPTION.
-  cran_deps <- unique(cran_deps)
-
   # Write DESCRIPTION with the configured dependencies.
   if (verbose) {
     message(.bb_tr("Generating DESCRIPTION and NAMESPACE..."))
@@ -643,7 +846,8 @@ create_metapackage <- function(
 
   # Generate the component installation engine.
   install_packages_content <- .render_install_engine(
-    name, components, .archive_dir_default(name, include_archives)
+    name, components, .archive_dir_default(name, include_archives),
+    install_upgrade = install_upgrade
   )
 
   install_packages_content <- .drop_regular_comment_lines(install_packages_content)
@@ -748,6 +952,8 @@ create_metapackage <- function(
 
   # Exclude the build-service configuration from the source tarball.
   rbuildignore_content <- c(rbuildignore_content, "^\\.BBSoptions$")
+  rbuildignore_content <- c(rbuildignore_content,
+                            "^\\.bigbang-manifest\\.rds$")
 
   # Persist the complete build ignore list.
   .write_utf8(rbuildignore_content, file.path(project_dir, ".Rbuildignore"))
@@ -787,7 +993,9 @@ StripTrailingWhitespace: Yes"
     implicit_deps = hard_implicit_deps,
     reexport = reexport,
     include_archives = include_archives,
-    verbose = debug
+    verbose = debug,
+    overwrite = update,
+    install_upgrade = install_upgrade
   )
   log_debug("Additional metapackage files created")
 
@@ -835,6 +1043,8 @@ StripTrailingWhitespace: Yes"
     message(.bb_tr("Install package 'devtools' to generate documentation automatically."))
   }
 
+  manifest <- .manifest_records(project_dir, exclude = .generation_manifest_name)
+  saveRDS(manifest, file.path(project_dir, .generation_manifest_name))
 
   result <- structure(
     list(
@@ -846,8 +1056,12 @@ StripTrailingWhitespace: Yes"
       cran_dependencies = cran_deps,
       implicit_dependencies = detected_implicit_deps,
       tolerated = tolerated,
+      omitted = omitted,
       workflow = workflow,
-      documented = doc_ok
+      documented = doc_ok,
+      dry_run = FALSE,
+      updated = isTRUE(update),
+      findings = generation_findings
     ),
     class = "bigbang_result"
   )

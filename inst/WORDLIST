@@ -4,6 +4,7 @@ CMD
 CRAN
 cwd
 devel
+dest
 Detomasi
 Egeler
 español
@@ -25,6 +26,7 @@ oldrel
 Paul
 pegeler
 pkgdown
+pkgbuild
 pre
 repos
 README

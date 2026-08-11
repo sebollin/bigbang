@@ -44,11 +44,13 @@ Depends:
 Imports:
     brio,
     glue,
+    tools,
     utils,
     whisker
 Suggests:
     devtools,
     knitr,
+    pkgbuild,
     rmarkdown,
     testthat (>= 3.0.0),
     withr

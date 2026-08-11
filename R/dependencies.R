@@ -35,6 +35,81 @@
   substr(basename, 1L, nchar(basename) - nchar(ext))
 }
 
+.expand_package_manifest <- function(packages, pkg_dir = NULL) {
+  if (!is.character(packages) || length(packages) != 1L ||
+        !file.exists(packages) || dir.exists(packages)) {
+    return(list(packages = packages, pkg_dir = pkg_dir))
+  }
+  manifest <- normalizePath(packages, winslash = "/", mustWork = TRUE)
+  if (!is.null(tryCatch(.archive_extension(manifest), error = function(e) NULL))) {
+    return(list(packages = packages, pkg_dir = pkg_dir))
+  }
+  lines <- readLines(manifest, warn = FALSE, encoding = "UTF-8")
+  lines <- trimws(lines)
+  lines <- lines[nzchar(lines) & !startsWith(lines, "#")]
+  if (length(lines) == 0L) {
+    stop(.bb_tr("The component manifest does not list any packages."),
+         call. = FALSE)
+  }
+  manifest_dir <- dirname(manifest)
+  entries <- vapply(lines, function(line) {
+    candidate <- file.path(manifest_dir, line)
+    is_archive <- !is.null(
+      tryCatch(.archive_extension(line), error = function(e) NULL)
+    )
+    if (file.exists(candidate) || is_archive || grepl("[/\\\\]", line)) {
+      candidate
+    } else {
+      line
+    }
+  }, character(1L))
+  list(
+    packages = entries,
+    pkg_dir = unique(c(manifest_dir, pkg_dir))
+  )
+}
+
+.build_source_component <- function(source_dir) {
+  if (!requireNamespace("pkgbuild", quietly = TRUE)) {
+    stop(.bb_tr(
+      "Component directories require the 'pkgbuild' package. Install 'pkgbuild' or pass a built archive instead."
+    ), call. = FALSE)
+  }
+  build_dir <- tempfile("bigbang-source-build-")
+  if (!dir.create(build_dir, recursive = TRUE)) {
+    stop(.bb_trf("Could not create temporary directory for %s", source_dir),
+         call. = FALSE)
+  }
+  built <- tryCatch(
+    pkgbuild::build(
+      path = source_dir, dest_path = build_dir, binary = FALSE,
+      vignettes = FALSE, manual = FALSE, quiet = TRUE
+    ),
+    error = identity
+  )
+  if (inherits(built, "error")) {
+    stop(.bb_trf(
+      "Could not build component source directory %s: %s",
+      source_dir, conditionMessage(built)
+    ), call. = FALSE)
+  }
+  built <- as.character(built)[1L]
+  if (!nzchar(built) || !file.exists(built)) {
+    candidates <- list.files(
+      build_dir, pattern = "\\.(tar\\.gz|zip)$", full.names = TRUE,
+      ignore.case = TRUE
+    )
+    if (length(candidates) != 1L) {
+      stop(.bb_trf(
+        "Could not find the archive built from component directory %s.",
+        source_dir
+      ), call. = FALSE)
+    }
+    built <- candidates[[1L]]
+  }
+  normalizePath(built, winslash = "/", mustWork = TRUE)
+}
+
 .normalize_archive_dirs <- function(pkg_dir) {
   if (is.null(pkg_dir) || length(pkg_dir) == 0L) return(character())
   if (!is.character(pkg_dir) || anyNA(pkg_dir) || any(!nzchar(pkg_dir))) {
@@ -51,6 +126,11 @@
 .resolve_archive_input <- function(input, pkg_dir = NULL, ext = ".tar.gz") {
   if (!is.character(input) || length(input) != 1L || is.na(input) || !nzchar(input)) {
     stop(.bb_tr("Each component must be one non-empty archive path or stem"), call. = FALSE)
+  }
+  if (dir.exists(input) && file.exists(file.path(input, "DESCRIPTION"))) {
+    return(.build_source_component(normalizePath(
+      input, winslash = "/", mustWork = TRUE
+    )))
   }
   if (file.exists(input) && !dir.exists(input)) {
     return(normalizePath(input, winslash = "/", mustWork = TRUE))
@@ -92,32 +172,101 @@
   normalizePath(found[[1L]], winslash = "/", mustWork = TRUE)
 }
 
-.resolve_components <- function(packages, pkg_dir = NULL, ext = ".tar.gz") {
+.resolve_components <- function(packages, pkg_dir = NULL, ext = ".tar.gz",
+                                on_component_error = "abort") {
   if (!is.character(packages) || length(packages) < 1L) {
     stop(.bb_tr("'packages' must be a non-empty character vector"), call. = FALSE)
   }
   if (!is.character(ext) || length(ext) != 1L || is.na(ext) || !nzchar(ext)) {
     stop(.bb_tr("'ext' must be one non-empty archive extension"), call. = FALSE)
   }
+  on_component_error <- match.arg(on_component_error, c("abort", "skip"))
+  expanded <- .expand_package_manifest(packages, pkg_dir)
+  packages <- expanded$packages
+  pkg_dir <- expanded$pkg_dir
   dirs <- .normalize_archive_dirs(pkg_dir)
-  components <- lapply(packages, function(input) {
-    path <- .resolve_archive_input(input, dirs, ext)
-    actual_ext <- .archive_extension(path)
-    metadata <- .read_archive_metadata(path, ext = actual_ext)
-    list(
-      path = path,
-      ext = actual_ext,
-      stem = .archive_stem(path, actual_ext),
-      input = input,
-      package = metadata$package,
-      version = metadata$version,
-      dependencies = metadata$dependencies,
-      constraints = metadata$constraints
-    )
-  })
+  omitted <- data.frame(
+    component = character(), input = character(), reason = character(),
+    stringsAsFactors = FALSE
+  )
+  components <- list()
+  for (input in packages) {
+    resolved <- tryCatch({
+      source_dir <- if (dir.exists(input) &&
+                          file.exists(file.path(input, "DESCRIPTION"))) {
+        normalizePath(input, winslash = "/", mustWork = TRUE)
+      } else {
+        NULL
+      }
+      path <- .resolve_archive_input(input, dirs, ext)
+      actual_ext <- .archive_extension(path)
+      metadata <- .read_archive_metadata(path, ext = actual_ext)
+      list(
+        path = path,
+        ext = actual_ext,
+        stem = .archive_stem(path, actual_ext),
+        input = input,
+        source_dir = source_dir,
+        package = metadata$package,
+        version = metadata$version,
+        dependencies = metadata$dependencies,
+        constraints = metadata$constraints
+      )
+    }, error = identity)
+    if (inherits(resolved, "error")) {
+      if (identical(on_component_error, "abort") ||
+            inherits(resolved, "bigbang_error_duplicate_component")) {
+        stop(resolved)
+      }
+      component_name <- sub("_.*", "", basename(input))
+      omitted <- rbind(
+        omitted,
+        data.frame(
+          component = component_name, input = input,
+          reason = conditionMessage(resolved), stringsAsFactors = FALSE
+        )
+      )
+    } else {
+      components[[length(components) + 1L]] <- resolved
+    }
+  }
+  if (length(components) == 0L) {
+    stop(.bb_tr("No valid component archives remain after applying the component error policy."),
+         call. = FALSE)
+  }
+  component_packages <- vapply(components, `[[`, character(1L), "package")
+  repeat {
+    omitted_names <- unique(omitted$component)
+    dependent <- vapply(components, function(component) {
+      any(component$dependencies %in% omitted_names)
+    }, logical(1L))
+    if (!any(dependent)) break
+    newly_omitted <- components[dependent]
+    for (component in newly_omitted) {
+      omitted <- rbind(
+        omitted,
+        data.frame(
+          component = component$package, input = component$input,
+          reason = .bb_trf(
+            "Omitted because it depends on omitted component %s.",
+            paste(intersect(component$dependencies, omitted_names), collapse = ", ")
+          ), stringsAsFactors = FALSE
+        )
+      )
+    }
+    components <- components[!dependent]
+    component_packages <- vapply(components, `[[`, character(1L), "package")
+    if (length(components) == 0L) {
+      stop(.bb_tr("No valid component archives remain after propagating omitted dependencies."),
+           call. = FALSE)
+    }
+  }
   source_dirs <- unique(c(dirs, dirname(vapply(components, `[[`, character(1L), "path"))))
   inventory <- .archive_inventory(source_dirs, known = components)
-  list(components = components, inventory = inventory, source_dirs = source_dirs)
+  list(
+    components = components, inventory = inventory, source_dirs = source_dirs,
+    omitted = omitted, packages = packages, pkg_dir = pkg_dir
+  )
 }
 
 .read_archive_metadata <- function(package, pkg_dir = NULL, ext = NULL) {
@@ -568,7 +717,11 @@
       known[[known_index]]
     } else {
       actual_ext <- .archive_extension(path)
-      metadata <- .read_archive_metadata(path, ext = actual_ext)
+      metadata <- tryCatch(
+        .read_archive_metadata(path, ext = actual_ext),
+        error = function(e) NULL
+      )
+      if (is.null(metadata)) return(NULL)
       list(
         path = path,
         ext = actual_ext,
@@ -580,6 +733,7 @@
       )
     }
   })
+  entries <- Filter(Negate(is.null), entries)
   stems <- if (length(entries) == 0L) {
     character()
   } else {
@@ -737,6 +891,51 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
       c(metadata_tolerated, list(dependency_tolerated))
     )
   )
+}
+
+.component_topological_order <- function(components) {
+  names_only <- vapply(components, function(x) x[["package"]], character(1L))
+  adjacency <- lapply(components, function(component) {
+    intersect(component$dependencies, names_only)
+  })
+  names(adjacency) <- names_only
+  state <- new.env(parent = emptyenv())
+  state$visited <- character()
+  state$ordered <- character()
+  visit <- function(node) {
+    if (node %in% state$visited) return(invisible(NULL))
+    state$visited <- c(state$visited, node)
+    for (dependency in adjacency[[node]]) visit(dependency)
+    state$ordered <- c(state$ordered, node)
+    invisible(NULL)
+  }
+  for (node in names_only) visit(node)
+  state$ordered
+}
+
+.validate_generation <- function(
+  resolved, tolerate = character(), on_component_error = "abort"
+) {
+  omitted <- resolved$omitted
+  validation <- .validate_component_archives(resolved, tolerate = tolerate)
+  archive_paths <- vapply(
+    resolved$components, function(x) x[["path"]], character(1L)
+  )
+  archive_basenames <- basename(archive_paths)
+  if (anyDuplicated(archive_basenames)) {
+    duplicate_names <- unique(archive_basenames[duplicated(archive_basenames)])
+    duplicate_paths <- archive_paths[archive_basenames %in% duplicate_names]
+    .bigbang_abort(
+      "bigbang_error_archive_basename_collision",
+      .bb_trf(
+        "Cannot use component archives with the same basename (%s): %s.",
+        paste(duplicate_names, collapse = ", "),
+        paste(duplicate_paths, collapse = "; ")
+      ),
+      paths = duplicate_paths
+    )
+  }
+  list(resolved = resolved, validation = validation, omitted = omitted)
 }
 
 #' @return A character vector of dependency names declared in DESCRIPTION.

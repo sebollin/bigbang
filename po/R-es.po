@@ -360,3 +360,45 @@ msgstr "El paquete instalado no tiene un campo Package válido."
 
 msgid "Could not identify the installed lazy-load database."
 msgstr "No se pudo identificar la base lazy-load instalada."
+
+msgid "The component manifest does not list any packages."
+msgstr "El manifiesto de componentes no lista ningún paquete."
+
+msgid "Component directories require the 'pkgbuild' package. Install 'pkgbuild' or pass a built archive instead."
+msgstr "Los directorios de componentes requieren el paquete 'pkgbuild'. Instale 'pkgbuild' o pase un archivo ya construido."
+
+msgid "Could not build component source directory %s: %s"
+msgstr "No se pudo construir el directorio fuente del componente %s: %s"
+
+msgid "Could not find the archive built from component directory %s."
+msgstr "No se encontró el archivo construido desde el directorio de componentes %s."
+
+msgid "Cannot update %s because it has no valid bigbang generation manifest."
+msgstr "No se puede actualizar %s porque no tiene un manifiesto de generación válido de bigbang."
+
+msgid "Cannot update %s because generated files were modified or removed: %s."
+msgstr "No se puede actualizar %s porque se modificaron o eliminaron archivos generados: %s."
+
+msgid "Cannot update a project that does not exist or has no bigbang generation manifest."
+msgstr "No se puede actualizar un proyecto que no existe o no tiene un manifiesto de generación de bigbang."
+
+msgid "The installation library must be one non-empty path."
+msgstr "La biblioteca de instalación debe ser una ruta no vacía."
+
+msgid "Could not create installation library: %s"
+msgstr "No se pudo crear la biblioteca de instalación: %s"
+
+msgid "'only' must contain component package names."
+msgstr "'only' debe contener nombres de paquetes componentes."
+
+msgid "Unknown component(s) in 'only': %s."
+msgstr "Componente(s) desconocido(s) en 'only': %s."
+
+msgid "Added local dependencies of selected components: %s"
+msgstr "Se agregaron dependencias locales de los componentes seleccionados: %s"
+
+msgid "Source directory components require include_archives = TRUE because their temporary build archive cannot be reused."
+msgstr "Los componentes de directorio fuente requieren include_archives = TRUE porque su archivo temporal no se puede reutilizar."
+
+msgid "Cannot update %s because requested generated files are not in its manifest: %s."
+msgstr "No se puede actualizar %s porque los archivos generados solicitados no están en su manifiesto: %s."

@@ -27,6 +27,11 @@ print.bigbang_result <- function(x, ...) {
   cat("  Package: ", x$name, "\n", sep = "")
   cat("  Path: ", x$path, "\n", sep = "")
   cat("  Components: ", paste(x$packages, collapse = ", "), "\n", sep = "")
+  if (isTRUE(x$dry_run)) cat("  Mode: dry run (no files written)\n")
+  if (isTRUE(x$updated)) cat("  Mode: updated from generation manifest\n")
+  if (is.data.frame(x$omitted) && nrow(x$omitted) > 0L) {
+    cat("  Omitted: ", paste(x$omitted$component, collapse = ", "), "\n", sep = "")
+  }
   if (length(x$cran_dependencies) > 0L) {
     cat("  Non-local dependencies: ",
         paste(x$cran_dependencies, collapse = ", "), "\n", sep = "")
