@@ -1,4 +1,16 @@
-# bigbang (development version)
+# bigbang 0.3.0
+
+This release makes the package accept component packages as an organisation
+actually keeps them, instead of requiring one directory, one archive extension,
+and a version in every filename. Package identity now comes from each archive's
+`DESCRIPTION` rather than from its filename, generation can report a plan without
+writing anything, and the checks that concern project tidiness can be relaxed
+individually. The checks that protect whoever installs the generated
+meta-package cannot: they remain hard errors during generation.
+
+It also supersedes 0.2.0, which was prepared and verified but never submitted.
+Everything listed under 0.2.0 below reaches CRAN for the first time here, so a
+user updating from 0.1.0 should read both sections.
 
 ## New capabilities
 
@@ -61,7 +73,8 @@
 
 # bigbang 0.2.0
 
-Released on 2026-08-09.
+Prepared and verified but never submitted: CRAN submissions were closed between
+2026-08-05 and 2026-08-19. These changes are released as part of 0.3.0.
 
 ## Breaking changes
 
