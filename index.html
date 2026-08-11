@@ -173,7 +173,7 @@
 <span><span class="op">)</span></span></code></pre></div>
 <p>A filename without a version is fine: <code>Package</code> and <code>Version</code> come from the archive’s <code>DESCRIPTION</code>. If the filename disagrees, bigbang warns and trusts the <code>DESCRIPTION</code>.</p>
 <p>Source directories are built with the optional <code>pkgbuild</code> package, in a temporary directory, and require <code>include_archives = TRUE</code>, because the archive built for them does not outlive the call.</p>
-<p><code>packages</code> can also be the path to a <strong>manifest</strong>: one component per line, <code>#</code> for comments. Relative paths in it resolve against the manifest’s own directory, and bare filenames are also looked up in <code>pkg_dir</code>, so the list can live under version control while the archives do not.</p>
+<p><code>packages</code> can also be the path to a <strong>manifest</strong>: one component per line, <code>#</code> for comments. Relative paths in it resolve against the manifest’s own directory; absolute paths and <code>~</code> paths are used as written; and bare filenames are also looked up in <code>pkg_dir</code>, so the list can live under version control while the archives do not.</p>
 </div>
 <div class="section level2">
 <h2 id="level_slider-generation-options">🎚️ Generation options<a class="anchor" aria-label="anchor" href="#level_slider-generation-options"></a>
@@ -186,9 +186,9 @@
 <p><code>dry_run = TRUE</code> does not create <code>dest_dir</code> and does not touch the destination at all, so it is a safe way to see what a call would do before it does it.</p>
 <ul>
 <li>
-<code>on_component_error = "skip"</code> generates from the components that are valid instead of aborting, and reports the ones it left out. The exclusion is transitive: a component that depends on an excluded one is excluded too, and the chain is reported. Excluding everything is an error.</li>
+<code>on_component_error = "skip"</code> generates from the components that are valid instead of aborting, and reports the ones it left out. The exclusion is transitive: a component that depends on an excluded one is excluded too, and the chain is reported. When an invalid archive still has a readable <code>DESCRIPTION</code>, its declared package name drives this propagation; otherwise bigbang falls back to the filename and reports that limitation. Excluding everything is an error.</li>
 <li>
-<code>update = TRUE</code> regenerates in place. Generation records a manifest of the files it wrote together with their content hashes; <code>update</code> rewrites only those, and refuses to run if the manifest is missing or if a generated file was modified or removed by hand. Files bigbang did not write are never touched.</li>
+<code>update = TRUE</code> regenerates in place. Generation records a manifest of the files it wrote together with their content hashes; <code>update</code> rewrites only those, and refuses to run if the manifest is missing or if a generated file was modified or removed by hand. Files bigbang did not write are never touched. Updates also refuse to write through symbolic links inside the generated project, including links in parent directories of generated files.</li>
 <li>
 <code>install_upgrade</code> fixes the default upgrade policy of the installer that gets emitted, so you decide when generating whether recipients stay pinned to the versions you ship (<code>"always"</code>) or keep anything newer they already have (<code>"newer"</code>, the default).</li>
 </ul>

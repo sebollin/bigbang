@@ -91,8 +91,8 @@ the element is resolved as a stem in <code>pkg_dir</code>, e.g. <code>"myPackage
 Existing paths may come from different directories. A single existing text
 file without a recognised archive extension is treated as a manifest, with
 one component per line; relative paths in that file are resolved relative
-to the manifest directory, and bare archive filenames may also be found in
-<code>pkg_dir</code>.</p></dd>
+to the manifest directory, absolute paths and <code>~</code> paths are used as written,
+and bare archive filenames may also be found in <code>pkg_dir</code>.</p></dd>
 
 
 <dt id="arg-pkg-dir">pkg_dir<a class="anchor" aria-label="anchor" href="#arg-pkg-dir"></a></dt>
@@ -214,13 +214,19 @@ project.</p></dd>
 <dt id="arg-on-component-error">on_component_error<a class="anchor" aria-label="anchor" href="#arg-on-component-error"></a></dt>
 <dd><p>Character policy for component-level failures:
 "abort" (default) stops generation, while "skip" omits the failed
-component and transitively omits components that depend on it.</p></dd>
+component and transitively omits components that depend on it. When a
+failed archive still exposes its DESCRIPTION, propagation uses its declared
+<code>Package</code>; otherwise the filename-derived name is used and the limitation is
+reported. If that fallback name differs from <code>Package</code>, a dependent may
+fail on the recipient.</p></dd>
 
 
 <dt id="arg-update">update<a class="anchor" aria-label="anchor" href="#arg-update"></a></dt>
 <dd><p>Logical. If TRUE, update a previously generated project only
 when its bigbang manifest is present and all generated files are unchanged.
-Files outside that manifest are never touched.</p></dd>
+Files outside that manifest are never touched. Updates are refused when a
+manifest file or any path component inside the generated project is a
+symbolic link, so writes cannot escape the project tree.</p></dd>
 
 
 <dt id="arg-install-upgrade">install_upgrade<a class="anchor" aria-label="anchor" href="#arg-install-upgrade"></a></dt>

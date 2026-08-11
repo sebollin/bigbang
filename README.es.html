@@ -125,7 +125,7 @@
 <span><span class="op">)</span></span></code></pre></div>
 <p>Un nombre de archivo sin versión es válido: <code>Package</code> y <code>Version</code> salen del <code>DESCRIPTION</code> del archivo. Si el nombre discrepa, bigbang avisa y le cree al <code>DESCRIPTION</code>.</p>
 <p>Los directorios fuente se construyen con el paquete opcional <code>pkgbuild</code>, en un temporal, y requieren <code>include_archives = TRUE</code>, porque ese archivo temporal no sobrevive a la llamada.</p>
-<p><code>packages</code> también puede ser la ruta a un <strong>manifiesto</strong>: un componente por línea, <code>#</code> para comentarios. Las rutas relativas se resuelven contra el directorio del manifiesto, y los nombres de archivo se buscan además en <code>pkg_dir</code>, así que la lista puede vivir bajo control de versiones y los archivos no.</p>
+<p><code>packages</code> también puede ser la ruta a un <strong>manifiesto</strong>: un componente por línea, <code>#</code> para comentarios. Las rutas relativas se resuelven contra el directorio del manifiesto; las rutas absolutas y las que empiezan con <code>~</code> se usan tal cual; y los nombres de archivo se buscan además en <code>pkg_dir</code>, así que la lista puede vivir bajo control de versiones y los archivos no.</p>
 </div>
 <div class="section level2">
 <h2 id="level_slider-opciones-de-generación">🎚️ Opciones de generación<a class="anchor" aria-label="anchor" href="#level_slider-opciones-de-generaci%C3%B3n"></a></h2>
@@ -136,9 +136,9 @@
 <span><span class="va">plan</span><span class="op">$</span><span class="va">findings</span>                                    <span class="co"># todos los hallazgos</span></span></code></pre></div>
 <p><code>dry_run = TRUE</code> no crea <code>dest_dir</code> ni toca el destino, así que es una forma segura de ver qué haría una llamada antes de que la haga.</p>
 <ul><li>
-<code>on_component_error = "skip"</code> genera con los componentes válidos en lugar de abortar, e informa los que dejó afuera. El descarte es transitivo: un componente que depende de uno excluido también queda excluido, y se informa la cadena. Excluir todo es un error.</li>
+<code>on_component_error = "skip"</code> genera con los componentes válidos en lugar de abortar, e informa los que dejó afuera. El descarte es transitivo: un componente que depende de uno excluido también queda excluido, y se informa la cadena. Si un archivo inválido todavía tiene un <code>DESCRIPTION</code> legible, se usa el nombre declarado del paquete; de lo contrario bigbang recurre al nombre del archivo e informa esa limitación. Excluir todo es un error.</li>
 <li>
-<code>update = TRUE</code> regenera en el mismo lugar. La generación registra un manifiesto de los archivos que escribió con sus hashes de contenido; <code>update</code> reescribe solo esos, y se niega a correr si falta el manifiesto o si algún archivo generado fue modificado o borrado a mano. Lo que bigbang no escribió no se toca nunca.</li>
+<code>update = TRUE</code> regenera en el mismo lugar. La generación registra un manifiesto de los archivos que escribió con sus hashes de contenido; <code>update</code> reescribe solo esos, y se niega a correr si falta el manifiesto o si algún archivo generado fue modificado o borrado a mano. Lo que bigbang no escribió no se toca nunca. También se niega a escribir a través de enlaces simbólicos dentro del proyecto generado, incluidos los enlaces en directorios padre de los archivos generados.</li>
 <li>
 <code>install_upgrade</code> fija la política de actualización por defecto del instalador emitido, así que decidís al generar si los destinatarios quedan clavados en las versiones que distribuís (<code>"always"</code>) o conservan lo más nuevo que ya tengan (<code>"newer"</code>, el default).</li>
 </ul><p>El instalador generado también acepta <code>only</code> para instalar un subconjunto —las dependencias locales de lo elegido se agregan solas— y <code>lib</code> para elegir la biblioteca donde instala.</p>

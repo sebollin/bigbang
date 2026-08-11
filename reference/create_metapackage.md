@@ -53,8 +53,9 @@ create_metapackage(
   Existing paths may come from different directories. A single existing
   text file without a recognised archive extension is treated as a
   manifest, with one component per line; relative paths in that file are
-  resolved relative to the manifest directory, and bare archive
-  filenames may also be found in `pkg_dir`.
+  resolved relative to the manifest directory, absolute paths and `~`
+  paths are used as written, and bare archive filenames may also be
+  found in `pkg_dir`.
 
 - pkg_dir:
 
@@ -179,13 +180,19 @@ create_metapackage(
 
   Character policy for component-level failures: "abort" (default) stops
   generation, while "skip" omits the failed component and transitively
-  omits components that depend on it.
+  omits components that depend on it. When a failed archive still
+  exposes its DESCRIPTION, propagation uses its declared `Package`;
+  otherwise the filename-derived name is used and the limitation is
+  reported. If that fallback name differs from `Package`, a dependent
+  may fail on the recipient.
 
 - update:
 
   Logical. If TRUE, update a previously generated project only when its
   bigbang manifest is present and all generated files are unchanged.
-  Files outside that manifest are never touched.
+  Files outside that manifest are never touched. Updates are refused
+  when a manifest file or any path component inside the generated
+  project is a symbolic link, so writes cannot escape the project tree.
 
 - install_upgrade:
 
