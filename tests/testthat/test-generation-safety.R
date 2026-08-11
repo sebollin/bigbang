@@ -219,7 +219,7 @@ test_that("named tolerances are explicit, reported, and typo-safe", {
       dest_dir = destination, document = FALSE, verbose = FALSE,
       tolerate = "unincluded_local_dep"
     ),
-    "available at"
+    "will not ship"
   )
   expect_identical(orphan$tolerated$relaxation, "unincluded_local_dep")
   expect_identical(orphan$tolerated$component, "orphantol")

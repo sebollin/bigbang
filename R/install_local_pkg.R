@@ -410,7 +410,13 @@ install_local_pkg <- function(
 
     state$installed[[stem]] <- "Installed successfully"
     if (isTRUE(verbose)) {
-      message(.bb_trf("Installed local package: %s", stem))
+      if (identical(base_name, stem)) {
+        message(.bb_trf("Installed local package: %s", stem))
+      } else {
+        message(.bb_trf(
+          "Installed local package: %s from %s", base_name, stem
+        ))
+      }
     }
     TRUE
   }

@@ -172,8 +172,11 @@ create_metapackage(
 `"filename_mismatch"` silences warnings when an archive filename differs from
 its DESCRIPTION identity. `"unincluded_local_dep"` changes the error for a
 local dependency available in the supplied sources but omitted from `packages`
-into a warning. Applied relaxations are recorded in `result$tolerated`; unknown
-names are errors. There is deliberately no switch that disables all validation.
+into a warning. The generated metapackage will not ship that dependency, so the
+recipient must provide it through `pkg_dir` or a repository with
+`cran_deps = "install"`. Applied relaxations are recorded in
+`result$tolerated`; unknown names are errors. There is deliberately no switch
+that disables all validation.
 
 bigbang does **not** run `R CMD check` on component packages. A component with
 check warnings or notes can be included; validation is limited to whether the

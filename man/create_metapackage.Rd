@@ -40,7 +40,11 @@ underscores \verb{_}).}
 \item{packages}{Character vector. Archive paths or stems of the local
 packages to include. An existing file is always used as a path; otherwise
 the element is resolved as a stem in \code{pkg_dir}, e.g. \code{"myPackage_1.0.0"}.
-Existing paths may come from different directories.}
+Existing paths may come from different directories. A single existing text
+file without a recognised archive extension is treated as a manifest, with
+one component per line; relative paths in that file are resolved relative
+to the manifest directory, and bare archive filenames may also be found in
+\code{pkg_dir}.}
 
 \item{pkg_dir}{Character. Optional directory or directories containing local
 archives used to resolve stems. It is not needed when every \code{packages}
@@ -110,8 +114,11 @@ reach; then \verb{<meta>_install()} requires an explicit \code{pkg_dir}.}
 \item{tolerate}{Character vector of explicitly named validation relaxations.
 Use \code{"filename_mismatch"} to silence filename-versus-DESCRIPTION mismatch
 warnings, or \code{"unincluded_local_dep"} to turn an available-but-unincluded
-local dependency error into a warning. Unknown names are errors. Each
-applied relaxation is recorded in the returned \code{tolerated} table.}
+local dependency error into a warning. With the latter relaxation, the
+generated metapackage does not ship that dependency: the recipient must
+provide it through \code{pkg_dir} or a repository with \code{cran_deps = "install"}.
+Unknown names are errors. Each applied relaxation is recorded in the
+returned \code{tolerated} table.}
 
 \item{dry_run}{Logical. If TRUE, resolves and validates components and
 returns the planned generation without creating dest_dir or writing a
@@ -173,7 +180,8 @@ installation without reading an archive that will not be used.
 }
 \section{Validation strictness}{
 
-Validations that protect the recipient cannot be disabled: malformed or
+During generation, validations that protect the recipient cannot be disabled:
+malformed or
 unsafe archives, invalid component metadata, duplicate components, cycles,
 and unsatisfied local version constraints remain hard errors. Checks about
 project tidiness can be relaxed individually through \code{tolerate}; there is no

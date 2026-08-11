@@ -61,7 +61,15 @@
     is_archive <- !is.null(
       tryCatch(.archive_extension(line), error = function(e) NULL)
     )
-    if (file.exists(candidate) || is_archive || grepl("[/\\\\]", line)) {
+    # A bare archive filename may live beside the manifest or in one of the
+    # supplied archive directories. Keep it as a filename so the resolver can
+    # search all sources and detect duplicate basenames.
+    # Explicit paths remain paths and therefore fail at their stated location.
+    if (grepl("[/\\\\]", line)) {
+      candidate
+    } else if (is_archive) {
+      line
+    } else if (file.exists(candidate)) {
       candidate
     } else {
       line
@@ -146,16 +154,36 @@
       input
     ), call. = FALSE)
   }
-  candidates <- file.path(dirs, paste0(input, ext))
-  found <- candidates[file.exists(candidates) & !dir.exists(candidates)]
-  # `ext` is a fallback, not a restriction: a stem may resolve to a source
-  # archive with any supported extension. Discover all matches even when the
-  # fallback exists, so a second format cannot be silently ignored.
-  expected_names <- tolower(paste0(input, .archive_extensions))
-  discovered <- unlist(lapply(dirs, function(dir) {
-    files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
-    files[tolower(basename(files)) %in% expected_names & !dir.exists(files)]
-  }), use.names = FALSE)
+  has_separator <- grepl("[/\\\\]", input)
+  input_extension <- tryCatch(.archive_extension(input), error = function(e) NULL)
+  discovered <- character()
+  if (!is.null(input_extension) && !has_separator) {
+    # A manifest can name an archive without placing it beside the manifest.
+    # Search that basename in every supplied source, rather than treating the
+    # already-suffixed value as a stem and appending the extension again.
+    expected_names <- tolower(basename(input))
+    discovered <- unlist(lapply(dirs, function(dir) {
+      files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
+      files[tolower(basename(files)) == expected_names & !dir.exists(files)]
+    }), use.names = FALSE)
+    found <- discovered
+  } else if (has_separator) {
+    # A path containing a separator is explicit.  Do not reinterpret it as a
+    # stem and search unrelated directories when the path is missing.
+    found <- character()
+  } else {
+    candidates <- file.path(dirs, paste0(input, ext))
+    found <- candidates[file.exists(candidates) & !dir.exists(candidates)]
+    # `ext` is a fallback, not a restriction: a stem may resolve to a source
+    # archive with any supported extension. Discover all matches even when the
+    # fallback exists, so a second format cannot be silently ignored.
+    expected_names <- tolower(paste0(input, .archive_extensions))
+    discovered <- unlist(lapply(dirs, function(dir) {
+      files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
+      files[tolower(basename(files)) %in% expected_names & !dir.exists(files)]
+    }), use.names = FALSE)
+    found <- c(found, discovered)
+  }
   found <- unique(c(found, discovered))
   if (length(found) > 1L) {
     .bigbang_abort(
@@ -169,8 +197,8 @@
   }
   if (length(found) == 0L) {
     stop(.bb_trf(
-      "Package archive does not exist: %s; archives were not found in the supplied archive directories.",
-      input
+      "Package archive does not exist: %s; archives were not found in the supplied archive directories: %s.",
+      input, paste(dirs, collapse = "; ")
     ), call. = FALSE)
   }
   normalizePath(found[[1L]], winslash = "/", mustWork = TRUE)
@@ -784,7 +812,17 @@
           item$package, dependency, archive
         )
         if ("unincluded_local_dep" %in% tolerate) {
-          warning(reason, call. = FALSE)
+          consequence <- .bb_trf(
+            paste0(
+              "The generated meta-package will not ship %s; the recipient ",
+              "must provide it through pkg_dir or a repository with ",
+              "cran_deps = 'install'."
+            ),
+            dependency
+          )
+          warning(paste0(
+            reason, " ", consequence
+          ), call. = FALSE)
           tolerated <- .combine_tolerated(
             tolerated,
             .tolerated_entry(

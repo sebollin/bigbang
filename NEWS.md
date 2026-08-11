@@ -34,6 +34,11 @@
 
 ## Bug fixes
 
+- Component manifests now resolve bare archive filenames from the supplied
+  `pkg_dir` directories when the files are not beside the manifest, and missing
+  entries report every directory that was searched.
+- Installation messages now name both the declared package identity and the
+  archive stem when those differ.
 - Installing an already present package no longer requires reading an archive
   when `upgrade = "never"`; under the default policy, only its DESCRIPTION is
   read before deciding whether the archive needs to be used. An unreadable

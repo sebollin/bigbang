@@ -244,7 +244,19 @@ test_that("generated installation reports the declared package identity", {
   ))
   expect_length(generated$failed, 0L)
   expect_true(any(grepl(
-    "Installed package declaredround81 successfully.", messages, fixed = TRUE
+    "Installed package declaredround81 from aliasround81_9.9 successfully.",
+    messages, fixed = TRUE
   )))
   expect_false(any(grepl("Installed package aliasround81", messages, fixed = TRUE)))
+  stem_messages <- suppressWarnings(capture.output(
+    environment$install_local_archive(
+      "aliasround81_9.9", archive_dir, NULL, upgrade = "always",
+      lib = library_dir
+    ),
+    type = "message"
+  ))
+  expect_true(any(grepl(
+    "Installed package declaredround81 from aliasround81_9.9 successfully.",
+    stem_messages, fixed = TRUE
+  )))
 })

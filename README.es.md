@@ -141,9 +141,11 @@ create_metapackage(
 `"filename_mismatch"` silencia los avisos cuando el nombre del archivo difiere
 de la identidad declarada en DESCRIPTION. `"unincluded_local_dep"` convierte en
 aviso el error por una dependencia local disponible en las fuentes pero omitida
-de `packages`. Cada relajación aplicada queda en `result$tolerated`; los nombres
-desconocidos son un error. No existe un interruptor que desactive toda la
-validación.
+de `packages`. El metapaquete generado no incluirá esa dependencia, por lo que
+el receptor debe proporcionarla mediante `pkg_dir` o un repositorio con
+`cran_deps = "install"`. Cada relajación aplicada queda en
+`result$tolerated`; los nombres desconocidos son un error. No existe un
+interruptor que desactive toda la validación.
 
 Durante la generación, bigbang valida todo lo que protege al receptor del
 metapaquete generado. Los archivos inseguros o malformados, la metadata inválida,

@@ -569,7 +569,13 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
     ))
   }}
 
-  message(.meta_trf("Installed package %s successfully.", base_name))
+  if (identical(base_name, package)) {{
+    message(.meta_trf("Installed package %s successfully.", base_name))
+  }} else {{
+    message(.meta_trf(
+      "Installed package %s from %s successfully.", base_name, package
+    ))
+  }}
   list(
     success = TRUE,
     message = .meta_tr("Installed successfully"),

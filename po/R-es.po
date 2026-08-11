@@ -28,8 +28,8 @@ msgstr "No se pudo resolver el componente '%s': no es un archivo existente y no 
 msgid "Could not resolve component '%s' in the supplied archive directories."
 msgstr "No se pudo resolver el componente '%s' en los directorios de archivos proporcionados."
 
-msgid "Package archive does not exist: %s; archives were not found in the supplied archive directories."
-msgstr "El archivo del paquete no existe: %s; no se encontraron archivos en los directorios proporcionados."
+msgid "Package archive does not exist: %s; archives were not found in the supplied archive directories: %s."
+msgstr "El archivo del paquete no existe: %s; no se encontraron archivos en los directorios proporcionados: %s."
 
 msgid "The archive directory does not exist: %s"
 msgstr "El directorio de archivos no existe: %s"
@@ -268,6 +268,9 @@ msgstr "Formato de archivo no compatible: %s"
 msgid "Installed local package: %s"
 msgstr "Paquete local instalado: %s"
 
+msgid "Installed local package: %s from %s"
+msgstr "Paquete local instalado: %s desde %s"
+
 msgid "Package %s has installed version %s, newer than archive version %s; keeping the installed version."
 msgstr "El paquete %s tiene instalada la versión %s, más nueva que la versión %s del archivo; se conservará la versión instalada."
 
@@ -300,6 +303,9 @@ msgstr "No se pueden usar archivos de componentes con el mismo nombre base (%s):
 
 msgid "Component %s declares dependency %s, available at %s but not included. Add it to packages or remove the dependency."
 msgstr "El componente %s declara la dependencia %s, disponible en %s pero no incluida. Agréguela a packages o quite la dependencia."
+
+msgid "The generated meta-package will not ship %s; the recipient must provide it through pkg_dir or a repository with cran_deps = 'install'."
+msgstr "El metapaquete generado no incluirá %s; el receptor debe proporcionarlo mediante pkg_dir o un repositorio con cran_deps = 'install'."
 
 msgid "This meta-package needs the following archive directories on the recipient: %s. Set include_archives = TRUE to avoid this requirement."
 msgstr "Este metapaquete necesita los siguientes directorios de archivos en el receptor: %s. Establezca include_archives = TRUE para evitar este requisito."

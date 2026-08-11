@@ -28,7 +28,7 @@ msgstr ""
 msgid "Could not resolve component '%s' in the supplied archive directories."
 msgstr ""
 
-msgid "Package archive does not exist: %s; archives were not found in the supplied archive directories."
+msgid "Package archive does not exist: %s; archives were not found in the supplied archive directories: %s."
 msgstr ""
 
 msgid "The archive directory does not exist: %s"
@@ -268,6 +268,9 @@ msgstr ""
 msgid "Installed local package: %s"
 msgstr ""
 
+msgid "Installed local package: %s from %s"
+msgstr ""
+
 msgid "Package %s has installed version %s, newer than archive version %s; keeping the installed version."
 msgstr ""
 
@@ -299,6 +302,9 @@ msgid "Cannot use component archives with the same basename (%s): %s."
 msgstr ""
 
 msgid "Component %s declares dependency %s, available at %s but not included. Add it to packages or remove the dependency."
+msgstr ""
+
+msgid "The generated meta-package will not ship %s; the recipient must provide it through pkg_dir or a repository with cran_deps = 'install'."
 msgstr ""
 
 msgid "This meta-package needs the following archive directories on the recipient: %s. Set include_archives = TRUE to avoid this requirement."
