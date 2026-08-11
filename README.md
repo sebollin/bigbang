@@ -217,9 +217,10 @@ temporary directory, and require `include_archives = TRUE`, because the archive
 built for them does not outlive the call.
 
 `packages` can also be the path to a **manifest**: one component per line, `#`
-for comments. Relative paths in it resolve against the manifest's own directory,
-and bare filenames are also looked up in `pkg_dir`, so the list can live under
-version control while the archives do not.
+for comments. Relative paths in it resolve against the manifest's own directory;
+absolute paths and `~` paths are used as written; and bare filenames are also
+looked up in `pkg_dir`, so the list can live under version control while the
+archives do not.
 
 ## 🎚️ Generation options
 
@@ -236,11 +237,16 @@ all, so it is a safe way to see what a call would do before it does it.
 - `on_component_error = "skip"` generates from the components that are valid
   instead of aborting, and reports the ones it left out. The exclusion is
   transitive: a component that depends on an excluded one is excluded too, and
-  the chain is reported. Excluding everything is an error.
+  the chain is reported. When an invalid archive still has a readable
+  `DESCRIPTION`, its declared package name drives this propagation; otherwise
+  bigbang falls back to the filename and reports that limitation. Excluding
+  everything is an error.
 - `update = TRUE` regenerates in place. Generation records a manifest of the
   files it wrote together with their content hashes; `update` rewrites only
   those, and refuses to run if the manifest is missing or if a generated file was
   modified or removed by hand. Files bigbang did not write are never touched.
+  Updates also refuse to write through symbolic links inside the generated
+  project, including links in parent directories of generated files.
 - `install_upgrade` fixes the default upgrade policy of the installer that gets
   emitted, so you decide when generating whether recipients stay pinned to the
   versions you ship (`"always"`) or keep anything newer they already have

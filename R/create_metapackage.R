@@ -94,9 +94,24 @@
 }
 
 .validate_update_manifest <- function(project_dir) {
+  manifest_path <- file.path(project_dir, .generation_manifest_name)
+  if (.path_is_symlink(manifest_path)) {
+    .bigbang_abort(
+      "bigbang_error_symlink_generated_path",
+      .bb_trf(
+        paste0(
+          "Cannot update %s because generated path components are symbolic links: ",
+          "%s. Refusing to write outside the project."
+        ),
+        project_dir, manifest_path
+      ),
+      path = project_dir, links = manifest_path
+    )
+  }
   manifest <- .read_generation_manifest(project_dir)
   if (is.null(manifest) || !is.character(manifest$files) ||
-        !is.character(manifest$hashes)) {
+        !is.character(manifest$hashes) || anyNA(manifest$files) ||
+        any(!nzchar(manifest$files))) {
     .bigbang_abort(
       "bigbang_error_missing_manifest",
       .bb_trf(
@@ -106,6 +121,23 @@
       path = project_dir
     )
   }
+  invalid <- manifest$files[grepl(
+    "(^/|^[A-Za-z]:[/\\\\]|^~|(^|[/\\\\])\\.\\.([/\\\\]|$))",
+    manifest$files, perl = TRUE
+  )]
+  if (length(invalid) > 0L) {
+    .bigbang_abort(
+      "bigbang_error_modified_generated_file",
+      .bb_trf(
+        "Cannot update %s because its manifest contains invalid paths: %s.",
+        project_dir, paste(invalid, collapse = ", ")
+      ),
+      path = project_dir, files = invalid
+    )
+  }
+  .validate_project_write_paths(
+    project_dir, c(manifest$files, .generation_manifest_name)
+  )
   paths <- file.path(project_dir, manifest$files)
   changed <- manifest$files[
     !file.exists(paths) | vapply(seq_along(paths), function(i) {
@@ -245,8 +277,8 @@
 #'   Existing paths may come from different directories. A single existing text
 #'   file without a recognised archive extension is treated as a manifest, with
 #'   one component per line; relative paths in that file are resolved relative
-#'   to the manifest directory, and bare archive filenames may also be found in
-#'   `pkg_dir`.
+#'   to the manifest directory, absolute paths and `~` paths are used as written,
+#'   and bare archive filenames may also be found in `pkg_dir`.
 #' @param pkg_dir Character. Optional directory or directories containing local
 #'   archives used to resolve stems. It is not needed when every `packages`
 #'   element is an existing archive path.
@@ -306,10 +338,16 @@
 #'   project.
 #' @param on_component_error Character policy for component-level failures:
 #'   "abort" (default) stops generation, while "skip" omits the failed
-#'   component and transitively omits components that depend on it.
+#'   component and transitively omits components that depend on it. When a
+#'   failed archive still exposes its DESCRIPTION, propagation uses its declared
+#'   `Package`; otherwise the filename-derived name is used and the limitation is
+#'   reported. If that fallback name differs from `Package`, a dependent may
+#'   fail on the recipient.
 #' @param update Logical. If TRUE, update a previously generated project only
 #'   when its bigbang manifest is present and all generated files are unchanged.
-#'   Files outside that manifest are never touched.
+#'   Files outside that manifest are never touched. Updates are refused when a
+#'   manifest file or any path component inside the generated project is a
+#'   symbolic link, so writes cannot escape the project tree.
 #' @param install_upgrade Character default upgrade policy emitted in the
 #'   generated installer function: "newer", "always", or "never".
 #'   This controls whether a generated installer keeps newer installed
@@ -772,9 +810,15 @@ create_metapackage <- function(
           !dir.exists(archive_dir)) {
       stop(.bb_trf("Could not create directory: %s", archive_dir), call. = FALSE)
     }
-    copied <- file.copy(
-      archive_paths, file.path(archive_dir, archive_names), overwrite = TRUE
-    )
+    copied <- vapply(seq_along(archive_paths), function(index) {
+      tryCatch({
+        .atomic_copy(
+          archive_paths[[index]],
+          file.path(archive_dir, archive_names[[index]])
+        )
+        TRUE
+      }, error = function(e) FALSE)
+    }, logical(1L))
     if (!all(copied)) {
       stop(.bb_trf(
         "Could not copy the component archives into the meta-package: %s",
@@ -1059,7 +1103,7 @@ StripTrailingWhitespace: Yes"
   }
 
   manifest <- .manifest_records(project_dir, exclude = .generation_manifest_name)
-  saveRDS(manifest, file.path(project_dir, .generation_manifest_name))
+  .atomic_save_rds(manifest, file.path(project_dir, .generation_manifest_name))
 
   result <- structure(
     list(

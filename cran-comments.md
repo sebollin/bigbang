@@ -70,8 +70,9 @@ that a destination must be new or empty. It is constrained: generation records a
 manifest of the files it wrote together with their content hashes, `update`
 rewrites only those files, and it refuses to proceed if the manifest is absent or
 if any recorded file was modified or removed. Files the package did not write are
-never touched. Nothing is installed or removed unless the user calls a function
-explicitly, and no repository is contacted unless the user selects
+never touched; updates also refuse to write through symbolic links in the
+generated project. Nothing is installed or removed unless the user calls a
+function explicitly, and no repository is contacted unless the user selects
 `cran_deps = "install"`.
 
 ## Behaviour changes that are not backwards compatible

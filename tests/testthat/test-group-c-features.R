@@ -158,14 +158,19 @@ test_that("component errors can be skipped transitively", {
   writeBin(bytes[seq_len(max(1L, length(bytes) %/% 2L))], bad_file)
   group_c_archive(good, good, "dependent", imports = "broken")
   group_c_archive(good, good, "keep")
-  result <- create_metapackage(
+  warnings <- character()
+  result <- withCallingHandlers(create_metapackage(
     "skipverse",
     c(bad_file, file.path(good, "dependent_0.1.0.tar.gz"),
       file.path(good, "keep_0.1.0.tar.gz")),
     dest_dir = file.path(root, "destination"), document = FALSE,
     verbose = FALSE, import_deps = character(), force_deps = character(),
     on_component_error = "skip"
-  )
+  ), warning = function(condition) {
+    warnings <<- c(warnings, conditionMessage(condition))
+    invokeRestart("muffleWarning")
+  })
+  expect_true(any(grepl("filename-derived name", warnings, fixed = TRUE)))
   expect_identical(result$packages, "keep")
   expect_setequal(result$omitted$component, c("broken", "dependent"))
 })

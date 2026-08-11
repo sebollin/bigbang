@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.2.0.9000\n"
+"Project-Id-Version: bigbang 0.3.0\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -413,4 +413,10 @@ msgid "Source directory components require include_archives = TRUE because their
 msgstr ""
 
 msgid "Cannot update %s because requested generated files are not in its manifest: %s."
+msgstr ""
+
+msgid "Cannot update %s because generated path components are symbolic links: %s. Refusing to write outside the project."
+msgstr ""
+
+msgid "Component archive %s could not be read; skip propagation uses filename-derived name '%s'; dependents may fail on the recipient if that name differs from Package."
 msgstr ""

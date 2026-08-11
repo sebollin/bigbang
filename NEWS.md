@@ -46,9 +46,16 @@ user updating from 0.1.0 should read both sections.
 
 ## Bug fixes
 
+- Updates now reject symbolic links in generated files and their parent
+  directories, and replace generated files and shipped archives atomically so
+  an update cannot write outside the project tree.
 - Component manifests now resolve bare archive filenames from the supplied
-  `pkg_dir` directories when the files are not beside the manifest, and missing
-  entries report every directory that was searched.
+-  `pkg_dir` directories when the files are not beside the manifest, preserve
+  absolute and `~` paths, and report every directory searched for a missing
+  entry.
+- When component generation skips an invalid archive, a readable DESCRIPTION is
+  used to propagate the omission through dependents; if it cannot be read, the
+  filename fallback is reported explicitly.
 - Installation messages now name both the declared package identity and the
   archive stem when those differ.
 - Installing an already present package no longer requires reading an archive

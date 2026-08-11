@@ -57,7 +57,16 @@
   }
   manifest_dir <- dirname(manifest)
   entries <- vapply(lines, function(line) {
-    candidate <- file.path(manifest_dir, line)
+    absolute <- startsWith(line, "~") || startsWith(line, "/") ||
+      grepl("^[A-Za-z]:[/\\\\]", line, perl = TRUE) ||
+      grepl("^\\\\\\\\", line, perl = TRUE)
+    candidate <- if (startsWith(line, "~")) {
+      path.expand(line)
+    } else if (absolute) {
+      line
+    } else {
+      file.path(manifest_dir, line)
+    }
     is_archive <- !is.null(
       tryCatch(.archive_extension(line), error = function(e) NULL)
     )
@@ -65,7 +74,7 @@
     # supplied archive directories. Keep it as a filename so the resolver can
     # search all sources and detect duplicate basenames.
     # Explicit paths remain paths and therefore fail at their stated location.
-    if (grepl("[/\\\\]", line)) {
+    if (absolute || grepl("[/\\\\]", line)) {
       candidate
     } else if (is_archive) {
       line
@@ -223,34 +232,60 @@
   )
   components <- list()
   for (input in packages) {
-    resolved <- tryCatch({
-      source_dir <- if (dir.exists(input) &&
-                          file.exists(file.path(input, "DESCRIPTION"))) {
-        normalizePath(input, winslash = "/", mustWork = TRUE)
-      } else {
-        NULL
-      }
-      path <- .resolve_archive_input(input, dirs, ext)
-      actual_ext <- .archive_extension(path)
-      metadata <- .read_archive_metadata(path, ext = actual_ext)
-      list(
-        path = path,
-        ext = actual_ext,
-        stem = .archive_stem(path, actual_ext),
-        input = input,
-        source_dir = source_dir,
-        package = metadata$package,
-        version = metadata$version,
-        dependencies = metadata$dependencies,
-        constraints = metadata$constraints
+    source_dir <- if (dir.exists(input) &&
+                        file.exists(file.path(input, "DESCRIPTION"))) {
+      normalizePath(input, winslash = "/", mustWork = TRUE)
+    } else {
+      NULL
+    }
+    path_result <- tryCatch(
+      .resolve_archive_input(input, dirs, ext), error = identity
+    )
+    declared_identity <- NULL
+    if (!inherits(path_result, "error")) {
+      actual_ext <- .archive_extension(path_result)
+      declared_identity <- tryCatch(
+        .read_archive_identity(path_result, actual_ext),
+        error = function(e) NULL
       )
-    }, error = identity)
+      resolved <- tryCatch({
+        metadata <- .read_archive_metadata(path_result, ext = actual_ext)
+        list(
+          path = path_result,
+          ext = actual_ext,
+          stem = .archive_stem(path_result, actual_ext),
+          input = input,
+          source_dir = source_dir,
+          package = metadata$package,
+          version = metadata$version,
+          dependencies = metadata$dependencies,
+          constraints = metadata$constraints
+        )
+      }, error = identity)
+    } else {
+      resolved <- path_result
+    }
     if (inherits(resolved, "error")) {
       if (identical(on_component_error, "abort") ||
             inherits(resolved, "bigbang_error_duplicate_component")) {
         stop(resolved)
       }
-      component_name <- sub("_.*", "", basename(input))
+      component_name <- if (!is.null(declared_identity)) {
+        declared_identity$package
+      } else {
+        sub("_.*", "", basename(input))
+      }
+      if (!is.null(path_result) && !inherits(path_result, "error") &&
+            is.null(declared_identity)) {
+        warning(.bb_trf(
+          paste0(
+            "Component archive %s could not be read; skip propagation uses ",
+            "filename-derived name '%s'; dependents may fail on the recipient ",
+            "if that name differs from Package."
+          ),
+          path_result, component_name
+        ), call. = FALSE)
+      }
       omitted <- rbind(
         omitted,
         data.frame(
@@ -360,6 +395,76 @@
     dependencies = parsed_dependencies$dependencies,
     constraints = parsed_dependencies$constraints
   )
+}
+
+# Read only the identity needed to propagate an omitted component through the
+# dependency graph. This deliberately does not replace full generation-time
+# validation: an archive can expose Package and Version while still being
+# rejected for another invariant (for example, multiple package roots).
+.read_archive_identity <- function(archive, ext) {
+  temp_dir <- tempfile("bigbang-identity-")
+  if (!dir.create(temp_dir)) return(NULL)
+  on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
+
+  listing <- tryCatch(suppressWarnings({
+    if (identical(tolower(ext), ".zip")) {
+      utils::unzip(archive, list = TRUE)
+    } else {
+      utils::untar(archive, list = TRUE)
+    }
+  }), error = function(e) NULL)
+  if (is.null(listing)) return(NULL)
+  listing_status <- attr(listing, "status")
+  if (is.numeric(listing_status) && length(listing_status) == 1L &&
+        listing_status != 0) return(NULL)
+  members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
+  members <- as.character(members)
+  if (length(members) == 0L) return(NULL)
+  checked <- tryCatch(
+    .validate_archive_members(members), error = function(e) NULL
+  )
+  if (is.null(checked)) return(NULL)
+  normalized <- sub("^\\./", "", gsub("\\\\", "/", members))
+  candidates <- which(
+    normalized == "DESCRIPTION" |
+      grepl("^[^/]+/DESCRIPTION$", normalized)
+  )
+  if (length(candidates) != 1L) return(NULL)
+  member <- members[[candidates[[1L]]]]
+  extraction <- tryCatch(suppressWarnings({
+    if (identical(tolower(ext), ".zip")) {
+      utils::unzip(archive, files = member, exdir = temp_dir)
+    } else {
+      utils::untar(archive, files = member, exdir = temp_dir)
+    }
+  }), error = function(e) NULL)
+  if (is.null(extraction) ||
+        (is.numeric(extraction) && length(extraction) == 1L &&
+           extraction != 0)) return(NULL)
+  links_ok <- tryCatch({
+    .validate_extracted_links(temp_dir, archive)
+    TRUE
+  }, error = function(e) FALSE)
+  if (!links_ok) return(NULL)
+  description_files <- list.files(
+    temp_dir, pattern = "^DESCRIPTION$", recursive = TRUE,
+    full.names = TRUE, all.files = TRUE
+  )
+  if (length(description_files) != 1L) return(NULL)
+  description <- tryCatch(
+    read.dcf(description_files[[1L]], fields = c("Package", "Version")),
+    error = function(e) NULL
+  )
+  if (is.null(description) || nrow(description) == 0L) return(NULL)
+  field <- function(name) {
+    if (!name %in% colnames(description)) return(NA_character_)
+    value <- unname(description[1L, name])
+    if (is.na(value)) NA_character_ else trimws(value)
+  }
+  package <- field("Package")
+  version <- field("Version")
+  if (is.na(package) || !nzchar(package)) return(NULL)
+  list(package = package, version = version)
 }
 
 .read_archive_version <- function(archive, ext) {

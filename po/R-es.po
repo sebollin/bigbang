@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.2.0.9000\n"
+"Project-Id-Version: bigbang 0.3.0\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -414,3 +414,9 @@ msgstr "Los componentes de directorio fuente requieren include_archives = TRUE p
 
 msgid "Cannot update %s because requested generated files are not in its manifest: %s."
 msgstr "No se puede actualizar %s porque los archivos generados solicitados no están en su manifiesto: %s."
+
+msgid "Cannot update %s because generated path components are symbolic links: %s. Refusing to write outside the project."
+msgstr "No se puede actualizar %s porque algunos componentes de la ruta generada son enlaces simbólicos: %s. Se rechaza escribir fuera del proyecto."
+
+msgid "Component archive %s could not be read; skip propagation uses filename-derived name '%s'; dependents may fail on the recipient if that name differs from Package."
+msgstr "No se pudo leer el archivo del componente %s; el arrastre del descarte usa el nombre derivado del archivo '%s'; los dependientes pueden fallar en el receptor si ese nombre difiere de Package."

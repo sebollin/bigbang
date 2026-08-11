@@ -137,7 +137,9 @@
     "Unknown component(s) in 'only': %s." = "Componente(s) desconocido(s) en 'only': %s.",
     "Added local dependencies of selected components: %s" = "Se agregaron dependencias locales de los componentes seleccionados: %s",
     "Source directory components require include_archives = TRUE because their temporary build archive cannot be reused." = "Los componentes de directorio fuente requieren include_archives = TRUE porque su archivo temporal no se puede reutilizar.",
-    "Cannot update %s because requested generated files are not in its manifest: %s." = "No se puede actualizar %s porque los archivos generados solicitados no est\u00e1n en su manifiesto: %s."
+    "Cannot update %s because requested generated files are not in its manifest: %s." = "No se puede actualizar %s porque los archivos generados solicitados no est\u00e1n en su manifiesto: %s.",
+    "Cannot update %s because generated path components are symbolic links: %s. Refusing to write outside the project." = "No se puede actualizar %s porque algunos componentes de la ruta generada son enlaces simb\u00f3licos: %s. Se rechaza escribir fuera del proyecto.",
+    "Component archive %s could not be read; skip propagation uses filename-derived name '%s'; dependents may fail on the recipient if that name differs from Package." = "No se pudo leer el archivo del componente %s; el arrastre del descarte usa el nombre derivado del archivo '%s'; los dependientes pueden fallar en el receptor si ese nombre difiere de Package."
   )
 }
 

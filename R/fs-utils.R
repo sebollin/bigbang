@@ -1,5 +1,96 @@
+.path_is_symlink <- function(path) {
+  target <- tryCatch(Sys.readlink(path), error = function(e) "")
+  is.character(target) && length(target) == 1L && !is.na(target) &&
+    nzchar(target)
+}
+
+.symlink_in_project_path <- function(project_dir, relative_path) {
+  root <- normalizePath(project_dir, winslash = "/", mustWork = TRUE)
+  relative_path <- gsub("\\\\", "/", relative_path)
+  if (grepl("^/", relative_path) || grepl("^[A-Za-z]:/", relative_path)) {
+    return(if (.path_is_symlink(relative_path)) relative_path else "")
+  }
+  parts <- strsplit(relative_path, "/", fixed = TRUE)[[1L]]
+  current <- root
+  parts <- parts[nzchar(parts) & parts != "."]
+  for (part in parts) {
+    if (identical(part, "..")) return("")
+    current <- file.path(current, part)
+    if (.path_is_symlink(current)) {
+      return(gsub("\\\\", "/", current))
+    }
+  }
+  ""
+}
+
+.validate_project_write_paths <- function(project_dir, relative_paths) {
+  links <- unique(Filter(nzchar, vapply(
+    relative_paths,
+    function(path) .symlink_in_project_path(project_dir, path),
+    character(1L)
+  )))
+  if (length(links) > 0L) {
+    .bigbang_abort(
+      "bigbang_error_symlink_generated_path",
+      .bb_trf(
+        paste0(
+          "Cannot update %s because generated path components are symbolic links: ",
+          "%s. Refusing to write outside the project."
+        ),
+        project_dir, paste(links, collapse = ", ")
+      ),
+      path = project_dir, links = links
+    )
+  }
+  invisible(NULL)
+}
+
+.atomic_replace <- function(source, destination) {
+  if (file.rename(source, destination)) return(invisible(TRUE))
+
+  # Windows cannot replace an existing file with rename(). Remove only the
+  # destination entry; if it is a link, unlink() removes the link itself.
+  if (.path_is_symlink(destination)) {
+    unlink(destination, recursive = FALSE, force = TRUE)
+  } else if (file.exists(destination) && !file.remove(destination)) {
+    stop(.bb_trf("Could not replace generated file: %s", destination),
+         call. = FALSE)
+  }
+  if (!file.rename(source, destination)) {
+    stop(.bb_trf("Could not replace generated file: %s", destination),
+         call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 .write_utf8 <- function(text, path) {
-  brio::write_lines(text, path)
+  parent <- dirname(path)
+  temporary <- tempfile(pattern = paste0(".", basename(path), "-"),
+                        tmpdir = parent)
+  on.exit(unlink(temporary, force = TRUE), add = TRUE)
+  brio::write_lines(text, temporary)
+  .atomic_replace(temporary, path)
+}
+
+.atomic_copy <- function(source, destination) {
+  parent <- dirname(destination)
+  temporary <- tempfile(pattern = paste0(".", basename(destination), "-"),
+                        tmpdir = parent)
+  on.exit(unlink(temporary, force = TRUE), add = TRUE)
+  if (!file.copy(source, temporary, overwrite = FALSE)) {
+    stop(.bb_trf("Could not copy the component archive: %s", source),
+         call. = FALSE)
+  }
+  .atomic_replace(temporary, destination)
+}
+
+.atomic_save_rds <- function(object, path) {
+  parent <- dirname(path)
+  temporary <- tempfile(pattern = paste0(".", basename(path), "-"),
+                        tmpdir = parent)
+  on.exit(unlink(temporary, force = TRUE), add = TRUE)
+  saveRDS(object, temporary)
+  .atomic_replace(temporary, path)
 }
 
 .r_literal <- function(x) {

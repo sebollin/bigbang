@@ -189,9 +189,9 @@ sobrevive a la llamada.
 
 `packages` también puede ser la ruta a un **manifiesto**: un componente por
 línea, `#` para comentarios. Las rutas relativas se resuelven contra el
-directorio del manifiesto, y los nombres de archivo se buscan además en
-`pkg_dir`, así que la lista puede vivir bajo control de versiones y los archivos
-no.
+directorio del manifiesto; las rutas absolutas y las que empiezan con `~` se
+usan tal cual; y los nombres de archivo se buscan además en `pkg_dir`, así que
+la lista puede vivir bajo control de versiones y los archivos no.
 
 ## 🎚️ Opciones de generación
 
@@ -208,12 +208,16 @@ segura de ver qué haría una llamada antes de que la haga.
 - `on_component_error = "skip"` genera con los componentes válidos en lugar de
   abortar, e informa los que dejó afuera. El descarte es transitivo: un
   componente que depende de uno excluido también queda excluido, y se informa la
-  cadena. Excluir todo es un error.
+  cadena. Si un archivo inválido todavía tiene un `DESCRIPTION` legible, se usa
+  el nombre declarado del paquete; de lo contrario bigbang recurre al nombre del
+  archivo e informa esa limitación. Excluir todo es un error.
 - `update = TRUE` regenera en el mismo lugar. La generación registra un
   manifiesto de los archivos que escribió con sus hashes de contenido; `update`
   reescribe solo esos, y se niega a correr si falta el manifiesto o si algún
   archivo generado fue modificado o borrado a mano. Lo que bigbang no escribió no
-  se toca nunca.
+  se toca nunca. También se niega a escribir a través de enlaces simbólicos
+  dentro del proyecto generado, incluidos los enlaces en directorios padre de
+  los archivos generados.
 - `install_upgrade` fija la política de actualización por defecto del instalador
   emitido, así que decidís al generar si los destinatarios quedan clavados en las
   versiones que distribuís (`"always"`) o conservan lo más nuevo que ya tengan
