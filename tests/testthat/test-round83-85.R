@@ -128,10 +128,15 @@ test_that("manifests accept absolute and tilde archive paths", {
   dir.create(archive_dir)
   dir.create(source_root)
   dir.create(destination)
+  withr::local_envvar(c(HOME = root, R_USER = root, USERPROFILE = root))
+  expected_home <- normalizePath(root, winslash = "/", mustWork = TRUE)
+  actual_home <- normalizePath(path.expand("~"), winslash = "/", mustWork = TRUE)
+  if (!identical(actual_home, expected_home)) {
+    skip("This platform does not honor a sandboxed HOME/R_USER for '~'.")
+  }
   first <- round83_make_archive(source_root, archive_dir, "absoluteone")
   second <- round83_make_archive(source_root, archive_dir, "absolutetwo")
   manifest <- file.path(manifest_dir, "components.txt")
-  withr::local_envvar(c(HOME = root, USERPROFILE = root))
   writeLines(c(
     normalizePath(first, winslash = "/"),
     paste0("~/archives/", basename(second))
