@@ -141,6 +141,47 @@ vez:
 workflow = c("Importación" = "datos", "Informe" = "reportes")
 ```
 
+## Validación y tolerancias explícitas
+
+bigbang mantiene como errores duros todas las validaciones que protegen
+a quien recibe el metapaquete: archivos inseguros o malformados,
+metadatos inválidos, componentes duplicados, restricciones locales
+insatisfechas y ciclos. Esas validaciones no se pueden desactivar.
+
+Las comprobaciones de prolijidad se relajan de forma individual y
+explícita:
+
+``` r
+
+create_metapackage(
+  # ...,
+  tolerate = c("filename_mismatch", "unincluded_local_dep")
+)
+```
+
+`"filename_mismatch"` silencia los avisos cuando el nombre del archivo
+difiere de la identidad declarada en DESCRIPTION.
+`"unincluded_local_dep"` convierte en aviso el error por una dependencia
+local disponible en las fuentes pero omitida de `packages`. El
+metapaquete generado no incluirá esa dependencia, por lo que el receptor
+debe proporcionarla mediante `pkg_dir` o un repositorio con
+`cran_deps = "install"`. Cada relajación aplicada queda en
+`result$tolerated`; los nombres desconocidos son un error. No existe un
+interruptor que desactive toda la validación.
+
+Durante la generación, bigbang valida todo lo que protege al receptor
+del metapaquete generado. Los archivos inseguros o malformados, la
+metadata inválida, los componentes duplicados, las restricciones de
+versión locales insatisfechas y los ciclos de dependencias siempre son
+errores duros. La instalación es más tolerante: puede conservar un
+componente ya instalado si no puede leer un archivo que no va a usar, e
+informa el motivo.
+
+bigbang **no** ejecuta `R CMD check` sobre los paquetes componentes. Un
+componente con warnings o notes puede incluirse: las validaciones se
+limitan a que el metapaquete distribuido pueda identificar e instalar
+sus componentes de forma segura.
+
 ## 🧰 API
 
 - [`create_metapackage()`](https://sebollin.github.io/bigbang/reference/create_metapackage.md)

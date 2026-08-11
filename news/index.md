@@ -2,6 +2,19 @@
 
 ## bigbang (development version)
 
+### New capabilities
+
+- The generator supports read-only dry-run reports, explicit
+  component-error policies, package source directories, component
+  manifests, and guarded update regeneration through a generation
+  manifest.
+- Generated installers accept component subsets and an explicit
+  installation library, and the generator can set their default upgrade
+  policy.
+- Source-directory components must use include_archives = TRUE because
+  their temporary build archive cannot be reused as an external
+  installation source.
+
 ### Component input and resolution
 
 - Component archives may be supplied as existing paths from multiple
@@ -14,9 +27,26 @@
 - Generated installers accept a vector of archive directories when
   archives are not shipped; archives shipped inside a generated
   meta-package remain portable and contain no source-machine paths.
+- [`create_metapackage()`](https://sebollin.github.io/bigbang/reference/create_metapackage.md)
+  gains a final `tolerate` argument for explicitly named relaxations.
+  Filename mismatches can be silenced, and an available local dependency
+  omitted from `packages` can be downgraded from an error to a warning;
+  unknown relaxation names are errors.
+- Generation results now include a `tolerated` table identifying every
+  applied relaxation, affected component, and reason.
+- The validation documentation now distinguishes non-negotiable
+  recipient protections from optional project-tidiness checks, and
+  states explicitly that bigbang does not run `R CMD check` on component
+  packages.
 
 ### Bug fixes
 
+- Component manifests now resolve bare archive filenames from the
+  supplied `pkg_dir` directories when the files are not beside the
+  manifest, and missing entries report every directory that was
+  searched.
+- Installation messages now name both the declared package identity and
+  the archive stem when those differ.
 - Installing an already present package no longer requires reading an
   archive when `upgrade = "never"`; under the default policy, only its
   DESCRIPTION is read before deciding whether the archive needs to be
@@ -25,6 +55,21 @@
 - Rollback paths after a post-scaffold generation error are covered,
   including destinations reached through a symbolic link and
   unsuccessful removal.
+- Lazy archive-version inspection now rejects extracted symbolic links
+  before reading metadata, matching the full archive validation path.
+- The installation help now explains that `upgrade = "never"` identifies
+  a component from its filename because the archive is intentionally not
+  read.
+- Component archives whose extensions use upper-case letters are copied
+  under canonical names so generated installers find them on
+  case-sensitive systems; archive names that collide only by case are
+  rejected.
+- Unreadable unrelated archives in a supplied source directory are
+  excluded from the inventory with a warning, including a specific
+  diagnostic when a declared dependency appears to match one.
+- Vector resolution failures retain the requested component names in the
+  installation result, and generated installers report the package
+  identity declared by DESCRIPTION after installation.
 
 ## bigbang 0.2.0
 

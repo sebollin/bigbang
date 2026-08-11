@@ -29,7 +29,12 @@ create_metapackage(
   force_deps = NULL,
   debug = FALSE,
   workflow = NULL,
-  include_archives = TRUE
+  include_archives = TRUE,
+  tolerate = character(),
+  dry_run = FALSE,
+  on_component_error = c("abort", "skip"),
+  update = FALSE,
+  install_upgrade = c("newer", "always", "never")
 )
 ```
 
@@ -43,8 +48,13 @@ create_metapackage(
 - packages:
 
   Character vector. Archive paths or stems of the local packages to
-  include. Existing paths may come from different directories; stems are
-  resolved in `pkg_dir`, e.g. `"myPackage_1.0.0"`.
+  include. An existing file is always used as a path; otherwise the
+  element is resolved as a stem in `pkg_dir`, e.g. `"myPackage_1.0.0"`.
+  Existing paths may come from different directories. A single existing
+  text file without a recognised archive extension is treated as a
+  manifest, with one component per line; relative paths in that file are
+  resolved relative to the manifest directory, and bare archive
+  filenames may also be found in `pkg_dir`.
 
 - pkg_dir:
 
@@ -149,10 +159,46 @@ create_metapackage(
   archives stay in a shared location that recipients can reach; then
   `<meta>_install()` requires an explicit `pkg_dir`.
 
+- tolerate:
+
+  Character vector of explicitly named validation relaxations. Use
+  `"filename_mismatch"` to silence filename-versus-DESCRIPTION mismatch
+  warnings, or `"unincluded_local_dep"` to turn an
+  available-but-unincluded local dependency error into a warning. With
+  the latter relaxation, the generated metapackage does not ship that
+  dependency: the recipient must provide it through `pkg_dir` or a
+  repository with `cran_deps = "install"`. Unknown names are errors.
+  Each applied relaxation is recorded in the returned `tolerated` table.
+
+- dry_run:
+
+  Logical. If TRUE, resolves and validates components and returns the
+  planned generation without creating dest_dir or writing a project.
+
+- on_component_error:
+
+  Character policy for component-level failures: "abort" (default) stops
+  generation, while "skip" omits the failed component and transitively
+  omits components that depend on it.
+
+- update:
+
+  Logical. If TRUE, update a previously generated project only when its
+  bigbang manifest is present and all generated files are unchanged.
+  Files outside that manifest are never touched.
+
+- install_upgrade:
+
+  Character default upgrade policy emitted in the generated installer
+  function: "newer", "always", or "never". This controls whether a
+  generated installer keeps newer installed versions, reinstalls every
+  component, or skips archive inspection.
+
 ## Value
 
 Invisibly, a `bigbang_result` containing the generated path, component
-archives, dependency classification, and documentation status.
+archives, dependency classification, applied tolerations, and
+documentation status.
 
 ## Details
 
@@ -200,6 +246,19 @@ more tolerant: when an already installed component does not need to be
 changed, it can retain that installation without reading an archive that
 will not be used.
 
+## Validation strictness
+
+During generation, validations that protect the recipient cannot be
+disabled: malformed or unsafe archives, invalid component metadata,
+duplicate components, cycles, and unsatisfied local version constraints
+remain hard errors. Checks about project tidiness can be relaxed
+individually through `tolerate`; there is no switch that disables
+validation as a whole. bigbang does not run `R CMD check` on component
+packages, so component warnings and notes do not prevent generation.
+Component source directories are built in a temporary directory with the
+optional pkgbuild package; passing an already built archive avoids that
+optional dependency.
+
 ## Component installation
 
 The generated meta-package installs component packages only when the
@@ -227,6 +286,11 @@ reach the component functions directly through the meta-package
 - Each component must be an existing archive path or a stem resolvable
   in one of the optional `pkg_dir` directories; `ext` is only a fallback
   for stems.
+
+- Files in the supplied archive directories that cannot be read are
+  excluded from the inventory with a warning. A requested component
+  still fails validation, while an unreadable file matching a declared
+  dependency is reported as an unavailable local archive.
 
 - Automatic documentation (`document = TRUE`) requires the `devtools`
   package.

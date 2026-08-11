@@ -139,6 +139,19 @@
 <p>For an ordered pipeline guide, supply every component once in a named workflow:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">workflow</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Import"</span> <span class="op">=</span> <span class="st">"datahelpers"</span>, <span class="st">"Report"</span> <span class="op">=</span> <span class="st">"reports"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="validation-and-explicit-tolerances">Validation and explicit tolerances<a class="anchor" aria-label="anchor" href="#validation-and-explicit-tolerances"></a>
+</h2>
+<p>During generation, bigbang validates everything that protects the recipient of a generated metapackage. Unsafe or malformed archives, invalid component metadata, duplicate components, unsatisfied local version constraints, and dependency cycles are always hard errors and cannot be disabled. Installation is more tolerant: an already installed component can be kept when an archive it will not use cannot be read, and the reason is reported.</p>
+<p>Checks about project tidiness can be relaxed individually and explicitly:</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/create_metapackage.html">create_metapackage</a></span><span class="op">(</span></span>
+<span>  <span class="co"># ...,</span></span>
+<span>  tolerate <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"filename_mismatch"</span>, <span class="st">"unincluded_local_dep"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><code>"filename_mismatch"</code> silences warnings when an archive filename differs from its DESCRIPTION identity. <code>"unincluded_local_dep"</code> changes the error for a local dependency available in the supplied sources but omitted from <code>packages</code> into a warning. The generated metapackage will not ship that dependency, so the recipient must provide it through <code>pkg_dir</code> or a repository with <code>cran_deps = "install"</code>. Applied relaxations are recorded in <code>result$tolerated</code>; unknown names are errors. There is deliberately no switch that disables all validation.</p>
+<p>bigbang does <strong>not</strong> run <code>R CMD check</code> on component packages. A component with check warnings or notes can be included; validation is limited to whether the distributed metapackage can identify and safely install its components.</p>
 <p>See <code><a href="articles/getting-started.html">vignette("getting-started", package = "bigbang")</a></code> for a reproducible toy project created entirely under <code><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir()</a></code>.</p>
 </div>
 <div class="section level2">
@@ -165,7 +178,7 @@
 <h2 id="earth_americas-english-and-spanish">🌎 English and Spanish<a class="anchor" aria-label="anchor" href="#earth_americas-english-and-spanish"></a>
 </h2>
 <p>English is the source language for code, help, and runtime messages. A complete Spanish runtime catalog is included through R’s gettext mechanism:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/gettext.html" class="external-link">Sys.setLanguage</a></span><span class="op">(</span><span class="st">"es"</span><span class="op">)</span>  <span class="co"># R &gt;= 4.2</span></span></code></pre></div>
 <p>On earlier R versions, set <code>LANGUAGE=es</code> before starting R. A complete Spanish guide is available in <code><a href="articles/bigbang-es.html">vignette("bigbang-es", package = "bigbang")</a></code> and as <a href="https://github.com/sebollin/bigbang/blob/main/README.es.md" class="external-link">README.es.md</a>. Rd help remains English because R has no stable native mechanism for translated help; a separate <code>bigbang.es</code> module can be considered if <code>rhelpi18n</code> becomes production-ready and reaches CRAN.</p>
 </div>
@@ -215,7 +228,7 @@
 </h2>
 <p>An unreleased predecessor generated cleanup code that could remove directories named after components from the user’s working directory. The startup installer and all cwd-relative cleanup paths were removed before this CRAN submission and are covered by destructive regression tests that run only in disposable trees.</p>
 <p>Do not load or document an old generated artifact before classifying it:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scan</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/scan_bigbang_artifact.html">scan_bigbang_artifact</a></span><span class="op">(</span><span class="st">"path/to/artifact"</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">scan</span></span></code></pre></div>
 <p>If <code>scan$vulnerable</code> is true, quarantine the artifact and generate a new version in a new, empty destination. Never regenerate an unclassified source tree in place. The full remediation procedure is documented in the Spanish guide and in <code>RELEASE.md</code>.</p>
@@ -233,15 +246,15 @@
 <div class="section level2">
 <h2 id="open_book-citation">📖 Citation<a class="anchor" aria-label="anchor" href="#open_book-citation"></a>
 </h2>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"bigbang"</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb12"><pre class="sourceCode bibtex"><code class="sourceCode bibtex"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="va">@Manual</span>{<span class="ot">bigbang2026</span>,</span>
-<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>  <span class="dt">title</span>  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},</span>
-<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>  <span class="dt">author</span> = {Sebastián Lucas},</span>
-<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>  <span class="dt">note</span>   = {R package version 0.2.0},</span>
-<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>  <span class="dt">year</span>   = {2026},</span>
-<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>  <span class="dt">url</span>    = {https://sebollin.github.io/bigbang/},</span>
-<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre class="sourceCode bibtex"><code class="sourceCode bibtex"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="va">@Manual</span>{<span class="ot">bigbang2026</span>,</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  <span class="dt">title</span>  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>  <span class="dt">author</span> = {Sebastián Lucas},</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>  <span class="dt">note</span>   = {R package version 0.2.0},</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>  <span class="dt">year</span>   = {2026},</span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a>  <span class="dt">url</span>    = {https://sebollin.github.io/bigbang/},</span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a>}</span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="microscope-development-status">🔬 Development status<a class="anchor" aria-label="anchor" href="#microscope-development-status"></a>

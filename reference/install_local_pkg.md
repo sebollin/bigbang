@@ -26,7 +26,8 @@ install_local_pkg(
 - package:
 
   Character. An existing archive path, or a package stem such as
-  `"uspr_0.8.5"` to resolve in `pkg_dir`.
+  `"uspr_0.8.5"` to resolve in `pkg_dir`. An existing file is always
+  treated as a path; only a non-existing element is resolved as a stem.
 
 - pkg_dir:
 
@@ -81,7 +82,10 @@ package can be kept without reading its archive when
 `upgrade = "never"`. Under the default policy, bigbang reads only the
 archive `DESCRIPTION` first; if that metadata cannot be verified for an
 already installed package, the installed package is kept and the reason
-is reported.
+is reported. With `upgrade = "never"`, the shortcut takes the component
+identity from the archive filename because the archive is not read. Use
+`upgrade = "newer"` when the declared `Package` field must be checked
+against the installed package.
 
 ## See also
 

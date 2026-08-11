@@ -69,7 +69,8 @@ installed as source packages.</p>
 
 <dl><dt id="arg-package">package<a class="anchor" aria-label="anchor" href="#arg-package"></a></dt>
 <dd><p>Character. An existing archive path, or a package stem such
-as <code>"uspr_0.8.5"</code> to resolve in <code>pkg_dir</code>.</p></dd>
+as <code>"uspr_0.8.5"</code> to resolve in <code>pkg_dir</code>. An existing file is always
+treated as a path; only a non-existing element is resolved as a stem.</p></dd>
 
 
 <dt id="arg-pkg-dir">pkg_dir<a class="anchor" aria-label="anchor" href="#arg-pkg-dir"></a></dt>
@@ -125,7 +126,10 @@ packages. With the default <code>cran_deps = "skip"</code>, it does not access t
 An installed package can be kept without reading its archive when
 <code>upgrade = "never"</code>. Under the default policy, bigbang reads only the archive
 <code>DESCRIPTION</code> first; if that metadata cannot be verified for an already
-installed package, the installed package is kept and the reason is reported.</p>
+installed package, the installed package is kept and the reason is reported.
+With <code>upgrade = "never"</code>, the shortcut takes the component identity from the
+archive filename because the archive is not read. Use <code>upgrade = "newer"</code> when
+the declared <code>Package</code> field must be checked against the installed package.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

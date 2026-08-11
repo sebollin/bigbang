@@ -171,6 +171,41 @@ workflow:
 workflow = c("Import" = "datahelpers", "Report" = "reports")
 ```
 
+## Validation and explicit tolerances
+
+During generation, bigbang validates everything that protects the
+recipient of a generated metapackage. Unsafe or malformed archives,
+invalid component metadata, duplicate components, unsatisfied local
+version constraints, and dependency cycles are always hard errors and
+cannot be disabled. Installation is more tolerant: an already installed
+component can be kept when an archive it will not use cannot be read,
+and the reason is reported.
+
+Checks about project tidiness can be relaxed individually and
+explicitly:
+
+``` r
+
+create_metapackage(
+  # ...,
+  tolerate = c("filename_mismatch", "unincluded_local_dep")
+)
+```
+
+`"filename_mismatch"` silences warnings when an archive filename differs
+from its DESCRIPTION identity. `"unincluded_local_dep"` changes the
+error for a local dependency available in the supplied sources but
+omitted from `packages` into a warning. The generated metapackage will
+not ship that dependency, so the recipient must provide it through
+`pkg_dir` or a repository with `cran_deps = "install"`. Applied
+relaxations are recorded in `result$tolerated`; unknown names are
+errors. There is deliberately no switch that disables all validation.
+
+bigbang does **not** run `R CMD check` on component packages. A
+component with check warnings or notes can be included; validation is
+limited to whether the distributed metapackage can identify and safely
+install its components.
+
 See
 [`vignette("getting-started", package = "bigbang")`](https://sebollin.github.io/bigbang/articles/getting-started.md)
 for a reproducible toy project created entirely under
