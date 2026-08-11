@@ -105,14 +105,10 @@ Every result below was obtained on the source of this submission.
 - Local Linux (Pop!_OS 22.04), R 4.6.1: `R CMD check --as-cran`, including the
   PDF manual: 0 errors, 0 warnings, 2 notes. One is the days-since-update note;
   the other is the absence of HTML Tidy, which is not installed here.
-- win-builder, R-devel (2026-08-10 r90389 ucrt): `Status: 1 NOTE`, the
-  days-since-update one. No technical observation; the test suite, both manuals
-  and the vignettes all passed.
-- R-hub v2, R-devel on the Linux, Windows and macOS containers: `Status: OK` on
-  all three, with no notes (run 31526791073).
+- win-builder, R-devel: <PENDING>
+- R-hub v2, R-devel on the Linux, Windows and macOS containers: <PENDING>
 - GitHub Actions: Ubuntu (release, devel, oldrel-1), Windows (release) and macOS
-  (release), with the PDF manual enabled: all five configurations pass (run
-  31526790384).
+  (release), with the PDF manual enabled: <PENDING>
 - The test suite is 123 `test_that` blocks. Tests that install packages are
   skipped under `--as-cran` and run in a dedicated step on every configuration;
   the destructive data-loss verification runs on Ubuntu release.

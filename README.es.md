@@ -159,6 +159,70 @@ componente con warnings o notes puede incluirse: las validaciones se limitan a
 que el metapaquete distribuido pueda identificar e instalar sus componentes de
 forma segura.
 
+## 🎛️ De dónde salen los componentes
+
+Cualquier elemento de `packages` que sea un archivo existente se usa como ruta;
+el resto se resuelve como stem en `pkg_dir`, que acepta más de un directorio. Así
+que todo esto funciona, incluso mezclado en una sola llamada:
+
+```r
+create_metapackage(
+  "equipoverse",
+  packages = c(
+    "/srv/archivos/primero_1.2.0.tar.gz",  # una ruta, cualquier directorio
+    "~/builds/segundo.zip",                # otro directorio, otro formato
+    "tercero_0.4.0",                       # un stem resuelto en pkg_dir
+    "~/fuentes/cuarto"                     # un directorio fuente, se empaqueta
+  ),
+  pkg_dir = c("/srv/archivos", "~/builds"),
+  dest_dir = "~/proyectos"
+)
+```
+
+Un nombre de archivo sin versión es válido: `Package` y `Version` salen del
+`DESCRIPTION` del archivo. Si el nombre discrepa, bigbang avisa y le cree al
+`DESCRIPTION`.
+
+Los directorios fuente se construyen con el paquete opcional `pkgbuild`, en un
+temporal, y requieren `include_archives = TRUE`, porque ese archivo temporal no
+sobrevive a la llamada.
+
+`packages` también puede ser la ruta a un **manifiesto**: un componente por
+línea, `#` para comentarios. Las rutas relativas se resuelven contra el
+directorio del manifiesto, y los nombres de archivo se buscan además en
+`pkg_dir`, así que la lista puede vivir bajo control de versiones y los archivos
+no.
+
+## 🎚️ Opciones de generación
+
+```r
+plan <- create_metapackage(..., dry_run = TRUE)  # resuelve, valida, no escribe
+plan$order                                       # orden de instalación
+plan$files                                       # qué se escribiría
+plan$findings                                    # todos los hallazgos
+```
+
+`dry_run = TRUE` no crea `dest_dir` ni toca el destino, así que es una forma
+segura de ver qué haría una llamada antes de que la haga.
+
+- `on_component_error = "skip"` genera con los componentes válidos en lugar de
+  abortar, e informa los que dejó afuera. El descarte es transitivo: un
+  componente que depende de uno excluido también queda excluido, y se informa la
+  cadena. Excluir todo es un error.
+- `update = TRUE` regenera en el mismo lugar. La generación registra un
+  manifiesto de los archivos que escribió con sus hashes de contenido; `update`
+  reescribe solo esos, y se niega a correr si falta el manifiesto o si algún
+  archivo generado fue modificado o borrado a mano. Lo que bigbang no escribió no
+  se toca nunca.
+- `install_upgrade` fija la política de actualización por defecto del instalador
+  emitido, así que decidís al generar si los destinatarios quedan clavados en las
+  versiones que distribuís (`"always"`) o conservan lo más nuevo que ya tengan
+  (`"newer"`, el default).
+
+El instalador generado también acepta `only` para instalar un subconjunto —las
+dependencias locales de lo elegido se agregan solas— y `lib` para elegir la
+biblioteca donde instala.
+
 ## 🧰 API
 
 - `create_metapackage()` crea la fuente completa del metapaquete.
@@ -251,7 +315,7 @@ citation("bigbang")
 @Manual{bigbang2026,
   title  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},
   author = {Sebastián Lucas},
-  note   = {R package version 0.2.0},
+  note   = {R package version 0.3.0},
   year   = {2026},
   url    = {https://sebollin.github.io/bigbang/},
 }
