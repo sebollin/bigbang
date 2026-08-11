@@ -71,18 +71,25 @@ test_that("install_local_pkg recognizes a package version already installed", {
 test_that("an installed package is kept without reading an unreadable archive", {
   sandbox <- tempfile("install-helper-unreadable-")
   dir.create(sandbox)
+  content <- file.path(sandbox, "content")
+  dir.create(content)
+  writeLines("not a package", file.path(content, "payload.txt"))
   archive <- file.path(sandbox, "stats_0.0.0.tar.gz")
-  file.create(archive)
+  withr::with_dir(content, utils::tar(
+    archive, files = "payload.txt", compression = "gzip"
+  ))
   installed_version <- as.character(utils::packageVersion("stats"))
 
   never <- install_local_pkg(
-    archive, verbose = FALSE, upgrade = "never"
+    "stats_0.0.0", sandbox, verbose = FALSE, upgrade = "never"
   )
   expect_length(never$failed, 0L)
   expect_match(never$unchanged[["stats_0.0.0"]], "archive was not read", fixed = TRUE)
   expect_match(never$unchanged[["stats_0.0.0"]], installed_version, fixed = TRUE)
 
-  newer <- install_local_pkg(archive, verbose = FALSE, upgrade = "newer")
+  newer <- install_local_pkg(
+    "stats_0.0.0", sandbox, verbose = FALSE, upgrade = "newer"
+  )
   expect_length(newer$failed, 0L)
   expect_match(
     newer$unchanged[["stats_0.0.0"]],
@@ -90,11 +97,60 @@ test_that("an installed package is kept without reading an unreadable archive", 
     fixed = TRUE
   )
   expect_match(newer$unchanged[["stats_0.0.0"]], installed_version, fixed = TRUE)
+  expect_message(
+    newer_verbose <- install_local_pkg(
+      "stats_0.0.0", sandbox, verbose = TRUE, upgrade = "newer"
+    ),
+    "Package stats is already installed",
+    fixed = TRUE
+  )
+  expect_identical(newer_verbose$unchanged, newer$unchanged)
 
-  always <- install_local_pkg(archive, verbose = FALSE, upgrade = "always")
+  always <- install_local_pkg(
+    "stats_0.0.0", sandbox, verbose = FALSE, upgrade = "always"
+  )
   expect_length(always$installed, 0L)
   expect_length(always$failed, 1L)
-  expect_match(always$failed[[1L]], "Could not extract archive", fixed = TRUE)
+  expect_match(always$failed[[1L]], basename(archive), fixed = TRUE)
+})
+
+test_that("lazy archive metadata rejects a symbolic DESCRIPTION link", {
+  skip_on_cran()
+  skip_on_os("windows")
+  sandbox <- tempfile("install-helper-description-link-")
+  source_root <- file.path(sandbox, "source")
+  package_root <- file.path(source_root, "linkpkg")
+  archives <- file.path(sandbox, "archives")
+  dir.create(package_root, recursive = TRUE)
+  dir.create(archives)
+
+  outside <- file.path(sandbox, "outside-DESCRIPTION")
+  writeLines(c(
+    "Package: linkpkg", "Version: 1.0.0", "Title: Link fixture",
+    "Description: Temporary fixture.", "License: MIT"
+  ), outside)
+  linked <- file.symlink(outside, file.path(package_root, "DESCRIPTION"))
+  skip_if_not(isTRUE(linked), "This platform cannot create symbolic links.")
+  writeLines(character(), file.path(package_root, "NAMESPACE"))
+
+  archive <- file.path(archives, "linkpkg_1.0.0.tar.gz")
+  packed <- withr::with_dir(source_root, system2(
+    "tar", c("czf", shQuote(archive), "linkpkg"),
+    stdout = FALSE, stderr = FALSE
+  ))
+  skip_if_not(identical(packed, 0L), "No usable system tar for this test.")
+  listing <- system2(
+    "tar", c("tvzf", shQuote(archive)), stdout = TRUE, stderr = FALSE
+  )
+  skip_if_not(
+    any(startsWith(listing, "l")),
+    "This platform did not store the symbolic link as a link."
+  )
+
+  expect_error(
+    .read_archive_version(archive, ".tar.gz"),
+    "contains symbolic links"
+  )
 })
 
 test_that("force and upgrade policies control local reinstallation", {

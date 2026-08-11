@@ -100,6 +100,9 @@
 #' `upgrade = "never"`. Under the default policy, bigbang reads only the archive
 #' `DESCRIPTION` first; if that metadata cannot be verified for an already
 #' installed package, the installed package is kept and the reason is reported.
+#' With `upgrade = "never"`, the shortcut takes the component identity from the
+#' archive filename because the archive is not read. Use `upgrade = "newer"` when
+#' the declared `Package` field must be checked against the installed package.
 #'
 #' @return Invisibly, a list describing installed, unchanged, failed, and
 #'   skipped packages. Components that an upgrade policy left in place are
@@ -184,18 +187,7 @@ install_local_pkg <- function(
           conditionMessage(candidate_metadata)
         )
       )
-      if (isTRUE(verbose)) message(.bb_trf(
-        "Package %s is already installed; %s", candidate_name, reason
-      ))
-      return(invisible(structure(
-        list(
-          installed = list(),
-          unchanged = stats::setNames(list(reason), candidate$stem),
-          failed = list(),
-          skipped = list()
-        ),
-        class = "bigbang_install_result"
-      )))
+      return(unchanged_result(reason))
     }
     if (identical(candidate_metadata$package, candidate_name) &&
       tryCatch(

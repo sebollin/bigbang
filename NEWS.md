@@ -21,6 +21,10 @@
   archive is reported as unchanged when the installed package can be retained.
 - Rollback paths after a post-scaffold generation error are covered, including
   destinations reached through a symbolic link and unsuccessful removal.
+- Lazy archive-version inspection now rejects extracted symbolic links before
+  reading metadata, matching the full archive validation path.
+- The installation help now explains that `upgrade = "never"` identifies a
+  component from its filename because the archive is intentionally not read.
 
 # bigbang 0.2.0
 

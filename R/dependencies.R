@@ -241,6 +241,7 @@
       archive, extraction
     ), call. = FALSE)
   }
+  .validate_extracted_links(temp_dir, archive)
   description_files <- list.files(
     temp_dir, pattern = "^DESCRIPTION$", recursive = TRUE,
     full.names = TRUE, all.files = TRUE

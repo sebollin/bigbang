@@ -63,6 +63,9 @@ An installed package can be kept without reading its archive when
 \code{upgrade = "never"}. Under the default policy, bigbang reads only the archive
 \code{DESCRIPTION} first; if that metadata cannot be verified for an already
 installed package, the installed package is kept and the reason is reported.
+With \code{upgrade = "never"}, the shortcut takes the component identity from the
+archive filename because the archive is not read. Use \code{upgrade = "newer"} when
+the declared \code{Package} field must be checked against the installed package.
 }
 
 \seealso{
