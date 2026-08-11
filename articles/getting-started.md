@@ -60,7 +60,7 @@ result <- create_metapackage(
 result
 #> <bigbang metapackage>
 #>   Package: toyverse
-#>   Path: /tmp/RtmpXH7w1B/bigbang-vignette-1bde37bdf46a/generated/toyverse
+#>   Path: /tmp/RtmpMF5CBN/bigbang-vignette-1ac015c96653/generated/toyverse
 #>   Components: toycomponent
 list.files(result$path)
 #>  [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           
@@ -75,7 +75,7 @@ The generated tree can be scanned without loading it:
 scan <- scan_bigbang_artifact(result$path)
 scan
 #> <bigbang artifact scan>
-#>   Path: /tmp/RtmpXH7w1B/bigbang-vignette-1bde37bdf46a/generated/toyverse
+#>   Path: /tmp/RtmpMF5CBN/bigbang-vignette-1ac015c96653/generated/toyverse
 #>   Type: source
 #>   Result: no deletion signatures found
 stopifnot(!scan$vulnerable)
@@ -113,3 +113,35 @@ available. Use `upgrade = "always"` or `force = TRUE` for an explicit
 reinstall. Generated metapackages provide `<meta>_conflicts()` and honor
 `options(<meta>.quiet = TRUE)` for startup output. Their optional `cli`
 display falls back to a dependency-free ASCII banner.
+
+## Beyond the simple case
+
+The example above uses the simplest input: stems resolved in one
+directory. That is not a requirement. Any element of `packages` that is
+an existing file is used as a path, so components can come from several
+directories in one call, mix `.tar.gz`, `.tar` and `.zip`, and carry no
+version in the filename — identity and version are read from each
+archive’s `DESCRIPTION`. A component can also be a source directory,
+built for you with the optional `pkgbuild` package, or the whole list
+can live in a manifest file under version control.
+
+Two options are worth knowing before you generate anything for real:
+
+``` r
+
+plan <- create_metapackage(..., dry_run = TRUE)
+plan$order      # the installation order that would be used
+plan$findings   # every validation finding, without writing anything
+```
+
+`dry_run = TRUE` does not create the destination at all. And
+`update = TRUE` regenerates an existing project in place, rewriting only
+the files bigbang itself wrote — it refuses if any of them was modified
+by hand, and never touches files it did not write.
+
+See
+[`?create_metapackage`](https://sebollin.github.io/bigbang/reference/create_metapackage.md)
+for the full set, including `on_component_error` for generating from a
+partly broken set, `tolerate` for relaxing tidiness checks individually,
+and `install_upgrade` for fixing the upgrade policy of the installer
+that gets emitted.

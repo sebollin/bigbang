@@ -168,6 +168,34 @@ versión nueva en una ruta vacía con la versión actual de
 e instálela.</p>
 </div>
 <div class="section level2">
+<h2 id="más-allá-del-caso-simple">Más allá del caso simple<a class="anchor" aria-label="anchor" href="#m%C3%A1s-all%C3%A1-del-caso-simple"></a>
+</h2>
+<p>Los ejemplos usan la entrada más simple: stems resueltos en un
+directorio. No es un requisito. Cualquier elemento de
+<code>packages</code> que sea un archivo existente se usa como ruta, así
+que los componentes pueden venir de varios directorios en una misma
+llamada, mezclar <code>.tar.gz</code>, <code>.tar</code> y
+<code>.zip</code>, y no llevar la versión en el nombre —la identidad y
+la versión salen del <code>DESCRIPTION</code> de cada archivo—. Un
+componente también puede ser un directorio fuente, que se empaqueta con
+el paquete opcional <code>pkgbuild</code>, o la lista entera puede vivir
+en un manifiesto bajo control de versiones.</p>
+<p>Dos opciones que conviene conocer antes de generar algo en serio:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/create_metapackage.html">create_metapackage</a></span><span class="op">(</span><span class="va">...</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">plan</span><span class="op">$</span><span class="va">order</span>      <span class="co"># el orden de instalación que se usaría</span></span>
+<span><span class="va">plan</span><span class="op">$</span><span class="va">findings</span>   <span class="co"># todos los hallazgos de validación, sin escribir nada</span></span></code></pre></div>
+<p><code>dry_run = TRUE</code> no crea el destino. Y
+<code>update = TRUE</code> regenera un proyecto existente en el mismo
+lugar, reescribiendo solo los archivos que bigbang escribió —se niega si
+alguno fue modificado a mano, y nunca toca lo que no escribió—.</p>
+<p>Vea <code><a href="../reference/create_metapackage.html">?create_metapackage</a></code> para el conjunto completo,
+incluido <code>on_component_error</code> para generar a partir de un
+conjunto parcialmente roto, <code>tolerate</code> para relajar de a una
+las verificaciones de prolijidad, e <code>install_upgrade</code> para
+fijar la política de actualización del instalador emitido.</p>
+</div>
+<div class="section level2">
 <h2 id="idioma">Idioma<a class="anchor" aria-label="anchor" href="#idioma"></a>
 </h2>
 <p>Los mensajes de ejecución tienen inglés como fuente y traducción

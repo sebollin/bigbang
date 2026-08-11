@@ -119,7 +119,7 @@ separately.</p>
 <span><span class="va">result</span></span>
 <span><span class="co">#&gt; &lt;bigbang metapackage&gt;</span></span>
 <span><span class="co">#&gt;   Package: toyverse</span></span>
-<span><span class="co">#&gt;   Path: /tmp/RtmpXH7w1B/bigbang-vignette-1bde37bdf46a/generated/toyverse</span></span>
+<span><span class="co">#&gt;   Path: /tmp/RtmpMF5CBN/bigbang-vignette-1ac015c96653/generated/toyverse</span></span>
 <span><span class="co">#&gt;   Components: toycomponent</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">list.files</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span></span>
 <span><span class="co">#&gt;  [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           </span></span>
@@ -130,7 +130,7 @@ separately.</p>
 <code class="sourceCode R"><span><span class="va">scan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/scan_bigbang_artifact.html">scan_bigbang_artifact</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span></span>
 <span><span class="va">scan</span></span>
 <span><span class="co">#&gt; &lt;bigbang artifact scan&gt;</span></span>
-<span><span class="co">#&gt;   Path: /tmp/RtmpXH7w1B/bigbang-vignette-1bde37bdf46a/generated/toyverse</span></span>
+<span><span class="co">#&gt;   Path: /tmp/RtmpMF5CBN/bigbang-vignette-1ac015c96653/generated/toyverse</span></span>
 <span><span class="co">#&gt;   Type: source</span></span>
 <span><span class="co">#&gt;   Result: no deletion signatures found</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot</a></span><span class="op">(</span><span class="op">!</span><span class="va">scan</span><span class="op">$</span><span class="va">vulnerable</span><span class="op">)</span></span></code></pre></div>
@@ -168,6 +168,35 @@ explicit reinstall. Generated metapackages provide
 <code>options(&lt;meta&gt;.quiet = TRUE)</code> for startup output.
 Their optional <code>cli</code> display falls back to a dependency-free
 ASCII banner.</p>
+</div>
+<div class="section level2">
+<h2 id="beyond-the-simple-case">Beyond the simple case<a class="anchor" aria-label="anchor" href="#beyond-the-simple-case"></a>
+</h2>
+<p>The example above uses the simplest input: stems resolved in one
+directory. That is not a requirement. Any element of
+<code>packages</code> that is an existing file is used as a path, so
+components can come from several directories in one call, mix
+<code>.tar.gz</code>, <code>.tar</code> and <code>.zip</code>, and carry
+no version in the filename — identity and version are read from each
+archive’s <code>DESCRIPTION</code>. A component can also be a source
+directory, built for you with the optional <code>pkgbuild</code>
+package, or the whole list can live in a manifest file under version
+control.</p>
+<p>Two options are worth knowing before you generate anything for
+real:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/create_metapackage.html">create_metapackage</a></span><span class="op">(</span><span class="va">...</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">plan</span><span class="op">$</span><span class="va">order</span>      <span class="co"># the installation order that would be used</span></span>
+<span><span class="va">plan</span><span class="op">$</span><span class="va">findings</span>   <span class="co"># every validation finding, without writing anything</span></span></code></pre></div>
+<p><code>dry_run = TRUE</code> does not create the destination at all.
+And <code>update = TRUE</code> regenerates an existing project in place,
+rewriting only the files bigbang itself wrote — it refuses if any of
+them was modified by hand, and never touches files it did not write.</p>
+<p>See <code><a href="../reference/create_metapackage.html">?create_metapackage</a></code> for the full set, including
+<code>on_component_error</code> for generating from a partly broken set,
+<code>tolerate</code> for relaxing tidiness checks individually, and
+<code>install_upgrade</code> for fixing the upgrade policy of the
+installer that gets emitted.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

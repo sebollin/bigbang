@@ -109,6 +109,41 @@
 <p>bigbang <strong>no</strong> ejecuta <code>R CMD check</code> sobre los paquetes componentes. Un componente con warnings o notes puede incluirse: las validaciones se limitan a que el metapaquete distribuido pueda identificar e instalar sus componentes de forma segura.</p>
 </div>
 <div class="section level2">
+<h2 id="control_knobs-de-dónde-salen-los-componentes">🎛️ De dónde salen los componentes<a class="anchor" aria-label="anchor" href="#control_knobs-de-d%C3%B3nde-salen-los-componentes"></a></h2>
+<p>Cualquier elemento de <code>packages</code> que sea un archivo existente se usa como ruta; el resto se resuelve como stem en <code>pkg_dir</code>, que acepta más de un directorio. Así que todo esto funciona, incluso mezclado en una sola llamada:</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/create_metapackage.html">create_metapackage</a></span><span class="op">(</span></span>
+<span>  <span class="st">"equipoverse"</span>,</span>
+<span>  packages <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>    <span class="st">"/srv/archivos/primero_1.2.0.tar.gz"</span>,  <span class="co"># una ruta, cualquier directorio</span></span>
+<span>    <span class="st">"~/builds/segundo.zip"</span>,                <span class="co"># otro directorio, otro formato</span></span>
+<span>    <span class="st">"tercero_0.4.0"</span>,                       <span class="co"># un stem resuelto en pkg_dir</span></span>
+<span>    <span class="st">"~/fuentes/cuarto"</span>                     <span class="co"># un directorio fuente, se empaqueta</span></span>
+<span>  <span class="op">)</span>,</span>
+<span>  pkg_dir <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"/srv/archivos"</span>, <span class="st">"~/builds"</span><span class="op">)</span>,</span>
+<span>  dest_dir <span class="op">=</span> <span class="st">"~/proyectos"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Un nombre de archivo sin versión es válido: <code>Package</code> y <code>Version</code> salen del <code>DESCRIPTION</code> del archivo. Si el nombre discrepa, bigbang avisa y le cree al <code>DESCRIPTION</code>.</p>
+<p>Los directorios fuente se construyen con el paquete opcional <code>pkgbuild</code>, en un temporal, y requieren <code>include_archives = TRUE</code>, porque ese archivo temporal no sobrevive a la llamada.</p>
+<p><code>packages</code> también puede ser la ruta a un <strong>manifiesto</strong>: un componente por línea, <code>#</code> para comentarios. Las rutas relativas se resuelven contra el directorio del manifiesto, y los nombres de archivo se buscan además en <code>pkg_dir</code>, así que la lista puede vivir bajo control de versiones y los archivos no.</p>
+</div>
+<div class="section level2">
+<h2 id="level_slider-opciones-de-generación">🎚️ Opciones de generación<a class="anchor" aria-label="anchor" href="#level_slider-opciones-de-generaci%C3%B3n"></a></h2>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/create_metapackage.html">create_metapackage</a></span><span class="op">(</span><span class="va">...</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>  <span class="co"># resuelve, valida, no escribe</span></span>
+<span><span class="va">plan</span><span class="op">$</span><span class="va">order</span>                                       <span class="co"># orden de instalación</span></span>
+<span><span class="va">plan</span><span class="op">$</span><span class="va">files</span>                                       <span class="co"># qué se escribiría</span></span>
+<span><span class="va">plan</span><span class="op">$</span><span class="va">findings</span>                                    <span class="co"># todos los hallazgos</span></span></code></pre></div>
+<p><code>dry_run = TRUE</code> no crea <code>dest_dir</code> ni toca el destino, así que es una forma segura de ver qué haría una llamada antes de que la haga.</p>
+<ul><li>
+<code>on_component_error = "skip"</code> genera con los componentes válidos en lugar de abortar, e informa los que dejó afuera. El descarte es transitivo: un componente que depende de uno excluido también queda excluido, y se informa la cadena. Excluir todo es un error.</li>
+<li>
+<code>update = TRUE</code> regenera en el mismo lugar. La generación registra un manifiesto de los archivos que escribió con sus hashes de contenido; <code>update</code> reescribe solo esos, y se niega a correr si falta el manifiesto o si algún archivo generado fue modificado o borrado a mano. Lo que bigbang no escribió no se toca nunca.</li>
+<li>
+<code>install_upgrade</code> fija la política de actualización por defecto del instalador emitido, así que decidís al generar si los destinatarios quedan clavados en las versiones que distribuís (<code>"always"</code>) o conservan lo más nuevo que ya tengan (<code>"newer"</code>, el default).</li>
+</ul><p>El instalador generado también acepta <code>only</code> para instalar un subconjunto —las dependencias locales de lo elegido se agregan solas— y <code>lib</code> para elegir la biblioteca donde instala.</p>
+</div>
+<div class="section level2">
 <h2 id="toolbox-api">🧰 API<a class="anchor" aria-label="anchor" href="#toolbox-api"></a></h2>
 <ul><li>
 <code><a href="reference/create_metapackage.html">create_metapackage()</a></code> crea la fuente completa del metapaquete.</li>
@@ -127,7 +162,7 @@
 <div class="section level2">
 <h2 id="earth_americas-idioma">🌎 Idioma<a class="anchor" aria-label="anchor" href="#earth_americas-idioma"></a></h2>
 <p>El inglés es el idioma fuente del código, la ayuda y los mensajes. Los mensajes tienen traducción completa al español mediante gettext. En R 4.2 o posterior:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/gettext.html" class="external-link">Sys.setLanguage</a></span><span class="op">(</span><span class="st">"es"</span><span class="op">)</span></span></code></pre></div>
 <p>En versiones anteriores, defina <code>LANGUAGE=es</code> antes de iniciar R. La guía completa está en <code><a href="articles/bigbang-es.html">vignette("bigbang-es", package = "bigbang")</a></code>. Cuando <code>rhelpi18n</code> madure y llegue a CRAN se podrá evaluar un módulo separado <code>bigbang.es</code> para la ayuda interactiva.</p>
 </div>
@@ -146,7 +181,7 @@
 <h2 id="shield-seguridad-y-artefactos-antiguos">🛡️ Seguridad y artefactos antiguos<a class="anchor" aria-label="anchor" href="#shield-seguridad-y-artefactos-antiguos"></a></h2>
 <p>Un antecesor no publicado emitía limpieza relativa al directorio de trabajo y podía eliminar carpetas con nombres de componentes. Esas rutas fueron retiradas y están cubiertas por tests destructivos que solo usan árboles temporales.</p>
 <p>No cargue ni documente una fuente antigua antes de escanearla:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/scan_bigbang_artifact.html">scan_bigbang_artifact</a></span><span class="op">(</span><span class="st">"ruta/al/artefacto"</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <p>Si resulta vulnerable, póngala en cuarentena y genere una versión nueva en una ruta nueva y vacía. Nunca regenere in-place una fuente no clasificada.</p>
 </div>
@@ -160,15 +195,15 @@
 </div>
 <div class="section level2">
 <h2 id="open_book-citar-el-paquete">📖 Citar el paquete<a class="anchor" aria-label="anchor" href="#open_book-citar-el-paquete"></a></h2>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"bigbang"</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb12"><pre class="sourceCode bibtex"><code class="sourceCode bibtex"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="va">@Manual</span>{<span class="ot">bigbang2026</span>,</span>
-<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>  <span class="dt">title</span>  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},</span>
-<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>  <span class="dt">author</span> = {Sebastián Lucas},</span>
-<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>  <span class="dt">note</span>   = {R package version 0.2.0},</span>
-<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>  <span class="dt">year</span>   = {2026},</span>
-<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>  <span class="dt">url</span>    = {https://sebollin.github.io/bigbang/},</span>
-<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode bibtex"><code class="sourceCode bibtex"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="va">@Manual</span>{<span class="ot">bigbang2026</span>,</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>  <span class="dt">title</span>  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a>  <span class="dt">author</span> = {Sebastián Lucas},</span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>  <span class="dt">note</span>   = {R package version 0.3.0},</span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a>  <span class="dt">year</span>   = {2026},</span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>  <span class="dt">url</span>    = {https://sebollin.github.io/bigbang/},</span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>}</span></code></pre></div>
 </div>
 </div>
 

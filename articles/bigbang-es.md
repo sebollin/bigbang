@@ -106,6 +106,39 @@ ni hooks del artefacto. Genere una versión nueva en una ruta vacía con
 la versión actual de `bigbang`, vuelva a escanearla y recién entonces
 constrúyala e instálela.
 
+## Más allá del caso simple
+
+Los ejemplos usan la entrada más simple: stems resueltos en un
+directorio. No es un requisito. Cualquier elemento de `packages` que sea
+un archivo existente se usa como ruta, así que los componentes pueden
+venir de varios directorios en una misma llamada, mezclar `.tar.gz`,
+`.tar` y `.zip`, y no llevar la versión en el nombre —la identidad y la
+versión salen del `DESCRIPTION` de cada archivo—. Un componente también
+puede ser un directorio fuente, que se empaqueta con el paquete opcional
+`pkgbuild`, o la lista entera puede vivir en un manifiesto bajo control
+de versiones.
+
+Dos opciones que conviene conocer antes de generar algo en serio:
+
+``` r
+
+plan <- create_metapackage(..., dry_run = TRUE)
+plan$order      # el orden de instalación que se usaría
+plan$findings   # todos los hallazgos de validación, sin escribir nada
+```
+
+`dry_run = TRUE` no crea el destino. Y `update = TRUE` regenera un
+proyecto existente en el mismo lugar, reescribiendo solo los archivos
+que bigbang escribió —se niega si alguno fue modificado a mano, y nunca
+toca lo que no escribió—.
+
+Vea
+[`?create_metapackage`](https://sebollin.github.io/bigbang/reference/create_metapackage.md)
+para el conjunto completo, incluido `on_component_error` para generar a
+partir de un conjunto parcialmente roto, `tolerate` para relajar de a
+una las verificaciones de prolijidad, e `install_upgrade` para fijar la
+política de actualización del instalador emitido.
+
 ## Idioma
 
 Los mensajes de ejecución tienen inglés como fuente y traducción
