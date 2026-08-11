@@ -11,7 +11,7 @@ approach.
 create_metapackage(
   name,
   packages,
-  pkg_dir,
+  pkg_dir = NULL,
   ext = ".tar.gz",
   version = "0.1.0",
   dest_dir,
@@ -42,17 +42,20 @@ create_metapackage(
 
 - packages:
 
-  Character vector. Names (with version) of the local packages to
-  include, e.g. `"myPackage_1.0.0"`.
+  Character vector. Archive paths or stems of the local packages to
+  include. Existing paths may come from different directories; stems are
+  resolved in `pkg_dir`, e.g. `"myPackage_1.0.0"`.
 
 - pkg_dir:
 
-  Character. Directory containing the local archive files (`.tar.gz`,
-  `.zip`, etc.).
+  Character. Optional directory or directories containing local archives
+  used to resolve stems. It is not needed when every `packages` element
+  is an existing archive path.
 
 - ext:
 
-  Character. Archive extension. Defaults to `".tar.gz"`.
+  Character. Fallback archive extension for stems. Defaults to
+  `".tar.gz"`; each existing archive path keeps its own extension.
 
 - version:
 
@@ -97,7 +100,9 @@ create_metapackage(
 - additional_deps:
 
   Character vector. Extra dependencies to add on top of the ones
-  detected automatically.
+  declared by components. Source-code guesses are diagnostic by default;
+  use this argument when a guessed dependency should bind in the
+  generated package.
 
 - ignore_deps:
 
@@ -157,7 +162,10 @@ The function performs the following steps:
     etc.).
 
 2.  Detects dependencies between packages, both explicit (from
-    DESCRIPTION) and implicit (found by scanning the source code).
+    DESCRIPTION) and possible implicit uses (found by scanning
+    executable source tokens). The latter are reported for diagnosis and
+    are not hard dependencies unless explicitly supplied through
+    `additional_deps` or `force_deps`.
 
 3.  Generates DESCRIPTION and NAMESPACE with the appropriate
     dependencies.
@@ -185,6 +193,13 @@ the components from the local archives, the user calls
 graph-based topological ordering that also detects circular
 dependencies.
 
+Generation validates every supplied component and its dependency graph
+eagerly before writing the metapackage. This hard validation protects an
+artifact that will be distributed to another machine. The installer is
+more tolerant: when an already installed component does not need to be
+changed, it can retain that installation without reading an archive that
+will not be used.
+
 ## Component installation
 
 The generated meta-package installs component packages only when the
@@ -209,7 +224,9 @@ reach the component functions directly through the meta-package
 
 ## Requirements
 
-- The local packages must exist in `pkg_dir` with the given extension.
+- Each component must be an existing archive path or a stem resolvable
+  in one of the optional `pkg_dir` directories; `ext` is only a fallback
+  for stems.
 
 - Automatic documentation (`document = TRUE`) requires the `devtools`
   package.

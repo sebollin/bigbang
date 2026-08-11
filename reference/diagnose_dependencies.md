@@ -7,20 +7,20 @@ implicitly but not declared as dependencies.
 ## Usage
 
 ``` r
-diagnose_dependencies(packages, pkg_dir, ext = ".tar.gz")
+diagnose_dependencies(packages, pkg_dir = NULL, ext = ".tar.gz")
 ```
 
 ## Arguments
 
 - packages:
 
-  Character vector. Names (with version) of the local packages to
-  examine, e.g. `"conexiones_0.8.3"`.
+  Character vector. Archive paths or stems to examine, e.g.
+  `"conexiones_0.8.3"`.
 
 - pkg_dir:
 
-  Character. Directory containing the local archive files (`.tar.gz`,
-  `.zip`, etc.).
+  Character. Directory or directories containing local archives
+  (`.tar.gz`, `.zip`, etc.).
 
 - ext:
 

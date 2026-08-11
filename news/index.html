@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,20 @@
       <small>Source: <a href="https://github.com/sebollin/bigbang/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="development version" id="bigbang-development-version">bigbang (development version)<a class="anchor" aria-label="anchor" href="#bigbang-development-version"></a></h2>
+<div class="section level3">
+<h3 id="component-input-and-resolution-development-version">Component input and resolution<a class="anchor" aria-label="anchor" href="#component-input-and-resolution-development-version"></a></h3>
+<ul><li>Component archives may be supplied as existing paths from multiple directories, with mixed <code>.tar.gz</code>, <code>.tar</code>, and <code>.zip</code> extensions. Stems remain supported through the optional <code>pkg_dir</code> fallback.</li>
+<li>Package identity and version now come from the archive <code>DESCRIPTION</code>. Filename mismatches are warned about, while empty metadata, duplicate components, invalid archives, cycles, and unsatisfied local constraints remain hard errors.</li>
+<li>Generated installers accept a vector of archive directories when archives are not shipped; archives shipped inside a generated meta-package remain portable and contain no source-machine paths.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-development-version">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-development-version"></a></h3>
+<ul><li>Installing an already present package no longer requires reading an archive when <code>upgrade = "never"</code>; under the default policy, only its DESCRIPTION is read before deciding whether the archive needs to be used. An unreadable archive is reported as unchanged when the installed package can be retained.</li>
+<li>Rollback paths after a post-scaffold generation error are covered, including destinations reached through a symbolic link and unsuccessful removal.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.2.0" id="bigbang-020">bigbang 0.2.0<a class="anchor" aria-label="anchor" href="#bigbang-020"></a></h2>
 <p>Released on 2026-08-09.</p>
@@ -74,7 +88,7 @@
 <li>Generated helper examples use the requested meta-package name instead of an internal historical name.</li>
 <li>Paths returned in results use forward slashes on every platform, like the rest of the package. On Windows <code>result$path</code> came back in the platform convention and therefore did not compare equal to a path the caller had built with <code><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path()</a></code>. The containment checks normalise both sides the same way, so a destination that does not exist yet cannot be compared against one that does in a different convention.</li>
 <li>When a component is skipped because a non-local dependency is missing, the warning names the call that resolves it and the attachment step no longer follows it with a vaguer hint suggesting a bare re-run, which would have skipped the component again for the same reason.</li>
-<li>Component archive <code>Package</code> and <code>Version</code> fields are validated against their filenames, duplicate component versions and dependency cycles are rejected while generating, and generated installers verify the declared version.</li>
+<li>Component archive <code>Package</code> and <code>Version</code> fields are validated against their filenames, duplicate component versions and archive basenames are rejected while generating, and generated installers verify the declared version.</li>
 <li>Already-installed messages now report the installed version rather than the version named by the archive.</li>
 <li>Component names matching standard R package paths no longer generate <code>.Rbuildignore</code> rules that could exclude the generated package’s own files or shipped archives.</li>
 <li>Already-installed messages show both the installed and archive versions, and explicitly flag when the installed version is newer. The <code>unchanged</code> element of an installation result now carries the same two versions instead of the label “Already installed”, which is untrue when the installed package only shares a component’s name; the result is the only thing a calling script can inspect.</li>

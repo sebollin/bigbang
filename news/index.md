@@ -1,5 +1,31 @@
 # Changelog
 
+## bigbang (development version)
+
+### Component input and resolution
+
+- Component archives may be supplied as existing paths from multiple
+  directories, with mixed `.tar.gz`, `.tar`, and `.zip` extensions.
+  Stems remain supported through the optional `pkg_dir` fallback.
+- Package identity and version now come from the archive `DESCRIPTION`.
+  Filename mismatches are warned about, while empty metadata, duplicate
+  components, invalid archives, cycles, and unsatisfied local
+  constraints remain hard errors.
+- Generated installers accept a vector of archive directories when
+  archives are not shipped; archives shipped inside a generated
+  meta-package remain portable and contain no source-machine paths.
+
+### Bug fixes
+
+- Installing an already present package no longer requires reading an
+  archive when `upgrade = "never"`; under the default policy, only its
+  DESCRIPTION is read before deciding whether the archive needs to be
+  used. An unreadable archive is reported as unchanged when the
+  installed package can be retained.
+- Rollback paths after a post-scaffold generation error are covered,
+  including destinations reached through a symbolic link and
+  unsuccessful removal.
+
 ## bigbang 0.2.0
 
 Released on 2026-08-09.
@@ -135,7 +161,7 @@ Released on 2026-08-09.
   longer follows it with a vaguer hint suggesting a bare re-run, which
   would have skipped the component again for the same reason.
 - Component archive `Package` and `Version` fields are validated against
-  their filenames, duplicate component versions and dependency cycles
+  their filenames, duplicate component versions and archive basenames
   are rejected while generating, and generated installers verify the
   declared version.
 - Already-installed messages now report the installed version rather

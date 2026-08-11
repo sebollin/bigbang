@@ -11,7 +11,7 @@ archives are unpacked and installed as source packages.
 ``` r
 install_local_pkg(
   package,
-  pkg_dir,
+  pkg_dir = NULL,
   ext = ".tar.gz",
   repos = getOption("repos"),
   cran_deps = c("skip", "error", "install"),
@@ -25,16 +25,18 @@ install_local_pkg(
 
 - package:
 
-  Character. Package file name without extension (for example,
-  `"uspr_0.8.5"`).
+  Character. An existing archive path, or a package stem such as
+  `"uspr_0.8.5"` to resolve in `pkg_dir`.
 
 - pkg_dir:
 
-  Character. Directory containing local archives.
+  Character. Optional directory or directories containing local
+  archives. It is not needed when `package` is an existing path.
 
 - ext:
 
-  Character. Archive extension.
+  Character. Fallback archive extension for stems; existing paths keep
+  their own extension.
 
 - repos:
 
@@ -74,7 +76,12 @@ in `unchanged`, not in `installed`.
 This function installs packages into the user's active R library.
 Installation occurs only when the user calls the function; loading
 `bigbang` never installs packages. With the default
-`cran_deps = "skip"`, it does not access the network.
+`cran_deps = "skip"`, it does not access the network. An installed
+package can be kept without reading its archive when
+`upgrade = "never"`. Under the default policy, bigbang reads only the
+archive `DESCRIPTION` first; if that metadata cannot be verified for an
+already installed package, the installed package is kept and the reason
+is reported.
 
 ## See also
 
