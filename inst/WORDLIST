@@ -38,6 +38,8 @@ tarballs
 tempdir
 testthat
 tidyverse
+tolerations
+unincluded
 UTF
 VignetteEncoding
 VignetteEngine

@@ -122,6 +122,34 @@ Para generar una guía de flujo ordenada, indique cada componente una vez:
 workflow = c("Importación" = "datos", "Informe" = "reportes")
 ```
 
+## Validación y tolerancias explícitas
+
+bigbang mantiene como errores duros todas las validaciones que protegen a quien
+recibe el metapaquete: archivos inseguros o malformados, metadatos inválidos,
+componentes duplicados, restricciones locales insatisfechas y ciclos. Esas
+validaciones no se pueden desactivar.
+
+Las comprobaciones de prolijidad se relajan de forma individual y explícita:
+
+```r
+create_metapackage(
+  # ...,
+  tolerate = c("filename_mismatch", "unincluded_local_dep")
+)
+```
+
+`"filename_mismatch"` silencia los avisos cuando el nombre del archivo difiere
+de la identidad declarada en DESCRIPTION. `"unincluded_local_dep"` convierte en
+aviso el error por una dependencia local disponible en las fuentes pero omitida
+de `packages`. Cada relajación aplicada queda en `result$tolerated`; los nombres
+desconocidos son un error. No existe un interruptor que desactive toda la
+validación.
+
+bigbang **no** ejecuta `R CMD check` sobre los paquetes componentes. Un
+componente con warnings o notes puede incluirse: las validaciones se limitan a
+que el metapaquete distribuido pueda identificar e instalar sus componentes de
+forma segura.
+
 ## 🧰 API
 
 - `create_metapackage()` crea la fuente completa del metapaquete.

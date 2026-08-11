@@ -181,6 +181,78 @@ test_that("local dependencies outside the component set are rejected", {
   expect_true("stats" %in% external_result$cran_dependencies)
 })
 
+test_that("named tolerances are explicit, reported, and typo-safe", {
+  sandbox <- tempfile("bigbang-tolerate-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  dir.create(destination)
+
+  build_safety_archive(
+    "mismatchtol", "2.0.0", source_root, archives,
+    filename_version = "1.0.0"
+  )
+  expect_warning(
+    mismatch <- create_metapackage(
+      "mismatchtolverse", "mismatchtol_1.0.0", archives,
+      dest_dir = destination, document = FALSE, verbose = FALSE,
+      tolerate = "filename_mismatch"
+    ),
+    NA
+  )
+  expect_identical(
+    names(mismatch$tolerated), c("relaxation", "component", "reason")
+  )
+  expect_identical(mismatch$tolerated$relaxation, "filename_mismatch")
+  expect_identical(mismatch$tolerated$component, "mismatchtol")
+  expect_match(mismatch$tolerated$reason, "declares version 2.0.0")
+
+  build_safety_archive("includedtol", "1.0.0", source_root, archives)
+  build_safety_archive(
+    "orphantol", "1.0.0", source_root, archives, imports = "includedtol"
+  )
+  expect_warning(
+    orphan <- create_metapackage(
+      "orphantolverse", "orphantol_1.0.0", archives,
+      dest_dir = destination, document = FALSE, verbose = FALSE,
+      tolerate = "unincluded_local_dep"
+    ),
+    "available at"
+  )
+  expect_identical(orphan$tolerated$relaxation, "unincluded_local_dep")
+  expect_identical(orphan$tolerated$component, "orphantol")
+  expect_match(orphan$tolerated$reason, "includedtol")
+
+  empty_destination <- file.path(sandbox, "unknown-destination")
+  dir.create(empty_destination)
+  expect_error(
+    create_metapackage(
+      "unknowntolverse", "mismatchtol_1.0.0", archives,
+      dest_dir = empty_destination, document = FALSE, verbose = FALSE,
+      tolerate = "filename_mismtach"
+    ),
+    class = "bigbang_error_tolerance",
+    regexp = "filename_mismtach"
+  )
+  expect_length(
+    list.files(empty_destination, all.files = TRUE, no.. = TRUE), 0L
+  )
+  expect_error(
+    create_metapackage(
+      "invalidtolverse", "mismatchtol_1.0.0", archives,
+      dest_dir = empty_destination, document = FALSE, verbose = FALSE,
+      tolerate = TRUE
+    ),
+    class = "bigbang_error_tolerance",
+    regexp = "character vector"
+  )
+  expect_length(
+    list.files(empty_destination, all.files = TRUE, no.. = TRUE), 0L
+  )
+})
+
 test_that("reserved component names cannot exclude generated package files", {
   sandbox <- tempfile("bigbang-reserved-components-")
   source_root <- file.path(sandbox, "sources")
@@ -469,6 +541,217 @@ test_that("duplicate components and cycles are rejected by the generator", {
     class = "bigbang_error_cycle"
   )
   expect_length(list.files(destination, all.files = TRUE, no.. = TRUE), 0L)
+})
+
+test_that("tolerations cannot disable recipient protection invariants", {
+  sandbox <- tempfile("bigbang-tolerance-invariant-")
+  source_root <- file.path(sandbox, "sources")
+  destination <- file.path(sandbox, "destination")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(destination)
+  all_tolerations <- .allowed_tolerations
+
+  generate <- function(name, packages, pkg_dir) {
+    create_metapackage(
+      name, packages, pkg_dir,
+      dest_dir = destination, document = FALSE, verbose = FALSE,
+      tolerate = all_tolerations
+    )
+  }
+  archive_dir <- function(name) {
+    path <- file.path(sandbox, name)
+    dir.create(path)
+    path
+  }
+
+  constraint_dir <- archive_dir("constraint")
+  build_safety_archive("guarddep", "1.0.0", source_root, constraint_dir)
+  build_safety_archive(
+    "guardneed", "1.0.0", source_root, constraint_dir,
+    imports = "guarddep (>= 2.0.0)"
+  )
+
+  cycle_dir <- archive_dir("cycle")
+  build_safety_archive(
+    "guardcyclea", "1.0.0", source_root, cycle_dir,
+    imports = "guardcycleb"
+  )
+  build_safety_archive(
+    "guardcycleb", "1.0.0", source_root, cycle_dir,
+    imports = "guardcyclea"
+  )
+
+  duplicate_dir <- archive_dir("duplicate")
+  build_safety_archive("guarddup", "1.0.0", source_root, duplicate_dir)
+  build_safety_archive("guarddup", "2.0.0", source_root, duplicate_dir)
+
+  valid_dir <- archive_dir("valid")
+  valid <- build_safety_archive(
+    "guardvalid", "1.0.0", source_root, valid_dir
+  )
+
+  truncated_dir <- archive_dir("truncated")
+  truncated <- build_safety_archive(
+    "guardtruncated", "1.0.0", source_root, truncated_dir,
+    code = rep("guardtruncated_padding <- 1L", 1000L)
+  )
+  bytes <- readBin(truncated, "raw", n = file.info(truncated)$size)
+  writeBin(bytes[seq_len(max(1L, length(bytes) %/% 2L))], truncated)
+
+  traversal_dir <- archive_dir("traversal")
+  traversal_work <- file.path(sandbox, "traversal-work")
+  dir.create(traversal_work)
+  traversal_payload <- file.path(sandbox, "traversal-payload.txt")
+  writeLines("unsafe", traversal_payload)
+  traversal <- file.path(traversal_dir, "guardtraversal.tar")
+  withr::with_dir(traversal_work, utils::tar(
+    traversal, "../traversal-payload.txt",
+    compression = "none", tar = "internal"
+  ))
+
+  absolute_dir <- archive_dir("absolute")
+  absolute <- file.path(absolute_dir, "guardabsolute.tar")
+  utils::tar(
+    absolute, traversal_payload, compression = "none", tar = "internal"
+  )
+
+  roots_dir <- archive_dir("roots")
+  roots_work <- file.path(sandbox, "roots-work")
+  dir.create(roots_work)
+  for (root in c("root-one", "root-two")) {
+    dir.create(file.path(roots_work, root))
+    writeLines(c(
+      paste0("Package: ", gsub("-", "", root)), "Version: 1.0.0"
+    ), file.path(roots_work, root, "DESCRIPTION"))
+  }
+  multiple_roots <- file.path(roots_dir, "guardroots.tar.gz")
+  withr::with_dir(roots_work, utils::tar(
+    multiple_roots, c("root-one", "root-two"), compression = "gzip"
+  ))
+
+  no_description_dir <- archive_dir("no-description")
+  no_description_work <- file.path(sandbox, "no-description-work")
+  dir.create(file.path(no_description_work, "guardnodesc"), recursive = TRUE)
+  writeLines(
+    character(), file.path(no_description_work, "guardnodesc", "NAMESPACE")
+  )
+  no_description <- file.path(no_description_dir, "guardnodesc.tar.gz")
+  withr::with_dir(no_description_work, utils::tar(
+    no_description, "guardnodesc", compression = "gzip"
+  ))
+
+  empty_fields_dir <- archive_dir("empty-fields")
+  empty_fields_work <- file.path(sandbox, "empty-fields-work")
+  dir.create(file.path(empty_fields_work, "guardempty"), recursive = TRUE)
+  writeLines(
+    c("Package:", "Version:"),
+    file.path(empty_fields_work, "guardempty", "DESCRIPTION")
+  )
+  empty_fields <- file.path(empty_fields_dir, "guardempty.tar.gz")
+  withr::with_dir(empty_fields_work, utils::tar(
+    empty_fields, "guardempty", compression = "gzip"
+  ))
+
+  checks <- list(
+    unsatisfied_version = list(
+      run = function() {
+        generate(
+          "guardconstraintverse",
+          c("guarddep_1.0.0", "guardneed_1.0.0"), constraint_dir
+        )
+      },
+      class = "bigbang_error_dependency_version"
+    ),
+    dependency_cycle = list(
+      run = function() {
+        generate(
+          "guardcycleverse",
+          c("guardcyclea_1.0.0", "guardcycleb_1.0.0"), cycle_dir
+        )
+      },
+      class = "bigbang_error_cycle"
+    ),
+    truncated_archive = list(
+      run = function() generate("guardtruncatedverse", truncated, NULL),
+      class = NULL
+    ),
+    parent_traversal = list(
+      run = function() generate("guardtraversalverse", traversal, NULL),
+      class = NULL
+    ),
+    absolute_member = list(
+      run = function() generate("guardabsoluteverse", absolute, NULL),
+      class = NULL
+    ),
+    multiple_roots = list(
+      run = function() generate("guardrootsverse", multiple_roots, NULL),
+      class = NULL
+    ),
+    missing_root_description = list(
+      run = function() generate("guardnodescverse", no_description, NULL),
+      class = NULL
+    ),
+    empty_identity = list(
+      run = function() generate("guardemptyverse", empty_fields, NULL),
+      class = NULL
+    ),
+    invalid_metapackage_name = list(
+      run = function() generate("guard_bad", valid, NULL),
+      class = NULL
+    ),
+    reserved_metapackage_name = list(
+      run = function() generate("stats", valid, NULL),
+      class = NULL
+    ),
+    duplicate_component = list(
+      run = function() {
+        generate(
+          "guarddupverse", c("guarddup_1.0.0", "guarddup_2.0.0"),
+          duplicate_dir
+        )
+      },
+      class = "bigbang_error_duplicate_component"
+    )
+  )
+
+  if (.Platform$OS.type != "windows") {
+    link_dir <- archive_dir("link")
+    link_work <- file.path(sandbox, "link-work")
+    link_root <- file.path(link_work, "guardlink")
+    dir.create(link_root, recursive = TRUE)
+    outside_description <- file.path(sandbox, "outside-DESCRIPTION")
+    writeLines(c("Package: guardlink", "Version: 1.0.0"), outside_description)
+    linked <- file.symlink(
+      outside_description, file.path(link_root, "DESCRIPTION")
+    )
+    if (isTRUE(linked) && nzchar(Sys.which("tar"))) {
+      link_archive <- file.path(link_dir, "guardlink.tar.gz")
+      packed <- withr::with_dir(link_work, system2(
+        "tar", c("czf", shQuote(link_archive), "guardlink"),
+        stdout = FALSE, stderr = FALSE
+      ))
+      if (identical(packed, 0L)) {
+        checks$symbolic_link <- list(
+          run = function() generate("guardlinkverse", link_archive, NULL),
+          class = NULL
+        )
+      }
+    }
+  }
+
+  expect_true("symbolic_link" %in% names(checks) ||
+                .Platform$OS.type == "windows")
+  for (label in names(checks)) {
+    condition <- tryCatch(
+      suppressWarnings(checks[[label]]$run()),
+      error = identity
+    )
+    expect_true(inherits(condition, "error"), info = label)
+    expected_class <- checks[[label]]$class
+    if (!is.null(expected_class)) {
+      expect_true(inherits(condition, expected_class), info = label)
+    }
+  }
 })
 
 test_that("already installed messages report the installed version", {

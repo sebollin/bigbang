@@ -100,9 +100,15 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
     readLines(file.path(project, "R", "install_packages.R"), warn = FALSE),
     collapse = "\n"
   )
-  expect_false(grepl(
-    normalizePath(archives, winslash = "/"), emitted_code, fixed = TRUE
-  ))
+  expect_path_absent(archives, emitted_code)
+})
+
+test_that("path assertions recognize extended Windows path prefixes", {
+  path <- tempfile("bigbang-extended-path-")
+  dir.create(path)
+  extended <- paste0("//?/", .canonical_test_path(path))
+  extended <- chartr("/", "\\", extended)
+  expect_true(contains_path(path, extended))
 })
 
 test_that("ZIP content distinguishes source archives from Windows binaries", {

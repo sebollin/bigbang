@@ -419,7 +419,34 @@
   )
 }
 
-.validate_archive_metadata <- function(component) {
+.empty_tolerated <- function() {
+  data.frame(
+    relaxation = character(),
+    component = character(),
+    reason = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+.tolerated_entry <- function(relaxation, component, reason) {
+  data.frame(
+    relaxation = relaxation,
+    component = component,
+    reason = reason,
+    stringsAsFactors = FALSE
+  )
+}
+
+.combine_tolerated <- function(...) {
+  entries <- list(...)
+  entries <- entries[vapply(entries, nrow, integer(1L)) > 0L]
+  if (length(entries) == 0L) return(.empty_tolerated())
+  result <- do.call(rbind, entries)
+  rownames(result) <- NULL
+  result
+}
+
+.validate_archive_metadata <- function(component, tolerate = character()) {
   stem <- component$stem
   expected_name <- sub("_.*", "", stem)
   has_version <- grepl("_", stem, fixed = TRUE)
@@ -428,19 +455,30 @@
   } else {
     NA_character_
   }
+  tolerated <- .empty_tolerated()
+  report_mismatch <- function(reason) {
+    if ("filename_mismatch" %in% tolerate) {
+      tolerated <<- .combine_tolerated(
+        tolerated,
+        .tolerated_entry("filename_mismatch", component$package, reason)
+      )
+    } else {
+      warning(reason, call. = FALSE)
+    }
+  }
   if (!identical(component$package, expected_name)) {
-    warning(.bb_trf(
+    report_mismatch(.bb_trf(
       "Archive %s declares package %s, but its filename suggests %s.",
       component$path, component$package, expected_name
-    ), call. = FALSE)
+    ))
   }
   if (has_version && !.version_matches(component$version, expected_version)) {
-    warning(.bb_trf(
+    report_mismatch(.bb_trf(
       "Archive %s declares version %s, but its filename suggests version %s.",
       component$path, component$version, expected_version
-    ), call. = FALSE)
+    ))
   }
-  invisible(component)
+  tolerated
 }
 
 .component_dependency_cycle <- function(components) {
@@ -555,30 +593,44 @@
   list(entries = entries, files = paths, stems = stems, packages = packages)
 }
 
-.validate_unincluded_deps <- function(components, inventory) {
+.validate_unincluded_deps <- function(components, inventory,
+                                      tolerate = character()) {
   included <- vapply(components, `[[`, character(1L), "package")
+  tolerated <- .empty_tolerated()
   for (item in components) {
     candidates <- setdiff(item$dependencies, included)
     for (dependency in candidates) {
       match <- which(inventory$packages == dependency)
       if (length(match) > 0L) {
-        .bigbang_abort(
-          "bigbang_error_unincluded_dependency",
-          .bb_trf(
-            paste0(
-              "Component %s declares dependency %s, available at %s but not ",
-              "included. Add it to packages or remove the dependency."
-            ),
-            item$package, dependency, inventory$files[[match[[1L]]]]
+        archive <- inventory$files[[match[[1L]]]]
+        reason <- .bb_trf(
+          paste0(
+            "Component %s declares dependency %s, available at %s but not ",
+            "included. Add it to packages or remove the dependency."
           ),
-          component = item$package,
-          dependency = dependency,
-          archive = inventory$files[[match[[1L]]]]
+          item$package, dependency, archive
         )
+        if ("unincluded_local_dep" %in% tolerate) {
+          warning(reason, call. = FALSE)
+          tolerated <- .combine_tolerated(
+            tolerated,
+            .tolerated_entry(
+              "unincluded_local_dep", item$package, reason
+            )
+          )
+        } else {
+          .bigbang_abort(
+            "bigbang_error_unincluded_dependency",
+            reason,
+            component = item$package,
+            dependency = dependency,
+            archive = archive
+          )
+        }
       }
     }
   }
-  invisible(components)
+  tolerated
 }
 
 classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
@@ -644,7 +696,7 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   best
 }
 
-.validate_component_archives <- function(resolved) {
+.validate_component_archives <- function(resolved, tolerate = character()) {
   components <- resolved$components
   inventory <- resolved$inventory
   names_only <- vapply(components, `[[`, character(1L), "package")
@@ -660,11 +712,13 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
     )
   }
 
-  for (component in components) {
-    .validate_archive_metadata(component)
-  }
+  metadata_tolerated <- lapply(
+    components, .validate_archive_metadata, tolerate = tolerate
+  )
   .validate_constraints(components)
-  .validate_unincluded_deps(components, inventory)
+  dependency_tolerated <- .validate_unincluded_deps(
+    components, inventory, tolerate = tolerate
+  )
   cycle <- .component_dependency_cycle(components)
   if (length(cycle) > 0L) {
     .bigbang_abort(
@@ -676,7 +730,13 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
       cycles = list(cycle)
     )
   }
-  components
+  list(
+    components = components,
+    tolerated = do.call(
+      .combine_tolerated,
+      c(metadata_tolerated, list(dependency_tolerated))
+    )
+  )
 }
 
 #' @return A character vector of dependency names declared in DESCRIPTION.

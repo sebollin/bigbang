@@ -25,7 +25,8 @@ create_metapackage(
   force_deps = NULL,
   debug = FALSE,
   workflow = NULL,
-  include_archives = TRUE
+  include_archives = TRUE,
+  tolerate = character()
 )
 }
 \arguments{
@@ -100,10 +101,17 @@ tarballs under 10 MB and does not accept binary executables in them, which
 matters only if a generated meta-package is ever submitted there. Set it to
 \code{FALSE} when the archives stay in a shared location that recipients can
 reach; then \verb{<meta>_install()} requires an explicit \code{pkg_dir}.}
+
+\item{tolerate}{Character vector of explicitly named validation relaxations.
+Use \code{"filename_mismatch"} to silence filename-versus-DESCRIPTION mismatch
+warnings, or \code{"unincluded_local_dep"} to turn an available-but-unincluded
+local dependency error into a warning. Unknown names are errors. Each
+applied relaxation is recorded in the returned \code{tolerated} table.}
 }
 \value{
 Invisibly, a \code{bigbang_result} containing the generated path,
-component archives, dependency classification, and documentation status.
+component archives, dependency classification, applied tolerations, and
+documentation status.
 }
 \description{
 Creates the full structure and files of a meta-package that installs, manages
@@ -141,6 +149,17 @@ will be distributed to another machine. The installer is more tolerant: when
 an already installed component does not need to be changed, it can retain that
 installation without reading an archive that will not be used.
 }
+\section{Validation strictness}{
+
+Validations that protect the recipient cannot be disabled: malformed or
+unsafe archives, invalid component metadata, duplicate components, cycles,
+and unsatisfied local version constraints remain hard errors. Checks about
+project tidiness can be relaxed individually through \code{tolerate}; there is no
+switch that disables validation as a whole. bigbang does not run
+\verb{R CMD check} on component packages, so component warnings and notes do not
+prevent generation.
+}
+
 \section{Component installation}{
 
 The generated meta-package installs component packages only when the user

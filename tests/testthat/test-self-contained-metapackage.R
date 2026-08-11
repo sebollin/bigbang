@@ -51,12 +51,8 @@ test_that("component archives travel inside the meta-package by default", {
   # library of whoever installed the meta-package rather than at this machine.
   signature <- installer_signature(result$path)
   expect_true(any(grepl("system.file(\"archives\"", signature, fixed = TRUE)))
-  expect_false(any(grepl(
-    normalizePath(archives, winslash = "/"), signature, fixed = TRUE
-  )))
-  expect_false(any(grepl(
-    normalizePath(sandbox, winslash = "/"), signature, fixed = TRUE
-  )))
+  expect_path_absent(archives, signature)
+  expect_path_absent(sandbox, signature)
 })
 
 test_that("shipped archives do not leak any source directory", {
@@ -107,15 +103,9 @@ test_that("shipped archives do not leak any source directory", {
       collapse = "\n"
     )
   }
-  contains_path <- function(path, text) {
-    needle <- normalizePath(path, winslash = "/")
-    canonical_text <- gsub("\\\\+", "/", text)
-    grepl(needle, canonical_text, fixed = TRUE)
-  }
-
   text <- generated_text()
-  expect_false(contains_path(first_dir, text))
-  expect_false(contains_path(second_dir, text))
+  expect_path_absent(first_dir, text)
+  expect_path_absent(second_dir, text)
 
   # Prove that the tree scan detects a leak instead of passing vacuously.
   probe <- file.path(result$path, "source-path-probe.txt")

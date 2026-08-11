@@ -151,6 +151,32 @@ For an ordered pipeline guide, supply every component once in a named workflow:
 workflow = c("Import" = "datahelpers", "Report" = "reports")
 ```
 
+## Validation and explicit tolerances
+
+bigbang validates everything that protects the recipient of a generated
+metapackage. Unsafe or malformed archives, invalid component metadata,
+duplicate components, unsatisfied local version constraints, and dependency
+cycles are always hard errors and cannot be disabled.
+
+Checks about project tidiness can be relaxed individually and explicitly:
+
+```r
+create_metapackage(
+  # ...,
+  tolerate = c("filename_mismatch", "unincluded_local_dep")
+)
+```
+
+`"filename_mismatch"` silences warnings when an archive filename differs from
+its DESCRIPTION identity. `"unincluded_local_dep"` changes the error for a
+local dependency available in the supplied sources but omitted from `packages`
+into a warning. Applied relaxations are recorded in `result$tolerated`; unknown
+names are errors. There is deliberately no switch that disables all validation.
+
+bigbang does **not** run `R CMD check` on component packages. A component with
+check warnings or notes can be included; validation is limited to whether the
+distributed metapackage can identify and safely install its components.
+
 See `vignette("getting-started", package = "bigbang")` for a reproducible
 toy project created entirely under `tempdir()`.
 

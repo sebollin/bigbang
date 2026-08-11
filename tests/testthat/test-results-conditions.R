@@ -51,6 +51,10 @@ test_that("generation returns a classified result and non-empty destinations are
   expect_s3_class(result, "bigbang_result")
   expect_identical(result$name, "resultverse")
   expect_setequal(result$packages, c("aaa", "bbb"))
+  expect_identical(
+    names(result$tolerated), c("relaxation", "component", "reason")
+  )
+  expect_identical(nrow(result$tolerated), 0L)
   expect_true(dir.exists(result$path))
 
   emitted <- new.env(parent = baseenv())

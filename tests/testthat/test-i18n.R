@@ -271,7 +271,10 @@ test_that("messages formerly keyed with edge whitespace translate at runtime", {
     deparse(unsupported_artifact), ")))); ",
     "writeLines(paste0('DESCRIPTION|', capture_error(scan_bigbang_artifact(",
     deparse(no_description), ")))); ",
-    "writeLines(paste0('UNSAFE|', capture_error(validate('../escape'))))"
+    "writeLines(paste0('UNSAFE|', capture_error(validate('../escape')))); ",
+    "writeLines(paste0('TOLERATE|', capture_error(create_metapackage(",
+    "'tolverse', 'missing', dest_dir = tempdir(), document = FALSE, ",
+    "tolerate = 'unknown'))))"
   )
   output <- run_spanish_child("R-bigbang", bigbang_catalog_dir(), code)
   translated <- paste(output, collapse = "\n")
@@ -289,6 +292,7 @@ test_that("messages formerly keyed with edge whitespace translate at runtime", {
     translated, "No se encontr\u00f3 DESCRIPTION en el directorio fuente", fixed = TRUE
   )
   expect_match(translated, "rutas absolutas", fixed = TRUE)
+  expect_match(translated, "Tolerancias desconocidas", fixed = TRUE)
 })
 
 test_that("template diagnostics translate without edge whitespace", {

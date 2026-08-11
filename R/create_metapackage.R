@@ -34,6 +34,7 @@
   ".rbuildignore", ".gitignore"
 )
 .template_safety_schema <- "2"
+.allowed_tolerations <- c("filename_mismatch", "unincluded_local_dep")
 
 .bigbang_condition <- function(class, message, ..., call = NULL) {
   structure(
@@ -46,6 +47,29 @@
   condition <- .bigbang_condition(class, message, ..., call = call)
   class(condition) <- c(class, "bigbang_error", "error", "condition")
   stop(condition)
+}
+
+.validate_tolerate <- function(tolerate) {
+  if (!is.character(tolerate) || anyNA(tolerate) || any(!nzchar(tolerate))) {
+    .bigbang_abort(
+      "bigbang_error_tolerance",
+      .bb_tr("'tolerate' must be a character vector of named relaxations")
+    )
+  }
+  tolerate <- unique(tolerate)
+  unknown <- setdiff(tolerate, .allowed_tolerations)
+  if (length(unknown) > 0L) {
+    .bigbang_abort(
+      "bigbang_error_tolerance",
+      .bb_trf(
+        "Unknown tolerance(s): %s. Supported values are: %s.",
+        paste(unknown, collapse = ", "),
+        paste(.allowed_tolerations, collapse = ", ")
+      ),
+      unknown = unknown
+    )
+  }
+  tolerate
 }
 
 # Keep rollback's filesystem operation behind a package binding so its
@@ -140,11 +164,17 @@
 #'   matters only if a generated meta-package is ever submitted there. Set it to
 #'   `FALSE` when the archives stay in a shared location that recipients can
 #'   reach; then `<meta>_install()` requires an explicit `pkg_dir`.
+#' @param tolerate Character vector of explicitly named validation relaxations.
+#'   Use `"filename_mismatch"` to silence filename-versus-DESCRIPTION mismatch
+#'   warnings, or `"unincluded_local_dep"` to turn an available-but-unincluded
+#'   local dependency error into a warning. Unknown names are errors. Each
+#'   applied relaxation is recorded in the returned `tolerated` table.
 #' @param debug Logical. If `TRUE`, emits detailed debugging messages. Defaults
 #'   to `FALSE`.
 #'
 #' @return Invisibly, a `bigbang_result` containing the generated path,
-#'   component archives, dependency classification, and documentation status.
+#'   component archives, dependency classification, applied tolerations, and
+#'   documentation status.
 #'
 #' @details
 #' The function performs the following steps:
@@ -173,6 +203,15 @@
 #' will be distributed to another machine. The installer is more tolerant: when
 #' an already installed component does not need to be changed, it can retain that
 #' installation without reading an archive that will not be used.
+#'
+#' @section Validation strictness:
+#' Validations that protect the recipient cannot be disabled: malformed or
+#' unsafe archives, invalid component metadata, duplicate components, cycles,
+#' and unsatisfied local version constraints remain hard errors. Checks about
+#' project tidiness can be relaxed individually through `tolerate`; there is no
+#' switch that disables validation as a whole. bigbang does not run
+#' `R CMD check` on component packages, so component warnings and notes do not
+#' prevent generation.
 #'
 #' @section Component installation:
 #' The generated meta-package installs component packages only when the user
@@ -240,7 +279,8 @@ create_metapackage <- function(
   # Arguments added after 0.1.0 go last, so that a positional call written
   # against 0.1.0 keeps binding to the same parameters.
   workflow = NULL,
-  include_archives = TRUE
+  include_archives = TRUE,
+  tolerate = character()
 ) {
   verbose <- isTRUE(verbose)
   debug <- isTRUE(debug)
@@ -268,6 +308,7 @@ create_metapackage <- function(
         is.na(include_archives)) {
     stop(.bb_tr("'include_archives' must be TRUE or FALSE"), call. = FALSE)
   }
+  tolerate <- .validate_tolerate(tolerate)
 
   # Resolve caller-supplied paths before any generated files are written. A
   # component may be an existing archive path or a stem resolved in pkg_dir.
@@ -301,7 +342,11 @@ create_metapackage <- function(
   }
 
   resolved_components <- .resolve_components(packages, pkg_dir, ext)
-  components <- .validate_component_archives(resolved_components)
+  validation <- .validate_component_archives(
+    resolved_components, tolerate = tolerate
+  )
+  components <- validation$components
+  tolerated <- validation$tolerated
   component_packages <- vapply(components, `[[`, character(1L), "package")
   archive_stems <- vapply(components, `[[`, character(1L), "stem")
   archive_paths <- vapply(components, `[[`, character(1L), "path")
@@ -800,6 +845,7 @@ StripTrailingWhitespace: Yes"
       local_dependencies = local_deps,
       cran_dependencies = cran_deps,
       implicit_dependencies = detected_implicit_deps,
+      tolerated = tolerated,
       workflow = workflow,
       documented = doc_ok
     ),

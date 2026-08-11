@@ -43,11 +43,11 @@ test_that("generated documentation keeps long archive paths out of usage", {
     readLines,
     warn = FALSE
   ), use.names = FALSE)
-  expect_false(any(grepl(normalized_archives, generated_r, fixed = TRUE)))
+  expect_path_absent(archives, generated_r)
   install_rd <- readLines(
     file.path(result$path, "man", "longpathverse_install.Rd"), warn = FALSE
   )
-  expect_false(any(grepl(normalized_archives, install_rd, fixed = TRUE)))
+  expect_path_absent(archives, install_rd)
   # The usage shows the portable default instead of this machine's archive
   # path, which is what keeps the Rd line widths within the limit.
   expect_true(any(grepl(

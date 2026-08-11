@@ -12,6 +12,15 @@
 - Generated installers accept a vector of archive directories when archives are
   not shipped; archives shipped inside a generated meta-package remain portable
   and contain no source-machine paths.
+- `create_metapackage()` gains a final `tolerate` argument for explicitly named
+  relaxations. Filename mismatches can be silenced, and an available local
+  dependency omitted from `packages` can be downgraded from an error to a
+  warning; unknown relaxation names are errors.
+- Generation results now include a `tolerated` table identifying every applied
+  relaxation, affected component, and reason.
+- The validation documentation now distinguishes non-negotiable recipient
+  protections from optional project-tidiness checks, and states explicitly that
+  bigbang does not run `R CMD check` on component packages.
 
 ## Bug fixes
 

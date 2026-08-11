@@ -43,6 +43,12 @@ msgstr "'dest_dir' debe proporcionarse como una ruta no vacía: el metapaquete s
 msgid "'workflow' must map unique non-empty stage names to every component package exactly once"
 msgstr "'workflow' debe asociar nombres de etapa únicos y no vacíos con cada paquete componente exactamente una vez"
 
+msgid "'tolerate' must be a character vector of named relaxations"
+msgstr "'tolerate' debe ser un vector de caracteres de relajaciones con nombre"
+
+msgid "Unknown tolerance(s): %s. Supported values are: %s."
+msgstr "Tolerancias desconocidas: %s. Los valores admitidos son: %s."
+
 msgid "Unsupported archive extension: %s"
 msgstr "Extensión de archivo no compatible: %s"
 

@@ -62,7 +62,6 @@ test_that("component paths can come from multiple directories and extensions", {
     list.files(file.path(result$path, "inst", "archives")),
     c("firstpkg_1.0.0.tar.gz", "secondpkg_1.0.0.zip")
   )
-  origin <- normalizePath(sandbox, winslash = "/")
   generated_files <- list.files(
     result$path, recursive = TRUE, full.names = TRUE, all.files = TRUE,
     no.. = TRUE
@@ -74,7 +73,7 @@ test_that("component paths can come from multiple directories and extensions", {
   emitted <- paste(
     unlist(lapply(generated_text, readLines, warn = FALSE)), collapse = "\n"
   )
-  expect_false(grepl(origin, emitted, fixed = TRUE))
+  expect_path_absent(sandbox, emitted)
   withr::local_libpaths(c(library_dir, .libPaths()))
   first_install <- install_local_pkg(first, verbose = FALSE, upgrade = "always")
   second_install <- install_local_pkg(second, verbose = FALSE, upgrade = "always")
@@ -418,12 +417,8 @@ test_that("multiple external sources are represented in the generated installer"
   install_file <- file.path(result$path, "R", "attach.R")
   install_text <- paste(readLines(install_file, warn = FALSE), collapse = "\n")
   expect_match(install_text, "pkg_dir", fixed = TRUE)
-  expect_false(grepl(
-    normalizePath(first_dir, winslash = "/"), install_text, fixed = TRUE
-  ))
-  expect_false(grepl(
-    normalizePath(second_dir, winslash = "/"), install_text, fixed = TRUE
-  ))
+  expect_path_absent(first_dir, install_text)
+  expect_path_absent(second_dir, install_text)
 
   generated <- new.env(parent = baseenv())
   sys.source(file.path(result$path, "R", "utils.R"), generated)

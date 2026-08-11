@@ -43,6 +43,12 @@ msgstr ""
 msgid "'workflow' must map unique non-empty stage names to every component package exactly once"
 msgstr ""
 
+msgid "'tolerate' must be a character vector of named relaxations"
+msgstr ""
+
+msgid "Unknown tolerance(s): %s. Supported values are: %s."
+msgstr ""
+
 msgid "Unsupported archive extension: %s"
 msgstr ""
 

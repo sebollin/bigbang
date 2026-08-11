@@ -14,6 +14,8 @@
     "The directory specified by 'pkg_dir' does not exist" = "El directorio indicado por 'pkg_dir' no existe",
     "'dest_dir' must be supplied as one non-empty path: the meta-package is written inside it. Use tempdir() for disposable output." = "'dest_dir' debe proporcionarse como una ruta no vac\u00eda: el metapaquete se escribe dentro de ella. Use tempdir() para una salida descartable.",
     "'workflow' must map unique non-empty stage names to every component package exactly once" = "'workflow' debe asociar nombres de etapa \u00fanicos y no vac\u00edos con cada paquete componente exactamente una vez",
+    "'tolerate' must be a character vector of named relaxations" = "'tolerate' debe ser un vector de caracteres de relajaciones con nombre",
+    "Unknown tolerance(s): %s. Supported values are: %s." = "Tolerancias desconocidas: %s. Los valores admitidos son: %s.",
     "Unsupported archive extension: %s" = "Extensi\u00f3n de archivo no compatible: %s",
     "Package archive does not exist: %s" = "El archivo del paquete no existe: %s",
     "Could not create temporary directory for %s" = "No se pudo crear el directorio temporal para %s",
