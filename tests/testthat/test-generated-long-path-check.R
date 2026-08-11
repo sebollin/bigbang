@@ -12,7 +12,8 @@ test_that("generated documentation keeps long archive paths out of usage", {
   destination <- file.path(sandbox, "generated")
   dir.create(archives, recursive = TRUE)
   dir.create(destination)
-  expect_gt(nchar(normalizePath(archives)), 120L)
+  normalized_archives <- normalizePath(archives, winslash = "/")
+  expect_gt(nchar(normalized_archives), 120L)
 
   fixture <- system.file(
     "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
@@ -42,11 +43,11 @@ test_that("generated documentation keeps long archive paths out of usage", {
     readLines,
     warn = FALSE
   ), use.names = FALSE)
-  expect_false(any(grepl(normalizePath(archives), generated_r, fixed = TRUE)))
+  expect_false(any(grepl(normalized_archives, generated_r, fixed = TRUE)))
   install_rd <- readLines(
     file.path(result$path, "man", "longpathverse_install.Rd"), warn = FALSE
   )
-  expect_false(any(grepl(normalizePath(archives), install_rd, fixed = TRUE)))
+  expect_false(any(grepl(normalized_archives, install_rd, fixed = TRUE)))
   # The usage shows the portable default instead of this machine's archive
   # path, which is what keeps the Rd line widths within the limit.
   expect_true(any(grepl(

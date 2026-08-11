@@ -100,7 +100,9 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
     readLines(file.path(project, "R", "install_packages.R"), warn = FALSE),
     collapse = "\n"
   )
-  expect_false(grepl(normalizePath(archives), emitted_code, fixed = TRUE))
+  expect_false(grepl(
+    normalizePath(archives, winslash = "/"), emitted_code, fixed = TRUE
+  ))
 })
 
 test_that("ZIP content distinguishes source archives from Windows binaries", {

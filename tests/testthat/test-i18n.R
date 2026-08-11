@@ -54,15 +54,19 @@ bigbang_catalog_dir <- function() {
   )
   catalog <- if (file.exists(source_catalog)) source_catalog else installed_catalog
   if (nzchar(catalog)) {
-    dirname(dirname(dirname(normalizePath(catalog))))
+    dirname(dirname(dirname(normalizePath(catalog, winslash = "/"))))
   } else {
-    normalizePath(file.path(testthat::test_path(), "..", "..", "inst", "po"))
+    normalizePath(
+      file.path(testthat::test_path(), "..", "..", "inst", "po"),
+      winslash = "/"
+    )
   }
 }
 
 bigbang_child_load_code <- function() {
   source_root <- normalizePath(
-    file.path(testthat::test_path(), "..", ".."), mustWork = FALSE
+    file.path(testthat::test_path(), "..", ".."),
+    winslash = "/", mustWork = FALSE
   )
   if (file.exists(file.path(source_root, "R", "create_metapackage.R"))) {
     paste0(
@@ -236,9 +240,12 @@ test_that("messages formerly keyed with edge whitespace translate at runtime", {
     "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
   )
   if (!nzchar(toy_archive)) {
-    toy_archive <- normalizePath(testthat::test_path(
-      "..", "..", "inst", "extdata", "toycomponent_0.1.0.tar.gz"
-    ))
+    toy_archive <- normalizePath(
+      testthat::test_path(
+        "..", "..", "inst", "extdata", "toycomponent_0.1.0.tar.gz"
+      ),
+      winslash = "/"
+    )
   }
   toy_archives <- dirname(toy_archive)
 

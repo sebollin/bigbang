@@ -51,8 +51,12 @@ test_that("component archives travel inside the meta-package by default", {
   # library of whoever installed the meta-package rather than at this machine.
   signature <- installer_signature(result$path)
   expect_true(any(grepl("system.file(\"archives\"", signature, fixed = TRUE)))
-  expect_false(any(grepl(normalizePath(archives), signature, fixed = TRUE)))
-  expect_false(any(grepl(normalizePath(sandbox), signature, fixed = TRUE)))
+  expect_false(any(grepl(
+    normalizePath(archives, winslash = "/"), signature, fixed = TRUE
+  )))
+  expect_false(any(grepl(
+    normalizePath(sandbox, winslash = "/"), signature, fixed = TRUE
+  )))
 })
 
 test_that("shipped archives do not leak any source directory", {
@@ -89,20 +93,36 @@ test_that("shipped archives do not leak any source directory", {
     "pathverse", c(first, second), dest_dir = destination,
     document = FALSE, verbose = FALSE, force_deps = character()
   )
-  files <- list.files(
-    result$path, recursive = TRUE, full.names = TRUE, all.files = TRUE,
-    no.. = TRUE
-  )
-  text_files <- files[
-    !dir.exists(files) & !grepl("\\.(mo|tar\\.gz|zip|tar)$", files,
-                                ignore.case = TRUE)
-  ]
-  text <- paste(
-    unlist(lapply(text_files, readLines, warn = FALSE), use.names = FALSE),
-    collapse = "\n"
-  )
-  expect_false(grepl(normalizePath(first_dir, winslash = "/"), text, fixed = TRUE))
-  expect_false(grepl(normalizePath(second_dir, winslash = "/"), text, fixed = TRUE))
+  generated_text <- function() {
+    files <- list.files(
+      result$path, recursive = TRUE, full.names = TRUE, all.files = TRUE,
+      no.. = TRUE
+    )
+    text_files <- files[
+      !dir.exists(files) & !grepl("\\.(mo|tar\\.gz|zip|tar)$", files,
+                                  ignore.case = TRUE)
+    ]
+    paste(
+      unlist(lapply(text_files, readLines, warn = FALSE), use.names = FALSE),
+      collapse = "\n"
+    )
+  }
+  contains_path <- function(path, text) {
+    needle <- normalizePath(path, winslash = "/")
+    canonical_text <- gsub("\\\\+", "/", text)
+    grepl(needle, canonical_text, fixed = TRUE)
+  }
+
+  text <- generated_text()
+  expect_false(contains_path(first_dir, text))
+  expect_false(contains_path(second_dir, text))
+
+  # Prove that the tree scan detects a leak instead of passing vacuously.
+  probe <- file.path(result$path, "source-path-probe.txt")
+  on.exit(unlink(probe), add = TRUE)
+  writeLines(normalizePath(first_dir, winslash = "/"), probe)
+  expect_true(contains_path(first_dir, generated_text()))
+  unlink(probe)
 })
 
 test_that("the build ignore rules keep shipped archives and drop stray ones", {

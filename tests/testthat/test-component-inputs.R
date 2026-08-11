@@ -341,15 +341,20 @@ test_that("an omitted dependency in a later source is rejected with its source",
     "laterinput", "1.0.0", file.path(second_dir, "laterinput_1.0.0.tar.gz"),
     source_root
   )
-  expect_error(
+  condition <- expect_error(
     create_metapackage(
       "omittedverse", file.path(first_dir, "orphaninput_1.0.0.tar.gz"),
       pkg_dir = c(first_dir, second_dir), dest_dir = destination,
       document = FALSE, verbose = FALSE, force_deps = character()
     ),
-    regexp = paste0("orphaninput.*laterinput.*", normalizePath(later)),
     class = "bigbang_error_unincluded_dependency"
   )
+  message <- conditionMessage(condition)
+  expect_true(grepl("orphaninput", message, fixed = TRUE))
+  expect_true(grepl("laterinput", message, fixed = TRUE))
+  expect_true(grepl(
+    normalizePath(later, winslash = "/"), message, fixed = TRUE
+  ))
 })
 
 test_that("archive basenames from different sources cannot overwrite", {
@@ -368,14 +373,20 @@ test_that("archive basenames from different sources cannot overwrite", {
   second <- make_input_archive(
     "collisiontwo", "1.0.0", file.path(second_dir, "same.tar.gz"), source_root
   )
-  expect_error(
+  condition <- expect_error(
     suppressWarnings(create_metapackage(
       "collisionverse", c(first, second), dest_dir = destination,
       document = FALSE, verbose = FALSE, force_deps = character()
     )),
-    class = "bigbang_error_archive_basename_collision",
-    regexp = paste0(normalizePath(first), ".*", normalizePath(second))
+    class = "bigbang_error_archive_basename_collision"
   )
+  message <- conditionMessage(condition)
+  expect_true(grepl(
+    normalizePath(first, winslash = "/"), message, fixed = TRUE
+  ))
+  expect_true(grepl(
+    normalizePath(second, winslash = "/"), message, fixed = TRUE
+  ))
 })
 
 test_that("multiple external sources are represented in the generated installer", {
@@ -407,8 +418,12 @@ test_that("multiple external sources are represented in the generated installer"
   install_file <- file.path(result$path, "R", "attach.R")
   install_text <- paste(readLines(install_file, warn = FALSE), collapse = "\n")
   expect_match(install_text, "pkg_dir", fixed = TRUE)
-  expect_false(grepl(normalizePath(first_dir), install_text, fixed = TRUE))
-  expect_false(grepl(normalizePath(second_dir), install_text, fixed = TRUE))
+  expect_false(grepl(
+    normalizePath(first_dir, winslash = "/"), install_text, fixed = TRUE
+  ))
+  expect_false(grepl(
+    normalizePath(second_dir, winslash = "/"), install_text, fixed = TRUE
+  ))
 
   generated <- new.env(parent = baseenv())
   sys.source(file.path(result$path, "R", "utils.R"), generated)
@@ -416,5 +431,8 @@ test_that("multiple external sources are represented in the generated installer"
   resolved <- generated$resolve_component_archive(
     "externaltwo_1.0.0", c(first_dir, second_dir), NULL
   )
-  expect_identical(normalizePath(resolved$path), normalizePath(second))
+  expect_identical(
+    normalizePath(resolved$path, winslash = "/"),
+    normalizePath(second, winslash = "/")
+  )
 })
