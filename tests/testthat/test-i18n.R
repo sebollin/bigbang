@@ -94,7 +94,7 @@ test_that("the bigbang runtime catalog translates messages to Spanish", {
   expect_identical(
     tail(destination_output, 1L),
     paste0(
-      "'dest_dir' debe proporcionarse como una ruta no vacía: el metapaquete ",
+      "'dest_dir' debe proporcionarse como una ruta no vac\u00eda: el metapaquete ",
       "se escribe dentro de ella. Use tempdir() para una salida descartable."
     )
   )
@@ -136,16 +136,19 @@ test_that("generated metapackages include their own Spanish runtime catalog", {
     list.files(file.path(result$path, "R"), full.names = TRUE),
     readLines, warn = FALSE
   ))
-  expect_false(any(grepl("[áéíóúÁÉÍÓÚñÑ¿¡]", emitted_code)))
+  expect_false(any(grepl(
+    "[\u00e1\u00e9\u00ed\u00f3\u00fa\u00c1\u00c9\u00cd\u00d3\u00da\u00f1\u00d1\u00bf\u00a1]",
+    emitted_code
+  )))
   previous_name <- paste0("local", "verse")
   expect_false(any(grepl(previous_name, emitted_code, fixed = TRUE)))
   expect_match(paste(readLines(po, encoding = "UTF-8"), collapse = "\n"),
-               "Instalación completa")
+               "Instalaci\u00f3n completa")
   output <- translate_from_catalog(
     "R-i18nverse", file.path(result$path, "inst", "po"),
     "Installation complete."
   )
-  expect_identical(tail(output, 1L), "Instalación completa.")
+  expect_identical(tail(output, 1L), "Instalaci\u00f3n completa.")
 })
 
 test_that("Spanish catalogs are complete and preserve format placeholders", {
@@ -266,12 +269,12 @@ test_that("messages formerly keyed with edge whitespace translate at runtime", {
   expect_match(translated, "Paquete local instalado", fixed = TRUE)
   expect_match(translated, "Paquetes que fallaron", fixed = TRUE)
   expect_match(
-    translated, "Paquetes omitidos por la política offline", fixed = TRUE
+    translated, "Paquetes omitidos por la pol\u00edtica offline", fixed = TRUE
   )
   expect_match(translated, "El artefacto no existe", fixed = TRUE)
   expect_match(translated, "Tipo de artefacto no compatible", fixed = TRUE)
   expect_match(
-    translated, "No se encontró DESCRIPTION en el directorio fuente", fixed = TRUE
+    translated, "No se encontr\u00f3 DESCRIPTION en el directorio fuente", fixed = TRUE
   )
   expect_match(translated, "rutas absolutas", fixed = TRUE)
 })

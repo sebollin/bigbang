@@ -41,7 +41,17 @@ test_that("install_local_pkg recognizes a package version already installed", {
   dir.create(sandbox)
   stem <- paste0("stats_", as.character(utils::packageVersion("stats")))
   archive <- file.path(sandbox, paste0(stem, ".tar.gz"))
-  expect_true(file.create(archive))
+  source <- file.path(sandbox, "stats-source")
+  dir.create(file.path(source, "R"), recursive = TRUE)
+  writeLines(c(
+    "Package: stats",
+    paste0("Version: ", as.character(utils::packageVersion("stats"))),
+    "Title: Temporary stats fixture",
+    "Description: Temporary fixture.", "License: GPL-2",
+    "Authors@R: person('Test', 'Author', role = 'aut')"
+  ), file.path(source, "DESCRIPTION"))
+  writeLines(character(), file.path(source, "NAMESPACE"))
+  withr::with_dir(sandbox, utils::tar(archive, "stats-source", compression = "gzip"))
 
   result <- install_local_pkg(stem, sandbox, verbose = FALSE)
 

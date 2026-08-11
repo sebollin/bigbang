@@ -6,7 +6,7 @@
 \usage{
 install_local_pkg(
   package,
-  pkg_dir,
+  pkg_dir = NULL,
   ext = ".tar.gz",
   repos = getOption("repos"),
   cran_deps = c("skip", "error", "install"),
@@ -16,12 +16,14 @@ install_local_pkg(
 )
 }
 \arguments{
-\item{package}{Character. Package file name without extension
-(for example, \code{"uspr_0.8.5"}).}
+\item{package}{Character. An existing archive path, or a package stem such
+as \code{"uspr_0.8.5"} to resolve in \code{pkg_dir}.}
 
-\item{pkg_dir}{Character. Directory containing local archives.}
+\item{pkg_dir}{Character. Optional directory or directories containing local
+archives. It is not needed when \code{package} is an existing path.}
 
-\item{ext}{Character. Archive extension.}
+\item{ext}{Character. Fallback archive extension for stems; existing paths
+keep their own extension.}
 
 \item{repos}{Character. Repositories used only when \code{cran_deps = "install"}.}
 

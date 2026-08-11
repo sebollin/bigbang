@@ -5,6 +5,12 @@
     "'name' must be one character string" = "'name' debe ser una cadena de caracteres",
     "'packages' must be a non-empty character vector" = "'packages' debe ser un vector de caracteres no vac\u00edo",
     "'pkg_dir' must be one character string" = "'pkg_dir' debe ser una cadena de caracteres",
+    "'pkg_dir' must contain one or more non-empty paths" = "'pkg_dir' debe contener una o m\u00e1s rutas no vac\u00edas",
+    "Each component must be one non-empty archive path or stem" = "Cada componente debe ser una ruta de archivo o stem no vac\u00eda",
+    "Could not resolve component '%s': it is not an existing file and no 'pkg_dir' was supplied." = "No se pudo resolver el componente '%s': no es un archivo existente y no se proporcion\u00f3 'pkg_dir'.",
+    "Could not resolve component '%s' in the supplied archive directories." = "No se pudo resolver el componente '%s' en los directorios de archivos proporcionados.",
+    "Package archive does not exist: %s; archives were not found in the supplied archive directories." = "El archivo del paquete no existe: %s; no se encontraron archivos en los directorios proporcionados.",
+    "The archive directory does not exist: %s" = "El directorio de archivos no existe: %s",
     "The directory specified by 'pkg_dir' does not exist" = "El directorio indicado por 'pkg_dir' no existe",
     "'dest_dir' must be supplied as one non-empty path: the meta-package is written inside it. Use tempdir() for disposable output." = "'dest_dir' debe proporcionarse como una ruta no vac\u00eda: el metapaquete se escribe dentro de ella. Use tempdir() para una salida descartable.",
     "'workflow' must map unique non-empty stage names to every component package exactly once" = "'workflow' debe asociar nombres de etapa \u00fanicos y no vac\u00edos con cada paquete componente exactamente una vez",
@@ -26,6 +32,8 @@
     "Archive %s must declare non-empty Package and Version fields." = "El archivo %s debe declarar campos Package y Version no vac\u00edos.",
     "Archive %s declares package %s, but its filename names %s." = "El archivo %s declara el paquete %s, pero su nombre indica %s.",
     "Archive %s declares version %s, but its filename names version %s." = "El archivo %s declara la versi\u00f3n %s, pero su nombre indica la versi\u00f3n %s.",
+    "Archive %s declares package %s, but its filename suggests %s." = "El archivo %s declara el paquete %s, pero su nombre sugiere %s.",
+    "Archive %s declares version %s, but its filename suggests version %s." = "El archivo %s declara la versi\u00f3n %s, pero su nombre sugiere la versi\u00f3n %s.",
     "More than one archive was supplied for component package(s): %s." = "Se proporcion\u00f3 m\u00e1s de un archivo para los paquetes componentes: %s.",
     "Circular dependencies detected: %s. A clean installation has no valid topological order." = "Dependencias circulares detectadas: %s. Una instalaci\u00f3n limpia no tiene un orden topol\u00f3gico v\u00e1lido.",
     "No DESCRIPTION file found in package %s" = "No se encontr\u00f3 DESCRIPTION en el paquete %s",
@@ -85,6 +93,9 @@
     "Component archives copied into the meta-package: %s (%.1f MB)." = "Archivos de los componentes copiados dentro del metapaquete: %s (%.1f MB).",
     "Package name '%s' belongs to R itself and cannot be reused." = "El nombre de paquete '%s' pertenece a R y no puede reutilizarse.",
     "Could not copy the component archives into the meta-package: %s" = "No se pudieron copiar los archivos de los componentes dentro del metapaquete: %s",
+    "Cannot use component archives with the same basename (%s): %s." = "No se pueden usar archivos de componentes con el mismo nombre base (%s): %s.",
+    "Component %s declares dependency %s, available at %s but not included. Add it to packages or remove the dependency." = "El componente %s declara la dependencia %s, disponible en %s pero no incluida. Agr\u00e9guela a packages o quite la dependencia.",
+    "This meta-package needs the following archive directories on the recipient: %s. Set include_archives = TRUE to avoid this requirement." = "Este metapaquete necesita los siguientes directorios de archivos en el receptor: %s. Establezca include_archives = TRUE para evitar este requisito.",
     "'force = TRUE' conflicts with an explicit upgrade policy other than 'always'" = "'force = TRUE' entra en conflicto con una pol\u00edtica 'upgrade' expl\u00edcita distinta de 'always'",
     "Kept installed version %s because upgrade = 'never'; the archive names version %s" = "Se conserv\u00f3 la versi\u00f3n instalada %s porque upgrade = 'never'; el archivo nombra la versi\u00f3n %s",
     "Kept installed version %s, newer than archive version %s" = "Se conserv\u00f3 la versi\u00f3n instalada %s, m\u00e1s nueva que la versi\u00f3n %s del archivo",
@@ -192,7 +203,12 @@
       "El archivo %s contiene enlaces simb\u00f3licos, que no son compatibles.",
       "El paquete %s tiene instalada la versi\u00f3n %s, m\u00e1s nueva que la versi\u00f3n %s del archivo; se conservar\u00e1 la versi\u00f3n instalada.",
       "El paquete %s tiene instalada la versi\u00f3n %s y la versi\u00f3n %s del archivo; se conservar\u00e1 la versi\u00f3n instalada.",
-      "El archivo %s debe declarar campos Package y Version no vac\u00edos."
+      "El archivo %s debe declarar campos Package y Version no vac\u00edos.",
+      "El directorio de archivos debe ser una o m\u00e1s rutas no vac\u00edas.",
+      "No se pudo resolver el componente '%s' en los directorios de archivos proporcionados.",
+      "El archivo %s declara el paquete %s, pero su nombre sugiere %s.",
+      "El archivo %s declara la versi\u00f3n %s, pero su nombre sugiere la versi\u00f3n %s.",
+      "El componente %s requiere %s %s %s, pero el archivo incluido proporciona la versi\u00f3n %s."
     ),
     c(
       "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives.",
@@ -256,7 +272,12 @@
       "Archive %s contains symbolic links, which are not supported.",
       "Package %s has installed version %s, newer than archive version %s; keeping the installed version.",
       "Package %s has installed version %s and archive version %s; keeping the installed version.",
-      "Archive %s must declare non-empty Package and Version fields."
+      "Archive %s must declare non-empty Package and Version fields.",
+      "The archive directory must be one or more non-empty paths.",
+      "Could not resolve component '%s' in the supplied archive directories.",
+      "Archive %s declares package %s, but its filename suggests %s.",
+      "Archive %s declares version %s, but its filename suggests version %s.",
+      "Component %s requires %s %s %s, but the included archive provides version %s."
     )
   )
 }

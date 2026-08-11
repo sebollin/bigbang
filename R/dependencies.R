@@ -1,21 +1,134 @@
-#' @param package Character archive stem.
-#' @param pkg_dir Character archive directory.
-#' @param ext Character archive extension.
+#' @param package Character archive stem or archive path.
+#' @param pkg_dir Character archive directory or directories.
+#' @param ext Character archive extension, or `NULL` to infer it.
 #'
 #' Extract one archive and read its DESCRIPTION metadata.
 #'
 #' The returned metadata is deliberately limited to facts declared by the
 #' component itself. Source-code heuristics belong to
-#' [detect_implicit_dependencies()] and must never silently become hard
+#' `detect_implicit_dependencies()` and must never silently become hard
 #' dependencies of a generated package.
 #'
-#' @param package Character archive stem.
-#' @param pkg_dir Character archive directory.
-#' @param ext Character archive extension.
+#' @param package Character archive stem or archive path.
+#' @param pkg_dir Character archive directory or directories.
+#' @param ext Character archive extension, or `NULL` to infer it.
 #' @return A list containing `package`, `version`, and declared `dependencies`.
 #' @noRd
-.read_archive_metadata <- function(package, pkg_dir, ext = ".tar.gz") {
-  archive <- file.path(pkg_dir, paste0(package, ext))
+.archive_extensions <- c(".tar.gz", ".zip", ".tar")
+
+.or_null <- function(x, y) if (is.null(x)) y else x
+
+.archive_extension <- function(path) {
+  path_lower <- tolower(path)
+  match <- .archive_extensions[vapply(
+    .archive_extensions, function(value) endsWith(path_lower, value), logical(1L)
+  )]
+  if (length(match) == 0L) {
+    stop(.bb_trf("Unsupported archive format: %s", path), call. = FALSE)
+  }
+  match[[1L]]
+}
+
+.archive_stem <- function(path, ext = NULL) {
+  ext <- .or_null(ext, .archive_extension(path))
+  basename <- basename(path)
+  substr(basename, 1L, nchar(basename) - nchar(ext))
+}
+
+.normalize_archive_dirs <- function(pkg_dir) {
+  if (is.null(pkg_dir) || length(pkg_dir) == 0L) return(character())
+  if (!is.character(pkg_dir) || anyNA(pkg_dir) || any(!nzchar(pkg_dir))) {
+    stop(.bb_tr("'pkg_dir' must contain one or more non-empty paths"), call. = FALSE)
+  }
+  if (any(!dir.exists(pkg_dir))) {
+    missing <- pkg_dir[!dir.exists(pkg_dir)]
+    stop(.bb_trf("The archive directory does not exist: %s", paste(missing, collapse = ", ")),
+         call. = FALSE)
+  }
+  normalizePath(pkg_dir, winslash = "/", mustWork = TRUE)
+}
+
+.resolve_archive_input <- function(input, pkg_dir = NULL, ext = ".tar.gz") {
+  if (!is.character(input) || length(input) != 1L || is.na(input) || !nzchar(input)) {
+    stop(.bb_tr("Each component must be one non-empty archive path or stem"), call. = FALSE)
+  }
+  if (file.exists(input) && !dir.exists(input)) {
+    return(normalizePath(input, winslash = "/", mustWork = TRUE))
+  }
+  dirs <- .normalize_archive_dirs(pkg_dir)
+  if (length(dirs) == 0L) {
+    stop(.bb_trf(
+      "Could not resolve component '%s': it is not an existing file and no 'pkg_dir' was supplied.",
+      input
+    ), call. = FALSE)
+  }
+  candidates <- file.path(dirs, paste0(input, ext))
+  found <- candidates[file.exists(candidates) & !dir.exists(candidates)]
+  if (length(found) == 0L) {
+    # `ext` is a fallback, not a restriction: a stem may resolve to a source
+    # archive with any supported extension. This permits mixed .tar.gz and
+    # .zip inputs while keeping the old scalar-ext call unchanged.
+    expected_names <- tolower(paste0(input, .archive_extensions))
+    discovered <- unlist(lapply(dirs, function(dir) {
+      files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
+      files[tolower(basename(files)) %in% expected_names & !dir.exists(files)]
+    }), use.names = FALSE)
+    found <- unique(discovered)
+  }
+  if (length(found) > 1L) {
+    .bigbang_abort(
+      "bigbang_error_duplicate_component",
+      .bb_trf(
+        "More than one archive was supplied for component package(s): %s.",
+        paste(found, collapse = "; ")
+      ),
+      packages = found
+    )
+  }
+  if (length(found) == 0L) {
+    stop(.bb_trf(
+      "Package archive does not exist: %s; archives were not found in the supplied archive directories.",
+      input
+    ), call. = FALSE)
+  }
+  normalizePath(found[[1L]], winslash = "/", mustWork = TRUE)
+}
+
+.resolve_components <- function(packages, pkg_dir = NULL, ext = ".tar.gz") {
+  if (!is.character(packages) || length(packages) < 1L) {
+    stop(.bb_tr("'packages' must be a non-empty character vector"), call. = FALSE)
+  }
+  if (!is.character(ext) || length(ext) != 1L || is.na(ext) || !nzchar(ext)) {
+    stop(.bb_tr("'ext' must be one non-empty archive extension"), call. = FALSE)
+  }
+  dirs <- .normalize_archive_dirs(pkg_dir)
+  components <- lapply(packages, function(input) {
+    path <- .resolve_archive_input(input, dirs, ext)
+    actual_ext <- .archive_extension(path)
+    metadata <- .read_archive_metadata(path, ext = actual_ext)
+    list(
+      path = path,
+      ext = actual_ext,
+      stem = .archive_stem(path, actual_ext),
+      input = input,
+      package = metadata$package,
+      version = metadata$version,
+      dependencies = metadata$dependencies,
+      constraints = metadata$constraints
+    )
+  })
+  source_dirs <- unique(c(dirs, dirname(vapply(components, `[[`, character(1L), "path"))))
+  inventory <- .archive_inventory(source_dirs, known = components)
+  list(components = components, inventory = inventory, source_dirs = source_dirs)
+}
+
+.read_archive_metadata <- function(package, pkg_dir = NULL, ext = NULL) {
+  archive <- if (file.exists(package) && !dir.exists(package)) {
+    normalizePath(package, winslash = "/", mustWork = TRUE)
+  } else {
+    .resolve_archive_input(package, pkg_dir, .or_null(ext, ".tar.gz"))
+  }
+  ext <- .or_null(ext, .archive_extension(archive))
   if (!file.exists(archive)) {
     stop(.bb_trf("Package archive does not exist: %s", archive), call. = FALSE)
   }
@@ -60,6 +173,9 @@
   )
 
   list(
+    path = normalizePath(archive, winslash = "/", mustWork = TRUE),
+    ext = ext,
+    stem = .archive_stem(archive, ext),
     package = declared_package,
     version = declared_version,
     dependencies = parsed_dependencies$dependencies,
@@ -211,40 +327,33 @@
   )
 }
 
-.validate_archive_metadata <- function(archive_stem, metadata, ext) {
-  expected_name <- sub("_.*", "", archive_stem)
-  expected_version <- sub("^[^_]+_", "", archive_stem)
-  archive <- paste0(archive_stem, ext)
-  if (!identical(metadata$package, expected_name)) {
-    .bigbang_abort(
-      "bigbang_error_archive_metadata",
-      .bb_trf(
-        "Archive %s declares package %s, but its filename names %s.",
-        archive, metadata$package, expected_name
-      ),
-      archive = archive,
-      declared_package = metadata$package,
-      filename_package = expected_name
-    )
+.validate_archive_metadata <- function(component) {
+  stem <- component$stem
+  expected_name <- sub("_.*", "", stem)
+  has_version <- grepl("_", stem, fixed = TRUE)
+  expected_version <- if (has_version) {
+    sub("^[^_]+_", "", stem)
+  } else {
+    NA_character_
   }
-  if (!.version_matches(metadata$version, expected_version)) {
-    .bigbang_abort(
-      "bigbang_error_archive_metadata",
-      .bb_trf(
-        "Archive %s declares version %s, but its filename names version %s.",
-        archive, metadata$version, expected_version
-      ),
-      archive = archive,
-      declared_version = metadata$version,
-      filename_version = expected_version
-    )
+  if (!identical(component$package, expected_name)) {
+    warning(.bb_trf(
+      "Archive %s declares package %s, but its filename suggests %s.",
+      component$path, component$package, expected_name
+    ), call. = FALSE)
   }
-  invisible(metadata)
+  if (has_version && !.version_matches(component$version, expected_version)) {
+    warning(.bb_trf(
+      "Archive %s declares version %s, but its filename suggests version %s.",
+      component$path, component$version, expected_version
+    ), call. = FALSE)
+  }
+  invisible(component)
 }
 
-.component_dependency_cycle <- function(archive_stems, metadata) {
-  names_only <- sub("_.*", "", archive_stems)
-  adjacency <- lapply(metadata, function(item) {
+.component_dependency_cycle <- function(components) {
+  names_only <- vapply(components, `[[`, character(1L), "package")
+  adjacency <- lapply(components, function(item) {
     intersect(item$dependencies, names_only)
   })
   names(adjacency) <- names_only
@@ -276,12 +385,12 @@
   character()
 }
 
-.validate_constraints <- function(archive_stems, metadata) {
-  included <- sub("_.*", "", archive_stems)
-  versions <- vapply(metadata, `[[`, character(1L), "version")
+.validate_constraints <- function(components) {
+  included <- vapply(components, `[[`, character(1L), "package")
+  versions <- vapply(components, `[[`, character(1L), "version")
   names(versions) <- included
-  for (index in seq_along(metadata)) {
-    constraints <- metadata[[index]]$constraints
+  for (index in seq_along(components)) {
+    constraints <- components[[index]]$constraints
     local_constraints <- constraints[vapply(
       constraints,
       function(x) x$package %in% included,
@@ -294,10 +403,10 @@
           "bigbang_error_dependency_version",
           .bb_trf(
             "Component %s requires %s %s %s, but the included archive provides version %s.",
-            metadata[[index]]$package, constraint$package, constraint$op,
+            components[[index]]$package, constraint$package, constraint$op,
             constraint$version, actual
           ),
-          component = metadata[[index]]$package,
+          component = components[[index]]$package,
           dependency = constraint$package,
           required = constraint,
           actual = actual
@@ -305,20 +414,58 @@
       }
     }
   }
-  invisible(metadata)
+  invisible(components)
 }
 
-.archive_inventory <- function(pkg_dir, ext) {
-  archives <- list.files(pkg_dir)
-  archives <- archives[endsWith(tolower(archives), tolower(ext))]
-  stems <- substr(archives, 1L, nchar(archives) - nchar(ext))
-  list(files = archives, stems = stems, packages = sub("_.*", "", stems))
+.archive_inventory <- function(pkg_dir, ext = NULL, known = list()) {
+  dirs <- .normalize_archive_dirs(pkg_dir)
+  paths <- unique(unlist(lapply(dirs, function(dir) {
+    files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
+    files[file.exists(files) & !dir.exists(files)]
+  }), use.names = FALSE))
+  paths <- paths[vapply(paths, function(path) {
+    supported <- tryCatch(.archive_extension(path), error = function(e) NULL)
+    !is.null(supported) && (is.null(ext) || identical(tolower(supported), tolower(ext)))
+  }, logical(1L))]
+  known_paths <- if (length(known) == 0L) {
+    character()
+  } else {
+    vapply(known, `[[`, character(1L), "path")
+  }
+  entries <- lapply(paths, function(path) {
+    known_index <- match(path, known_paths)
+    if (!is.na(known_index)) {
+      known[[known_index]]
+    } else {
+      actual_ext <- .archive_extension(path)
+      metadata <- .read_archive_metadata(path, ext = actual_ext)
+      list(
+        path = path,
+        ext = actual_ext,
+        stem = .archive_stem(path, actual_ext),
+        package = metadata$package,
+        version = metadata$version,
+        dependencies = metadata$dependencies,
+        constraints = metadata$constraints
+      )
+    }
+  })
+  stems <- if (length(entries) == 0L) {
+    character()
+  } else {
+    vapply(entries, `[[`, character(1L), "stem")
+  }
+  packages <- if (length(entries) == 0L) {
+    character()
+  } else {
+    vapply(entries, `[[`, character(1L), "package")
+  }
+  list(entries = entries, files = paths, stems = stems, packages = packages)
 }
 
-.validate_unincluded_deps <- function(archive_stems, metadata, pkg_dir, ext) {
-  included <- sub("_.*", "", archive_stems)
-  inventory <- .archive_inventory(pkg_dir, ext)
-  for (item in metadata) {
+.validate_unincluded_deps <- function(components, inventory) {
+  included <- vapply(components, `[[`, character(1L), "package")
+  for (item in components) {
     candidates <- setdiff(item$dependencies, included)
     for (dependency in candidates) {
       match <- which(inventory$packages == dependency)
@@ -327,9 +474,8 @@
           "bigbang_error_unincluded_dependency",
           .bb_trf(
             paste0(
-              "Component %s declares dependency %s, available as %s in ",
-              "pkg_dir but not included. Add it to packages or remove the ",
-              "dependency."
+              "Component %s declares dependency %s, available at %s but not ",
+              "included. Add it to packages or remove the dependency."
             ),
             item$package, dependency, inventory$files[[match[[1L]]]]
           ),
@@ -340,16 +486,31 @@
       }
     }
   }
-  invisible(metadata)
+  invisible(components)
 }
 
-classify_dependencies <- function(dependencies, pkg_dir, ext = ".tar.gz",
+classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
                                   included_packages = NULL) {
   local_names <- if (is.null(included_packages)) {
-    inventory <- .archive_inventory(pkg_dir, ext)
-    unique(c(inventory$stems, inventory$packages))
+    # Classification is also useful as a light-weight diagnostic on a folder
+    # that may contain placeholders or archives not meant to be opened. Keep
+    # this path filename-based; generation passes `included_packages` and uses
+    # the fully validated component table instead.
+    dirs <- .normalize_archive_dirs(pkg_dir)
+    paths <- unique(unlist(lapply(dirs, function(dir) {
+      files <- list.files(dir, full.names = FALSE, all.files = TRUE, no.. = TRUE)
+      files[!dir.exists(file.path(dir, files))]
+    }), use.names = FALSE))
+    paths <- paths[vapply(paths, function(path) {
+      tryCatch({
+        actual <- .archive_extension(path)
+        is.null(ext) || identical(tolower(actual), tolower(ext))
+      }, error = function(e) FALSE)
+    }, logical(1L))]
+    stems <- vapply(paths, .archive_stem, character(1L))
+    unique(c(stems, sub("_.*", "", stems)))
   } else {
-    sub("_.*", "", included_packages)
+    included_packages
   }
   is_local <- dependencies %in% unique(local_names)
 
@@ -391,8 +552,10 @@ classify_dependencies <- function(dependencies, pkg_dir, ext = ".tar.gz",
   best
 }
 
-.validate_component_archives <- function(archive_stems, pkg_dir, ext) {
-  names_only <- sub("_.*", "", archive_stems)
+.validate_component_archives <- function(resolved) {
+  components <- resolved$components
+  inventory <- resolved$inventory
+  names_only <- vapply(components, `[[`, character(1L), "package")
   duplicates <- unique(names_only[duplicated(names_only)])
   if (length(duplicates) > 0L) {
     .bigbang_abort(
@@ -405,13 +568,12 @@ classify_dependencies <- function(dependencies, pkg_dir, ext = ".tar.gz",
     )
   }
 
-  metadata <- lapply(archive_stems, .read_archive_metadata, pkg_dir, ext)
-  for (index in seq_along(archive_stems)) {
-    .validate_archive_metadata(archive_stems[[index]], metadata[[index]], ext)
+  for (component in components) {
+    .validate_archive_metadata(component)
   }
-  .validate_constraints(archive_stems, metadata)
-  .validate_unincluded_deps(archive_stems, metadata, pkg_dir, ext)
-  cycle <- .component_dependency_cycle(archive_stems, metadata)
+  .validate_constraints(components)
+  .validate_unincluded_deps(components, inventory)
+  cycle <- .component_dependency_cycle(components)
   if (length(cycle) > 0L) {
     .bigbang_abort(
       "bigbang_error_cycle",
@@ -422,12 +584,12 @@ classify_dependencies <- function(dependencies, pkg_dir, ext = ".tar.gz",
       cycles = list(cycle)
     )
   }
-  metadata
+  components
 }
 
 #' @return A character vector of dependency names declared in DESCRIPTION.
 #' @noRd
-extract_dependencies <- function(package, pkg_dir, ext = ".tar.gz") {
+extract_dependencies <- function(package, pkg_dir = NULL, ext = ".tar.gz") {
   .read_archive_metadata(package, pkg_dir, ext)$dependencies
 }
 
@@ -457,9 +619,9 @@ extract_dependencies <- function(package, pkg_dir, ext = ".tar.gz") {
 #' 'class', which can cause `R CMD check` failures when they are used implicitly
 #' but not declared as dependencies.
 #'
-#' @param packages Character vector. Names (with version) of the local
-#'   packages to examine, e.g. `"conexiones_0.8.3"`.
-#' @param pkg_dir Character. Directory containing the local archive files
+#' @param packages Character vector. Archive paths or stems to examine, e.g.
+#'   `"conexiones_0.8.3"`.
+#' @param pkg_dir Character. Directory or directories containing local archives
 #'   (`.tar.gz`, `.zip`, etc.).
 #' @param ext Character. Archive extension. Defaults to `".tar.gz"`.
 #'
@@ -485,29 +647,31 @@ extract_dependencies <- function(package, pkg_dir, ext = ".tar.gz") {
 #' res[["toycomponent_0.1.0"]]
 #' lapply(res, function(x) x$matrix_refs)
 #' @export
-diagnose_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
+diagnose_dependencies <- function(packages, pkg_dir = NULL, ext = ".tar.gz") {
   results <- list()
+  resolved <- .resolve_components(packages, pkg_dir, ext)
 
-  for (package in packages) {
+  for (component in resolved$components) {
     temp_dir <- tempfile()
     dir.create(temp_dir)
     on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
 
-    archive <- file.path(pkg_dir, paste0(package, ext))
-    if (!file.exists(archive)) {
-      message(.bb_trf("Package archive not found: %s", archive))
-      next
-    }
+    archive <- component$path
+    package <- component$input
 
     # This is an exported entry point, so it gets the same extraction guards as
     # generation. Without them a component carrying a symbolic link made the
     # scanner read a file outside the archive and return its contents in the
     # result, which is how an unrelated file ends up in a diagnostic report.
-    .extract_archive_checked(archive, ext, temp_dir)
+    .extract_archive_checked(archive, component$ext, temp_dir)
 
     # Locate references to Matrix and class APIs from the archive root rather
     # than assuming that the root directory has the package name.
-    package_root <- .find_archive_root(temp_dir, archive)
+    package_root <- .find_archive_root(
+      temp_dir, archive,
+      allow_flat = identical(tolower(component$ext), ".zip") &&
+        file.exists(file.path(temp_dir, "Meta", "package.rds"))
+    )
     r_dir <- file.path(package_root, "R")
 
     if (!dir.exists(r_dir)) {
@@ -558,13 +722,18 @@ diagnose_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
 #' for conservative package-specific patterns. This supplements, but does not
 #' replace, dependencies declared in DESCRIPTION.
 #'
-#' @param packages Character archive stems including versions.
-#' @param pkg_dir Character archive directory.
+#' @param packages Character archive paths or stems.
+#' @param pkg_dir Character archive directory or directories.
 #' @param ext Character archive extension.
 #' @return A sorted character vector of possible dependency names.
 #' @noRd
-detect_implicit_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
+detect_implicit_dependencies <- function(
+  packages, pkg_dir = NULL, ext = ".tar.gz", components = NULL
+) {
   possible_deps <- character(0)
+  if (is.null(components)) {
+    components <- .resolve_components(packages, pkg_dir, ext)$components
+  }
 
   # Conservative patterns for common implicit dependencies.
   package_patterns <- list(
@@ -612,25 +781,26 @@ detect_implicit_dependencies <- function(packages, pkg_dir, ext = ".tar.gz") {
 
   )
 
-  for (package in packages) {
+  for (component in components) {
     temp_dir <- tempfile()
     dir.create(temp_dir)
     on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
 
-    archive <- file.path(pkg_dir, paste0(package, ext))
-    if (!file.exists(archive)) {
-      warning(.bb_trf("Package archive not found: %s", archive), call. = FALSE)
-      next
-    }
+    archive <- component$path
+    package <- component$input
 
     tryCatch({
       # Generation validates every component archive before reaching this
       # scanner, so a hostile archive cannot get here today. Extract through the
       # guarded path anyway: this is a helper that could be called from
       # somewhere else later, and the guard costs nothing.
-      .extract_archive_checked(archive, ext, temp_dir)
+      .extract_archive_checked(archive, component$ext, temp_dir)
 
-      package_root <- .find_archive_root(temp_dir, archive)
+      package_root <- .find_archive_root(
+        temp_dir, archive,
+        allow_flat = identical(tolower(component$ext), ".zip") &&
+          file.exists(file.path(temp_dir, "Meta", "package.rds"))
+      )
       r_dir <- file.path(package_root, "R")
 
       if (!dir.exists(r_dir)) {

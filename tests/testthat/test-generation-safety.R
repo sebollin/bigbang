@@ -408,30 +408,37 @@ test_that("a self-contained chain installs despite comment-only dependency words
   expect_true(any(grepl("READY: TRUE", recipient_output, fixed = TRUE)), info = report)
 })
 
-test_that("archive metadata mismatches are rejected before generation", {
+test_that("archive metadata mismatches warn but use DESCRIPTION identity", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-archive-metadata-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
   destination <- file.path(sandbox, "destination")
+  library_dir <- file.path(sandbox, "library")
   dir.create(source_root, recursive = TRUE)
   dir.create(archive_dir)
   dir.create(destination)
+  dir.create(library_dir)
   build_safety_archive(
-    "mismatch", "2.0.0", source_root, archive_dir, filename_version = "1.0.0"
+    "mismatchfixture", "2.0.0", source_root, archive_dir, filename_version = "1.0.0"
   )
 
-  expect_error(
-    create_metapackage(
-      "mismatchverse", "mismatch_1.0.0", archive_dir,
+  expect_warning(
+    result <- create_metapackage(
+      "mismatchverse", "mismatchfixture_1.0.0", archive_dir,
       dest_dir = destination, document = FALSE, verbose = FALSE
     ),
-    class = "bigbang_error_archive_metadata"
+    "declares version 2.0.0"
   )
-  expect_length(list.files(destination, all.files = TRUE, no.. = TRUE), 0L)
+  expect_true(file.exists(file.path(result$path, "DESCRIPTION")))
 
-  direct <- install_local_pkg("mismatch_1.0.0", archive_dir, verbose = FALSE)
-  expect_named(direct$failed, "mismatch_1.0.0")
-  expect_match(direct$failed[[1L]], "declares version 2.0.0")
+  withr::local_libpaths(c(library_dir, .libPaths()))
+  direct <- suppressWarnings(
+    install_local_pkg("mismatchfixture_1.0.0", archive_dir, verbose = FALSE)
+  )
+  expect_length(direct$failed, 0L)
+  expect_named(direct$installed, "mismatchfixture_1.0.0")
+  expect_identical(as.character(utils::packageVersion("mismatchfixture")), "2.0.0")
 })
 
 test_that("duplicate components and cycles are rejected by the generator", {

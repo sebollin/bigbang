@@ -66,10 +66,12 @@
 #' treated as Windows binaries, while other ZIP archives are unpacked and
 #' installed as source packages.
 #'
-#' @param package Character. Package file name without extension
-#'   (for example, `"uspr_0.8.5"`).
-#' @param pkg_dir Character. Directory containing local archives.
-#' @param ext Character. Archive extension.
+#' @param package Character. An existing archive path, or a package stem such
+#'   as `"uspr_0.8.5"` to resolve in `pkg_dir`.
+#' @param pkg_dir Character. Optional directory or directories containing local
+#'   archives. It is not needed when `package` is an existing path.
+#' @param ext Character. Fallback archive extension for stems; existing paths
+#'   keep their own extension.
 #' @param repos Character. Repositories used only when `cran_deps = "install"`.
 #' @param cran_deps Character. Policy for missing non-local dependencies:
 #'   `"skip"` (the default) never accesses the network, `"error"` fails without
@@ -96,7 +98,7 @@
 #' @export
 install_local_pkg <- function(
   package,
-  pkg_dir,
+  pkg_dir = NULL,
   ext = ".tar.gz",
   repos = getOption("repos"),
   cran_deps = c("skip", "error", "install"),
@@ -108,6 +110,28 @@ install_local_pkg <- function(
 ) {
   cran_deps <- match.arg(cran_deps)
   upgrade <- .resolve_upgrade_policy(force, upgrade, missing(upgrade))
+  resolved <- tryCatch(
+    .resolve_components(package, pkg_dir, ext),
+    error = function(error) error
+  )
+  if (inherits(resolved, "error")) {
+    stem <- if (length(package) == 1L && is.character(package)) package else "package"
+    if (isTRUE(verbose)) {
+      message(.bb_trf("Packages that failed: %s", stem))
+    }
+    return(invisible(structure(
+      list(
+        installed = list(), unchanged = list(),
+        failed = stats::setNames(list(conditionMessage(resolved)), stem),
+        skipped = list()
+      ),
+      class = "bigbang_install_result"
+    )))
+  }
+  components <- resolved$components
+  inventory <- resolved$inventory
+  component <- components[[1L]]
+  .validate_archive_metadata(component)
   state <- new.env(parent = emptyenv())
   state$installed <- list()
   state$unchanged <- list()
@@ -115,27 +139,18 @@ install_local_pkg <- function(
   state$skipped <- list()
   state$visiting <- character()
 
-  archive_names <- list.files(pkg_dir)
-  archive_names <- archive_names[endsWith(archive_names, ext)]
-  local_stems <- substr(archive_names, 1L, nchar(archive_names) - nchar(ext))
-  local_base_names <- sub("_.*", "", local_stems)
-
-  install_one <- function(stem) {
-    base_name <- sub("_.*", "", stem)
-    version_text <- sub("^[^_]+_", "", stem)
-    archive <- file.path(pkg_dir, paste0(stem, ext))
+  install_one <- function(item) {
+    stem <- item$stem
+    base_name <- item$package
+    version_text <- item$version
+    archive <- item$path
 
     if (base_name %in% state$visiting) {
       state$failed[[stem]] <- "Circular local dependency"
       return(FALSE)
     }
-    if (!file.exists(archive)) {
-      state$failed[[stem]] <- paste("Package archive does not exist:", archive)
-      return(FALSE)
-    }
-    # Preserve the inexpensive early-exit behavior for an already installed
-    # package. Full archive metadata validation still happens before any
-    # installation when the policy decides that work is needed.
+    # Metadata was read before installation, so the DESCRIPTION version remains
+    # authoritative even when the filename has no version or disagrees with it.
     installed_version <- tryCatch(
       utils::packageVersion(base_name), error = function(e) NULL
     )
@@ -171,7 +186,7 @@ install_local_pkg <- function(
     dir.create(extracted)
     on.exit(safe_unlink(extracted, recursive = TRUE), add = TRUE)
     extraction_error <- tryCatch({
-      .extract_archive_checked(archive, ext, extracted)
+      .extract_archive_checked(archive, item$ext, extracted)
       NULL
     }, error = identity)
     if (inherits(extraction_error, "error")) {
@@ -179,7 +194,7 @@ install_local_pkg <- function(
       return(FALSE)
     }
 
-    archive_kind <- tryCatch(.classify_local_archive(archive, ext), error = identity)
+    archive_kind <- tryCatch(.classify_local_archive(archive, item$ext), error = identity)
     if (inherits(archive_kind, "error")) {
       state$failed[[stem]] <- conditionMessage(archive_kind)
       return(FALSE)
@@ -197,100 +212,39 @@ install_local_pkg <- function(
       state$failed[[stem]] <- conditionMessage(package_root)
       return(FALSE)
     }
-    descriptions <- file.path(package_root, "DESCRIPTION")
-    desc <- read.dcf(
-      descriptions, fields = c("Package", "Version", "Depends", "Imports", "LinkingTo")
-    )
-    if (nrow(desc) == 0L) {
-      state$failed[[stem]] <- .bb_trf(
-        "Archive %s must declare non-empty Package and Version fields.", archive
-      )
-      return(FALSE)
-    }
-    declared_package <- if ("Package" %in% colnames(desc)) {
-      trimws(unname(desc[1L, "Package"]))
-    } else {
-      NA_character_
-    }
-    declared_version <- if ("Version" %in% colnames(desc)) {
-      trimws(unname(desc[1L, "Version"]))
-    } else {
-      NA_character_
-    }
-    if (is.na(declared_package) || is.na(declared_version) ||
-          !identical(declared_package, base_name)) {
-      state$failed[[stem]] <- .bb_trf(
-        "Archive %s declares package %s, but its filename names %s.",
-        archive, declared_package, base_name
-      )
-      return(FALSE)
-    }
-    if (!.version_matches(declared_version, version_text)) {
-      state$failed[[stem]] <- .bb_trf(
-        "Archive %s declares version %s, but its filename names version %s.",
-        archive, declared_version, version_text
-      )
-      return(FALSE)
-    }
-    version_text <- declared_version
-
-    installed_version <- tryCatch(
-      utils::packageVersion(base_name), error = function(e) NULL
-    )
-    keep_installed <- !is.null(installed_version) && (
-      identical(upgrade, "never") ||
-        (identical(upgrade, "newer") &&
-           installed_version >= base::package_version(version_text))
-    )
-    if (keep_installed) {
-      newer <- installed_version > base::package_version(version_text)
-      if (isTRUE(verbose)) {
-        message(if (newer) {
-          .bb_trf(
-            "Package %s has installed version %s, newer than archive version %s; keeping the installed version.",
-            base_name, as.character(installed_version), version_text
+    dependencies <- item$dependencies
+    local_dependencies <- intersect(dependencies, inventory$packages)
+    local_constraints <- item$constraints[vapply(
+      item$constraints,
+      function(constraint) constraint$package %in% inventory$packages,
+      logical(1L)
+    )]
+    for (constraint in local_constraints) {
+      match <- which(inventory$packages == constraint$package)
+      if (length(match) == 1L) {
+        actual <- inventory$entries[[match[[1L]]]]$version
+        if (!.version_satisfies(actual, constraint$op, constraint$version)) {
+          state$failed[[stem]] <- .bb_trf(
+            "Component %s requires %s %s %s, but the included archive provides version %s.",
+            base_name, constraint$package, constraint$op,
+            constraint$version, actual
           )
-        } else {
-          .bb_trf(
-            "Package %s has installed version %s and archive version %s; keeping the installed version.",
-            base_name, as.character(installed_version), version_text
-          )
-        })
-      }
-      state$unchanged[[stem]] <- .unchanged_reason(
-        installed_version, version_text, upgrade, newer
-      )
-      return(TRUE)
-    }
-    dependency_fields <- intersect(
-      c("Depends", "Imports", "LinkingTo"), colnames(desc)
-    )
-    dependencies <- if (length(dependency_fields) == 0L) {
-      character()
-    } else {
-      dependency_values <- unname(desc[1L, dependency_fields])
-      dependency_values <- dependency_values[
-        !is.na(dependency_values) & nzchar(dependency_values)
-      ]
-      if (length(dependency_values) == 0L) {
-        character()
-      } else {
-        unlist(
-          strsplit(paste(dependency_values, collapse = ","), ","),
-          use.names = FALSE
-        )
+          return(FALSE)
+        }
       }
     }
-    dependencies <- trimws(gsub("\\s*\\([^)]*\\)", "", dependencies))
-    dependencies <- unique(dependencies[nzchar(dependencies) & dependencies != "R"])
-
-    local_dependencies <- intersect(dependencies, local_base_names)
     for (dependency in local_dependencies) {
-      dependency_stem <- local_stems[match(dependency, local_base_names)]
-      if (!isTRUE(install_one(dependency_stem))) return(FALSE)
+      matches <- which(inventory$packages == dependency)
+      if (length(matches) > 1L) {
+        state$failed[[stem]] <- .bb_trf(
+          "More than one local archive is available for dependency %s.", dependency
+        )
+        return(FALSE)
+      }
+      if (!isTRUE(install_one(inventory$entries[[matches[[1L]]]]))) return(FALSE)
     }
 
-    external <- setdiff(dependencies, local_base_names)
+    external <- setdiff(dependencies, inventory$packages)
     missing_external <- external[!vapply(
       external, requireNamespace, logical(1), quietly = TRUE
     )]
@@ -367,7 +321,7 @@ install_local_pkg <- function(
     TRUE
   }
 
-  install_one(package)
+  install_one(component)
   if (isTRUE(verbose) && length(state$failed) > 0L) {
     message(.bb_trf(
       "Packages that failed: %s", paste(names(state$failed), collapse = ", ")

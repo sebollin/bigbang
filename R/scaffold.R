@@ -196,10 +196,10 @@ write_metapackage_readme <- function(name, project_dir,
     } else {
       c(
         "The component archives live outside this package, so the directory",
-        "holding them is required:",
+        "or directories holding them are required:",
         "",
         "```r",
-        paste0(name, "_install(pkg_dir = \"/path/to/local/archives\")"),
+        paste0(name, "_install(pkg_dir = c(\"/path/to/local/archives\"))"),
         "```"
       )
     },

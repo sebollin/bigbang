@@ -19,7 +19,18 @@
 #' @noRd
 .archive_subdir <- "archives"
 
-.render_install_engine <- function(name, packages, ext, pkg_dir_default = "") {
+.render_install_engine <- function(name, components, pkg_dir_default = "") {
+  packages <- vapply(components, `[[`, character(1L), "package")
+  archive_stems <- vapply(components, `[[`, character(1L), "stem")
+  component_specs <- stats::setNames(lapply(components, function(component) {
+    list(
+      package = component$package,
+      stem = component$stem,
+      ext = component$ext
+    )
+  }), packages)
+  component_specs_literal <- .r_literal(component_specs)
+  package_list_literal <- .r_literal(packages)
   glue::glue('
 
 .bigbang_abort <- function(class, message, ...) {{
@@ -52,23 +63,58 @@ resolve_upgrade_policy <- function(force, upgrade, upgrade_missing) {{
   upgrade
 }}
 
+.component_specs <- {component_specs_literal}
+.component_names <- {package_list_literal}
+
+resolve_component_spec <- function(package, ext = NULL) {{
+  if (package %in% names(.component_specs)) return(.component_specs[[package]])
+  by_stem <- vapply(.component_specs, function(spec) identical(spec$stem, package),
+                    logical(1L))
+  if (sum(by_stem) == 1L) return(.component_specs[[which(by_stem)]])
+  fallback_ext <- if (is.null(ext)) ".tar.gz" else ext
+  list(
+    package = sub("_.*", "", package),
+    stem = package,
+    ext = fallback_ext
+  )
+}}
+
+resolve_component_archive <- function(package, pkg_dir, ext = NULL) {{
+  spec <- resolve_component_spec(package, ext)
+  if (!is.character(pkg_dir) || length(pkg_dir) < 1L || anyNA(pkg_dir) ||
+      any(!nzchar(pkg_dir))) {{
+    stop(.meta_tr(
+      "The archive directory must be one or more non-empty paths."
+    ), call. = FALSE)
+  }}
+  dirs <- normalizePath(pkg_dir, winslash = "/", mustWork = FALSE)
+  candidates <- file.path(dirs, paste0(spec$stem, spec$ext))
+  found <- candidates[file.exists(candidates) & !dir.exists(candidates)]
+  if (length(found) == 0L) {{
+    stop(.meta_trf(
+      "Could not resolve component \'%s\' in the supplied archive directories.",
+      package
+    ), call. = FALSE)
+  }}
+  list(path = normalizePath(found[[1L]], winslash = "/", mustWork = TRUE),
+       ext = spec$ext, stem = spec$stem)
+}}
+
 #\' Read dependencies from a local package archive
 #\'
 #\' Extracts into an owned temporary directory and reads Depends, Imports, and
 #\' LinkingTo from DESCRIPTION. It does not install or load the package.
 #\'
-#\' @param package Character archive stem including the version.
-#\' @param pkg_dir Character directory containing local archives.
-#\' @param ext Character archive extension.
+#\' @param package Character archive stem or generated component identifier.
+#\' @param pkg_dir Character vector of directories containing local archives.
+#\' @param ext Character fallback archive extension.
 #\'
 #\' @return A list with declared package metadata and dependencies.
 #\' @keywords internal
-read_archive_metadata <- function(package, pkg_dir, ext = ".tar.gz") {{
-  archive <- file.path(pkg_dir, paste0(package, ext))
-  if (!file.exists(archive)) {{
-    stop(.meta_trf("Package archive does not exist: %s", archive),
-         call. = FALSE)
-  }}
+read_archive_metadata <- function(package, pkg_dir, ext = NULL) {{
+  resolved <- resolve_component_archive(package, pkg_dir, ext)
+  archive <- resolved$path
+  ext <- resolved$ext
 
   temp_dir <- tempfile("bigbang-deps-")
   if (!dir.create(temp_dir)) stop(.meta_trf(
@@ -163,23 +209,29 @@ read_archive_metadata <- function(package, pkg_dir, ext = ".tar.gz") {{
   }}
   declared_package <- field("Package")
   declared_version <- field("Version")
-  expected_package <- sub("_.*", "", package)
-  expected_version <- sub("^[^_]+_", "", package)
-  if (is.na(declared_package) || is.na(declared_version) ||
-      !identical(declared_package, expected_package)) {{
+  if (is.na(declared_package) || !nzchar(declared_package) ||
+      is.na(declared_version) || !nzchar(declared_version)) {{
     stop(.meta_trf(
-      "Archive %s declares package %s, but its filename names %s.",
+      "Archive %s must declare non-empty Package and Version fields.", archive
+    ), call. = FALSE)
+  }}
+  spec <- resolve_component_spec(package, ext)
+  expected_package <- sub("_.*", "", spec$stem)
+  has_version <- grepl("_", spec$stem, fixed = TRUE)
+  expected_version <- if (has_version) sub("^[^_]+_", "", spec$stem) else NA_character_
+  if (!identical(declared_package, expected_package)) {{
+    warning(.meta_trf(
+      "Archive %s declares package %s, but its filename suggests %s.",
       archive, declared_package, expected_package
     ), call. = FALSE)
   }}
-  versions_match <- tryCatch(
-    isTRUE(base::package_version(declared_version) ==
+  if (has_version && !tryCatch(
+      isTRUE(base::package_version(declared_version) ==
              base::package_version(expected_version)),
-    error = function(e) FALSE
-  )
-  if (!versions_match) {{
-    stop(.meta_trf(
-      "Archive %s declares version %s, but its filename names version %s.",
+      error = function(e) FALSE
+  )) {{
+    warning(.meta_trf(
+      "Archive %s declares version %s, but its filename suggests version %s.",
       archive, declared_version, expected_version
     ), call. = FALSE)
   }}
@@ -206,6 +258,9 @@ read_archive_metadata <- function(package, pkg_dir, ext = ".tar.gz") {{
     }}
   }}
   list(
+    path = archive,
+    ext = ext,
+    stem = spec$stem,
     package = declared_package,
     version = declared_version,
     dependencies = unique(setdiff(dependencies[nzchar(dependencies)], "R")),
@@ -213,9 +268,50 @@ read_archive_metadata <- function(package, pkg_dir, ext = ".tar.gz") {{
   )
 }}
 
-read_archive_dependencies <- function(package, pkg_dir, ext = ".tar.gz") {{
+read_archive_dependencies <- function(package, pkg_dir, ext = NULL) {{
   read_archive_metadata(package, pkg_dir, ext)$dependencies
 }}
+
+version_satisfies <- function(actual, op, required) {{
+  tryCatch({{
+    actual <- base::package_version(actual)
+    required <- base::package_version(required)
+    switch(op, ">=" = actual >= required, ">" = actual > required,
+           "<=" = actual <= required, "<" = actual < required,
+           "==" = actual == required, FALSE)
+  }}, error = function(e) FALSE)
+}}
+
+validate_local_constraints <- function(packages, pkg_dir, ext = NULL) {{
+  metadata <- lapply(packages, read_archive_metadata, pkg_dir = pkg_dir, ext = ext)
+  package_names <- vapply(metadata, function(item) item$package, character(1L))
+  versions <- vapply(metadata, function(item) item$version, character(1L))
+  names(versions) <- package_names
+  for (index in seq_along(metadata)) {{
+    constraints <- metadata[[index]]$constraints
+    local <- constraints[vapply(constraints, function(item) {{
+      item$package %in% package_names
+    }}, logical(1L))]
+    for (constraint in local) {{
+      actual <- unname(versions[[constraint$package]])
+      if (!version_satisfies(actual, constraint$op, constraint$version)) {{
+        .bigbang_abort(
+          "bigbang_error_dependency_version",
+          .meta_trf(
+            "Component %s requires %s %s %s, but the included archive provides version %s.",
+            metadata[[index]]$package, constraint$package, constraint$op,
+            constraint$version, actual
+          ),
+          component = metadata[[index]]$package,
+          dependency = constraint$package,
+          required = constraint,
+          actual = actual
+        )
+      }
+    }
+  }
+  invisible(metadata)
+}
 
 
 #\' Classify a local package archive
@@ -249,30 +345,30 @@ classify_package_archive <- function(archive, ext) {{
 #\' policy, and installs the local archive. Local dependencies are installed by
 #\' the outer topological loop, so this helper is not recursive.
 #\'
-#\' @param package Character archive stem including the version.
-#\' @param pkg_dir Character directory containing local archives.
-#\' @param ext Character archive extension.
+#\' @param package Character archive stem or generated component identifier.
+#\' @param pkg_dir Character vector of directories containing local archives.
+#\' @param ext Character fallback archive extension.
 #\' @param repos Character repositories for non-local dependencies.
 #\' @param cran_deps Character missing-dependency policy: `"skip"` and `"error"`
 #\'   never access the network; `"install"` uses `repos`.
 #\'
 #\' @return A list with installation status and detected dependencies.
 #\' @keywords internal
-install_local_archive <- function(package, pkg_dir, ext = ".tar.gz",
+install_local_archive <- function(package, pkg_dir, ext = NULL,
                                    repos = getOption("repos"),
                                    cran_deps = c("skip", "error", "install"),
                                    upgrade = c("newer", "always", "never")) {{
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
-  archive <- file.path(pkg_dir, paste0(package, ext))
-  if (!file.exists(archive)) {{
-    return(list(
-      success = FALSE,
-      message = .meta_trf("Package archive does not exist: %s", archive)
-    ))
+  resolved <- tryCatch(
+    resolve_component_archive(package, pkg_dir, ext),
+    error = function(e) e
+  )
+  if (inherits(resolved, "error")) {{
+    return(list(success = FALSE, message = conditionMessage(resolved)))
   }}
-
-  base_name <- sub("_.*", "", package)
+  archive <- resolved$path
+  ext <- resolved$ext
   metadata <- tryCatch(
     read_archive_metadata(package, pkg_dir, ext),
     error = function(e) e
@@ -280,6 +376,7 @@ install_local_archive <- function(package, pkg_dir, ext = ".tar.gz",
   if (inherits(metadata, "error")) {{
     return(list(success = FALSE, message = conditionMessage(metadata)))
   }}
+  base_name <- metadata$package
   version <- metadata$version
   dependencies <- metadata$dependencies
 
@@ -330,11 +427,7 @@ install_local_archive <- function(package, pkg_dir, ext = ".tar.gz",
     ))
   }}
 
-  local_files <- list.files(pkg_dir)
-  local_files <- local_files[endsWith(local_files, ext)]
-  local_names <- sub("_.*", "", substr(
-    local_files, 1L, nchar(local_files) - nchar(ext)
-  ))
+  local_names <- .component_names
 
   # Local dependencies are installed once by the outer topological loop. This
   # branch resolves only dependencies not provided by local archives.
@@ -540,8 +633,8 @@ detect_cycles <- function(adjacency) {{
 #\' Reads each archive DESCRIPTION without installing or loading packages and
 #\' builds the adjacency matrix used for installation ordering.
 #\'
-#\' @param packages Character archive stems including versions.
-#\' @param pkg_dir Character archive directory.
+#\' @param packages Character archive stems or generated component identifiers.
+#\' @param pkg_dir Character vector of archive directories.
 #\' @param ext Character archive extension.
 #\'
 #\' @return An adjacency matrix.
@@ -558,16 +651,22 @@ detect_cycles <- function(adjacency) {{
 #\'   print(adj)
 #\' }}
 
-build_dependency_graph <- function(packages, pkg_dir, ext) {{
+build_dependency_graph <- function(packages, pkg_dir, ext = NULL) {{
   package_count <- length(packages)
   adjacency <- base::matrix(0, nrow = package_count, ncol = package_count)
   rownames(adjacency) <- colnames(adjacency) <- packages
+  package_names <- vapply(
+    packages,
+    function(package) resolve_component_spec(package, ext)$package,
+    character(1L)
+  )
+  validate_local_constraints(packages, pkg_dir, ext)
 
   for (package in packages) {{
     deps <- read_archive_dependencies(package, pkg_dir, ext)
-    local_deps <- intersect(deps, sub("_.*", "", packages))
+    local_deps <- intersect(deps, package_names)
     for (dep in local_deps) {{
-      dependency_index <- which(sub("_.*", "", packages) == dep)
+      dependency_index <- which(package_names == dep)
       if (length(dependency_index) > 0) {{
         package_index <- which(packages == package)
         adjacency[package_index, dependency_index[1]] <- 1
@@ -648,8 +747,8 @@ topological_order <- function(adjacency) {{
 #\' Builds the graph, computes its topological order, and installs each package
 #\' exactly once.
 #\'
-#\' @param packages Character archive stems including versions.
-#\' @param pkg_dir Character archive directory.
+#\' @param packages Character archive stems or generated component identifiers.
+#\' @param pkg_dir Character vector of archive directories.
 #\' @param ext Character archive extension.
 #\' @param verbose Logical progress toggle.
 #\' @return Invisibly, installation, failure, skip, and order information.
@@ -664,7 +763,7 @@ topological_order <- function(adjacency) {{
 #\' }}
 
 
-install_packages_in_order <- function(packages, pkg_dir, ext,
+install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
                                       verbose = TRUE,
                                       repos = getOption("repos"),
                                       cran_deps = c("skip", "error", "install"),
@@ -734,19 +833,23 @@ install_packages_in_order <- function(packages, pkg_dir, ext,
 #\'
 #\' Returns component names and dependencies read from their archives.
 #\'
-#\' @param pkg_dir Character archive directory.
+#\' @param pkg_dir Character vector of archive directories.
 #\' @param ext Character archive extension.
 #\' @return A sorted character vector of dependency names.
 #\' @export
 {name}_deps <- function(
     pkg_dir{pkg_dir_default},
-    ext = {paste(deparse(ext), collapse = "")}) {{
-  packages <- {.r_literal(packages)}
+    ext = NULL) {{
+    packages <- {.r_literal(packages)}
   deps <- unlist(lapply(
     packages, read_archive_dependencies,
     pkg_dir = pkg_dir, ext = ext
   ), use.names = FALSE)
-  sort(unique(c(sub("_.*", "", packages), deps)))
+  # DESCRIPTION is the authority for component identity.  The archive stem
+  # can be unversioned or can deliberately differ from the declared package
+  # name, so deriving names with sub("_.*", ...) would report a filename
+  # rather than the component users actually receive.
+  sort(unique(c(.component_names, deps)))
 }}
 ')
 }
@@ -792,7 +895,7 @@ write_metapackage_files <- function(
     name = name,
     package_list = .r_literal(packages),
     local_packages = .r_literal(archive_stems),
-    extension = paste(deparse(ext), collapse = ""),
+    extension = "NULL",
     pkg_dir_default = .archive_dir_default(name, include_archives),
     install_call = if (isTRUE(include_archives)) {
       paste0(name, "_install()")
@@ -823,6 +926,7 @@ write_metapackage_files <- function(
     attach = '
 utils::globalVariables(".pkgs")
 .pkgs <- {{{ package_list }}}
+.component_names <- .pkgs
 
 attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
   already_attached <- gsub("^package:", "", search())
@@ -866,7 +970,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
 #\' Installs local archives in topological order and then attaches them. Installation
 #\' is explicit and never occurs from a startup hook.
 #\'
-#\' @param pkg_dir Character archive directory.
+#\' @param pkg_dir Character vector of archive directories.
 #\' @param ext Character archive extension.
 #\' @param cran_deps Character missing non-local dependency policy.
 #\' @param repos Character repositories used only by `cran_deps = "install"`.
@@ -885,7 +989,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
 #\'   {{ name }}_install(pkg_dir = "/path/to/local/archives")
 #\' }
 {{ name }}_install <- function(pkg_dir{{{ pkg_dir_default }}},
-                               ext = {{{ extension }}},
+                               ext = NULL,
                                cran_deps = c("skip", "error", "install"),
                                repos = getOption("repos"),
                                verbose = getOption("bigbang.verbose", interactive()),
@@ -895,13 +999,16 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
   upgrade <- resolve_upgrade_policy(force, upgrade, missing(upgrade))
   # An empty pkg_dir means the shipped archive directory was not found, which
   # produces a misleading path further down. Say what is wrong instead.
-  if (!is.character(pkg_dir) || length(pkg_dir) != 1L || !nzchar(pkg_dir)) {
+  if (!is.character(pkg_dir) || length(pkg_dir) < 1L || anyNA(pkg_dir) ||
+      any(!nzchar(pkg_dir))) {
     stop(.meta_tr(
       "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives."
     ), call. = FALSE)
   }
-  if (!dir.exists(pkg_dir)) {
-    stop(.meta_trf("The archive directory does not exist: %s", pkg_dir),
+  missing_dirs <- pkg_dir[!dir.exists(pkg_dir)]
+  if (length(missing_dirs) > 0L) {
+    stop(.meta_trf("The archive directory does not exist: %s",
+                   paste(missing_dirs, collapse = ", ")),
          call. = FALSE)
   }
   packages <- {{{ local_packages }}}
@@ -941,7 +1048,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE) {
   # A skipped component was just reported with its reason and the call that
   # fixes it, so attaching must not follow it with a vaguer hint.
   attach_installed_packages(
-    sub("_.*", "", packages),
+    .component_names,
     warn_missing = length(result$skipped) == 0L
   )
   invisible(result)
@@ -1360,7 +1467,7 @@ zzz = '
 
 .onAttach <- function(libname, pkgname) {
   # Safety fix 2026-07: no deletion and no installation from startup.
-  pkg_base_names <- sub("_.*", "", {{{ local_packages }}})
+  pkg_base_names <- .component_names
 
   # Tidyverse-style startup hook: delegate search-path changes to a helper.
   result <- attach_installed_packages(pkg_base_names, warn_missing = FALSE)

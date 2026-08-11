@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.2.0\n"
+"Project-Id-Version: bigbang 0.2.0.9000\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14,6 +14,24 @@ msgid "'packages' must be a non-empty character vector"
 msgstr ""
 
 msgid "'pkg_dir' must be one character string"
+msgstr ""
+
+msgid "'pkg_dir' must contain one or more non-empty paths"
+msgstr ""
+
+msgid "Each component must be one non-empty archive path or stem"
+msgstr ""
+
+msgid "Could not resolve component '%s': it is not an existing file and no 'pkg_dir' was supplied."
+msgstr ""
+
+msgid "Could not resolve component '%s' in the supplied archive directories."
+msgstr ""
+
+msgid "Package archive does not exist: %s; archives were not found in the supplied archive directories."
+msgstr ""
+
+msgid "The archive directory does not exist: %s"
 msgstr ""
 
 msgid "The directory specified by 'pkg_dir' does not exist"
@@ -77,6 +95,12 @@ msgid "Archive %s declares package %s, but its filename names %s."
 msgstr ""
 
 msgid "Archive %s declares version %s, but its filename names version %s."
+msgstr ""
+
+msgid "Archive %s declares package %s, but its filename suggests %s."
+msgstr ""
+
+msgid "Archive %s declares version %s, but its filename suggests version %s."
 msgstr ""
 
 msgid "More than one archive was supplied for component package(s): %s."
@@ -254,6 +278,15 @@ msgid "Package name '%s' belongs to R itself and cannot be reused."
 msgstr ""
 
 msgid "Could not copy the component archives into the meta-package: %s"
+msgstr ""
+
+msgid "Cannot use component archives with the same basename (%s): %s."
+msgstr ""
+
+msgid "Component %s declares dependency %s, available at %s but not included. Add it to packages or remove the dependency."
+msgstr ""
+
+msgid "This meta-package needs the following archive directories on the recipient: %s. Set include_archives = TRUE to avoid this requirement."
 msgstr ""
 
 msgid "'force = TRUE' conflicts with an explicit upgrade policy other than 'always'"

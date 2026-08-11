@@ -85,11 +85,14 @@
 #'
 #' @param name Character. Name of the meta-package to create (must not contain
 #'   underscores `_`).
-#' @param packages Character vector. Names (with version) of the local
-#'   packages to include, e.g. `"myPackage_1.0.0"`.
-#' @param pkg_dir Character. Directory containing the local archive files
-#'   (`.tar.gz`, `.zip`, etc.).
-#' @param ext Character. Archive extension. Defaults to `".tar.gz"`.
+#' @param packages Character vector. Archive paths or stems of the local
+#'   packages to include. Existing paths may come from different directories;
+#'   stems are resolved in `pkg_dir`, e.g. `"myPackage_1.0.0"`.
+#' @param pkg_dir Character. Optional directory or directories containing local
+#'   archives used to resolve stems. It is not needed when every `packages`
+#'   element is an existing archive path.
+#' @param ext Character. Fallback archive extension for stems. Defaults to
+#'   `".tar.gz"`; each existing archive path keeps its own extension.
 #' @param version Character. Version of the meta-package. Defaults to `"0.1.0"`.
 #' @param dest_dir Character. Required destination directory. The function writes
 #'   the generated meta-package exclusively inside this directory; there is no
@@ -178,7 +181,9 @@
 #' (`meta::fun()` instead of `component::fun()`), tidyverse style.
 #'
 #' @section Requirements:
-#' - The local packages must exist in `pkg_dir` with the given extension.
+#' - Each component must be an existing archive path or a stem resolvable in
+#'   one of the optional `pkg_dir` directories; `ext` is only a fallback for
+#'   stems.
 #' - Automatic documentation (`document = TRUE`) requires the
 #'   `devtools` package.
 #'
@@ -205,7 +210,7 @@
 create_metapackage <- function(
   name,
   packages,
-  pkg_dir,
+  pkg_dir = NULL,
   ext = ".tar.gz",
   version = "0.1.0",
   dest_dir,
@@ -243,50 +248,18 @@ create_metapackage <- function(
   if (!is.character(packages) || length(packages) < 1) {
     stop(.bb_tr("'packages' must be a non-empty character vector"), call. = FALSE)
   }
-  if (!is.character(pkg_dir) || length(pkg_dir) != 1) {
-    stop(.bb_tr("'pkg_dir' must be one character string"), call. = FALSE)
-  }
-  if (!dir.exists(pkg_dir)) {
-    stop(.bb_tr("The directory specified by 'pkg_dir' does not exist"), call. = FALSE)
+  if (!is.null(pkg_dir) &&
+        (!is.character(pkg_dir) || anyNA(pkg_dir) || any(!nzchar(pkg_dir)))) {
+    stop(.bb_tr("'pkg_dir' must contain one or more non-empty paths"), call. = FALSE)
   }
   if (!is.logical(include_archives) || length(include_archives) != 1L ||
         is.na(include_archives)) {
     stop(.bb_tr("'include_archives' must be TRUE or FALSE"), call. = FALSE)
   }
 
-  # Resolve caller-supplied paths before generation changes the working directory.
+  # Resolve caller-supplied paths before any generated files are written. A
+  # component may be an existing archive path or a stem resolved in pkg_dir.
   dest_dir <- normalizePath(dest_dir, winslash = "/", mustWork = FALSE)
-  pkg_dir <- normalizePath(pkg_dir, winslash = "/", mustWork = TRUE)
-
-  component_packages <- unique(sub("_.*", "", packages))
-  duplicate_components <- unique(
-    sub("_.*", "", packages)[duplicated(sub("_.*", "", packages))]
-  )
-  if (length(duplicate_components) > 0L) {
-    .bigbang_abort(
-      "bigbang_error_duplicate_component",
-      .bb_trf(
-        "More than one archive was supplied for component package(s): %s.",
-        paste(duplicate_components, collapse = ", ")
-      ),
-      packages = duplicate_components
-    )
-  }
-  if (!is.null(workflow)) {
-    valid_workflow <- is.character(workflow) && length(workflow) > 0L &&
-      !is.null(names(workflow)) && all(nzchar(names(workflow))) &&
-      !any(grepl("\\r|\\n", names(workflow), perl = TRUE)) &&
-      !anyDuplicated(names(workflow)) && !anyDuplicated(unname(workflow)) &&
-      setequal(unname(workflow), component_packages)
-    if (!isTRUE(valid_workflow)) {
-      .bigbang_abort(
-        "bigbang_error_workflow",
-        .bb_tr(
-          "'workflow' must map unique non-empty stage names to every component package exactly once"
-        )
-      )
-    }
-  }
 
   # Validate the package name.
   if (grepl("_", name)) {
@@ -313,6 +286,51 @@ create_metapackage <- function(
       "characters, start with a letter, continue with letters, digits or dots, ",
       "and do not end with a dot."
     ), name), call. = FALSE)
+  }
+
+  resolved_components <- .resolve_components(packages, pkg_dir, ext)
+  components <- .validate_component_archives(resolved_components)
+  component_packages <- vapply(components, `[[`, character(1L), "package")
+  archive_stems <- vapply(components, `[[`, character(1L), "stem")
+  archive_paths <- vapply(components, `[[`, character(1L), "path")
+  archive_basenames <- basename(archive_paths)
+  if (anyDuplicated(archive_basenames)) {
+    duplicate_names <- unique(archive_basenames[duplicated(archive_basenames)])
+    duplicate_paths <- archive_paths[archive_basenames %in% duplicate_names]
+    .bigbang_abort(
+      "bigbang_error_archive_basename_collision",
+      .bb_trf(
+        "Cannot use component archives with the same basename (%s): %s.",
+        paste(duplicate_names, collapse = ", "),
+        paste(duplicate_paths, collapse = "; ")
+      ),
+      paths = duplicate_paths
+    )
+  }
+  if (!is.null(workflow)) {
+    valid_workflow <- is.character(workflow) && length(workflow) > 0L &&
+      !is.null(names(workflow)) && all(nzchar(names(workflow))) &&
+      !any(grepl("\\r|\\n", names(workflow), perl = TRUE)) &&
+      !anyDuplicated(names(workflow)) && !anyDuplicated(unname(workflow)) &&
+      setequal(unname(workflow), component_packages)
+    if (!isTRUE(valid_workflow)) {
+      .bigbang_abort(
+        "bigbang_error_workflow",
+        .bb_tr(
+          "'workflow' must map unique non-empty stage names to every component package exactly once"
+        )
+      )
+    }
+  }
+  r_requirement <- .resolve_r_requirement(components)
+  if (!isTRUE(include_archives) && length(resolved_components$source_dirs) > 1L) {
+    warning(.bb_trf(
+      paste0(
+        "This meta-package needs the following archive directories on the ",
+        "recipient: %s. Set include_archives = TRUE to avoid this requirement."
+      ),
+      paste(resolved_components$source_dirs, collapse = ", ")
+    ), call. = FALSE)
   }
   # Debug logger.
   log_debug <- function(debug_message) {
@@ -414,22 +432,6 @@ create_metapackage <- function(
   }
   log_debug("Basic directory structure created")
 
-  # Require every requested local archive to exist.
-  missing_archives <- packages[!file.exists(file.path(pkg_dir, paste0(packages, ext)))]
-  if (length(missing_archives) > 0) {
-    stop(.bb_trf(
-      "The following package archives were not found: %s",
-      paste(missing_archives, collapse = ", ")
-    ), call. = FALSE)
-  }
-
-  # Validate metadata and the local dependency graph before writing any
-  # component-specific files. This moves errors that are knowable to the
-  # generator (filename/description mismatches and cycles) away from the
-  # recipient's installation step.
-  archive_metadata <- .validate_component_archives(packages, pkg_dir, ext)
-  r_requirement <- .resolve_r_requirement(archive_metadata)
-
   # Ship the component archives inside the meta-package so that installing it
   # is enough to install the components wherever it is installed.
   if (isTRUE(include_archives)) {
@@ -438,15 +440,14 @@ create_metapackage <- function(
           !dir.exists(archive_dir)) {
       stop(.bb_trf("Could not create directory: %s", archive_dir), call. = FALSE)
     }
-    sources <- file.path(pkg_dir, paste0(packages, ext))
-    copied <- file.copy(sources, archive_dir, overwrite = TRUE)
+    copied <- file.copy(archive_paths, archive_dir, overwrite = TRUE)
     if (!all(copied)) {
       stop(.bb_trf(
         "Could not copy the component archives into the meta-package: %s",
-        paste(packages[!copied], collapse = ", ")
+        paste(archive_basenames[!copied], collapse = ", ")
       ), call. = FALSE)
     }
-    total_bytes <- sum(file.size(sources), na.rm = TRUE)
+    total_bytes <- sum(file.size(archive_paths), na.rm = TRUE)
     if (verbose) {
       message(.bb_trf(
         "Component archives copied into the meta-package: %s (%.1f MB).",
@@ -492,7 +493,9 @@ create_metapackage <- function(
       message(.bb_tr("Scanning local packages for implicit dependencies..."))
     }
 
-    detected_implicit_deps <- detect_implicit_dependencies(packages, pkg_dir, ext)
+    detected_implicit_deps <- detect_implicit_dependencies(
+      packages, pkg_dir, ext, components = components
+    )
 
     if (verbose) {
       message(.bb_trf(
@@ -515,11 +518,11 @@ create_metapackage <- function(
   }
 
   # Extract explicit dependencies from local archives.
-  dependencies <- unlist(lapply(archive_metadata, `[[`, "dependencies"), use.names = FALSE)
+  dependencies <- unlist(lapply(components, `[[`, "dependencies"), use.names = FALSE)
 
   # Classify dependencies as local or repository-provided.
   classified_deps <- classify_dependencies(
-    dependencies, pkg_dir, ext, included_packages = component_packages
+    dependencies, included_packages = component_packages
   )
   cran_deps <- classified_deps$cran
   local_deps <- classified_deps$local
@@ -551,7 +554,7 @@ create_metapackage <- function(
 
 
   # Create the basic vignette after DESCRIPTION exists.
-  write_basic_vignette(name, packages, project_dir,
+  write_basic_vignette(name, component_packages, project_dir,
                        include_archives = include_archives, verbose = debug)
   if (!is.null(workflow)) {
     write_workflow_vignette(name, workflow, project_dir)
@@ -583,7 +586,7 @@ create_metapackage <- function(
 
   # Generate the component installation engine.
   install_packages_content <- .render_install_engine(
-    name, packages, ext, .archive_dir_default(name, include_archives)
+    name, components, .archive_dir_default(name, include_archives)
   )
 
   install_packages_content <- .drop_regular_comment_lines(install_packages_content)
@@ -663,7 +666,7 @@ create_metapackage <- function(
     "^(?!(?-i:inst/archives/)).*\\.tar$",
 
     # Local component patterns
-    unlist(lapply(sub("_.*", "", packages), function(pkg) {
+    unlist(lapply(component_packages, function(pkg) {
       pkg_pattern <- .escape_regex_literal(pkg)
       if (tolower(pkg) %in% .r_build_reserved_paths) return(character())
       c(sprintf("^%s$", pkg_pattern),         # Exact component directory
@@ -721,9 +724,8 @@ StripTrailingWhitespace: Yes"
 
   write_metapackage_files(
     name = name,
-    packages = sub("_.*", "", packages),
-    archive_stems = packages,
-    ext = ext,
+    packages = component_packages,
+    archive_stems = archive_stems,
     dest_dir = file.path(project_dir, "R"),
     implicit_deps = hard_implicit_deps,
     reexport = reexport,
@@ -781,8 +783,8 @@ StripTrailingWhitespace: Yes"
     list(
       path = normalizePath(project_dir, winslash = "/", mustWork = TRUE),
       name = name,
-      packages = sub("_.*", "", packages),
-      archives = packages,
+      packages = component_packages,
+      archives = archive_stems,
       local_dependencies = local_deps,
       cran_dependencies = cran_deps,
       implicit_dependencies = detected_implicit_deps,

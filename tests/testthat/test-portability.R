@@ -49,7 +49,7 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
       dest_dir = destination,
       document = FALSE,
       verbose = FALSE,
-      description = "Metapackage with UTF-8 text: café, jalapeño, naïve."
+      description = "Metapackage with UTF-8 text: caf\u00e9, jalape\u00f1o, na\u00efve."
     )
   ))
   project <- file.path(destination, "portablemeta")

@@ -7,7 +7,7 @@
 create_metapackage(
   name,
   packages,
-  pkg_dir,
+  pkg_dir = NULL,
   ext = ".tar.gz",
   version = "0.1.0",
   dest_dir,
@@ -32,13 +32,16 @@ create_metapackage(
 \item{name}{Character. Name of the meta-package to create (must not contain
 underscores \verb{_}).}
 
-\item{packages}{Character vector. Names (with version) of the local
-packages to include, e.g. \code{"myPackage_1.0.0"}.}
+\item{packages}{Character vector. Archive paths or stems of the local
+packages to include. Existing paths may come from different directories;
+stems are resolved in \code{pkg_dir}, e.g. \code{"myPackage_1.0.0"}.}
 
-\item{pkg_dir}{Character. Directory containing the local archive files
-(\code{.tar.gz}, \code{.zip}, etc.).}
+\item{pkg_dir}{Character. Optional directory or directories containing local
+archives used to resolve stems. It is not needed when every \code{packages}
+element is an existing archive path.}
 
-\item{ext}{Character. Archive extension. Defaults to \code{".tar.gz"}.}
+\item{ext}{Character. Fallback archive extension for stems. Defaults to
+\code{".tar.gz"}; each existing archive path keeps its own extension.}
 
 \item{version}{Character. Version of the meta-package. Defaults to \code{"0.1.0"}.}
 
@@ -63,7 +66,9 @@ automatically. Defaults to \code{TRUE}.}
 \item{license}{Character. License of the meta-package.}
 
 \item{additional_deps}{Character vector. Extra dependencies to add on top of the
-ones detected automatically.}
+ones declared by components. Source-code guesses are diagnostic by default;
+use this argument when a guessed dependency should bind in the generated
+package.}
 
 \item{ignore_deps}{Character vector. Dependencies to ignore even if detected.}
 
@@ -110,7 +115,9 @@ The function performs the following steps:
 \enumerate{
 \item Creates the basic R package structure (\code{R}, \code{man}, \code{vignettes}, etc.).
 \item Detects dependencies between packages, both explicit (from DESCRIPTION) and
-implicit (found by scanning the source code).
+possible implicit uses (found by scanning executable source tokens). The
+latter are reported for diagnosis and are not hard dependencies unless
+explicitly supplied through \code{additional_deps} or \code{force_deps}.
 \item Generates DESCRIPTION and NAMESPACE with the appropriate dependencies.
 \item Creates a basic vignette documenting the meta-package.
 \item Generates R files with functions to install and load the component packages:
@@ -151,7 +158,9 @@ reach the component functions directly through the meta-package
 \section{Requirements}{
 
 \itemize{
-\item The local packages must exist in \code{pkg_dir} with the given extension.
+\item Each component must be an existing archive path or a stem resolvable in
+one of the optional \code{pkg_dir} directories; \code{ext} is only a fallback for
+stems.
 \item Automatic documentation (\code{document = TRUE}) requires the
 \code{devtools} package.
 }

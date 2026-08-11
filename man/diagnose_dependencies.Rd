@@ -4,13 +4,13 @@
 \alias{diagnose_dependencies}
 \title{Diagnose implicit dependencies of local packages}
 \usage{
-diagnose_dependencies(packages, pkg_dir, ext = ".tar.gz")
+diagnose_dependencies(packages, pkg_dir = NULL, ext = ".tar.gz")
 }
 \arguments{
-\item{packages}{Character vector. Names (with version) of the local
-packages to examine, e.g. \code{"conexiones_0.8.3"}.}
+\item{packages}{Character vector. Archive paths or stems to examine, e.g.
+\code{"conexiones_0.8.3"}.}
 
-\item{pkg_dir}{Character. Directory containing the local archive files
+\item{pkg_dir}{Character. Directory or directories containing local archives
 (\code{.tar.gz}, \code{.zip}, etc.).}
 
 \item{ext}{Character. Archive extension. Defaults to \code{".tar.gz"}.}

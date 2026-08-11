@@ -120,7 +120,9 @@ test_that("failed generation restores cwd and rolls back only its own project", 
     "archives were not found"
   )
   expect_true(dir.exists(preexisting))
-  expect_true(dir.exists(file.path(preexisting, "R")))
+  # Component resolution is a preflight step, so a failed call does not create
+  # a partial project inside a pre-existing empty directory.
+  expect_false(dir.exists(file.path(preexisting, "R")))
   expect_identical(getwd(), cwd_before)
 })
 
