@@ -110,6 +110,10 @@ user updating from 0.1.0 should read both sections.
   contain no path from the machine that produced them.
 - Real generation results now include the same topological `order` field as
   dry-run plans. The planned `files` field remains specific to dry runs.
+- When installing a source component fails, `install_local_pkg()` and generated
+  installers now report the error lines of the installation subprocess itself
+  -- for example, which dependency it could not find -- instead of only a
+  generic verification failure.
 
 ## Bug fixes
 

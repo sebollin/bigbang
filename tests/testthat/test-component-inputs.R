@@ -431,3 +431,49 @@ test_that("multiple external sources are represented in the generated installer"
     normalizePath(second, winslash = "/")
   )
 })
+
+test_that("a failed installation reports the installer's own error", {
+  skip_on_cran()
+  sandbox <- tempfile("bigbang-install-error-detail-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  direct_lib <- file.path(sandbox, "direct-library")
+  emitted_lib <- file.path(sandbox, "emitted-library")
+  for (dir in c(source_root, archives, destination, direct_lib, emitted_lib)) {
+    dir.create(dir, recursive = TRUE)
+  }
+  on.exit(unlink(sandbox, recursive = TRUE, force = TRUE), add = TRUE)
+
+  broken <- make_input_archive(
+    "brokendetail", "1.0.0", file.path(archives, "brokendetail_1.0.0.tar.gz"),
+    source_root, r_code = "brokendetail_value <- function("
+  )
+
+  direct <- suppressWarnings(install_local_pkg(
+    broken, verbose = FALSE, upgrade = "always", lib = direct_lib
+  ))
+  expect_length(direct$failed, 1L)
+  # The failure must carry the child installer's own diagnosis, not only a
+  # generic verification message.
+  expect_match(direct$failed[[1L]], "ERROR", fixed = TRUE)
+  expect_match(direct$failed[[1L]], "unable to collate", fixed = TRUE)
+
+  generated <- create_metapackage(
+    "brokendetailverse", broken, dest_dir = destination, document = FALSE,
+    verbose = FALSE, import_deps = character(), force_deps = character()
+  )
+  runtime <- new.env(parent = baseenv())
+  sys.source(file.path(generated$path, "R", "utils.R"), runtime)
+  sys.source(file.path(generated$path, "R", "install_packages.R"), runtime)
+  sys.source(file.path(generated$path, "R", "attach.R"), runtime)
+  emitted <- tryCatch(
+    suppressWarnings(runtime$brokendetailverse_install(
+      pkg_dir = file.path(generated$path, "inst", "archives"),
+      cran_deps = "skip", verbose = FALSE, lib = emitted_lib
+    )),
+    error = identity
+  )
+  expect_s3_class(emitted, "error")
+  expect_match(conditionMessage(emitted), "unable to collate", fixed = TRUE)
+})

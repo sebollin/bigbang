@@ -83,6 +83,39 @@ with_install_library_path <- function(libraries, code) {{
   force(code)
 }}
 
+install_source_component <- function(target, lib) {{
+  # utils::install.packages() discards the output of the child installer for
+  # local source packages, so a failure only reports a non-zero exit status.
+  # Run the same R CMD INSTALL directly and keep the output: the ERROR lines
+  # of the child become the failure message instead of a generic one.
+  log_file <- tempfile("bigbang-install-log-")
+  on.exit(unlink(log_file, force = TRUE), add = TRUE)
+  target <- normalizePath(path.expand(target), winslash = "/", mustWork = FALSE)
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  status <- system2(
+    r_binary, c("CMD", "INSTALL", "-l", shQuote(lib), shQuote(target)),
+    stdout = log_file, stderr = log_file
+  )
+  output <- if (file.exists(log_file)) {{
+    readLines(log_file, warn = FALSE)
+  }} else {{
+    character()
+  }}
+  if (length(output) > 0L) cat(output, sep = "\\n")
+  if (!identical(status, 0L)) {{
+    detail <- grep("ERROR", output, value = TRUE, fixed = TRUE)
+    if (length(detail) == 0L) detail <- utils::tail(output, 5L)
+    detail <- paste(detail, collapse = " | ")
+    if (!nzchar(detail)) {{
+      detail <- sprintf("R CMD INSTALL exited with status %d", status)
+    }}
+    stop(detail, call. = FALSE)
+  }}
+  invisible(TRUE)
+}}
+
 .component_specs <- {component_specs_literal}
 .component_names <- {package_list_literal}
 
@@ -565,13 +598,20 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
 
   install_error <- NULL
   tryCatch(
-    with_install_library_path(
-      dependency_libraries,
-      utils::install.packages(
-        install_target, repos = NULL, type = install_type,
-        dependencies = FALSE, lib = lib
+    if (identical(install_type, "win.binary")) {{
+      with_install_library_path(
+        dependency_libraries,
+        utils::install.packages(
+          install_target, repos = NULL, type = install_type,
+          dependencies = FALSE, lib = lib
+        )
       )
-    ),
+    }} else {{
+      with_install_library_path(
+        dependency_libraries,
+        install_source_component(install_target, lib)
+      )
+    }},
     error = function(e) install_error <<- conditionMessage(e)
   )
 

@@ -84,6 +84,39 @@
   force(code)
 }
 
+.install_source_component <- function(target, lib) {
+  # utils::install.packages() discards the child installer's output for local
+  # source packages, so a failure only reports a non-zero exit status. Run the
+  # same R CMD INSTALL directly and keep the output: the child's own ERROR
+  # lines become the failure message instead of a generic verification one.
+  log_file <- tempfile("bigbang-install-log-")
+  on.exit(unlink(log_file, force = TRUE), add = TRUE)
+  target <- normalizePath(path.expand(target), winslash = "/", mustWork = FALSE)
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  status <- system2(
+    r_binary, c("CMD", "INSTALL", "-l", shQuote(lib), shQuote(target)),
+    stdout = log_file, stderr = log_file
+  )
+  output <- if (file.exists(log_file)) {
+    readLines(log_file, warn = FALSE)
+  } else {
+    character()
+  }
+  if (length(output) > 0L) cat(output, sep = "\n")
+  if (!identical(status, 0L)) {
+    detail <- grep("ERROR", output, value = TRUE, fixed = TRUE)
+    if (length(detail) == 0L) detail <- utils::tail(output, 5L)
+    detail <- paste(detail, collapse = " | ")
+    if (!nzchar(detail)) {
+      detail <- sprintf("R CMD INSTALL exited with status %d", status)
+    }
+    stop(detail, call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 #' Install a local package together with its dependencies
 #'
 #' Installs a package from a local archive. Dependencies available as local
@@ -435,18 +468,24 @@ install_local_pkg <- function(
     } else {
       archive
     }
-    install_type <- if (binary_zip) "win.binary" else "source"
     install_error <- tryCatch({
-      .with_install_library_path(
-        dependency_libraries,
-        utils::install.packages(
-          install_target,
-          repos = NULL,
-          type = install_type,
-          dependencies = FALSE,
-          lib = lib
+      if (binary_zip) {
+        .with_install_library_path(
+          dependency_libraries,
+          utils::install.packages(
+            install_target,
+            repos = NULL,
+            type = "win.binary",
+            dependencies = FALSE,
+            lib = lib
+          )
         )
-      )
+      } else {
+        .with_install_library_path(
+          dependency_libraries,
+          .install_source_component(install_target, lib)
+        )
+      }
       NULL
     }, error = identity)
     verified <- !inherits(install_error, "error") && tryCatch(
