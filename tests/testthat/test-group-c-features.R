@@ -310,6 +310,16 @@ test_that("generated install_upgrade, only, and lib are functional", {
 
 test_that("lib is the component destination but not the only dependency library", {
   skip_on_cran()
+  # rcmdcheck runs R CMD check through callr, which points R_ENVIRON* and
+  # R_PROFILE* at temporary files whose profile calls .libPaths() with the
+  # check libraries. The Unix wrapper for R CMD BATCH --vanilla empties those
+  # four variables, so descendants never read them; the Windows front-end
+  # leaves them set, and every non-vanilla child R spawned here would have its
+  # .libPaths() hijacked. Empty them exactly as the Unix wrapper does, so this
+  # test asserts the same thing on every platform.
+  withr::local_envvar(c(
+    R_ENVIRON = "", R_ENVIRON_USER = "", R_PROFILE = "", R_PROFILE_USER = ""
+  ))
   root <- tempfile("bigbang-lib-search-")
   source_root <- file.path(root, "sources")
   archives <- file.path(root, "archives")
@@ -424,6 +434,16 @@ test_that("lib is the component destination but not the only dependency library"
 })
 
 test_that("installation subprocesses inherit the complete library path", {
+  # rcmdcheck runs R CMD check through callr, which points R_ENVIRON* and
+  # R_PROFILE* at temporary files whose profile calls .libPaths() with the
+  # check libraries. The Unix wrapper for R CMD BATCH --vanilla empties those
+  # four variables, so descendants never read them; the Windows front-end
+  # leaves them set, and every non-vanilla child R spawned here would have its
+  # .libPaths() hijacked. Empty them exactly as the Unix wrapper does, so this
+  # test asserts the same thing on every platform.
+  withr::local_envvar(c(
+    R_ENVIRON = "", R_ENVIRON_USER = "", R_PROFILE = "", R_PROFILE_USER = ""
+  ))
   root <- tempfile("bigbang-install-library-env-")
   first <- file.path(root, "first-library")
   second <- file.path(root, "second-library")
