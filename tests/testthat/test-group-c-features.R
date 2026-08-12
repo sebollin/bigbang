@@ -66,6 +66,7 @@ test_that("verbose generation completes through every write stage", {
     import_deps = character(), force_deps = character()
   )
   expect_true(file.exists(file.path(result$path, "DESCRIPTION")))
+  expect_identical(result$order, "toycomponent")
 })
 
 test_that("dry_run validates without creating its destination", {
@@ -100,9 +101,9 @@ test_that("dry_run reports optional planned files and internal helpers", {
   expect_false(any(grepl("inst/archives", result$files, fixed = TRUE)))
   expect_true(nzchar(.bb_generator_version()))
   expect_true(is.na(.file_digest(file.path(tempdir(), "no-such-file"))))
-  expect_true(any(grepl("reexports.R", .planned_generation_files(
-    "xverse", list(), reexport = TRUE
-  ), fixed = TRUE)))
+  expect_false(any(grepl(
+    "reexports.R", .planned_generation_files("xverse", list()), fixed = TRUE
+  )))
 })
 
 test_that("a manifest file resolves relative component paths", {
@@ -305,4 +306,70 @@ test_that("generated install_upgrade, only, and lib are functional", {
     ),
     class = "bigbang_error_only"
   )
+})
+
+test_that("lib is the component destination but not the only dependency library", {
+  skip_on_cran()
+  root <- tempfile("bigbang-lib-search-")
+  source_root <- file.path(root, "sources")
+  archives <- file.path(root, "archives")
+  support_archives <- file.path(root, "support-archives")
+  destination <- file.path(root, "destination")
+  support_lib <- file.path(root, "support-library")
+  direct_lib <- file.path(root, "direct-library")
+  generated_lib <- file.path(root, "generated-library")
+  dirs <- c(source_root, archives, support_archives, destination, support_lib,
+            direct_lib, generated_lib)
+  vapply(dirs, dir.create, logical(1L), recursive = TRUE)
+
+  suffix <- as.character(Sys.getpid())
+  dependency <- paste0("outside", suffix)
+  component <- paste0("target", suffix)
+  dependency_archive <- group_c_archive(
+    source_root, support_archives, dependency
+  )
+  component_archive <- group_c_archive(
+    source_root, archives, component, imports = dependency
+  )
+  r <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  install_into_support <- function(archive) {
+    system2(
+      r, c("CMD", "INSTALL", "-l", shQuote(support_lib), shQuote(archive)),
+      stdout = FALSE, stderr = FALSE
+    )
+  }
+  expect_equal(install_into_support(dependency_archive), 0L)
+  expect_equal(install_into_support(component_archive), 0L)
+
+  old_libs <- .libPaths()
+  on.exit(.libPaths(old_libs), add = TRUE)
+  .libPaths(c(support_lib, old_libs))
+  direct <- install_local_pkg(
+    component_archive, cran_deps = "skip", verbose = FALSE, lib = direct_lib
+  )
+  expect_length(direct$failed, 0L)
+  expect_length(direct$skipped, 0L)
+  expect_true(dir.exists(file.path(direct_lib, component)))
+  expect_true(dir.exists(file.path(support_lib, dependency)))
+  expect_false(dir.exists(file.path(direct_lib, dependency)))
+
+  generated <- create_metapackage(
+    "libsearchverse", component_archive, dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character()
+  )
+  runtime <- new.env(parent = baseenv())
+  sys.source(file.path(generated$path, "R", "utils.R"), runtime)
+  sys.source(file.path(generated$path, "R", "install_packages.R"), runtime)
+  sys.source(file.path(generated$path, "R", "attach.R"), runtime)
+  emitted <- runtime$libsearchverse_install(
+    pkg_dir = file.path(generated$path, "inst", "archives"),
+    cran_deps = "skip", verbose = FALSE, lib = generated_lib
+  )
+  expect_length(emitted$failed, 0L)
+  expect_length(emitted$skipped, 0L)
+  expect_true(dir.exists(file.path(generated_lib, component)))
+  expect_false(dir.exists(file.path(generated_lib, dependency)))
 })

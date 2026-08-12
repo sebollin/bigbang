@@ -142,13 +142,7 @@ msgstr ""
 msgid "Error processing package %s: %s"
 msgstr ""
 
-msgid "No component packages are installed; re-exports were not generated."
-msgstr ""
-
-msgid "No functions were found to re-export."
-msgstr ""
-
-msgid "Re-export file created with %d functions from %d packages."
+msgid "'reexport' is deprecated and ignored. Loading the generated metapackage attaches installed components, but their functions are not exported from the metapackage namespace."
 msgstr ""
 
 msgid "SAFETY: Path is too short and may be dangerous: %s"

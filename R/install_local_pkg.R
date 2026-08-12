@@ -92,9 +92,18 @@
 #'   than `"always"` is an error.
 #' @param verbose Logical. Whether to emit progress and summary messages. The
 #'   default follows `getOption("bigbang.verbose", interactive())`.
+#' @param lib Character. Library in which the local component must be installed
+#'   and verified when supplied explicitly. When omitted, the legacy lookup
+#'   considers all of `.libPaths()` and installs into its first entry. Non-local
+#'   dependencies may be available either in `lib` or anywhere on `.libPaths()`.
 #'
 #' @section Installation:
-#' This function installs packages into the user's active R library. Installation
+#' This function installs packages into `lib`, which defaults to the user's
+#' active R library. When `lib` is supplied explicitly, a component found only
+#' in another library is still installed into `lib`; non-local dependencies are
+#' resolved from `lib` plus `.libPaths()`. When `lib` is omitted, an installed
+#' component found anywhere on `.libPaths()` retains the pre-0.3.0 behavior.
+#' Installation
 #' occurs only when the user calls the function; loading `bigbang` never installs
 #' packages. With the default `cran_deps = "skip"`, it does not access the network.
 #' An installed package can be kept without reading its archive when
@@ -121,10 +130,23 @@ install_local_pkg <- function(
   # Added after 0.1.0, so they go last: a positional call written against
   # 0.1.0 passed verbose sixth, and must keep meaning verbose.
   force = FALSE,
-  upgrade = c("newer", "always", "never")
+  upgrade = c("newer", "always", "never"),
+  lib = .libPaths()[[1L]]
 ) {
+  lib_was_missing <- missing(lib)
   cran_deps <- match.arg(cran_deps)
   upgrade <- .resolve_upgrade_policy(force, upgrade, missing(upgrade))
+  if (!is.character(lib) || length(lib) != 1L || is.na(lib) || !nzchar(lib)) {
+    stop(.bb_tr("The installation library must be one non-empty path."),
+         call. = FALSE)
+  }
+  if (!dir.exists(lib) && !dir.create(lib, recursive = TRUE)) {
+    stop(.bb_trf("Could not create installation library: %s", lib),
+         call. = FALSE)
+  }
+  lib <- normalizePath(lib, winslash = "/", mustWork = TRUE)
+  dependency_libraries <- unique(c(lib, .libPaths()))
+  component_libraries <- if (lib_was_missing) dependency_libraries else lib
   failure_names <- if (is.character(package) && length(package) > 0L) {
     package
   } else {
@@ -163,7 +185,8 @@ install_local_pkg <- function(
 
   candidate_name <- sub("_.*", "", candidate$stem)
   installed_candidate <- tryCatch(
-    utils::packageVersion(candidate_name), error = function(e) NULL
+    utils::packageVersion(candidate_name, lib.loc = component_libraries),
+    error = function(e) NULL
   )
   unchanged_result <- function(reason) {
     if (isTRUE(verbose)) message(.bb_trf(
@@ -246,7 +269,8 @@ install_local_pkg <- function(
     # Metadata was read before installation, so the DESCRIPTION version remains
     # authoritative even when the filename has no version or disagrees with it.
     installed_version <- tryCatch(
-      utils::packageVersion(base_name), error = function(e) NULL
+      utils::packageVersion(base_name, lib.loc = component_libraries),
+      error = function(e) NULL
     )
     keep_installed <- !is.null(installed_version) && (
       identical(upgrade, "never") ||
@@ -340,7 +364,8 @@ install_local_pkg <- function(
 
     external <- setdiff(dependencies, inventory$packages)
     missing_external <- external[!vapply(
-      external, requireNamespace, logical(1), quietly = TRUE
+      external, requireNamespace, logical(1), quietly = TRUE,
+      lib.loc = dependency_libraries
     )]
     if (length(missing_external) > 0L && cran_deps != "install") {
       detail <- paste(missing_external, collapse = ", ")
@@ -361,7 +386,9 @@ install_local_pkg <- function(
       for (dependency in missing_external) {
         install_error <- tryCatch({
           # NA installs Depends, Imports and LinkingTo, not Suggests.
-          utils::install.packages(dependency, dependencies = NA, repos = repos)
+          utils::install.packages(
+            dependency, dependencies = NA, repos = repos, lib = lib
+          )
           NULL
         }, error = identity)
         if (inherits(install_error, "error")) {
@@ -369,7 +396,8 @@ install_local_pkg <- function(
         }
       }
       still_missing <- missing_external[!vapply(
-        missing_external, requireNamespace, logical(1), quietly = TRUE
+        missing_external, requireNamespace, logical(1), quietly = TRUE,
+        lib.loc = dependency_libraries
       )]
       if (length(still_missing) > 0L) {
         state$failed[[stem]] <- paste(
@@ -391,12 +419,14 @@ install_local_pkg <- function(
         install_target,
         repos = NULL,
         type = install_type,
-        dependencies = FALSE
+        dependencies = FALSE,
+        lib = lib
       )
       NULL
     }, error = identity)
     verified <- !inherits(install_error, "error") && tryCatch(
-      utils::packageVersion(base_name) == base::package_version(version_text),
+      utils::packageVersion(base_name, lib.loc = lib) ==
+        base::package_version(version_text),
       error = function(e) FALSE
     )
     if (!verified) {

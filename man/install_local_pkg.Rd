@@ -12,7 +12,8 @@ install_local_pkg(
   cran_deps = c("skip", "error", "install"),
   verbose = getOption("bigbang.verbose", interactive()),
   force = FALSE,
-  upgrade = c("newer", "always", "never")
+  upgrade = c("newer", "always", "never"),
+  lib = .libPaths()[[1L]]
 )
 }
 \arguments{
@@ -42,6 +43,11 @@ alias for \code{upgrade = "always"}.}
 when the archive is newer, \code{"always"} reinstalls, and \code{"never"} keeps any
 installed version. Explicitly combining \code{force = TRUE} with a value other
 than \code{"always"} is an error.}
+
+\item{lib}{Character. Library in which the local component must be installed
+and verified when supplied explicitly. When omitted, the legacy lookup
+considers all of \code{.libPaths()} and installs into its first entry. Non-local
+dependencies may be available either in \code{lib} or anywhere on \code{.libPaths()}.}
 }
 \value{
 Invisibly, a list describing installed, unchanged, failed, and
@@ -57,7 +63,12 @@ installed as source packages.
 }
 \section{Installation}{
 
-This function installs packages into the user's active R library. Installation
+This function installs packages into \code{lib}, which defaults to the user's
+active R library. When \code{lib} is supplied explicitly, a component found only
+in another library is still installed into \code{lib}; non-local dependencies are
+resolved from \code{lib} plus \code{.libPaths()}. When \code{lib} is omitted, an installed
+component found anywhere on \code{.libPaths()} retains the pre-0.3.0 behavior.
+Installation
 occurs only when the user calls the function; loading \code{bigbang} never installs
 packages. With the default \code{cran_deps = "skip"}, it does not access the network.
 An installed package can be kept without reading its archive when

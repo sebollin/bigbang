@@ -812,53 +812,29 @@ test_that("already installed messages report the installed version", {
   )
 })
 
-test_that("reexport = TRUE generates re-exports instead of failing", {
-  skip_on_cran()
+test_that("the deprecated reexport argument warns and is ignored", {
   sandbox <- tempfile("bigbang-reexport-")
-  source_root <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")
   destination <- file.path(sandbox, "destination")
-  component_lib <- file.path(sandbox, "lib")
-  dir.create(source_root, recursive = TRUE)
-  dir.create(archives)
+  dir.create(archives, recursive = TRUE)
   dir.create(destination)
-  dir.create(component_lib)
-  build_safety_archive("rexa", "1.0.0", source_root, archives)
-  build_safety_archive("rexb", "1.0.0", source_root, archives)
-
-  # The working re-export writer resolves component namespaces, so the
-  # components have to be installed for it to find anything to re-export.
-  for (stem in c("rexa_1.0.0", "rexb_1.0.0")) {
-    installed <- system2(
-      file.path(R.home("bin"), "R"),
-      c("CMD", "INSTALL", "-l", shQuote(component_lib),
-        shQuote(file.path(archives, paste0(stem, ".tar.gz")))),
-      stdout = FALSE, stderr = FALSE
-    )
-    expect_equal(installed, 0L)
-  }
-  old_libs <- .libPaths()
-  on.exit(.libPaths(old_libs), add = TRUE)
-  .libPaths(c(component_lib, old_libs))
-
-  # Every reexport = TRUE call used to abort here: the aborted block iterated the
-  # versioned archive stems, and asNamespace("rexa_1.0.0") cannot resolve.
-  result <- create_metapackage(
-    "reexportverse", c("rexa_1.0.0", "rexb_1.0.0"), archives,
-    dest_dir = destination, reexport = TRUE, document = FALSE, verbose = FALSE
+  toy <- system.file(
+    "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
   )
-  reexports <- file.path(result$path, "R", "reexports.R")
-  expect_true(file.exists(reexports))
-  contents <- paste(readLines(reexports, warn = FALSE), collapse = "\n")
-  expect_match(contents, "rexa", fixed = TRUE)
-  expect_match(contents, "rexb", fixed = TRUE)
-
-  # S3method(<name>, default) for every export was never right: it declares a
-  # method for a generic that does not exist.
-  namespace <- paste(
-    readLines(file.path(result$path, "NAMESPACE"), warn = FALSE), collapse = "\n"
+  file.copy(toy, archives)
+  result <- NULL
+  expect_warning(
+    result <- create_metapackage(
+      "reexportverse", "toycomponent_0.1.0", archives,
+      dest_dir = destination, reexport = TRUE, document = FALSE,
+      verbose = FALSE, import_deps = character(), force_deps = character()
+    ),
+    "deprecated and ignored"
   )
-  expect_false(grepl("S3method(rexa_value, default)", namespace, fixed = TRUE))
+  expect_false(file.exists(file.path(result$path, "R", "reexports.R")))
+  expect_false(any(grepl("importFrom\\(toycomponent", readLines(
+    file.path(result$path, "NAMESPACE"), warn = FALSE
+  ))))
 })
 
 test_that("an AppleDouble sibling does not hide the package root", {

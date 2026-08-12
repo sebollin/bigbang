@@ -19,15 +19,6 @@ round87_make_component <- function(source_root, archive_dir, name,
   archive
 }
 
-round87_install_component <- function(archive, library) {
-  status <- system2(
-    file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"),
-    c("CMD", "INSTALL", "-l", shQuote(library), shQuote(archive)),
-    stdout = FALSE, stderr = FALSE
-  )
-  expect_equal(status, 0L)
-}
-
 round87_build <- function(project, sandbox) {
   output <- withr::with_dir(sandbox, system2(
     file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"),
@@ -39,57 +30,56 @@ round87_build <- function(project, sandbox) {
   tarball
 }
 
-round87_build_with_library <- function(project, sandbox, library) {
-  library_paths <- unique(c(library, .libPaths()))
-  withr::with_envvar(
-    c(R_LIBS_USER = paste(library_paths, collapse = .Platform$path.sep)),
-    round87_build(project, sandbox)
-  )
-}
-
-test_that("update reconciles removed re-exports and component archives", {
+test_that("update reconciles legacy re-exports and removed component archives", {
   skip_on_cran()
   skip_if_not_installed("devtools")
   sandbox <- tempfile("bigbang-round87-update-")
   source_root <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")
   destination <- file.path(sandbox, "destination")
-  component_lib <- file.path(sandbox, "component-lib")
   recipient <- file.path(sandbox, "recipient")
   dir.create(source_root, recursive = TRUE)
   dir.create(archives)
   dir.create(destination)
-  dir.create(component_lib)
   dir.create(recipient)
   first <- round87_make_component(source_root, archives, "rounda")
   second <- round87_make_component(source_root, archives, "roundb")
 
-  old_libs <- .libPaths()
-  on.exit(.libPaths(old_libs), add = TRUE)
-  .libPaths(c(component_lib, old_libs))
-  round87_install_component(first, component_lib)
-  round87_install_component(second, component_lib)
-
   initial <- create_metapackage(
     "reconcileverse", c("rounda_1.0.0", "roundb_1.0.0"),
-    pkg_dir = archives, dest_dir = destination, reexport = TRUE,
+    pkg_dir = archives, dest_dir = destination,
     document = TRUE, verbose = FALSE, import_deps = character(),
-    force_deps = character()
+    force_deps = character(),
+    workflow = c("First" = "rounda", "Second" = "roundb")
   )
-  expect_true(file.exists(file.path(initial$path, "R", "reexports.R")))
+  legacy_reexport <- file.path(initial$path, "R", "reexports.R")
+  writeLines("legacy_value <- roundb::roundb_value", legacy_reexport)
+  legacy_manifest <- .manifest_records(
+    initial$path, exclude = .generation_manifest_name
+  )
+  .atomic_save_rds(
+    legacy_manifest, file.path(initial$path, .generation_manifest_name)
+  )
+  expect_true(file.exists(legacy_reexport))
   expect_true(file.exists(file.path(
     initial$path, "inst", "archives", "roundb_1.0.0.tar.gz"
   )))
 
   updated <- create_metapackage(
     "reconcileverse", "rounda_1.0.0", pkg_dir = archives,
-    dest_dir = destination, reexport = FALSE, document = TRUE,
+    dest_dir = destination, document = TRUE,
     verbose = FALSE, import_deps = character(), force_deps = character(),
-    update = TRUE
+    include_archives = FALSE, update = TRUE
   )
   expect_false(file.exists(file.path(updated$path, "R", "reexports.R")))
   expect_false(file.exists(file.path(
     updated$path, "inst", "archives", "roundb_1.0.0.tar.gz"
+  )))
+  expect_false(file.exists(file.path(
+    updated$path, "inst", "archives", "rounda_1.0.0.tar.gz"
+  )))
+  expect_false(file.exists(file.path(
+    updated$path, "vignettes", "workflow-reconcileverse.Rmd"
   )))
   expect_false(grepl("roundb", paste(
     readLines(file.path(updated$path, "NAMESPACE"), warn = FALSE),
@@ -99,7 +89,7 @@ test_that("update reconciles removed re-exports and component archives", {
     file.path(updated$path, "NAMESPACE"), warn = FALSE
   ))))
 
-  tarball <- round87_build_with_library(updated$path, sandbox, component_lib)
+  tarball <- round87_build(updated$path, sandbox)
   check_output <- withr::with_dir(sandbox, system2(
     file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"),
     c("CMD", "check", "--as-cran", shQuote(tarball)),
@@ -117,74 +107,64 @@ test_that("update reconciles removed re-exports and component archives", {
     stdout = FALSE, stderr = FALSE
   )
   expect_equal(install_status, 0L)
+  old_libs <- .libPaths()
+  on.exit(.libPaths(old_libs), add = TRUE)
   .libPaths(c(recipient, old_libs))
   loadNamespace("reconcileverse", lib.loc = recipient)
   install_function <- getExportedValue(
     "reconcileverse", "reconcileverse_install"
   )
-  install_result <- install_function(verbose = FALSE)
+  install_result <- install_function(pkg_dir = archives, verbose = FALSE)
   expect_true(any(grepl("^rounda", names(install_result$installed))))
   expect_true(dir.exists(file.path(recipient, "rounda")))
   expect_false(dir.exists(file.path(recipient, "roundb")))
 })
 
-test_that("re-exports install with or without documentation", {
+test_that("generated artifact option combinations pass R CMD check", {
   skip_on_cran()
   skip_if_not_installed("devtools")
-  sandbox <- tempfile("bigbang-round88-reexport-")
-  source_root <- file.path(sandbox, "sources")
+  sandbox <- tempfile("bigbang-generated-matrix-")
+  sources <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")
   destination <- file.path(sandbox, "destination")
-  recipient <- file.path(sandbox, "recipient")
-  dir.create(source_root, recursive = TRUE)
+  dir.create(sources, recursive = TRUE)
   dir.create(archives)
   dir.create(destination)
-  dir.create(recipient)
-  first <- round87_make_component(source_root, archives, "nodoca")
-  second <- round87_make_component(source_root, archives, "nodocb")
+  round87_make_component(sources, archives, "matrixa")
 
-  old_libs <- .libPaths()
-  on.exit(.libPaths(old_libs), add = TRUE)
-  .libPaths(c(recipient, old_libs))
-  round87_install_component(first, recipient)
-  round87_install_component(second, recipient)
-
-  no_doc <- create_metapackage(
-    "nodocverse", c("nodoca_1.0.0", "nodocb_1.0.0"), pkg_dir = archives,
-    dest_dir = destination, reexport = TRUE, document = FALSE,
-    verbose = FALSE, import_deps = character(), force_deps = character()
+  combinations <- expand.grid(
+    include_archives = c(FALSE, TRUE),
+    workflow = c(FALSE, TRUE),
+    stringsAsFactors = FALSE
   )
-  no_doc_namespace <- readLines(file.path(no_doc$path, "NAMESPACE"), warn = FALSE)
-  expect_true(any(grepl("importFrom(nodoca, nodoca_value)", no_doc_namespace,
-                        fixed = TRUE)))
-  expect_true(any(grepl("importFrom(nodocb, nodocb_value)", no_doc_namespace,
-                        fixed = TRUE)))
-  no_doc_tar <- round87_build_with_library(no_doc$path, sandbox, recipient)
-  no_doc_status <- system2(
-    file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"),
-    c("CMD", "INSTALL", "-l", shQuote(recipient), shQuote(no_doc_tar)),
-    stdout = FALSE, stderr = FALSE
+  r <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
   )
-  expect_equal(no_doc_status, 0L)
-
-  documented <- create_metapackage(
-    "docreexportverse", c("nodoca_1.0.0", "nodocb_1.0.0"), pkg_dir = archives,
-    dest_dir = destination, reexport = TRUE, document = TRUE,
-    verbose = FALSE, import_deps = character(), force_deps = character()
-  )
-  documented_namespace <- readLines(
-    file.path(documented$path, "NAMESPACE"), warn = FALSE
-  )
-  import_lines <- documented_namespace[grepl("^importFrom\\(", documented_namespace)]
-  expect_length(unique(gsub("[[:space:]]", "", import_lines)),
-                length(import_lines))
-  documented_tar <- round87_build_with_library(documented$path, sandbox, recipient)
-  documented_status <- system2(
-    file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"),
-    c("CMD", "INSTALL", "-l", shQuote(recipient), shQuote(documented_tar)),
-    stdout = FALSE, stderr = FALSE
-  )
-  expect_equal(documented_status, 0L)
+  for (i in seq_len(nrow(combinations))) {
+    name <- paste0("matrixverse", i)
+    workflow <- if (combinations$workflow[[i]]) {
+      c("Stage" = "matrixa")
+    } else {
+      NULL
+    }
+    generated <- create_metapackage(
+      name, "matrixa_1.0.0", pkg_dir = archives, dest_dir = destination,
+      document = TRUE, verbose = FALSE, import_deps = character(),
+      force_deps = character(), workflow = workflow,
+      include_archives = combinations$include_archives[[i]]
+    )
+    tarball <- round87_build(generated$path, sandbox)
+    output <- withr::with_dir(sandbox, system2(
+      r, c("CMD", "check", "--as-cran", "--no-manual", shQuote(tarball)),
+      stdout = TRUE, stderr = TRUE
+    ))
+    status <- output[grepl("^Status:", output)]
+    expect_equal(length(status), 1L, info = paste(output, collapse = "\n"))
+    expect_false(
+      grepl("ERROR|WARNING", status),
+      info = paste(name, paste(output, collapse = "\n"), sep = "\n")
+    )
+  }
 })
 
 test_that("atomic writer leftovers are excluded from generated tarballs", {

@@ -370,6 +370,7 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
                                    lib = .libPaths()[[1L]]) {{
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
+  dependency_libraries <- unique(c(lib, .libPaths()))
   resolved <- tryCatch(
     resolve_component_archive(package, pkg_dir, ext),
     error = function(e) e
@@ -444,7 +445,7 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
   missing_nonlocal <- setdiff(dependencies, local_names)
   missing_nonlocal <- missing_nonlocal[!vapply(
     missing_nonlocal, requireNamespace, logical(1), quietly = TRUE,
-    lib.loc = lib
+    lib.loc = dependency_libraries
   )]
   if (length(missing_nonlocal) > 0L && cran_deps != "install") {{
     detail <- paste(missing_nonlocal, collapse = ", ")
@@ -494,7 +495,7 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
 
   missing <- dependencies[!vapply(
     dependencies, requireNamespace, logical(1), quietly = TRUE,
-    lib.loc = lib
+    lib.loc = dependency_libraries
   )]
   if (length(missing) > 0L) {{
     return(list(
@@ -773,7 +774,9 @@ topological_order <- function(adjacency) {{
 #\' @param verbose Logical progress toggle.
 #\' @return Invisibly, installation, failure, skip, and order information.
 #\' @param only Optional component names; local dependencies are added.
-#\' @param lib Character library in which to install and verify components.
+#\' @param lib Character library in which components are installed and verified.
+#\'   A component found only in another library is installed into `lib`, while
+#\'   non-local dependencies may be available in `lib` or any `.libPaths()` entry.
 #\' @keywords internal
 #\'
 #\' @examples
@@ -802,6 +805,7 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     stop(.meta_trf("Could not create installation library: %s", lib),
          call. = FALSE)
   }}
+  lib <- normalizePath(lib, winslash = "/", mustWork = TRUE)
   if (!is.null(only)) {{
     if (!is.character(only) || anyNA(only) || any(!nzchar(only))) {{
       stop(.meta_tr("\'only\' must contain component package names."),
@@ -921,7 +925,6 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
 #' @param ext Character archive extension.
 #' @param dest_dir Character R output directory.
 #' @param implicit_deps Character implicit dependencies.
-#' @param reexport Logical re-export toggle.
 #' @param authors Character Authors@R expression.
 #' @param description Character metapackage description.
 #' @param license Character license declaration.
@@ -936,7 +939,6 @@ write_metapackage_files <- function(
     ext = ".tar.gz",
     dest_dir = "R",
     implicit_deps = NULL,
-    reexport = FALSE,
     authors = "person('First', 'Last', email = 'first.last@example.com', role = c('aut', 'cre'))",
     description = "Local Package Metapackage",
     license = "MIT + file LICENSE",
@@ -1655,27 +1657,6 @@ zzz = '
       if (verbose) {
         message(.bb_trf("%s.R already exists and will not be overwritten.", file_name))
       }
-    }
-  }
-
-  # Generate re-exports when requested.
-  if (reexport) {
-    reexport_result <- write_reexports_file(
-      name = name,
-      packages = packages,
-      dest_dir = dest_dir,
-      verbose = verbose
-    )
-    if (!is.null(reexport_result) &&
-        length(reexport_result$namespace_imports) > 0L) {
-      namespace_path <- file.path(dirname(dest_dir), "NAMESPACE")
-      namespace_lines <- readLines(namespace_path, warn = FALSE,
-                                   encoding = "UTF-8")
-      namespace_lines <- c(
-        namespace_lines,
-        setdiff(reexport_result$namespace_imports, namespace_lines)
-      )
-      .write_utf8(namespace_lines, namespace_path)
     }
   }
 

@@ -41,7 +41,7 @@ underscores \verb{_}).}
 packages to include. An existing file is always used as a path; otherwise
 the element is resolved as a stem in \code{pkg_dir}, e.g. \code{"myPackage_1.0.0"}.
 Existing paths may come from different directories. A single existing text
-file without a recognised archive extension is treated as a manifest, with
+file without a recognized archive extension is treated as a manifest, with
 one component per line; relative paths in that file are resolved relative
 to the manifest directory, absolute paths and \code{~} paths are used as written,
 and bare archive filenames may also be found in \code{pkg_dir}.}
@@ -59,9 +59,11 @@ element is an existing archive path.}
 the generated meta-package exclusively inside this directory; there is no
 default path. Use \code{tempdir()} for disposable output.}
 
-\item{reexport}{Logical. If \code{TRUE}, re-exports the component packages'
-functions so they are reachable directly through the meta-package (tidyverse
-style). Defaults to \code{FALSE}.}
+\item{reexport}{Deprecated logical argument retained in its original position
+for positional-call compatibility. It is ignored. Loading the generated
+meta-package attaches installed components, making their exported functions
+available on the search path, but it does not copy those functions into the
+meta-package namespace.}
 
 \item{document}{Logical. If \code{TRUE}, runs \code{devtools::document()}
 automatically. Defaults to \code{TRUE}.}
@@ -214,12 +216,10 @@ path has to be agreed on between machines. Network access is needed only when
 a component depends on a package that must come from a repository, which
 happens exclusively under \code{cran_deps = "install"}.
 
-If \code{reexport = TRUE}, a \code{reexports.R} file is generated so users can
-reach the component functions directly through the meta-package
-(\code{meta::fun()} instead of \code{component::fun()}), tidyverse style. The required
-\code{importFrom} directives are written directly to \code{NAMESPACE}, so re-exports
-remain installable when \code{document = FALSE}; automatic documentation adds the
-corresponding help files when \code{document = TRUE}.
+Loading the generated meta-package attaches installed components, so their
+exported functions can be called directly or through \verb{component::function()}.
+Component functions are not copied into the meta-package namespace, so
+\code{meta::component_function()} is not supported.
 }
 
 \section{Requirements}{

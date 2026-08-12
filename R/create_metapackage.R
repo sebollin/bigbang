@@ -38,7 +38,6 @@
 .generation_manifest_name <- ".bigbang-manifest.rds"
 
 .planned_generation_files <- function(name, components, workflow = NULL,
-                                      reexport = FALSE,
                                       include_archives = TRUE,
                                       license = "MIT + file LICENSE") {
   files <- c(
@@ -53,7 +52,6 @@
     file.path("inst", "po", "es", "LC_MESSAGES", paste0("R-", name, ".mo")),
     .generation_manifest_name
   )
-  if (isTRUE(reexport)) files <- c(files, file.path("R", "reexports.R"))
   if (grepl("file[[:space:]]+LICENSE", license, ignore.case = TRUE)) {
     files <- c(files, "LICENSE")
   }
@@ -303,7 +301,7 @@
 #'   packages to include. An existing file is always used as a path; otherwise
 #'   the element is resolved as a stem in `pkg_dir`, e.g. `"myPackage_1.0.0"`.
 #'   Existing paths may come from different directories. A single existing text
-#'   file without a recognised archive extension is treated as a manifest, with
+#'   file without a recognized archive extension is treated as a manifest, with
 #'   one component per line; relative paths in that file are resolved relative
 #'   to the manifest directory, absolute paths and `~` paths are used as written,
 #'   and bare archive filenames may also be found in `pkg_dir`.
@@ -316,9 +314,11 @@
 #' @param dest_dir Character. Required destination directory. The function writes
 #'   the generated meta-package exclusively inside this directory; there is no
 #'   default path. Use `tempdir()` for disposable output.
-#' @param reexport Logical. If `TRUE`, re-exports the component packages'
-#'   functions so they are reachable directly through the meta-package (tidyverse
-#'   style). Defaults to `FALSE`.
+#' @param reexport Deprecated logical argument retained in its original position
+#'   for positional-call compatibility. It is ignored. Loading the generated
+#'   meta-package attaches installed components, making their exported functions
+#'   available on the search path, but it does not copy those functions into the
+#'   meta-package namespace.
 #' @param document Logical. If `TRUE`, runs `devtools::document()`
 #'   automatically. Defaults to `TRUE`.
 #' @param verbose Logical. If `TRUE`, shows verbose messages. The default follows
@@ -442,12 +442,10 @@
 #' a component depends on a package that must come from a repository, which
 #' happens exclusively under `cran_deps = "install"`.
 #'
-#' If `reexport = TRUE`, a `reexports.R` file is generated so users can
-#' reach the component functions directly through the meta-package
-#' (`meta::fun()` instead of `component::fun()`), tidyverse style. The required
-#' `importFrom` directives are written directly to `NAMESPACE`, so re-exports
-#' remain installable when `document = FALSE`; automatic documentation adds the
-#' corresponding help files when `document = TRUE`.
+#' Loading the generated meta-package attaches installed components, so their
+#' exported functions can be called directly or through `component::function()`.
+#' Component functions are not copied into the meta-package namespace, so
+#' `meta::component_function()` is not supported.
 #'
 #' @section Requirements:
 #' - Each component must be an existing archive path or a stem resolvable in
@@ -512,6 +510,15 @@ create_metapackage <- function(
   debug <- isTRUE(debug)
   on_component_error <- match.arg(on_component_error)
   install_upgrade <- match.arg(install_upgrade)
+  if (!missing(reexport)) {
+    warning(.bb_tr(
+      paste0(
+        "'reexport' is deprecated and ignored. Loading the generated ",
+        "metapackage attaches installed components, but their functions are ",
+        "not exported from the metapackage namespace."
+      )
+    ), call. = FALSE)
+  }
 
   # Validate public arguments before touching the filesystem.
   if (missing(dest_dir) || is.null(dest_dir) ||
@@ -687,7 +694,7 @@ create_metapackage <- function(
       components = components,
       order = .component_topological_order(components),
       files = .planned_generation_files(
-        name, components, workflow, reexport, include_archives,
+        name, components, workflow, include_archives,
         license = license
       ),
       findings = generation_findings,
@@ -729,7 +736,7 @@ create_metapackage <- function(
     update_manifest <- .validate_update_manifest(project_dir)
     requested_files <- setdiff(
       .planned_generation_files(
-        name, resolved_components$components, workflow, reexport,
+        name, resolved_components$components, workflow,
         include_archives, license = license
       ),
       .generation_manifest_name
@@ -926,14 +933,6 @@ create_metapackage <- function(
     verbose = debug
   )
 
-  # Re-exports are written by write_reexports_file(), reached through
-  # write_metapackage_files() below. It receives component names, resolves each
-  # namespace, and distinguishes S3 generics from ordinary functions. An earlier
-  # block here duplicated that work incorrectly: it iterated the versioned
-  # archive stems, so asNamespace() could never resolve them and every
-  # reexport = TRUE call failed before reaching the working path, and it declared
-  # S3method(<name>, default) for every export whether or not it was a generic.
-
   log_debug("NAMESPACE file created")
 
   # Generate the component installation engine.
@@ -1087,7 +1086,6 @@ StripTrailingWhitespace: Yes"
     archive_stems = archive_stems,
     dest_dir = file.path(project_dir, "R"),
     implicit_deps = hard_implicit_deps,
-    reexport = reexport,
     include_archives = include_archives,
     verbose = debug,
     overwrite = update,
@@ -1139,9 +1137,7 @@ StripTrailingWhitespace: Yes"
     message(.bb_tr("Install package 'devtools' to generate documentation automatically."))
   }
 
-  # Roxygen and direct generation can both contribute importFrom directives
-  # for re-exports. Keep the emitted NAMESPACE deterministic and duplicate-free
-  # in either documentation mode.
+  # Keep the emitted NAMESPACE deterministic when documentation rewrites it.
   .deduplicate_namespace_imports(file.path(project_dir, "NAMESPACE"))
 
   manifest <- .manifest_records(project_dir, exclude = .generation_manifest_name)
@@ -1153,6 +1149,7 @@ StripTrailingWhitespace: Yes"
       name = name,
       packages = component_packages,
       archives = archive_stems,
+      order = .component_topological_order(components),
       local_dependencies = local_deps,
       cran_dependencies = cran_deps,
       implicit_dependencies = detected_implicit_deps,

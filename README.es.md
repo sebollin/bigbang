@@ -99,6 +99,11 @@ library(equipoverse)
 equipoverse_install()
 ```
 
+Las funciones exportadas por los componentes adjuntos quedan disponibles en
+forma directa (por ejemplo, `informe()`) o mediante su propio espacio de nombres
+(`reportes::informe()`). No se copian al espacio de nombres del metapaquete, por
+lo que `equipoverse::informe()` no está disponible.
+
 `equipoverse` lleva sus componentes adentro, así que la llamada no necesita
 argumentos y eso es todo lo que tiene que hacer quien lo recibe: le pasás el
 `equipoverse_0.1.0.tar.gz` construido y nada más. Si preferís que los archivos

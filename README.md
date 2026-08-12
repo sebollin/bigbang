@@ -129,6 +129,10 @@ library(teamverse)                 # attaches what is already installed
 teamverse_install()                # installs them, in dependency order
 ```
 
+Attached component exports are available directly (for example, `report()`)
+or through their own namespace (`reports::report()`). They are not copied into
+the metapackage namespace, so `teamverse::report()` is not supported.
+
 `teamverse` carries its components, so the call takes no arguments and that is
 all anyone who receives it has to do. Hand over the built
 `teamverse_0.1.0.tar.gz` and nothing else: no folder of archives alongside it,

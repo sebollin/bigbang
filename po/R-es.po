@@ -142,14 +142,8 @@ msgstr "No se encontró el directorio R del paquete: %s"
 msgid "Error processing package %s: %s"
 msgstr "Error al procesar el paquete %s: %s"
 
-msgid "No component packages are installed; re-exports were not generated."
-msgstr "No hay paquetes componentes instalados; no se generaron reexportaciones."
-
-msgid "No functions were found to re-export."
-msgstr "No se encontraron funciones para reexportar."
-
-msgid "Re-export file created with %d functions from %d packages."
-msgstr "Archivo de reexportaciones creado con %d funciones de %d paquetes."
+msgid "'reexport' is deprecated and ignored. Loading the generated metapackage attaches installed components, but their functions are not exported from the metapackage namespace."
+msgstr "'reexport' está deprecado y se ignora. Cargar el metapaquete generado adjunta los componentes instalados, pero sus funciones no se exportan desde el espacio de nombres del metapaquete."
 
 msgid "SAFETY: Path is too short and may be dangerous: %s"
 msgstr "SEGURIDAD: La ruta es demasiado corta y puede ser peligrosa: %s"

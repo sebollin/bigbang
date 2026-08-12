@@ -74,7 +74,7 @@ test_that("generator internals use the English names", {
   namespace <- asNamespace("bigbang")
   expected <- c(
     "extract_dependencies", "classify_dependencies",
-    "detect_implicit_dependencies", "write_reexports_file",
+    "detect_implicit_dependencies",
     "write_basic_vignette", "write_metapackage_files"
   )
   expect_true(all(vapply(expected, exists, logical(1), envir = namespace, inherits = FALSE)))
