@@ -249,8 +249,11 @@ all, so it is a safe way to see what a call would do before it does it.
   files it wrote together with their content hashes; `update` rewrites only
   those, and refuses to run if the manifest is missing or if a generated file was
   modified or removed by hand. Files bigbang did not write are never touched.
-  Generated files and shipped archives removed from the new plan are reconciled
-  out of the previous manifest.
+  Before changing an existing project, bigbang backs up every generated file
+  and its manifest. A failed update restores that state so the same update can
+  be retried. Both dry runs and real results list removed paths in
+  `removed_files`. Removing a component removes its shipped archive, which may
+  be the last available copy.
   Updates also refuse to write through symbolic links inside the generated
   project, including links in parent directories of generated files.
 - `install_upgrade` fixes the default upgrade policy of the installer that gets

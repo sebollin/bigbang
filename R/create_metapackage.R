@@ -155,6 +155,65 @@
   manifest
 }
 
+.create_update_backup <- function(project_dir, manifest) {
+  files <- unique(c(manifest$files, .generation_manifest_name))
+  backup_dir <- tempfile("bigbang-update-backup-")
+  if (!dir.create(backup_dir)) {
+    stop(.bb_trf("Could not create temporary directory for %s", project_dir),
+         call. = FALSE)
+  }
+  complete <- FALSE
+  on.exit({
+    if (!complete) unlink(backup_dir, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
+
+  for (relative in files) {
+    source <- file.path(project_dir, relative)
+    destination <- file.path(backup_dir, relative)
+    parent <- dirname(destination)
+    if (!dir.exists(parent) && !dir.create(parent, recursive = TRUE)) {
+      stop(.bb_trf("Could not create temporary directory for %s", relative),
+           call. = FALSE)
+    }
+    if (!file.copy(source, destination, overwrite = FALSE)) {
+      stop(.bb_trf("Could not back up generated file: %s", source),
+           call. = FALSE)
+    }
+  }
+  complete <- TRUE
+  list(path = backup_dir, files = files)
+}
+
+.restore_update_backup <- function(project_dir, backup) {
+  failures <- character()
+  for (relative in backup$files) {
+    source <- file.path(backup$path, relative)
+    destination <- file.path(project_dir, relative)
+    restored <- tryCatch({
+      .atomic_copy(source, destination)
+      TRUE
+    }, error = function(e) FALSE)
+    if (!restored) failures <- c(failures, relative)
+  }
+  if (length(failures) > 0L) {
+    warning(.bb_trf(
+      "Could not restore generated files after a failed update: %s",
+      paste(failures, collapse = ", ")
+    ), call. = FALSE)
+  }
+  invisible(length(failures) == 0L)
+}
+
+.discard_update_backup <- function(backup) {
+  if (is.null(backup)) return(invisible(NULL))
+  unlink(backup$path, recursive = TRUE, force = TRUE)
+  invisible(NULL)
+}
+
+.stale_unlink <- function(path) {
+  unlink(path, recursive = FALSE, force = TRUE)
+}
+
 .remove_stale_generation_files <- function(project_dir, files) {
   files <- setdiff(files, .generation_manifest_name)
   if (length(files) == 0L) return(invisible(NULL))
@@ -176,7 +235,7 @@
         path = project_dir, files = relative
       )
     }
-    if (unlink(path, recursive = FALSE, force = TRUE) != 0L) {
+    if (.stale_unlink(path) != 0L) {
       stop(.bb_trf("Could not remove completely: %s", path), call. = FALSE)
     }
   }
@@ -375,7 +434,12 @@
 #'   when its bigbang manifest is present and all generated files are unchanged.
 #'   Files outside that manifest are never touched. Updates are refused when a
 #'   manifest file or any path component inside the generated project is a
-#'   symbolic link, so writes cannot escape the project tree.
+#'   symbolic link, so writes cannot escape the project tree. Generated files
+#'   no longer in the plan are reported in `removed_files`. Removing a component
+#'   also removes its shipped archive, which may be the last available copy.
+#'   Before changing the project, an update backs up every generated file and
+#'   its manifest. A failed update restores that state so the same update can be
+#'   retried.
 #' @param install_upgrade Character default upgrade policy emitted in the
 #'   generated installer function: "newer", "always", or "never".
 #'   This controls whether a generated installer keeps newer installed
@@ -384,8 +448,8 @@
 #'   to `FALSE`.
 #'
 #' @return Invisibly, a `bigbang_result` containing the generated path,
-#'   component archives, dependency classification, applied tolerations, and
-#'   documentation status.
+#'   component archives, dependency classification, applied tolerations,
+#'   generated files removed by an update, and documentation status.
 #'
 #' @details
 #' The function performs the following steps:
@@ -680,49 +744,8 @@ create_metapackage <- function(
   project_dir <- normalizePath(
     file.path(dest_dir, name), winslash = "/", mustWork = FALSE
   )
-  generation_findings <- list(
-    metadata = .generation_metadata_findings(components, tolerate),
-    tolerated = tolerated,
-    omitted = omitted
-  )
-  if (isTRUE(dry_run)) {
-    result <- structure(list(
-      path = project_dir,
-      name = name,
-      packages = component_packages,
-      archives = archive_stems,
-      components = components,
-      order = .component_topological_order(components),
-      files = .planned_generation_files(
-        name, components, workflow, include_archives,
-        license = license
-      ),
-      findings = generation_findings,
-      local_dependencies = local_deps,
-      cran_dependencies = cran_deps,
-      implicit_dependencies = detected_implicit_deps,
-      tolerated = tolerated,
-      omitted = omitted,
-      workflow = workflow,
-      documented = FALSE,
-      dry_run = TRUE,
-      updated = FALSE
-    ), class = "bigbang_result")
-    return(invisible(result))
-  }
-
-  # Debug logger.
-  log_debug <- function(debug_message) {
-    if (debug) message(paste0("DEBUG: ", debug_message))
-  }
-
-  log_debug("Starting create_metapackage()")
-
-
-  project_created <- FALSE
-  destination_created <- !dir.exists(dest_dir)
-  generation_complete <- FALSE
   update_manifest <- NULL
+  stale_files <- character()
   if (isTRUE(update)) {
     if (!dir.exists(project_dir)) {
       .bigbang_abort(
@@ -753,7 +776,54 @@ create_metapackage <- function(
       )
     }
     stale_files <- setdiff(update_manifest$files, requested_files)
-    .remove_stale_generation_files(project_dir, stale_files)
+  }
+  generation_findings <- list(
+    metadata = .generation_metadata_findings(components, tolerate),
+    tolerated = tolerated,
+    omitted = omitted
+  )
+  if (isTRUE(dry_run)) {
+    result <- structure(list(
+      path = project_dir,
+      name = name,
+      packages = component_packages,
+      archives = archive_stems,
+      components = components,
+      order = .component_topological_order(components),
+      files = .planned_generation_files(
+        name, components, workflow, include_archives,
+        license = license
+      ),
+      removed_files = stale_files,
+      findings = generation_findings,
+      local_dependencies = local_deps,
+      cran_dependencies = cran_deps,
+      implicit_dependencies = detected_implicit_deps,
+      tolerated = tolerated,
+      omitted = omitted,
+      workflow = workflow,
+      documented = FALSE,
+      dry_run = TRUE,
+      updated = FALSE
+    ), class = "bigbang_result")
+    return(invisible(result))
+  }
+
+  # Debug logger.
+  log_debug <- function(debug_message) {
+    if (debug) message(paste0("DEBUG: ", debug_message))
+  }
+
+  log_debug("Starting create_metapackage()")
+
+
+  project_created <- FALSE
+  destination_created <- !dir.exists(dest_dir)
+  generation_complete <- FALSE
+  update_backup <- if (isTRUE(update)) {
+    .create_update_backup(project_dir, update_manifest)
+  } else {
+    NULL
   }
   documentation_search <- NULL
   documentation_namespaces <- NULL
@@ -798,7 +868,32 @@ create_metapackage <- function(
       # unlink() to remove an empty directory on all supported platforms.
       .rollback_unlink(dest_dir)
     }
+    backup_restored <- TRUE
+    if (!generation_complete && !is.null(update_backup)) {
+      backup_restored <- .restore_update_backup(project_dir, update_backup)
+    }
+    if (generation_complete || backup_restored) {
+      .discard_update_backup(update_backup)
+    } else if (!is.null(update_backup)) {
+      warning(.bb_trf(
+        "The update backup was retained for manual recovery at: %s",
+        update_backup$path
+      ), call. = FALSE)
+    }
   }, add = TRUE)
+
+  # Reconcile before documentation so stale generated R code cannot be loaded
+  # by roxygen. The update backup and rollback above are already active, so a
+  # failure here or later restores every pre-existing generated file.
+  if (length(stale_files) > 0L) {
+    if (verbose) {
+      message(.bb_trf(
+        "Removing generated files no longer in the plan: %s",
+        paste(stale_files, collapse = ", ")
+      ))
+    }
+    .remove_stale_generation_files(project_dir, stale_files)
+  }
 
   log_debug(glue::glue("New project path: {project_dir}"))
 
@@ -1150,6 +1245,7 @@ StripTrailingWhitespace: Yes"
       packages = component_packages,
       archives = archive_stems,
       order = .component_topological_order(components),
+      removed_files = stale_files,
       local_dependencies = local_deps,
       cran_dependencies = cran_deps,
       implicit_dependencies = detected_implicit_deps,

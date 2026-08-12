@@ -29,6 +29,10 @@ print.bigbang_result <- function(x, ...) {
   cat("  Components: ", paste(x$packages, collapse = ", "), "\n", sep = "")
   if (isTRUE(x$dry_run)) cat("  Mode: dry run (no files written)\n")
   if (isTRUE(x$updated)) cat("  Mode: updated from generation manifest\n")
+  if (length(x$removed_files) > 0L) {
+    label <- if (isTRUE(x$dry_run)) "  Would remove: " else "  Removed: "
+    cat(label, paste(x$removed_files, collapse = ", "), "\n", sep = "")
+  }
   if (is.data.frame(x$omitted) && nrow(x$omitted) > 0L) {
     cat("  Omitted: ", paste(x$omitted$component, collapse = ", "), "\n", sep = "")
   }

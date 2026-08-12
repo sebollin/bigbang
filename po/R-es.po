@@ -412,5 +412,17 @@ msgstr "No se puede actualizar %s porque los archivos generados solicitados no e
 msgid "Cannot update %s because generated path components are symbolic links: %s. Refusing to write outside the project."
 msgstr "No se puede actualizar %s porque algunos componentes de la ruta generada son enlaces simbólicos: %s. Se rechaza escribir fuera del proyecto."
 
+msgid "Could not back up generated file: %s"
+msgstr "No se pudo respaldar el archivo generado: %s"
+
+msgid "Could not restore generated files after a failed update: %s"
+msgstr "No se pudieron restaurar los archivos generados después de una actualización fallida: %s"
+
+msgid "The update backup was retained for manual recovery at: %s"
+msgstr "El respaldo de la actualización se conservó para recuperación manual en: %s"
+
+msgid "Removing generated files no longer in the plan: %s"
+msgstr "Eliminando archivos generados que ya no están en el plan: %s"
+
 msgid "Component archive %s could not be read; skip propagation uses filename-derived name '%s'; dependents may fail on the recipient if that name differs from Package."
 msgstr "No se pudo leer el archivo del componente %s; el arrastre del descarte usa el nombre derivado del archivo '%s'; los dependientes pueden fallar en el receptor si ese nombre difiere de Package."

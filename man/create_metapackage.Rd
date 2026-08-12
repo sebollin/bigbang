@@ -138,7 +138,12 @@ fail on the recipient.}
 when its bigbang manifest is present and all generated files are unchanged.
 Files outside that manifest are never touched. Updates are refused when a
 manifest file or any path component inside the generated project is a
-symbolic link, so writes cannot escape the project tree.}
+symbolic link, so writes cannot escape the project tree. Generated files
+no longer in the plan are reported in \code{removed_files}. Removing a component
+also removes its shipped archive, which may be the last available copy.
+Before changing the project, an update backs up every generated file and
+its manifest. A failed update restores that state so the same update can be
+retried.}
 
 \item{install_upgrade}{Character default upgrade policy emitted in the
 generated installer function: "newer", "always", or "never".
@@ -147,8 +152,8 @@ versions, reinstalls every component, or skips archive inspection.}
 }
 \value{
 Invisibly, a \code{bigbang_result} containing the generated path,
-component archives, dependency classification, applied tolerations, and
-documentation status.
+component archives, dependency classification, applied tolerations,
+generated files removed by an update, and documentation status.
 }
 \description{
 Creates the full structure and files of a meta-package that installs, manages

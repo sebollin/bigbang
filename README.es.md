@@ -220,8 +220,11 @@ segura de ver qué haría una llamada antes de que la haga.
   manifiesto de los archivos que escribió con sus hashes de contenido; `update`
   reescribe solo esos, y se niega a correr si falta el manifiesto o si algún
   archivo generado fue modificado o borrado a mano. Lo que bigbang no escribió no
-  se toca nunca. Los archivos generados y archivos embarcados que ya no forman
-  parte del plan nuevo se reconcilian y se quitan del manifiesto anterior.
+  se toca nunca. Antes de cambiar un proyecto existente, bigbang respalda cada
+  archivo generado y su manifiesto. Si el update falla, restaura ese estado para
+  poder reintentarlo. Tanto el dry run como el resultado real enumeran las rutas
+  eliminadas en `removed_files`.
+  Quitar un componente elimina su archivo embarcado, que puede ser la última copia.
   También se niega a escribir a través de enlaces simbólicos
   dentro del proyecto generado, incluidos los enlaces en directorios padre de
   los archivos generados.

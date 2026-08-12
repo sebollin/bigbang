@@ -412,5 +412,17 @@ msgstr ""
 msgid "Cannot update %s because generated path components are symbolic links: %s. Refusing to write outside the project."
 msgstr ""
 
+msgid "Could not back up generated file: %s"
+msgstr ""
+
+msgid "Could not restore generated files after a failed update: %s"
+msgstr ""
+
+msgid "The update backup was retained for manual recovery at: %s"
+msgstr ""
+
+msgid "Removing generated files no longer in the plan: %s"
+msgstr ""
+
 msgid "Component archive %s could not be read; skip propagation uses filename-derived name '%s'; dependents may fail on the recipient if that name differs from Package."
 msgstr ""

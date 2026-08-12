@@ -85,8 +85,13 @@ user updating from 0.1.0 should read both sections.
   regeneration cannot write outside the project tree.
 - When components or options are dropped, `update` reconciles: generated files
   and shipped component archives that the new plan no longer includes are
-  removed, so the regenerated meta-package cannot end up importing from a
-  component it no longer declares.
+  removed transactionally, so the regenerated meta-package cannot end up
+  importing from a component it no longer declares. Before changing an existing
+  project, bigbang backs up all generated files and its manifest. If generation
+  or reconciliation fails, that state is restored and the update remains
+  retryable. Dry runs and completed updates report the affected paths in
+  `removed_files`; removing a component may remove the last available copy of
+  its shipped archive.
 
 ## Generated installers
 

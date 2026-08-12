@@ -30,7 +30,7 @@ Description: Turns a curated set of package archives (.tar.gz, .zip) into one
     Installation needs no repository access unless a component depends on a
     package that only exists in one, which suits teams working behind
     institutional firewalls. Generates the complete meta-package scaffold,
-    including re-exports, vignettes and documentation.
+    including installation helpers, vignettes and documentation.
 License: GPL (>= 3)
 URL: https://sebollin.github.io/bigbang/,
     https://github.com/sebollin/bigbang
