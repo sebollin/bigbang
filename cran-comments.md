@@ -68,7 +68,8 @@ does not need to read archives it will not use.
 `create_metapackage(update = TRUE)` regenerates in place, which relaxes the rule
 that a destination must be new or empty. It is constrained: generation records a
 manifest of the files it wrote together with their content hashes, `update`
-rewrites only those files, and it refuses to proceed if the manifest is absent or
+rewrites only those files and reconciles generated files and shipped archives
+removed from the new plan. It refuses to proceed if the manifest is absent or
 if any recorded file was modified or removed. Files the package did not write are
 never touched; updates also refuse to write through symbolic links in the
 generated project. Nothing is installed or removed unless the user calls a

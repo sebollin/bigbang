@@ -215,7 +215,9 @@ segura de ver qué haría una llamada antes de que la haga.
   manifiesto de los archivos que escribió con sus hashes de contenido; `update`
   reescribe solo esos, y se niega a correr si falta el manifiesto o si algún
   archivo generado fue modificado o borrado a mano. Lo que bigbang no escribió no
-  se toca nunca. También se niega a escribir a través de enlaces simbólicos
+  se toca nunca. Los archivos generados y archivos embarcados que ya no forman
+  parte del plan nuevo se reconcilian y se quitan del manifiesto anterior.
+  También se niega a escribir a través de enlaces simbólicos
   dentro del proyecto generado, incluidos los enlaces en directorios padre de
   los archivos generados.
 - `install_upgrade` fija la política de actualización por defecto del instalador

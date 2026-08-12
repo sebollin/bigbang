@@ -216,7 +216,10 @@ happens exclusively under \code{cran_deps = "install"}.
 
 If \code{reexport = TRUE}, a \code{reexports.R} file is generated so users can
 reach the component functions directly through the meta-package
-(\code{meta::fun()} instead of \code{component::fun()}), tidyverse style.
+(\code{meta::fun()} instead of \code{component::fun()}), tidyverse style. The required
+\code{importFrom} directives are written directly to \code{NAMESPACE}, so re-exports
+remain installable when \code{document = FALSE}; automatic documentation adds the
+corresponding help files when \code{document = TRUE}.
 }
 
 \section{Requirements}{

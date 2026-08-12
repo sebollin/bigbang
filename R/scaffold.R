@@ -163,6 +163,21 @@ write_namespace_file <- function(name, namespace_path,
   }
 }
 
+.deduplicate_namespace_imports <- function(namespace_path) {
+  if (!file.exists(namespace_path)) return(invisible(NULL))
+  lines <- readLines(namespace_path, warn = FALSE, encoding = "UTF-8")
+  seen <- character()
+  keep <- vapply(lines, function(line) {
+    if (!grepl("^importFrom\\(", line)) return(TRUE)
+    key <- gsub("[[:space:]]", "", line)
+    if (key %in% seen) return(FALSE)
+    seen <<- c(seen, key)
+    TRUE
+  }, logical(1L))
+  if (any(!keep)) .write_utf8(lines[keep], namespace_path)
+  invisible(NULL)
+}
+
 #' Write a generated metapackage README
 #'
 #' @param name Character metapackage name.
@@ -424,13 +439,12 @@ write_reexports_file <- function(
 
   # Generate English roxygen source for the re-exports.
   content <- c(
-    paste0("#\' Functions re-exported from components of ", name),
-    "#\'",
-    "#\' This file re-exports component functions for direct access through",
-    paste0("#\' the ", name, " metapackage, following the tidyverse convention."),
-    "#\' Re-exported functions retain their original behavior.",
-    "#\'",
-    "#\' @keywords internal",
+    paste0("# Functions re-exported from components of ", name),
+    "#",
+    "# This file re-exports component functions for direct access through",
+    paste0("# the ", name, " metapackage, following the tidyverse convention."),
+    "# Re-exported functions retain their original behavior.",
+    "#",
     ""
   )
 
@@ -470,6 +484,7 @@ write_reexports_file <- function(
   }
 
   # Generate one section per component.
+  namespace_imports <- character()
   for (pkg in names(reexports)) {
     content <- c(
       content,
@@ -491,6 +506,10 @@ write_reexports_file <- function(
 
     for (fun in pkg_functions) {
       is_s3 <- fun %in% s3_generics[[pkg]]
+      namespace_imports <- c(
+        namespace_imports,
+        paste0("importFrom(", pkg, ", ", fun, ")")
+      )
 
       if (is_s3) {
         content <- c(
@@ -532,6 +551,7 @@ write_reexports_file <- function(
   result <- list(
     reexports = reexports,
     conflicts = duplicates_map,
+    namespace_imports = unique(namespace_imports),
     file = reexports_file
   )
 

@@ -157,6 +157,34 @@
   manifest
 }
 
+.remove_stale_generation_files <- function(project_dir, files) {
+  files <- setdiff(files, .generation_manifest_name)
+  if (length(files) == 0L) return(invisible(NULL))
+
+  # The manifest was validated immediately before this call. Recheck the
+  # paths so a stale entry can never turn into a write-through symlink during
+  # reconciliation. unlink() removes a replaced symlink entry itself rather
+  # than following its target.
+  .validate_project_write_paths(project_dir, files)
+  for (relative in files) {
+    path <- file.path(project_dir, relative)
+    if (dir.exists(path)) {
+      .bigbang_abort(
+        "bigbang_error_modified_generated_file",
+        .bb_trf(
+          "Cannot update %s because generated files were modified or removed: %s.",
+          project_dir, relative
+        ),
+        path = project_dir, files = relative
+      )
+    }
+    if (unlink(path, recursive = FALSE, force = TRUE) != 0L) {
+      stop(.bb_trf("Could not remove completely: %s", path), call. = FALSE)
+    }
+  }
+  invisible(NULL)
+}
+
 .generation_metadata_findings <- function(components, tolerate = character()) {
   rows <- lapply(components, function(component) {
     stem <- component$stem
@@ -416,7 +444,10 @@
 #'
 #' If `reexport = TRUE`, a `reexports.R` file is generated so users can
 #' reach the component functions directly through the meta-package
-#' (`meta::fun()` instead of `component::fun()`), tidyverse style.
+#' (`meta::fun()` instead of `component::fun()`), tidyverse style. The required
+#' `importFrom` directives are written directly to `NAMESPACE`, so re-exports
+#' remain installable when `document = FALSE`; automatic documentation adds the
+#' corresponding help files when `document = TRUE`.
 #'
 #' @section Requirements:
 #' - Each component must be an existing archive path or a stem resolvable in
@@ -714,6 +745,8 @@ create_metapackage <- function(
         path = project_dir, files = untracked
       )
     }
+    stale_files <- setdiff(update_manifest$files, requested_files)
+    .remove_stale_generation_files(project_dir, stale_files)
   }
   documentation_search <- NULL
   documentation_namespaces <- NULL
@@ -966,6 +999,10 @@ create_metapackage <- function(
     "^check$",
     "\\.Rcheck$",
 
+    # Temporary files left by atomic writers after an interrupted generation.
+    # The optional directory prefix also covers atomic copies in inst/archives.
+    "^(.*/)?\\..*-[[:alnum:]]+$",
+
     # CI, version-control, and pkgdown files
     "^\\.github$",
     "^_pkgdown\\.yml$",
@@ -1101,6 +1138,11 @@ StripTrailingWhitespace: Yes"
   } else if (isTRUE(document) && verbose) {
     message(.bb_tr("Install package 'devtools' to generate documentation automatically."))
   }
+
+  # Roxygen and direct generation can both contribute importFrom directives
+  # for re-exports. Keep the emitted NAMESPACE deterministic and duplicate-free
+  # in either documentation mode.
+  .deduplicate_namespace_imports(file.path(project_dir, "NAMESPACE"))
 
   manifest <- .manifest_records(project_dir, exclude = .generation_manifest_name)
   .atomic_save_rds(manifest, file.path(project_dir, .generation_manifest_name))

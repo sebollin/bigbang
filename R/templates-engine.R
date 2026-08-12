@@ -1660,12 +1660,23 @@ zzz = '
 
   # Generate re-exports when requested.
   if (reexport) {
-    write_reexports_file(
+    reexport_result <- write_reexports_file(
       name = name,
       packages = packages,
       dest_dir = dest_dir,
       verbose = verbose
     )
+    if (!is.null(reexport_result) &&
+        length(reexport_result$namespace_imports) > 0L) {
+      namespace_path <- file.path(dirname(dest_dir), "NAMESPACE")
+      namespace_lines <- readLines(namespace_path, warn = FALSE,
+                                   encoding = "UTF-8")
+      namespace_lines <- c(
+        namespace_lines,
+        setdiff(reexport_result$namespace_imports, namespace_lines)
+      )
+      .write_utf8(namespace_lines, namespace_path)
+    }
   }
 
   invisible(created_files)

@@ -46,11 +46,18 @@ user updating from 0.1.0 should read both sections.
 
 ## Bug fixes
 
+- Updating a generated metapackage now reconciles stale generated files and
+  shipped component archives when components or options are removed.
+- Re-exports now write their `importFrom` directives directly, so
+  `reexport = TRUE` remains installable when `document = FALSE`; duplicate
+  namespace imports are removed when documentation also runs.
+- Temporary files left by interrupted atomic writes are excluded from generated
+  source tarballs.
 - Updates now reject symbolic links in generated files and their parent
   directories, and replace generated files and shipped archives atomically so
   an update cannot write outside the project tree.
 - Component manifests now resolve bare archive filenames from the supplied
--  `pkg_dir` directories when the files are not beside the manifest, preserve
+  `pkg_dir` directories when the files are not beside the manifest, preserve
   absolute and `~` paths, and report every directory searched for a missing
   entry.
 - When component generation skips an invalid archive, a readable DESCRIPTION is

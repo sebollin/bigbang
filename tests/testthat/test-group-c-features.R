@@ -34,6 +34,40 @@ group_c_archive <- function(source_root, archive_dir, name, version = "0.1.0",
   file.path(archive_dir, paste0(name, "_", version, ".tar.gz"))
 }
 
+test_that("stale generated files can be removed safely", {
+  project <- tempfile("bigbang-stale-files-")
+  dir.create(project)
+  stale <- file.path(project, "old-generated.R")
+  writeLines("old", stale, useBytes = TRUE)
+  .remove_stale_generation_files(project, "old-generated.R")
+  expect_false(file.exists(stale))
+})
+
+test_that("duplicate namespace imports are removed", {
+  namespace <- tempfile("bigbang-namespace-")
+  writeLines(c(
+    "importFrom(toy, value)",
+    "importFrom(toy,value)",
+    "export(other)"
+  ), namespace, useBytes = TRUE)
+  .deduplicate_namespace_imports(namespace)
+  expect_identical(readLines(namespace, warn = FALSE), c(
+    "importFrom(toy, value)",
+    "export(other)"
+  ))
+})
+
+test_that("verbose generation completes through every write stage", {
+  archives <- system.file("extdata", package = "bigbang")
+  destination <- tempfile("bigbang-verbose-generation-")
+  result <- create_metapackage(
+    "verboseverse", "toycomponent_0.1.0", pkg_dir = archives,
+    dest_dir = destination, document = FALSE, verbose = TRUE, debug = TRUE,
+    import_deps = character(), force_deps = character()
+  )
+  expect_true(file.exists(file.path(result$path, "DESCRIPTION")))
+})
+
 test_that("dry_run validates without creating its destination", {
   archives <- tempfile("bigbang-group-c-dry-")
   dir.create(archives)
