@@ -412,6 +412,9 @@ msgstr "No se puede actualizar %s porque los archivos generados solicitados no e
 msgid "Cannot update %s because generated path components are symbolic links: %s. Refusing to write outside the project."
 msgstr "No se puede actualizar %s porque algunos componentes de la ruta generada son enlaces simbólicos: %s. Se rechaza escribir fuera del proyecto."
 
+msgid "Generated files were not written as planned: %s"
+msgstr "Los archivos generados no se escribieron según lo planificado: %s"
+
 msgid "Could not back up generated file: %s"
 msgstr "No se pudo respaldar el archivo generado: %s"
 

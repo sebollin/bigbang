@@ -83,7 +83,7 @@ with_install_library_path <- function(libraries, code) {{
   force(code)
 }}
 
-install_source_component <- function(target, lib) {{
+install_source_component <- function(target, lib, verbose = TRUE) {{
   # utils::install.packages() discards the output of the child installer for
   # local source packages, so a failure only reports a non-zero exit status.
   # Run the same R CMD INSTALL directly and keep the output: the ERROR lines
@@ -103,7 +103,7 @@ install_source_component <- function(target, lib) {{
   }} else {{
     character()
   }}
-  if (length(output) > 0L) cat(output, sep = "\\n")
+  if (isTRUE(verbose) && length(output) > 0L) cat(output, sep = "\\n")
   if (!identical(status, 0L)) {{
     detail <- grep("ERROR", output, value = TRUE, fixed = TRUE)
     if (length(detail) == 0L) detail <- utils::tail(output, 5L)
@@ -414,12 +414,13 @@ classify_package_archive <- function(archive, ext) {{
 #\'
 #\' @return A list with installation status and detected dependencies.
 #\' @param lib Character library in which to install and verify the package.
+#\' @param verbose Logical; print the installation subprocess transcript.
 #\' @keywords internal
 install_local_archive <- function(package, pkg_dir, ext = NULL,
                                    repos = getOption("repos"),
                                    cran_deps = c("skip", "error", "install"),
                                    upgrade = c("newer", "always", "never"),
-                                   lib = .libPaths()[[1L]]) {{
+                                   lib = .libPaths()[[1L]], verbose = TRUE) {{
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
   dependency_libraries <- unique(c(lib, .libPaths()))
@@ -609,7 +610,7 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
     }} else {{
       with_install_library_path(
         dependency_libraries,
-        install_source_component(install_target, lib)
+        install_source_component(install_target, lib, verbose = verbose)
       )
     }},
     error = function(e) install_error <<- conditionMessage(e)
@@ -919,7 +920,7 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     result <- tryCatch(
       install_local_archive(
         package, pkg_dir, ext, repos = repos, cran_deps = cran_deps,
-        upgrade = upgrade, lib = lib
+        upgrade = upgrade, lib = lib, verbose = verbose
       ),
       error = function(e) list(success = FALSE, message = conditionMessage(e))
     )

@@ -4,6 +4,22 @@
     nzchar(target)
 }
 
+.validate_project_root_path <- function(project_dir) {
+  if (!.path_is_symlink(project_dir)) return(invisible(NULL))
+  link <- gsub("\\\\", "/", project_dir)
+  .bigbang_abort(
+    "bigbang_error_symlink_generated_path",
+    .bb_trf(
+      paste0(
+        "Cannot update %s because generated path components are symbolic links: ",
+        "%s. Refusing to write outside the project."
+      ),
+      project_dir, link
+    ),
+    path = project_dir, links = link
+  )
+}
+
 .symlink_in_project_path <- function(project_dir, relative_path) {
   root <- normalizePath(project_dir, winslash = "/", mustWork = TRUE)
   relative_path <- gsub("\\\\", "/", relative_path)

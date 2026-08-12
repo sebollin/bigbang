@@ -37,9 +37,24 @@
 .allowed_tolerations <- c("filename_mismatch", "unincluded_local_dep")
 .generation_manifest_name <- ".bigbang-manifest.rds"
 
+.planned_documentation_files <- function(name) {
+  static <- c(
+    "build_dependency_graph", "classify_package_archive", "detect_cycles",
+    "format_cli_startup", "generate_ascii_banner", "install_local_archive",
+    "install_packages_in_order", "is_path_inside", "read_archive_metadata",
+    "safe_unlink", "style_startup_text", "topological_order"
+  )
+  public <- paste0(name, c(
+    "_attach_all", "_attach", "_conflicts", "_deps", "_detach", "_install",
+    "_load_all", "_packages"
+  ))
+  file.path("man", paste0(c(static, public), ".Rd"))
+}
+
 .planned_generation_files <- function(name, components, workflow = NULL,
                                       include_archives = TRUE,
-                                      license = "MIT + file LICENSE") {
+                                      license = "MIT + file LICENSE",
+                                      document = FALSE) {
   files <- c(
     "DESCRIPTION", "NAMESPACE", "README.md", ".Rbuildignore", ".gitignore",
     ".BBSoptions", paste0(name, ".Rproj"),
@@ -58,6 +73,9 @@
   if (!is.null(workflow)) {
     files <- c(files, file.path("vignettes", paste0("workflow-", name, ".Rmd")))
   }
+  if (isTRUE(document)) {
+    files <- c(files, .planned_documentation_files(name))
+  }
   if (isTRUE(include_archives) && length(components) > 0L) {
     files <- c(files, file.path(
       "inst", .archive_subdir,
@@ -72,17 +90,61 @@
   unname(as.character(tools::md5sum(path)))
 }
 
-.manifest_records <- function(project_dir, exclude = character()) {
-  paths <- list.files(project_dir, recursive = TRUE, all.files = TRUE,
-                      full.names = TRUE, no.. = TRUE, include.dirs = FALSE)
+.manifest_records <- function(project_dir, files) {
+  files <- unique(setdiff(files, .generation_manifest_name))
+  paths <- file.path(project_dir, files)
+  missing <- files[!file.exists(paths) | dir.exists(paths)]
+  if (length(missing) > 0L) {
+    stop(.bb_trf(
+      "Generated files were not written as planned: %s",
+      paste(missing, collapse = ", ")
+    ), call. = FALSE)
+  }
   paths <- normalizePath(paths, winslash = "/", mustWork = TRUE)
   root <- normalizePath(project_dir, winslash = "/", mustWork = TRUE)
   rel <- substring(paths, nchar(root) + 2L)
-  keep <- !rel %in% exclude
-  rel <- rel[keep]
-  paths <- paths[keep]
   hashes <- vapply(paths, .file_digest, character(1L))
-  list(schema = 1L, files = rel, hashes = stats::setNames(hashes, rel))
+  list(schema = 2L, files = rel, hashes = stats::setNames(hashes, rel))
+}
+
+.legacy_owned_generation_files <- function(project_dir, files) {
+  name <- basename(normalizePath(
+    project_dir, winslash = "/", mustWork = TRUE
+  ))
+  known <- setdiff(
+    .planned_generation_files(
+      name, list(), workflow = stats::setNames(name, "stage"),
+      include_archives = FALSE, license = "MIT + file LICENSE",
+      document = TRUE
+    ),
+    .generation_manifest_name
+  )
+  known <- c(known, file.path("R", "reexports.R"))
+  shipped_archive <- grepl(
+    "^inst/archives/[^/]+\\.(tar\\.gz|tar|zip)$",
+    files, ignore.case = TRUE, perl = TRUE
+  )
+  files[files %in% known | shipped_archive]
+}
+
+.preserve_omitted_archives <- function(stale_files, omitted) {
+  archives <- stale_files[startsWith(stale_files, "inst/archives/")]
+  if (length(archives) == 0L || nrow(omitted) == 0L) return(character())
+
+  archive_packages <- sub(
+    "_.*", "", vapply(archives, function(path) {
+      extension <- tryCatch(.archive_extension(path), error = function(e) "")
+      if (nzchar(extension)) .archive_stem(path, extension) else basename(path)
+    }, character(1L))
+  )
+  omitted_packages <- unique(omitted$component[nzchar(omitted$component)])
+  matched <- archives[archive_packages %in% omitted_packages]
+
+  # An unreadable or misspelled input may not expose the identity of the old
+  # component it was meant to replace. In that ambiguous case deletion is
+  # deferred for every stale shipped archive; a later clean update reconciles
+  # them. Guessing would risk deleting the only surviving copy.
+  if (any(!omitted_packages %in% archive_packages)) archives else matched
 }
 
 .read_generation_manifest <- function(project_dir) {
@@ -132,6 +194,12 @@
       ),
       path = project_dir, files = invalid
     )
+  }
+  if (is.null(manifest$schema) || identical(manifest$schema, 1L)) {
+    manifest$files <- .legacy_owned_generation_files(
+      project_dir, manifest$files
+    )
+    manifest$hashes <- manifest$hashes[manifest$files]
   }
   .validate_project_write_paths(
     project_dir, c(manifest$files, .generation_manifest_name)
@@ -429,12 +497,16 @@
 #'   failed archive still exposes its DESCRIPTION, propagation uses its declared
 #'   `Package`; otherwise the filename-derived name is used and the limitation is
 #'   reported. If that fallback name differs from `Package`, a dependent may
-#'   fail on the recipient.
+#'   fail on the recipient. During an update, omitted inputs never authorize
+#'   deletion of a previously shipped archive. When the old component cannot be
+#'   identified unambiguously, archive reconciliation is deferred until a clean
+#'   update rather than risking the only surviving copy.
 #' @param update Logical. If TRUE, update a previously generated project only
 #'   when its bigbang manifest is present and all generated files are unchanged.
-#'   Files outside that manifest are never touched. Updates are refused when a
-#'   manifest file or any path component inside the generated project is a
-#'   symbolic link, so writes cannot escape the project tree. Generated files
+#'   Files outside that manifest are never touched. Updates are refused when the
+#'   generated project root, a manifest file, or any path component inside the
+#'   project is a symbolic link, so writes cannot escape the project tree.
+#'   Generated files
 #'   no longer in the plan are reported in `removed_files`. Removing a component
 #'   also removes its shipped archive, which may be the last available copy.
 #'   Before changing the project, an update backs up every generated file and
@@ -741,11 +813,14 @@ create_metapackage <- function(
     }
   }
 
+  project_path <- file.path(dest_dir, name)
+  if (isTRUE(update)) .validate_project_root_path(project_path)
   project_dir <- normalizePath(
-    file.path(dest_dir, name), winslash = "/", mustWork = FALSE
+    project_path, winslash = "/", mustWork = FALSE
   )
   update_manifest <- NULL
   stale_files <- character()
+  preserved_files <- character()
   if (isTRUE(update)) {
     if (!dir.exists(project_dir)) {
       .bigbang_abort(
@@ -760,7 +835,7 @@ create_metapackage <- function(
     requested_files <- setdiff(
       .planned_generation_files(
         name, resolved_components$components, workflow,
-        include_archives, license = license
+        include_archives, license = license, document = document
       ),
       .generation_manifest_name
     )
@@ -776,6 +851,8 @@ create_metapackage <- function(
       )
     }
     stale_files <- setdiff(update_manifest$files, requested_files)
+    preserved_files <- .preserve_omitted_archives(stale_files, omitted)
+    stale_files <- setdiff(stale_files, preserved_files)
   }
   generation_findings <- list(
     metadata = .generation_metadata_findings(components, tolerate),
@@ -792,7 +869,7 @@ create_metapackage <- function(
       order = .component_topological_order(components),
       files = .planned_generation_files(
         name, components, workflow, include_archives,
-        license = license
+        license = license, document = document
       ),
       removed_files = stale_files,
       findings = generation_findings,
@@ -1235,7 +1312,17 @@ StripTrailingWhitespace: Yes"
   # Keep the emitted NAMESPACE deterministic when documentation rewrites it.
   .deduplicate_namespace_imports(file.path(project_dir, "NAMESPACE"))
 
-  manifest <- .manifest_records(project_dir, exclude = .generation_manifest_name)
+  manifest_files <- union(
+    setdiff(
+      .planned_generation_files(
+        name, components, workflow, include_archives,
+        license = license, document = doc_ok
+      ),
+      .generation_manifest_name
+    ),
+    preserved_files
+  )
+  manifest <- .manifest_records(project_dir, manifest_files)
   .atomic_save_rds(manifest, file.path(project_dir, .generation_manifest_name))
 
   result <- structure(

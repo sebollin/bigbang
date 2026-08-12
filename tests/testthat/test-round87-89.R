@@ -54,8 +54,11 @@ test_that("update reconciles legacy re-exports and removed component archives", 
   )
   legacy_reexport <- file.path(initial$path, "R", "reexports.R")
   writeLines("legacy_value <- roundb::roundb_value", legacy_reexport)
+  generated_manifest <- readRDS(file.path(
+    initial$path, .generation_manifest_name
+  ))
   legacy_manifest <- .manifest_records(
-    initial$path, exclude = .generation_manifest_name
+    initial$path, c(generated_manifest$files, "R/reexports.R")
   )
   .atomic_save_rds(
     legacy_manifest, file.path(initial$path, .generation_manifest_name)

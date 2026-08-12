@@ -137,6 +137,7 @@
     "Source directory components require include_archives = TRUE because their temporary build archive cannot be reused." = "Los componentes de directorio fuente requieren include_archives = TRUE porque su archivo temporal no se puede reutilizar.",
     "Cannot update %s because requested generated files are not in its manifest: %s." = "No se puede actualizar %s porque los archivos generados solicitados no est\u00e1n en su manifiesto: %s.",
     "Cannot update %s because generated path components are symbolic links: %s. Refusing to write outside the project." = "No se puede actualizar %s porque algunos componentes de la ruta generada son enlaces simb\u00f3licos: %s. Se rechaza escribir fuera del proyecto.",
+    "Generated files were not written as planned: %s" = "Los archivos generados no se escribieron seg\u00fan lo planificado: %s",
     "Could not back up generated file: %s" = "No se pudo respaldar el archivo generado: %s",
     "Could not restore generated files after a failed update: %s" = "No se pudieron restaurar los archivos generados despu\u00e9s de una actualizaci\u00f3n fallida: %s",
     "The update backup was retained for manual recovery at: %s" = "El respaldo de la actualizaci\u00f3n se conserv\u00f3 para recuperaci\u00f3n manual en: %s",

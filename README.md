@@ -244,7 +244,10 @@ all, so it is a safe way to see what a call would do before it does it.
   the chain is reported. When an invalid archive still has a readable
   `DESCRIPTION`, its declared package name drives this propagation; otherwise
   bigbang falls back to the filename and reports that limitation. Excluding
-  everything is an error.
+  everything is an error. During an update, a failed input never authorizes
+  deletion of an archive already shipped by the project. If the old component
+  cannot be identified unambiguously, archive reconciliation waits for a clean
+  update.
 - `update = TRUE` regenerates in place. Generation records a manifest of the
   files it wrote together with their content hashes; `update` rewrites only
   those, and refuses to run if the manifest is missing or if a generated file was
@@ -254,8 +257,9 @@ all, so it is a safe way to see what a call would do before it does it.
   be retried. Both dry runs and real results list removed paths in
   `removed_files`. Removing a component removes its shipped archive, which may
   be the last available copy.
-  Updates also refuse to write through symbolic links inside the generated
-  project, including links in parent directories of generated files.
+  Updates also refuse to write through a symbolic project root or symbolic
+  links inside the generated project, including links in parent directories of
+  generated files.
 - `install_upgrade` fixes the default upgrade policy of the installer that gets
   emitted, so you decide when generating whether recipients stay pinned to the
   versions you ship (`"always"`) or keep anything newer they already have

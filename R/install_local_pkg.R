@@ -84,7 +84,7 @@
   force(code)
 }
 
-.install_source_component <- function(target, lib) {
+.install_source_component <- function(target, lib, verbose = TRUE) {
   # utils::install.packages() discards the child installer's output for local
   # source packages, so a failure only reports a non-zero exit status. Run the
   # same R CMD INSTALL directly and keep the output: the child's own ERROR
@@ -104,7 +104,7 @@
   } else {
     character()
   }
-  if (length(output) > 0L) cat(output, sep = "\n")
+  if (isTRUE(verbose) && length(output) > 0L) cat(output, sep = "\n")
   if (!identical(status, 0L)) {
     detail <- grep("ERROR", output, value = TRUE, fixed = TRUE)
     if (length(detail) == 0L) detail <- utils::tail(output, 5L)
@@ -483,7 +483,7 @@ install_local_pkg <- function(
       } else {
         .with_install_library_path(
           dependency_libraries,
-          .install_source_component(install_target, lib)
+          .install_source_component(install_target, lib, verbose = verbose)
         )
       }
       NULL

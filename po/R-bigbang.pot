@@ -412,6 +412,9 @@ msgstr ""
 msgid "Cannot update %s because generated path components are symbolic links: %s. Refusing to write outside the project."
 msgstr ""
 
+msgid "Generated files were not written as planned: %s"
+msgstr ""
+
 msgid "Could not back up generated file: %s"
 msgstr ""
 

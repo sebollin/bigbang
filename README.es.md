@@ -215,7 +215,10 @@ segura de ver qué haría una llamada antes de que la haga.
   componente que depende de uno excluido también queda excluido, y se informa la
   cadena. Si un archivo inválido todavía tiene un `DESCRIPTION` legible, se usa
   el nombre declarado del paquete; de lo contrario bigbang recurre al nombre del
-  archivo e informa esa limitación. Excluir todo es un error.
+  archivo e informa esa limitación. Excluir todo es un error. Durante un update,
+  una entrada fallida nunca autoriza borrar un archivo ya embarcado por el
+  proyecto. Si el componente anterior no se puede identificar sin ambigüedad, la
+  reconciliación de archivos espera a un update limpio.
 - `update = TRUE` regenera en el mismo lugar. La generación registra un
   manifiesto de los archivos que escribió con sus hashes de contenido; `update`
   reescribe solo esos, y se niega a correr si falta el manifiesto o si algún
@@ -225,9 +228,9 @@ segura de ver qué haría una llamada antes de que la haga.
   poder reintentarlo. Tanto el dry run como el resultado real enumeran las rutas
   eliminadas en `removed_files`.
   Quitar un componente elimina su archivo embarcado, que puede ser la última copia.
-  También se niega a escribir a través de enlaces simbólicos
-  dentro del proyecto generado, incluidos los enlaces en directorios padre de
-  los archivos generados.
+  También se niega a escribir a través de una raíz de proyecto simbólica o de
+  enlaces simbólicos dentro del proyecto generado, incluidos los enlaces en
+  directorios padre de los archivos generados.
 - `install_upgrade` fija la política de actualización por defecto del instalador
   emitido, así que decidís al generar si los destinatarios quedan clavados en las
   versiones que distribuís (`"always"`) o conservan lo más nuevo que ya tengan

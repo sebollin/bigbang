@@ -117,6 +117,18 @@ user updating from 0.1.0 should read both sections.
 
 ## Bug fixes
 
+- Update manifests are now built from the explicit generation plan instead of
+  scanning the project tree. Repeated updates no longer absorb and later delete
+  user files, including files under `.git/`.
+- With `on_component_error = "skip"`, a failed update input no longer authorizes
+  deletion of a previously shipped component archive. If the old component
+  cannot be identified safely, archive reconciliation is deferred until a clean
+  update.
+- Updates now reject a generated project whose root entry is itself a symbolic
+  link, in addition to links below the project root.
+- Successful source-install transcripts now honor `verbose = FALSE` in both
+  `install_local_pkg()` and generated installers; failure details still retain
+  the child process's `ERROR` lines.
 - `install_local_pkg(lib = ...)` and generated installers now distinguish the
   component destination from the dependency search path: a component present
   only elsewhere is installed into `lib`, while a non-local dependency already

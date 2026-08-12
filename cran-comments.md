@@ -71,8 +71,9 @@ manifest of the files it wrote together with their content hashes, `update`
 rewrites only those files and reconciles generated files and shipped archives
 removed from the new plan. It refuses to proceed if the manifest is absent or
 if any recorded file was modified or removed. Files the package did not write are
-never touched; updates also refuse to write through symbolic links in the
-generated project. Before changing an existing project, bigbang backs up every
+never touched; updates also refuse a symbolic project root and refuse to write
+through symbolic links in the generated project. Before changing an existing
+project, bigbang backs up every
 generated file and its manifest; a failed update restores that state and remains
 retryable. Dry runs and completed updates report generated files that would be or
 were removed. Nothing is installed or removed unless the user calls a function
