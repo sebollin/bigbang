@@ -111,9 +111,8 @@ user updating from 0.1.0 should read both sections.
 - `install_local_pkg(lib = ...)` and generated installers now distinguish the
   component destination from the dependency search path: a component present
   only elsewhere is installed into `lib`, while a non-local dependency already
-  available elsewhere on `.libPaths()` is reused. The complete library path is
-  propagated to installation subprocesses on every platform, including Windows
-  under the dependency isolation used by `R CMD check`.
+  available elsewhere on `.libPaths()` is reused. This also works under the
+  dependency isolation used by `R CMD check` on Windows.
 - A component archive with an upper-case extension — `PKG_1.0.TAR.GZ`, as they
   often arrive from Windows — was shipped under its original name while the
   generated installer looked for the normalised one. The component was never

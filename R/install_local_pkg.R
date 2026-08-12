@@ -70,16 +70,17 @@
     libraries[dir.exists(libraries)], winslash = "/", mustWork = TRUE
   ))
   library_path <- paste(libraries, collapse = .Platform$path.sep)
-  variables <- c("R_LIBS", "R_LIBS_USER")
-  previous <- Sys.getenv(variables, unset = NA_character_)
+  previous <- Sys.getenv("R_LIBS_USER", unset = NA_character_)
   on.exit({
-    present <- !is.na(previous)
-    if (any(present)) {
-      do.call(Sys.setenv, as.list(previous[present]))
+    if (is.na(previous)) {
+      Sys.unsetenv("R_LIBS_USER")
+    } else {
+      Sys.setenv(R_LIBS_USER = previous)
     }
-    if (any(!present)) Sys.unsetenv(variables[!present])
   }, add = TRUE)
-  Sys.setenv(R_LIBS = library_path, R_LIBS_USER = library_path)
+  # install.packages() always rebuilds R_LIBS from the current .libPaths(), so
+  # R_LIBS_USER is the channel that preserves additional libraries for its child.
+  Sys.setenv(R_LIBS_USER = library_path)
   force(code)
 }
 

@@ -316,10 +316,12 @@ test_that("lib is the component destination but not the only dependency library"
   support_archives <- file.path(root, "support-archives")
   destination <- file.path(root, "destination")
   support_lib <- file.path(root, "support-library")
+  direct_control_lib <- file.path(root, "direct-control-library")
+  generated_control_lib <- file.path(root, "generated-control-library")
   direct_lib <- file.path(root, "direct-library")
   generated_lib <- file.path(root, "generated-library")
   dirs <- c(source_root, archives, support_archives, destination, support_lib,
-            direct_lib, generated_lib)
+            direct_control_lib, generated_control_lib, direct_lib, generated_lib)
   vapply(dirs, dir.create, logical(1L), recursive = TRUE)
 
   suffix <- as.character(Sys.getpid())
@@ -345,10 +347,46 @@ test_that("lib is the component destination but not the only dependency library"
 
   old_libs <- .libPaths()
   on.exit(.libPaths(old_libs), add = TRUE)
+
+  install_with_only_r_libs <- function(target_lib) {
+    .libPaths(old_libs)
+    warnings <- character()
+    withr::with_envvar(
+      c(R_LIBS = support_lib, R_LIBS_USER = NA_character_),
+      withCallingHandlers(
+        utils::install.packages(
+          component_archive, repos = NULL, type = "source",
+          dependencies = FALSE, lib = target_lib
+        ),
+        warning = function(w) {
+          warnings <<- c(warnings, conditionMessage(w))
+          invokeRestart("muffleWarning")
+        }
+      )
+    )
+    expect_false(dir.exists(file.path(target_lib, component)))
+    expect_true(any(grepl(basename(component_archive), warnings, fixed = TRUE)))
+  }
+
+  # R_LIBS alone is overwritten by install.packages(), so it cannot carry the
+  # support library to the installation child.
+  install_with_only_r_libs(direct_control_lib)
+
+  original_wrapper <- bigbang:::.with_install_library_path
+  direct_libraries <- NULL
+  testthat::local_mocked_bindings(
+    .with_install_library_path = function(libraries, code) {
+      direct_libraries <<- libraries
+      .libPaths(old_libs)
+      original_wrapper(libraries, code)
+    },
+    .package = "bigbang"
+  )
   .libPaths(c(support_lib, old_libs))
   direct <- install_local_pkg(
     component_archive, cran_deps = "skip", verbose = FALSE, lib = direct_lib
   )
+  expect_true(normalizePath(support_lib, winslash = "/") %in% direct_libraries)
   expect_length(direct$failed, 0L)
   expect_length(direct$skipped, 0L)
   expect_true(dir.exists(file.path(direct_lib, component)))
@@ -364,10 +402,21 @@ test_that("lib is the component destination but not the only dependency library"
   sys.source(file.path(generated$path, "R", "utils.R"), runtime)
   sys.source(file.path(generated$path, "R", "install_packages.R"), runtime)
   sys.source(file.path(generated$path, "R", "attach.R"), runtime)
+
+  install_with_only_r_libs(generated_control_lib)
+  emitted_wrapper <- runtime$with_install_library_path
+  emitted_libraries <- NULL
+  runtime$with_install_library_path <- function(libraries, code) {
+    emitted_libraries <<- libraries
+    .libPaths(old_libs)
+    emitted_wrapper(libraries, code)
+  }
+  .libPaths(c(support_lib, old_libs))
   emitted <- runtime$libsearchverse_install(
     pkg_dir = file.path(generated$path, "inst", "archives"),
     cran_deps = "skip", verbose = FALSE, lib = generated_lib
   )
+  expect_true(normalizePath(support_lib, winslash = "/") %in% emitted_libraries)
   expect_length(emitted$failed, 0L)
   expect_length(emitted$skipped, 0L)
   expect_true(dir.exists(file.path(generated_lib, component)))
@@ -395,9 +444,13 @@ test_that("installation subprocesses inherit the complete library path", {
     if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript"
   )
 
+  environment_during_call <- NULL
   status <- bigbang:::.with_install_library_path(
     c(first, second),
-    system2(rscript, shQuote(script), stdout = FALSE, stderr = FALSE)
+    {
+      environment_during_call <- Sys.getenv(variables, unset = NA_character_)
+      system2(rscript, shQuote(script), stdout = FALSE, stderr = FALSE)
+    }
   )
 
   expect_equal(status, 0L)
@@ -407,6 +460,13 @@ test_that("installation subprocesses inherit the complete library path", {
   expected <- normalizePath(
     c(first, second), winslash = "/", mustWork = TRUE
   )
-  expect_identical(child_libraries[seq_along(expected)], expected)
+  child_positions <- match(expected, child_libraries)
+  expect_false(anyNA(child_positions))
+  expect_true(all(diff(child_positions) > 0L))
+  expect_identical(environment_during_call[["R_LIBS"]], before[["R_LIBS"]])
+  expect_identical(
+    environment_during_call[["R_LIBS_USER"]],
+    paste(expected, collapse = .Platform$path.sep)
+  )
   expect_identical(Sys.getenv(variables, unset = NA_character_), before)
 })
