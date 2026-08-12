@@ -64,6 +64,24 @@ resolve_upgrade_policy <- function(force, upgrade, upgrade_missing) {{
   upgrade
 }}
 
+with_install_library_path <- function(libraries, code) {{
+  libraries <- unique(normalizePath(
+    libraries[dir.exists(libraries)], winslash = "/", mustWork = TRUE
+  ))
+  library_path <- paste(libraries, collapse = .Platform$path.sep)
+  variables <- c("R_LIBS", "R_LIBS_USER")
+  previous <- Sys.getenv(variables, unset = NA_character_)
+  on.exit({{
+    present <- !is.na(previous)
+    if (any(present)) {{
+      do.call(Sys.setenv, as.list(previous[present]))
+    }}
+    if (any(!present)) Sys.unsetenv(variables[!present])
+  }}, add = TRUE)
+  Sys.setenv(R_LIBS = library_path, R_LIBS_USER = library_path)
+  force(code)
+}}
+
 .component_specs <- {component_specs_literal}
 .component_names <- {package_list_literal}
 
@@ -483,11 +501,13 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
     }}
     for (dep in missing_nonlocal) {{
       message(.meta_trf("Installing non-local dependency: %s", dep))
-      tryCatch(
+      tryCatch(with_install_library_path(
+        dependency_libraries,
         # NA is what is needed to use the package: Depends, Imports and
         # LinkingTo. TRUE would add Suggests, pulling development tooling
         # into environments that asked for one dependency.
-        utils::install.packages(dep, dependencies = NA, repos = repos, lib = lib),
+        utils::install.packages(dep, dependencies = NA, repos = repos, lib = lib)
+      ),
         error = function(e) warning(conditionMessage(e), call. = FALSE)
       )
     }}
@@ -544,9 +564,12 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
 
   install_error <- NULL
   tryCatch(
-    utils::install.packages(
-      install_target, repos = NULL, type = install_type, dependencies = FALSE,
-      lib = lib
+    with_install_library_path(
+      dependency_libraries,
+      utils::install.packages(
+        install_target, repos = NULL, type = install_type,
+        dependencies = FALSE, lib = lib
+      )
     ),
     error = function(e) install_error <<- conditionMessage(e)
   )

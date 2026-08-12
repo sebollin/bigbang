@@ -373,3 +373,40 @@ test_that("lib is the component destination but not the only dependency library"
   expect_true(dir.exists(file.path(generated_lib, component)))
   expect_false(dir.exists(file.path(generated_lib, dependency)))
 })
+
+test_that("installation subprocesses inherit the complete library path", {
+  root <- tempfile("bigbang-install-library-env-")
+  first <- file.path(root, "first-library")
+  second <- file.path(root, "second-library")
+  dir.create(first, recursive = TRUE)
+  dir.create(second, recursive = TRUE)
+
+  variables <- c("R_LIBS", "R_LIBS_USER")
+  before <- Sys.getenv(variables, unset = NA_character_)
+  script <- file.path(root, "child.R")
+  writeLines(
+    "writeLines(.libPaths(), Sys.getenv('BIGBANG_CHILD_OUTPUT'))",
+    script
+  )
+  output <- file.path(root, "libraries.txt")
+  withr::local_envvar(c(BIGBANG_CHILD_OUTPUT = output))
+  rscript <- file.path(
+    R.home("bin"),
+    if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript"
+  )
+
+  status <- bigbang:::.with_install_library_path(
+    c(first, second),
+    system2(rscript, shQuote(script), stdout = FALSE, stderr = FALSE)
+  )
+
+  expect_equal(status, 0L)
+  child_libraries <- normalizePath(
+    readLines(output, warn = FALSE), winslash = "/", mustWork = TRUE
+  )
+  expected <- normalizePath(
+    c(first, second), winslash = "/", mustWork = TRUE
+  )
+  expect_identical(child_libraries[seq_along(expected)], expected)
+  expect_identical(Sys.getenv(variables, unset = NA_character_), before)
+})

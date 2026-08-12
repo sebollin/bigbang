@@ -65,6 +65,24 @@
   )
 }
 
+.with_install_library_path <- function(libraries, code) {
+  libraries <- unique(normalizePath(
+    libraries[dir.exists(libraries)], winslash = "/", mustWork = TRUE
+  ))
+  library_path <- paste(libraries, collapse = .Platform$path.sep)
+  variables <- c("R_LIBS", "R_LIBS_USER")
+  previous <- Sys.getenv(variables, unset = NA_character_)
+  on.exit({
+    present <- !is.na(previous)
+    if (any(present)) {
+      do.call(Sys.setenv, as.list(previous[present]))
+    }
+    if (any(!present)) Sys.unsetenv(variables[!present])
+  }, add = TRUE)
+  Sys.setenv(R_LIBS = library_path, R_LIBS_USER = library_path)
+  force(code)
+}
+
 #' Install a local package together with its dependencies
 #'
 #' Installs a package from a local archive. Dependencies available as local
@@ -386,8 +404,11 @@ install_local_pkg <- function(
       for (dependency in missing_external) {
         install_error <- tryCatch({
           # NA installs Depends, Imports and LinkingTo, not Suggests.
-          utils::install.packages(
-            dependency, dependencies = NA, repos = repos, lib = lib
+          .with_install_library_path(
+            dependency_libraries,
+            utils::install.packages(
+              dependency, dependencies = NA, repos = repos, lib = lib
+            )
           )
           NULL
         }, error = identity)
@@ -415,12 +436,15 @@ install_local_pkg <- function(
     }
     install_type <- if (binary_zip) "win.binary" else "source"
     install_error <- tryCatch({
-      utils::install.packages(
-        install_target,
-        repos = NULL,
-        type = install_type,
-        dependencies = FALSE,
-        lib = lib
+      .with_install_library_path(
+        dependency_libraries,
+        utils::install.packages(
+          install_target,
+          repos = NULL,
+          type = install_type,
+          dependencies = FALSE,
+          lib = lib
+        )
       )
       NULL
     }, error = identity)
