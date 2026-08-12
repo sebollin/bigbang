@@ -277,9 +277,11 @@ before it does it.
   the files it wrote together with their content hashes; `update`
   rewrites only those, and refuses to run if the manifest is missing or
   if a generated file was modified or removed by hand. Files bigbang did
-  not write are never touched. Updates also refuse to write through
-  symbolic links inside the generated project, including links in parent
-  directories of generated files.
+  not write are never touched. Generated files and shipped archives
+  removed from the new plan are reconciled out of the previous manifest.
+  Updates also refuse to write through symbolic links inside the
+  generated project, including links in parent directories of generated
+  files.
 - `install_upgrade` fixes the default upgrade policy of the installer
   that gets emitted, so you decide when generating whether recipients
   stay pinned to the versions you ship (`"always"`) or keep anything

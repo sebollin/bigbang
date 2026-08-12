@@ -300,7 +300,10 @@ a component depends on a package that must come from a repository, which
 happens exclusively under <code>cran_deps = "install"</code>.</p>
 <p>If <code>reexport = TRUE</code>, a <code>reexports.R</code> file is generated so users can
 reach the component functions directly through the meta-package
-(<code>meta::fun()</code> instead of <code>component::fun()</code>), tidyverse style.</p>
+(<code>meta::fun()</code> instead of <code>component::fun()</code>), tidyverse style. The required
+<code>importFrom</code> directives are written directly to <code>NAMESPACE</code>, so re-exports
+remain installable when <code>document = FALSE</code>; automatic documentation adds the
+corresponding help files when <code>document = TRUE</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="requirements">Requirements<a class="anchor" aria-label="anchor" href="#requirements"></a></h2>

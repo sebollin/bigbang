@@ -286,7 +286,10 @@ must come from a repository, which happens exclusively under
 
 If `reexport = TRUE`, a `reexports.R` file is generated so users can
 reach the component functions directly through the meta-package
-(`meta::fun()` instead of `component::fun()`), tidyverse style.
+(`meta::fun()` instead of `component::fun()`), tidyverse style. The
+required `importFrom` directives are written directly to `NAMESPACE`, so
+re-exports remain installable when `document = FALSE`; automatic
+documentation adds the corresponding help files when `document = TRUE`.
 
 ## Requirements
 
