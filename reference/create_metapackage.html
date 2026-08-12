@@ -89,7 +89,7 @@ underscores <code>_</code>).</p></dd>
 packages to include. An existing file is always used as a path; otherwise
 the element is resolved as a stem in <code>pkg_dir</code>, e.g. <code>"myPackage_1.0.0"</code>.
 Existing paths may come from different directories. A single existing text
-file without a recognised archive extension is treated as a manifest, with
+file without a recognized archive extension is treated as a manifest, with
 one component per line; relative paths in that file are resolved relative
 to the manifest directory, absolute paths and <code>~</code> paths are used as written,
 and bare archive filenames may also be found in <code>pkg_dir</code>.</p></dd>
@@ -117,9 +117,11 @@ default path. Use <code><a href="https://rdrr.io/r/base/tempfile.html" class="ex
 
 
 <dt id="arg-reexport">reexport<a class="anchor" aria-label="anchor" href="#arg-reexport"></a></dt>
-<dd><p>Logical. If <code>TRUE</code>, re-exports the component packages'
-functions so they are reachable directly through the meta-package (tidyverse
-style). Defaults to <code>FALSE</code>.</p></dd>
+<dd><p>Deprecated logical argument retained in its original position
+for positional-call compatibility. It is ignored. Loading the generated
+meta-package attaches installed components, making their exported functions
+available on the search path, but it does not copy those functions into the
+meta-package namespace.</p></dd>
 
 
 <dt id="arg-document">document<a class="anchor" aria-label="anchor" href="#arg-document"></a></dt>
@@ -298,12 +300,10 @@ meta-package: recipients need nothing beyond the meta-package itself, and no
 path has to be agreed on between machines. Network access is needed only when
 a component depends on a package that must come from a repository, which
 happens exclusively under <code>cran_deps = "install"</code>.</p>
-<p>If <code>reexport = TRUE</code>, a <code>reexports.R</code> file is generated so users can
-reach the component functions directly through the meta-package
-(<code>meta::fun()</code> instead of <code>component::fun()</code>), tidyverse style. The required
-<code>importFrom</code> directives are written directly to <code>NAMESPACE</code>, so re-exports
-remain installable when <code>document = FALSE</code>; automatic documentation adds the
-corresponding help files when <code>document = TRUE</code>.</p>
+<p>Loading the generated meta-package attaches installed components, so their
+exported functions can be called directly or through <code>component::function()</code>.
+Component functions are not copied into the meta-package namespace, so
+<code>meta::component_function()</code> is not supported.</p>
     </div>
     <div class="section level2">
     <h2 id="requirements">Requirements<a class="anchor" aria-label="anchor" href="#requirements"></a></h2>

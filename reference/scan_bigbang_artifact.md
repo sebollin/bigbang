@@ -56,7 +56,7 @@ result <- create_metapackage(
 )
 scan_bigbang_artifact(result$path)
 #> <bigbang artifact scan>
-#>   Path: /tmp/RtmpPAqoEF/bigbang-scan-example-1a61323416d4/toyverse
+#>   Path: /tmp/Rtmp4Pz5fk/bigbang-scan-example-1a417bd4e9c2/toyverse
 #>   Type: source
 #>   Result: no deletion signatures found
 

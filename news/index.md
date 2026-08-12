@@ -5,98 +5,164 @@
 This release makes the package accept component packages as an
 organisation actually keeps them, instead of requiring one directory,
 one archive extension, and a version in every filename. Package identity
-now comes from each archive’s `DESCRIPTION` rather than from its
-filename, generation can report a plan without writing anything, and the
-checks that concern project tidiness can be relaxed individually. The
-checks that protect whoever installs the generated meta-package cannot:
-they remain hard errors during generation.
+now comes from each archive’s `DESCRIPTION` rather than its filename,
+generation can report a plan without writing anything, and the checks
+that concern project tidiness can be relaxed individually. The checks
+that protect whoever installs the generated meta-package cannot: they
+remain hard errors during generation.
 
 It also supersedes 0.2.0, which was prepared and verified but never
 submitted. Everything listed under 0.2.0 below reaches CRAN for the
 first time here, so a user updating from 0.1.0 should read both
 sections.
 
-### New capabilities
+### Breaking changes
 
-- The generator supports read-only dry-run reports, explicit
-  component-error policies, package source directories, component
-  manifests, and guarded update regeneration through a generation
-  manifest.
-- Generated installers accept component subsets and an explicit
-  installation library, and the generator can set their default upgrade
-  policy.
-- Source-directory components must use include_archives = TRUE because
-  their temporary build archive cannot be reused as an external
-  installation source.
+- `reexport` is deprecated and ignored. Generated metapackages attach
+  installed components, so their exports remain available directly or
+  through each component namespace, but they are not copied into the
+  metapackage namespace. Re-exporting would require declaring components
+  as installation-time dependencies, which conflicts with explicit
+  offline component installation; the option did not produce a valid
+  package in the published 0.1.0 release.
 
-### Component input and resolution
+### Component archives can come from anywhere
 
-- Component archives may be supplied as existing paths from multiple
-  directories, with mixed `.tar.gz`, `.tar`, and `.zip` extensions.
-  Stems remain supported through the optional `pkg_dir` fallback.
-- Package identity and version now come from the archive `DESCRIPTION`.
-  Filename mismatches are warned about, while empty metadata, duplicate
-  components, invalid archives, cycles, and unsatisfied local
-  constraints remain hard errors.
-- Generated installers accept a vector of archive directories when
-  archives are not shipped; archives shipped inside a generated
-  meta-package remain portable and contain no source-machine paths.
+- Any element of `packages` that is an existing file is used as a path,
+  so components can come from **several directories** in one call and
+  mix `.tar.gz`, `.tar` and `.zip`. Stems still work, resolved against
+  `pkg_dir`, which now accepts more than one directory.
+- **Package identity and version come from each archive’s
+  `DESCRIPTION`**, not from its filename, so a filename without a
+  version is valid. A filename that disagrees with the `DESCRIPTION`
+  produces a warning and the `DESCRIPTION` wins.
+- A component may be a **source directory** with a `DESCRIPTION` at its
+  root, built for you with the optional `pkgbuild` package. It requires
+  `include_archives = TRUE`, because the archive built for it lives in a
+  temporary directory that does not outlive the call.
+- `packages` may be the path to a **manifest**: one component per line,
+  `#` for comments. Relative paths resolve against the manifest’s own
+  directory, absolute and `~` paths are used as given, and bare
+  filenames are also looked up in `pkg_dir`, so the list can live under
+  version control while the archives do not. A missing entry reports
+  every directory that was searched.
+
+### Seeing what a call would do before it does it
+
+- `create_metapackage(dry_run = TRUE)` resolves and validates everything
+  and returns the plan — components, installation order, files that
+  would be written, and every validation finding — **without creating
+  `dest_dir` or writing anything**.
+
+### Strictness you choose, within limits you do not
+
 - [`create_metapackage()`](https://sebollin.github.io/bigbang/reference/create_metapackage.md)
-  gains a final `tolerate` argument for explicitly named relaxations.
-  Filename mismatches can be silenced, and an available local dependency
-  omitted from `packages` can be downgraded from an error to a warning;
-  unknown relaxation names are errors.
-- Generation results now include a `tolerated` table identifying every
-  applied relaxation, affected component, and reason.
-- The validation documentation now distinguishes non-negotiable
-  recipient protections from optional project-tidiness checks, and
-  states explicitly that bigbang does not run `R CMD check` on component
-  packages.
+  gains a final `tolerate` argument taking a closed list of named
+  relaxations: `"filename_mismatch"` silences the filename-versus-
+  `DESCRIPTION` warning, and `"unincluded_local_dep"` turns the error
+  for a local dependency available in the supplied sources but omitted
+  from `packages` into a warning. That second relaxation means the
+  dependency does not travel, so the recipient has to supply it. Unknown
+  names are errors, not silent no-ops.
+- Generation results include a `tolerated` table naming every applied
+  relaxation, the component it affected, and why.
+- `on_component_error = "skip"` generates from the components that are
+  valid instead of aborting, and reports the ones it left out. The
+  exclusion is transitive: a component that depends on an excluded one
+  is excluded too, and the chain is reported. When the omitted archive
+  can be read, its declared `Package` drives the exclusion; when it
+  cannot, the filename fallback is reported explicitly. Excluding every
+  component is an error.
+- The documentation now separates the two classes of check: validations
+  that protect whoever installs the generated meta-package cannot be
+  disabled by any value of `tolerate`, and there is no switch that turns
+  validation off as a whole. It also states explicitly that bigbang does
+  **not** run `R CMD check` on component packages, so a component with
+  check warnings or notes can be included.
+
+### Regenerating in place
+
+- `create_metapackage(update = TRUE)` regenerates an existing project,
+  which relaxes the rule that a destination must be new or empty.
+  Generation records a manifest of the files it wrote together with
+  their content hashes; `update` rewrites only those, and refuses to run
+  if the manifest is missing or if a generated file was modified or
+  removed by hand.
+- Files bigbang did not write are never touched. `update` refuses when a
+  generated file, or any parent directory on the way to it, is a
+  symbolic link, and it replaces generated files and shipped archives
+  atomically, so a regeneration cannot write outside the project tree.
+- When components or options are dropped, `update` reconciles: generated
+  files and shipped component archives that the new plan no longer
+  includes are removed, so the regenerated meta-package cannot end up
+  importing from a component it no longer declares.
+
+### Generated installers
+
+- `<meta>_install(only = ...)` installs a subset; local dependencies of
+  the selection are added automatically, and an unknown component name
+  is an error.
+- `<meta>_install(lib = ...)` chooses the library in which components
+  must be installed and verified. Non-local dependencies may already be
+  available in that library or anywhere on
+  [`.libPaths()`](https://rdrr.io/r/base/libPaths.html); they no longer
+  need to be duplicated into the component destination.
+- `create_metapackage(install_upgrade = ...)` fixes the default upgrade
+  policy of the installer that gets emitted, so the person generating
+  decides whether recipients stay pinned to the versions being shipped
+  or keep anything newer they already have. The default is unchanged.
+- The installer accepts a vector of archive directories when the
+  archives are not shipped, and archives that do travel inside a
+  generated meta-package contain no path from the machine that produced
+  them.
+- Real generation results now include the same topological `order` field
+  as dry-run plans. The planned `files` field remains specific to dry
+  runs.
 
 ### Bug fixes
 
-- Updating a generated metapackage now reconciles stale generated files
-  and shipped component archives when components or options are removed.
-- Re-exports now write their `importFrom` directives directly, so
-  `reexport = TRUE` remains installable when `document = FALSE`;
-  duplicate namespace imports are removed when documentation also runs.
-- Temporary files left by interrupted atomic writes are excluded from
-  generated source tarballs.
-- Updates now reject symbolic links in generated files and their parent
-  directories, and replace generated files and shipped archives
-  atomically so an update cannot write outside the project tree.
-- Component manifests now resolve bare archive filenames from the
-  supplied `pkg_dir` directories when the files are not beside the
-  manifest, preserve absolute and `~` paths, and report every directory
-  searched for a missing entry.
-- When component generation skips an invalid archive, a readable
-  DESCRIPTION is used to propagate the omission through dependents; if
-  it cannot be read, the filename fallback is reported explicitly.
-- Installation messages now name both the declared package identity and
-  the archive stem when those differ.
-- Installing an already present package no longer requires reading an
-  archive when `upgrade = "never"`; under the default policy, only its
-  DESCRIPTION is read before deciding whether the archive needs to be
-  used. An unreadable archive is reported as unchanged when the
-  installed package can be retained.
-- Rollback paths after a post-scaffold generation error are covered,
-  including destinations reached through a symbolic link and
-  unsuccessful removal.
-- Lazy archive-version inspection now rejects extracted symbolic links
-  before reading metadata, matching the full archive validation path.
-- The installation help now explains that `upgrade = "never"` identifies
-  a component from its filename because the archive is intentionally not
-  read.
-- Component archives whose extensions use upper-case letters are copied
-  under canonical names so generated installers find them on
-  case-sensitive systems; archive names that collide only by case are
-  rejected.
-- Unreadable unrelated archives in a supplied source directory are
-  excluded from the inventory with a warning, including a specific
+- `install_local_pkg(lib = ...)` and generated installers now
+  distinguish the component destination from the dependency search path:
+  a component present only elsewhere is installed into `lib`, while a
+  non-local dependency already available elsewhere on
+  [`.libPaths()`](https://rdrr.io/r/base/libPaths.html) is reused.
+- A component archive with an upper-case extension — `PKG_1.0.TAR.GZ`,
+  as they often arrive from Windows — was shipped under its original
+  name while the generated installer looked for the normalised one. The
+  component was never installed on a case-sensitive filesystem, with no
+  error anywhere. Archives are now copied under canonical names, and
+  names that collide only by case are rejected.
+- An unreadable archive unrelated to the requested components, left in a
+  supplied source directory, aborted generation. Such archives are now
+  excluded from the inventory with a warning, and there is a specific
   diagnostic when a declared dependency appears to match one.
-- Vector resolution failures retain the requested component names in the
-  installation result, and generated installers report the package
-  identity declared by DESCRIPTION after installation.
+- Installing a package that is already present no longer requires
+  reading its archive when `upgrade = "never"`; under the default policy
+  only the archive’s `DESCRIPTION` is read before deciding whether the
+  archive is needed at all. An unreadable archive is reported as
+  unchanged when the installed package can be kept, instead of failing
+  the call.
+- A failed resolution of several components kept only a placeholder name
+  in the installation result; the requested names are retained.
+- Installation messages name both the package declared by the
+  `DESCRIPTION` and the archive it came from when the two differ,
+  instead of reporting the filename as though it were the package.
+- Reading an archive’s version for the installation shortcut now rejects
+  extracted symbolic links before reading metadata, matching the
+  guarantees of the full archive validation path.
+- Rolling back a generation that failed after the project tree existed
+  is now exercised, including destinations reached through a symbolic
+  link and a removal that does not succeed.
+
+### Documentation
+
+- The installation help explains that under `upgrade = "never"` the
+  component is identified from its filename, because the archive is
+  deliberately not read; use the default policy when the declared
+  `Package` has to be checked against what is installed.
+- The README, in both languages, documents where components can come
+  from and every generation option. It previously described the input
+  model the package had before this release.
 
 ## bigbang 0.2.0
 
@@ -185,16 +251,6 @@ between 2026-08-05 and 2026-08-19. These changes are released as part of
   [`tempdir()`](https://rdrr.io/r/base/tempfile.html) sits under `/var`,
   itself a link to `/private/var`. Both sides are now normalised at the
   same moment.
-- `create_metapackage(reexport = TRUE)` works. It previously failed for
-  every input: a block that ran before the re-export writer iterated the
-  versioned archive stems and called
-  [`asNamespace()`](https://rdrr.io/r/base/ns-internal.html) on them,
-  which can never resolve, so the call aborted with “there is no package
-  called ‘pkg_1.0’” before reaching the writer that does the work. That
-  block also declared `S3method(<name>, default)` for every export
-  whether or not it was a generic. It was removed;
-  `write_reexports_file()` already resolves component namespaces and
-  distinguishes S3 generics from ordinary functions.
 - An archive whose root directory is accompanied by an AppleDouble
   `._<dir>` member is accepted. Archiving a package directory on macOS
   with extended attributes emits one, and R installs such an archive, so

@@ -17,7 +17,8 @@ install_local_pkg(
   cran_deps = c("skip", "error", "install"),
   verbose = getOption("bigbang.verbose", interactive()),
   force = FALSE,
-  upgrade = c("newer", "always", "never")
+  upgrade = c("newer", "always", "never"),
+  lib = .libPaths()[[1L]]
 )
 ```
 
@@ -66,6 +67,15 @@ install_local_pkg(
   installed version. Explicitly combining `force = TRUE` with a value
   other than `"always"` is an error.
 
+- lib:
+
+  Character. Library in which the local component must be installed and
+  verified when supplied explicitly. When omitted, the legacy lookup
+  considers all of [`.libPaths()`](https://rdrr.io/r/base/libPaths.html)
+  and installs into its first entry. Non-local dependencies may be
+  available either in `lib` or anywhere on
+  [`.libPaths()`](https://rdrr.io/r/base/libPaths.html).
+
 ## Value
 
 Invisibly, a list describing installed, unchanged, failed, and skipped
@@ -74,9 +84,15 @@ in `unchanged`, not in `installed`.
 
 ## Installation
 
-This function installs packages into the user's active R library.
-Installation occurs only when the user calls the function; loading
-`bigbang` never installs packages. With the default
+This function installs packages into `lib`, which defaults to the user's
+active R library. When `lib` is supplied explicitly, a component found
+only in another library is still installed into `lib`; non-local
+dependencies are resolved from `lib` plus
+[`.libPaths()`](https://rdrr.io/r/base/libPaths.html). When `lib` is
+omitted, an installed component found anywhere on
+[`.libPaths()`](https://rdrr.io/r/base/libPaths.html) retains the
+pre-0.3.0 behavior. Installation occurs only when the user calls the
+function; loading `bigbang` never installs packages. With the default
 `cran_deps = "skip"`, it does not access the network. An installed
 package can be kept without reading its archive when
 `upgrade = "never"`. Under the default policy, bigbang reads only the

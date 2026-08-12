@@ -34,40 +34,70 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.0" id="bigbang-030">bigbang 0.3.0<a class="anchor" aria-label="anchor" href="#bigbang-030"></a></h2>
-<p>This release makes the package accept component packages as an organisation actually keeps them, instead of requiring one directory, one archive extension, and a version in every filename. Package identity now comes from each archive’s <code>DESCRIPTION</code> rather than from its filename, generation can report a plan without writing anything, and the checks that concern project tidiness can be relaxed individually. The checks that protect whoever installs the generated meta-package cannot: they remain hard errors during generation.</p>
+<p>This release makes the package accept component packages as an organisation actually keeps them, instead of requiring one directory, one archive extension, and a version in every filename. Package identity now comes from each archive’s <code>DESCRIPTION</code> rather than its filename, generation can report a plan without writing anything, and the checks that concern project tidiness can be relaxed individually. The checks that protect whoever installs the generated meta-package cannot: they remain hard errors during generation.</p>
 <p>It also supersedes 0.2.0, which was prepared and verified but never submitted. Everything listed under 0.2.0 below reaches CRAN for the first time here, so a user updating from 0.1.0 should read both sections.</p>
 <div class="section level3">
-<h3 id="new-capabilities-0-3-0">New capabilities<a class="anchor" aria-label="anchor" href="#new-capabilities-0-3-0"></a></h3>
-<ul><li>The generator supports read-only dry-run reports, explicit component-error policies, package source directories, component manifests, and guarded update regeneration through a generation manifest.</li>
-<li>Generated installers accept component subsets and an explicit installation library, and the generator can set their default upgrade policy.</li>
-<li>Source-directory components must use include_archives = TRUE because their temporary build archive cannot be reused as an external installation source.</li>
+<h3 id="breaking-changes-0-3-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-3-0"></a></h3>
+<ul><li>
+<code>reexport</code> is deprecated and ignored. Generated metapackages attach installed components, so their exports remain available directly or through each component namespace, but they are not copied into the metapackage namespace. Re-exporting would require declaring components as installation-time dependencies, which conflicts with explicit offline component installation; the option did not produce a valid package in the published 0.1.0 release.</li>
 </ul></div>
 <div class="section level3">
-<h3 id="component-input-and-resolution-0-3-0">Component input and resolution<a class="anchor" aria-label="anchor" href="#component-input-and-resolution-0-3-0"></a></h3>
-<ul><li>Component archives may be supplied as existing paths from multiple directories, with mixed <code>.tar.gz</code>, <code>.tar</code>, and <code>.zip</code> extensions. Stems remain supported through the optional <code>pkg_dir</code> fallback.</li>
-<li>Package identity and version now come from the archive <code>DESCRIPTION</code>. Filename mismatches are warned about, while empty metadata, duplicate components, invalid archives, cycles, and unsatisfied local constraints remain hard errors.</li>
-<li>Generated installers accept a vector of archive directories when archives are not shipped; archives shipped inside a generated meta-package remain portable and contain no source-machine paths.</li>
+<h3 id="component-archives-can-come-from-anywhere-0-3-0">Component archives can come from anywhere<a class="anchor" aria-label="anchor" href="#component-archives-can-come-from-anywhere-0-3-0"></a></h3>
+<ul><li>Any element of <code>packages</code> that is an existing file is used as a path, so components can come from <strong>several directories</strong> in one call and mix <code>.tar.gz</code>, <code>.tar</code> and <code>.zip</code>. Stems still work, resolved against <code>pkg_dir</code>, which now accepts more than one directory.</li>
 <li>
-<code><a href="../reference/create_metapackage.html">create_metapackage()</a></code> gains a final <code>tolerate</code> argument for explicitly named relaxations. Filename mismatches can be silenced, and an available local dependency omitted from <code>packages</code> can be downgraded from an error to a warning; unknown relaxation names are errors.</li>
-<li>Generation results now include a <code>tolerated</code> table identifying every applied relaxation, affected component, and reason.</li>
-<li>The validation documentation now distinguishes non-negotiable recipient protections from optional project-tidiness checks, and states explicitly that bigbang does not run <code>R CMD check</code> on component packages.</li>
+<strong>Package identity and version come from each archive’s <code>DESCRIPTION</code></strong>, not from its filename, so a filename without a version is valid. A filename that disagrees with the <code>DESCRIPTION</code> produces a warning and the <code>DESCRIPTION</code> wins.</li>
+<li>A component may be a <strong>source directory</strong> with a <code>DESCRIPTION</code> at its root, built for you with the optional <code>pkgbuild</code> package. It requires <code>include_archives = TRUE</code>, because the archive built for it lives in a temporary directory that does not outlive the call.</li>
+<li>
+<code>packages</code> may be the path to a <strong>manifest</strong>: one component per line, <code>#</code> for comments. Relative paths resolve against the manifest’s own directory, absolute and <code>~</code> paths are used as given, and bare filenames are also looked up in <code>pkg_dir</code>, so the list can live under version control while the archives do not. A missing entry reports every directory that was searched.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="seeing-what-a-call-would-do-before-it-does-it-0-3-0">Seeing what a call would do before it does it<a class="anchor" aria-label="anchor" href="#seeing-what-a-call-would-do-before-it-does-it-0-3-0"></a></h3>
+<ul><li>
+<code>create_metapackage(dry_run = TRUE)</code> resolves and validates everything and returns the plan — components, installation order, files that would be written, and every validation finding — <strong>without creating <code>dest_dir</code> or writing anything</strong>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="strictness-you-choose-within-limits-you-do-not-0-3-0">Strictness you choose, within limits you do not<a class="anchor" aria-label="anchor" href="#strictness-you-choose-within-limits-you-do-not-0-3-0"></a></h3>
+<ul><li>
+<code><a href="../reference/create_metapackage.html">create_metapackage()</a></code> gains a final <code>tolerate</code> argument taking a closed list of named relaxations: <code>"filename_mismatch"</code> silences the filename-versus- <code>DESCRIPTION</code> warning, and <code>"unincluded_local_dep"</code> turns the error for a local dependency available in the supplied sources but omitted from <code>packages</code> into a warning. That second relaxation means the dependency does not travel, so the recipient has to supply it. Unknown names are errors, not silent no-ops.</li>
+<li>Generation results include a <code>tolerated</code> table naming every applied relaxation, the component it affected, and why.</li>
+<li>
+<code>on_component_error = "skip"</code> generates from the components that are valid instead of aborting, and reports the ones it left out. The exclusion is transitive: a component that depends on an excluded one is excluded too, and the chain is reported. When the omitted archive can be read, its declared <code>Package</code> drives the exclusion; when it cannot, the filename fallback is reported explicitly. Excluding every component is an error.</li>
+<li>The documentation now separates the two classes of check: validations that protect whoever installs the generated meta-package cannot be disabled by any value of <code>tolerate</code>, and there is no switch that turns validation off as a whole. It also states explicitly that bigbang does <strong>not</strong> run <code>R CMD check</code> on component packages, so a component with check warnings or notes can be included.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="regenerating-in-place-0-3-0">Regenerating in place<a class="anchor" aria-label="anchor" href="#regenerating-in-place-0-3-0"></a></h3>
+<ul><li>
+<code>create_metapackage(update = TRUE)</code> regenerates an existing project, which relaxes the rule that a destination must be new or empty. Generation records a manifest of the files it wrote together with their content hashes; <code>update</code> rewrites only those, and refuses to run if the manifest is missing or if a generated file was modified or removed by hand.</li>
+<li>Files bigbang did not write are never touched. <code>update</code> refuses when a generated file, or any parent directory on the way to it, is a symbolic link, and it replaces generated files and shipped archives atomically, so a regeneration cannot write outside the project tree.</li>
+<li>When components or options are dropped, <code>update</code> reconciles: generated files and shipped component archives that the new plan no longer includes are removed, so the regenerated meta-package cannot end up importing from a component it no longer declares.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="generated-installers-0-3-0">Generated installers<a class="anchor" aria-label="anchor" href="#generated-installers-0-3-0"></a></h3>
+<ul><li>
+<code>&lt;meta&gt;_install(only = ...)</code> installs a subset; local dependencies of the selection are added automatically, and an unknown component name is an error.</li>
+<li>
+<code>&lt;meta&gt;_install(lib = ...)</code> chooses the library in which components must be installed and verified. Non-local dependencies may already be available in that library or anywhere on <code><a href="https://rdrr.io/r/base/libPaths.html" class="external-link">.libPaths()</a></code>; they no longer need to be duplicated into the component destination.</li>
+<li>
+<code>create_metapackage(install_upgrade = ...)</code> fixes the default upgrade policy of the installer that gets emitted, so the person generating decides whether recipients stay pinned to the versions being shipped or keep anything newer they already have. The default is unchanged.</li>
+<li>The installer accepts a vector of archive directories when the archives are not shipped, and archives that do travel inside a generated meta-package contain no path from the machine that produced them.</li>
+<li>Real generation results now include the same topological <code>order</code> field as dry-run plans. The planned <code>files</code> field remains specific to dry runs.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="bug-fixes-0-3-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-3-0"></a></h3>
-<ul><li>Updating a generated metapackage now reconciles stale generated files and shipped component archives when components or options are removed.</li>
-<li>Re-exports now write their <code>importFrom</code> directives directly, so <code>reexport = TRUE</code> remains installable when <code>document = FALSE</code>; duplicate namespace imports are removed when documentation also runs.</li>
-<li>Temporary files left by interrupted atomic writes are excluded from generated source tarballs.</li>
-<li>Updates now reject symbolic links in generated files and their parent directories, and replace generated files and shipped archives atomically so an update cannot write outside the project tree.</li>
-<li>Component manifests now resolve bare archive filenames from the supplied <code>pkg_dir</code> directories when the files are not beside the manifest, preserve absolute and <code>~</code> paths, and report every directory searched for a missing entry.</li>
-<li>When component generation skips an invalid archive, a readable DESCRIPTION is used to propagate the omission through dependents; if it cannot be read, the filename fallback is reported explicitly.</li>
-<li>Installation messages now name both the declared package identity and the archive stem when those differ.</li>
-<li>Installing an already present package no longer requires reading an archive when <code>upgrade = "never"</code>; under the default policy, only its DESCRIPTION is read before deciding whether the archive needs to be used. An unreadable archive is reported as unchanged when the installed package can be retained.</li>
-<li>Rollback paths after a post-scaffold generation error are covered, including destinations reached through a symbolic link and unsuccessful removal.</li>
-<li>Lazy archive-version inspection now rejects extracted symbolic links before reading metadata, matching the full archive validation path.</li>
-<li>The installation help now explains that <code>upgrade = "never"</code> identifies a component from its filename because the archive is intentionally not read.</li>
-<li>Component archives whose extensions use upper-case letters are copied under canonical names so generated installers find them on case-sensitive systems; archive names that collide only by case are rejected.</li>
-<li>Unreadable unrelated archives in a supplied source directory are excluded from the inventory with a warning, including a specific diagnostic when a declared dependency appears to match one.</li>
-<li>Vector resolution failures retain the requested component names in the installation result, and generated installers report the package identity declared by DESCRIPTION after installation.</li>
+<ul><li>
+<code>install_local_pkg(lib = ...)</code> and generated installers now distinguish the component destination from the dependency search path: a component present only elsewhere is installed into <code>lib</code>, while a non-local dependency already available elsewhere on <code><a href="https://rdrr.io/r/base/libPaths.html" class="external-link">.libPaths()</a></code> is reused.</li>
+<li>A component archive with an upper-case extension — <code>PKG_1.0.TAR.GZ</code>, as they often arrive from Windows — was shipped under its original name while the generated installer looked for the normalised one. The component was never installed on a case-sensitive filesystem, with no error anywhere. Archives are now copied under canonical names, and names that collide only by case are rejected.</li>
+<li>An unreadable archive unrelated to the requested components, left in a supplied source directory, aborted generation. Such archives are now excluded from the inventory with a warning, and there is a specific diagnostic when a declared dependency appears to match one.</li>
+<li>Installing a package that is already present no longer requires reading its archive when <code>upgrade = "never"</code>; under the default policy only the archive’s <code>DESCRIPTION</code> is read before deciding whether the archive is needed at all. An unreadable archive is reported as unchanged when the installed package can be kept, instead of failing the call.</li>
+<li>A failed resolution of several components kept only a placeholder name in the installation result; the requested names are retained.</li>
+<li>Installation messages name both the package declared by the <code>DESCRIPTION</code> and the archive it came from when the two differ, instead of reporting the filename as though it were the package.</li>
+<li>Reading an archive’s version for the installation shortcut now rejects extracted symbolic links before reading metadata, matching the guarantees of the full archive validation path.</li>
+<li>Rolling back a generation that failed after the project tree existed is now exercised, including destinations reached through a symbolic link and a removal that does not succeed.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-0-3-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-3-0"></a></h3>
+<ul><li>The installation help explains that under <code>upgrade = "never"</code> the component is identified from its filename, because the archive is deliberately not read; use the default policy when the declared <code>Package</code> has to be checked against what is installed.</li>
+<li>The README, in both languages, documents where components can come from and every generation option. It previously described the input model the package had before this release.</li>
 </ul></div>
 </div>
     <div class="section level2">
@@ -97,8 +127,6 @@
 <div class="section level3">
 <h3 id="bug-fixes-0-2-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-2-0"></a></h3>
 <ul><li>Rollback of a failed generation works when a component of the destination path is a symbolic link. The project path was normalised before the directory existed and therefore left unresolved, while the path it was compared against was normalised after creation and resolved, so the two never matched and the rollback declined silently. That is the situation on macOS, where <code><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir()</a></code> sits under <code>/var</code>, itself a link to <code>/private/var</code>. Both sides are now normalised at the same moment.</li>
-<li>
-<code>create_metapackage(reexport = TRUE)</code> works. It previously failed for every input: a block that ran before the re-export writer iterated the versioned archive stems and called <code><a href="https://rdrr.io/r/base/ns-internal.html" class="external-link">asNamespace()</a></code> on them, which can never resolve, so the call aborted with “there is no package called ‘pkg_1.0’” before reaching the writer that does the work. That block also declared <code>S3method(&lt;name&gt;, default)</code> for every export whether or not it was a generic. It was removed; <code>write_reexports_file()</code> already resolves component namespaces and distinguishes S3 generics from ordinary functions.</li>
 <li>An archive whose root directory is accompanied by an AppleDouble <code>._&lt;dir&gt;</code> member is accepted. Archiving a package directory on macOS with extended attributes emits one, and R installs such an archive, so rejecting it rejected a working package.</li>
 <li>
 <code><a href="../reference/diagnose_dependencies.html">diagnose_dependencies()</a></code> extracts through the same guarded path as generation. A component carrying a symbolic link made the scanner read a file outside the archive and return its contents in the result.</li>

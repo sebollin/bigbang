@@ -51,7 +51,7 @@ create_metapackage(
   include. An existing file is always used as a path; otherwise the
   element is resolved as a stem in `pkg_dir`, e.g. `"myPackage_1.0.0"`.
   Existing paths may come from different directories. A single existing
-  text file without a recognised archive extension is treated as a
+  text file without a recognized archive extension is treated as a
   manifest, with one component per line; relative paths in that file are
   resolved relative to the manifest directory, absolute paths and `~`
   paths are used as written, and bare archive filenames may also be
@@ -81,9 +81,11 @@ create_metapackage(
 
 - reexport:
 
-  Logical. If `TRUE`, re-exports the component packages' functions so
-  they are reachable directly through the meta-package (tidyverse
-  style). Defaults to `FALSE`.
+  Deprecated logical argument retained in its original position for
+  positional-call compatibility. It is ignored. Loading the generated
+  meta-package attaches installed components, making their exported
+  functions available on the search path, but it does not copy those
+  functions into the meta-package namespace.
 
 - document:
 
@@ -284,12 +286,11 @@ Network access is needed only when a component depends on a package that
 must come from a repository, which happens exclusively under
 `cran_deps = "install"`.
 
-If `reexport = TRUE`, a `reexports.R` file is generated so users can
-reach the component functions directly through the meta-package
-(`meta::fun()` instead of `component::fun()`), tidyverse style. The
-required `importFrom` directives are written directly to `NAMESPACE`, so
-re-exports remain installable when `document = FALSE`; automatic
-documentation adds the corresponding help files when `document = TRUE`.
+Loading the generated meta-package attaches installed components, so
+their exported functions can be called directly or through
+`component::function()`. Component functions are not copied into the
+meta-package namespace, so `meta::component_function()` is not
+supported.
 
 ## Requirements
 
