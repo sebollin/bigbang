@@ -1,7 +1,7 @@
 Package: bigbang
 Type: Package
 Title: Build 'Tidyverse'-Style Meta-Packages from Local Package Files
-Version: 0.3.0
+Version: 0.3.0.9000
 Authors@R: c(
     person(given = "Sebastián",
            family = "Lucas",
