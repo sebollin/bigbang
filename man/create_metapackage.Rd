@@ -64,11 +64,16 @@ positional-call compatibility. The default \code{FALSE} attaches installed
 components as usual. With \code{TRUE}, explicit exports read from each
 component's NAMESPACE are exposed through read-only active bindings.
 Components are never added to \code{Imports} or \code{Depends}, so the generated
-package still installs offline without them. Accessing a binding before
-its component is installed gives a clear error; installing the component
-later makes the same binding work without reloading the metapackage. An
-object restored with \code{readRDS()} does not load a component by itself, so
-base R cannot dispatch that component's S3 method until it is loaded.}
+package still installs offline without them. Before installation, reading
+a binding returns a placeholder function whose clear missing-component
+error appears only when that function is called. For non-function exports,
+access therefore returns the placeholder instead of the object until the
+component is installed. The same binding then works without reloading the
+metapackage. Only explicit \code{export()} directives become bindings. S4
+classes and methods remain available by loading their component package.
+An object restored with \code{readRDS()} does not load a
+component by itself, so base R cannot dispatch that component's S3 method
+until it is loaded.}
 
 \item{document}{Logical. If \code{TRUE}, runs \code{devtools::document()}
 automatically. Defaults to \code{TRUE}. The planned \verb{man/<name>_*.Rd} and
@@ -242,9 +247,11 @@ exported functions can be called directly or through \verb{component::function()
 With \code{reexport = TRUE}, explicit component exports are instead exposed through
 read-only active bindings in the meta-package namespace. This does not add
 components to \code{Imports} or \code{Depends}: loading remains possible without them,
-and a binding resolves the component on every access. An object restored with
-\code{readRDS()} cannot load a component by itself, so base R cannot dispatch that
-component's S3 method until the component has been loaded.
+and a binding resolves the component on every access. Only explicit
+\code{export()} directives are rebound; S4 classes and methods are used through
+the loaded component namespace. An object restored with \code{readRDS()} cannot
+load a component by itself, so base R cannot dispatch that component's S3
+method until the component has been loaded.
 }
 
 \section{Requirements}{

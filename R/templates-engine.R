@@ -1067,7 +1067,7 @@ write_metapackage_files <- function(
 
   # Templates for the generated runtime files.
   templates <- list(
-    reexports = '\n.component_reexport_specs <- {{{ reexport_specs }}}\n.reexport_state <- new.env(parent = emptyenv())\n.reexport_state$library <- character()\n.reexport_library_paths <- function() {\n  unique(c(.reexport_state$library[dir.exists(.reexport_state$library)], .libPaths()))\n}\n.set_reexport_library <- function(lib) {\n  .reexport_state$library <- normalizePath(lib, winslash = "/", mustWork = TRUE)\n  invisible(NULL)\n}\n\n.reexport_component_value <- function(package, symbol) {\n  if (!requireNamespace(package, quietly = TRUE,\n                        lib.loc = .reexport_library_paths())) {\n    return(function(...) {\n      stop(.meta_trf("Component package \'%s\' is not installed.", package), call. = FALSE)\n    })\n  }\n  getExportedValue(package, symbol)\n}\n\n.make_reexport_binding <- function(package, symbol) {\n  force(package)\n  force(symbol)\n  function(value) {\n    if (!missing(value)) {\n      stop(.meta_tr("Runtime re-export bindings are read-only."), call. = FALSE)\n    }\n    .reexport_component_value(package, symbol)\n  }\n}\n\n.install_reexport_bindings <- function(pkgname) {\n  namespace <- asNamespace(pkgname)\n  for (spec in .component_reexport_specs) {\n    makeActiveBinding(\n      spec$symbol,\n      .make_reexport_binding(spec$package, spec$symbol),\n      namespace\n    )\n  }\n  invisible(NULL)\n}\n',
+    reexports = '\n.component_reexport_specs <- {{{ reexport_specs }}}\n.reexport_state <- new.env(parent = emptyenv())\n.reexport_state$library <- character()\n.reexport_library_paths <- function() {\n  unique(c(.reexport_state$library[dir.exists(.reexport_state$library)], .libPaths()))\n}\n.set_reexport_library <- function(lib) {\n  .reexport_state$library <- normalizePath(lib, winslash = "/", mustWork = FALSE)\n  invisible(NULL)\n}\n\n.reexport_component_value <- function(package, symbol) {\n  if (!requireNamespace(package, quietly = TRUE,\n                        lib.loc = .reexport_library_paths())) {\n    return(function(...) {\n      stop(.meta_trf("Component package \'%s\' is not installed.", package), call. = FALSE)\n    })\n  }\n  getExportedValue(package, symbol)\n}\n\n.make_reexport_binding <- function(package, symbol) {\n  force(package)\n  force(symbol)\n  function(value) {\n    if (!missing(value)) {\n      stop(.meta_tr("Runtime re-export bindings are read-only."), call. = FALSE)\n    }\n    .reexport_component_value(package, symbol)\n  }\n}\n\n.install_reexport_bindings <- function(pkgname) {\n  namespace <- asNamespace(pkgname)\n  for (spec in .component_reexport_specs) {\n    makeActiveBinding(\n      spec$symbol,\n      .make_reexport_binding(spec$package, spec$symbol),\n      namespace\n    )\n  }\n  invisible(NULL)\n}\n',
     attach = '
 utils::globalVariables(".pkgs")
 .pkgs <- {{{ package_list }}}
@@ -1640,10 +1640,11 @@ zzz = '
   missing <- result$missing
   installed <- setdiff(pkg_base_names, missing)
 {{/reexport}}{{#reexport}}  # Runtime re-exports stay lazy; do not attach components here.
-  missing <- pkg_base_names[!vapply(
-    pkg_base_names, requireNamespace, logical(1), quietly = TRUE,
-    lib.loc = .reexport_library_paths()
-  )]
+  missing <- pkg_base_names[!vapply(pkg_base_names, function(package) {
+    length(find.package(
+      package, lib.loc = .reexport_library_paths(), quiet = TRUE
+    )) > 0L
+  }, logical(1))]
   installed <- setdiff(pkg_base_names, missing)
 {{/reexport}}
 

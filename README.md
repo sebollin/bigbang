@@ -136,10 +136,15 @@ the metapackage namespace, so `teamverse::report()` is not supported.
 To expose explicit component exports through read-only runtime bindings, use
 `reexport = TRUE` when generating. Components remain outside `Imports` and
 `Depends`, so the metapackage can be installed and loaded offline before they
-exist. A binding reports a clear error until its component is installed, then
-resolves the real function or object without reloading the metapackage. An
-object restored with `readRDS()` does not load a component by itself, so base R
-cannot dispatch that component's S3 method until the component has been loaded.
+exist. Before installation, reading a binding returns a placeholder function;
+its clear missing-component error appears only when that function is called.
+For non-function exports, access returns the placeholder instead of the object
+until installation. The binding then resolves the real function or object
+without reloading the metapackage. Only explicit
+`export()` directives become bindings. S4 classes and methods remain available
+by loading the component. An object restored with `readRDS()` does not load a
+component by itself, so base R cannot dispatch that component's S3 method until
+the component has been loaded.
 
 `teamverse` carries its components, so the call takes no arguments and that is
 all anyone who receives it has to do. Hand over the built

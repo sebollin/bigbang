@@ -421,8 +421,7 @@
         archive = archive
       )
     }
-    if (length(namespace$exportPatterns) > 0L ||
-          length(namespace$exportClassPatterns) > 0L) {
+    if (length(namespace$exportPatterns) > 0L) {
       .bigbang_abort(
         "bigbang_error_reexport_namespace",
         .bb_trf(
@@ -445,11 +444,7 @@
     } else {
       exports <- unname(explicit)
     }
-    exports <- unique(c(
-      exports,
-      namespace$exportClasses,
-      namespace$exportMethods
-    ))
+    exports <- unique(exports)
     if (any(!nzchar(exports))) {
       .bigbang_abort(
         "bigbang_error_reexport_namespace",

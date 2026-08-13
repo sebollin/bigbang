@@ -138,6 +138,7 @@ test_that("generated artifact option combinations pass R CMD check", {
   combinations <- expand.grid(
     include_archives = c(FALSE, TRUE),
     workflow = c(FALSE, TRUE),
+    reexport = c(FALSE, TRUE),
     stringsAsFactors = FALSE
   )
   r <- file.path(
@@ -154,7 +155,8 @@ test_that("generated artifact option combinations pass R CMD check", {
       name, "matrixa_1.0.0", pkg_dir = archives, dest_dir = destination,
       document = TRUE, verbose = FALSE, import_deps = character(),
       force_deps = character(), workflow = workflow,
-      include_archives = combinations$include_archives[[i]]
+      include_archives = combinations$include_archives[[i]],
+      reexport = combinations$reexport[[i]]
     )
     tarball <- round87_build(generated$path, sandbox)
     output <- withr::with_dir(sandbox, system2(

@@ -102,6 +102,20 @@ test_that("the bigbang runtime catalog translates messages to Spanish", {
       "se escribe dentro de ella. Use tempdir() para una salida descartable."
     )
   )
+
+  collision_message <- paste0(
+    "Cannot re-export symbol(s) %s because components collide: %s."
+  )
+  collision_output <- translate_from_catalog(
+    "R-bigbang", bind_dir, collision_message
+  )
+  expect_identical(
+    tail(collision_output, 1L),
+    paste0(
+      "No se pueden reexportar los s\u00edmbolos %s porque hay colisiones ",
+      "entre componentes: %s."
+    )
+  )
 })
 
 test_that("generated metapackages include their own Spanish runtime catalog", {
@@ -171,6 +185,26 @@ test_that("Spanish catalogs are complete and preserve format placeholders", {
   expect_identical(unname(local_catalog), trimws(unname(local_catalog)))
   expect_identical(names(meta_catalog), trimws(names(meta_catalog)))
   expect_identical(unname(meta_catalog), trimws(unname(meta_catalog)))
+
+  reexport_messages <- c(
+    "'reexport' must be TRUE or FALSE",
+    "Could not read NAMESPACE from archive %s: the file is missing.",
+    "Could not read NAMESPACE from archive %s: %s",
+    paste0(
+      "Could not determine explicit exports in NAMESPACE from archive %s: ",
+      "export patterns are not supported for reexport."
+    ),
+    "Could not read explicit exports from NAMESPACE in archive %s.",
+    "Cannot re-export symbol(s) %s because components collide: %s.",
+    paste0(
+      "Cannot re-export symbol(s) %s because they belong to generated ",
+      "metapackage code."
+    )
+  )
+  expect_true(all(reexport_messages %in% names(local_catalog)))
+  expect_false(any(grepl(
+    "reexport' is deprecated and ignored", names(local_catalog), fixed = TRUE
+  )))
 
   placeholders <- function(text) {
     matches <- gregexpr("%(?:[0-9]+\\$)?[a-zA-Z]", text, perl = TRUE)

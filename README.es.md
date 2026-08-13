@@ -132,11 +132,15 @@ workflow = c("Importación" = "datos", "Informe" = "reportes")
 Para exponer las exportaciones explícitas mediante bindings activos de solo
 lectura, usá `reexport = TRUE` al generar. Los componentes quedan fuera de
 `Imports` y `Depends`, así que el metapaquete se puede instalar y cargar sin
-conexión antes de que existan. Un binding informa un error claro hasta que se
-instala su componente; después resuelve la función u objeto real sin recargar
-el metapaquete. Un objeto restaurado con `readRDS()` no carga un componente por
-sí mismo, así que R no puede despachar su método S3 hasta que el componente se
-haya cargado.
+conexión antes de que existan. Antes de instalarlo, leer un binding devuelve una
+función provisoria; el error claro de componente faltante aparece solo al
+llamarla. Para exports que no son funciones, el acceso devuelve esa función en
+lugar del objeto hasta la instalación. Después el binding resuelve la función u
+objeto real sin recargar el metapaquete. Solo las directivas `export()` explícitas se
+convierten en bindings. Las clases y métodos S4 quedan disponibles cargando el
+componente. Un objeto restaurado con `readRDS()` no carga un componente por sí
+mismo, así que R no puede despachar su método S3 hasta que el componente se haya
+cargado.
 
 bigbang mantiene como errores duros todas las validaciones que protegen a quien
 recibe el metapaquete: archivos inseguros o malformados, metadatos inválidos,

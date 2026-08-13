@@ -142,8 +142,26 @@ msgstr "No se encontró el directorio R del paquete: %s"
 msgid "Error processing package %s: %s"
 msgstr "Error al procesar el paquete %s: %s"
 
-msgid "'reexport' is deprecated and ignored. Loading the generated metapackage attaches installed components, but their functions are not exported from the metapackage namespace."
-msgstr "'reexport' está deprecado y se ignora. Cargar el metapaquete generado adjunta los componentes instalados, pero sus funciones no se exportan desde el espacio de nombres del metapaquete."
+msgid "'reexport' must be TRUE or FALSE"
+msgstr "'reexport' debe ser TRUE o FALSE"
+
+msgid "Could not read NAMESPACE from archive %s: the file is missing."
+msgstr "No se pudo leer NAMESPACE del archivo %s: falta el archivo."
+
+msgid "Could not read NAMESPACE from archive %s: %s"
+msgstr "No se pudo leer NAMESPACE del archivo %s: %s"
+
+msgid "Could not determine explicit exports in NAMESPACE from archive %s: export patterns are not supported for reexport."
+msgstr "No se pudieron determinar las exportaciones explícitas en NAMESPACE del archivo %s: los patrones de exportación no son compatibles con reexport."
+
+msgid "Could not read explicit exports from NAMESPACE in archive %s."
+msgstr "No se pudieron leer las exportaciones explícitas de NAMESPACE en el archivo %s."
+
+msgid "Cannot re-export symbol(s) %s because components collide: %s."
+msgstr "No se pueden reexportar los símbolos %s porque hay colisiones entre componentes: %s."
+
+msgid "Cannot re-export symbol(s) %s because they belong to generated metapackage code."
+msgstr "No se pueden reexportar los símbolos %s porque pertenecen al código generado del metapaquete."
 
 msgid "SAFETY: Path is too short and may be dangerous: %s"
 msgstr "SEGURIDAD: La ruta es demasiado corta y puede ser peligrosa: %s"

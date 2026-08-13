@@ -7,6 +7,11 @@
   dependencies. Generated metapackages can load offline before their components
   are installed, and the bindings resolve after a later installation.
 
+- Runtime re-exports now exclude S4 class and method directives, reserve every
+  generated helper symbol, preserve untracked `reexports.R` and `reexports.Rd`
+  files during updates, avoid loading components for startup reporting, and
+  support installation into a new library directory.
+
 # bigbang 0.3.0
 
 This release makes the package accept component packages as an organisation

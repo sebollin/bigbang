@@ -573,11 +573,16 @@
 #'   components as usual. With `TRUE`, explicit exports read from each
 #'   component's NAMESPACE are exposed through read-only active bindings.
 #'   Components are never added to `Imports` or `Depends`, so the generated
-#'   package still installs offline without them. Accessing a binding before
-#'   its component is installed gives a clear error; installing the component
-#'   later makes the same binding work without reloading the metapackage. An
-#'   object restored with `readRDS()` does not load a component by itself, so
-#'   base R cannot dispatch that component's S3 method until it is loaded.
+#'   package still installs offline without them. Before installation, reading
+#'   a binding returns a placeholder function whose clear missing-component
+#'   error appears only when that function is called. For non-function exports,
+#'   access therefore returns the placeholder instead of the object until the
+#'   component is installed. The same binding then works without reloading the
+#'   metapackage. Only explicit `export()` directives become bindings. S4
+#'   classes and methods remain available by loading their component package.
+#'   An object restored with `readRDS()` does not load a
+#'   component by itself, so base R cannot dispatch that component's S3 method
+#'   until it is loaded.
 #' @param document Logical. If `TRUE`, runs `devtools::document()`
 #'   automatically. Defaults to `TRUE`. The planned `man/<name>_*.Rd` and
 #'   internal-helper Rd filenames are reserved for generated documentation;
@@ -722,9 +727,11 @@
 #' With `reexport = TRUE`, explicit component exports are instead exposed through
 #' read-only active bindings in the meta-package namespace. This does not add
 #' components to `Imports` or `Depends`: loading remains possible without them,
-#' and a binding resolves the component on every access. An object restored with
-#' `readRDS()` cannot load a component by itself, so base R cannot dispatch that
-#' component's S3 method until the component has been loaded.
+#' and a binding resolves the component on every access. Only explicit
+#' `export()` directives are rebound; S4 classes and methods are used through
+#' the loaded component namespace. An object restored with `readRDS()` cannot
+#' load a component by itself, so base R cannot dispatch that component's S3
+#' method until the component has been loaded.
 #'
 #' @section Requirements:
 #' - Each component must be an existing archive path or a stem resolvable in
@@ -986,7 +993,16 @@ create_metapackage <- function(
     } else {
       character()
     }
-    if (isTRUE(reexport)) regenerable <- c(regenerable, file.path("R", "reexports.R"))
+    if (isTRUE(reexport)) {
+      reexport_files <- c(
+        file.path("R", "reexports.R"),
+        if (isTRUE(document)) file.path("man", "reexports.Rd") else character()
+      )
+      reexport_files <- reexport_files[!file.exists(file.path(
+        project_dir, reexport_files
+      ))]
+      regenerable <- c(regenerable, reexport_files)
+    }
     untracked <- setdiff(
       requested_files, union(update_manifest$files, regenerable)
     )
@@ -1055,6 +1071,14 @@ create_metapackage <- function(
   documentation_search <- NULL
   documentation_namespaces <- NULL
   documentation_snapshot <- NULL
+  documentation_files <- if (isTRUE(document)) {
+    c(
+      .planned_documentation_files(name),
+      if (isTRUE(reexport)) file.path("man", "reexports.Rd") else character()
+    )
+  } else {
+    character()
+  }
   on.exit({
     if (!is.null(documentation_search)) {
       .restore_documentation_session(
@@ -1443,6 +1467,11 @@ StripTrailingWhitespace: Yes"
       list()
     }
   )
+  if (isTRUE(document)) {
+    documentation_snapshot <- .snapshot_untracked_docs(
+      project_dir, documentation_files, update_manifest, update_backup
+    )
+  }
   if (isTRUE(reexport) && isTRUE(document)) {
     .write_reexport_documentation(
       project_dir,
@@ -1467,10 +1496,6 @@ StripTrailingWhitespace: Yes"
   doc_ok <- FALSE
   devtools_available <- FALSE
   if (isTRUE(document)) {
-    documentation_snapshot <- .snapshot_untracked_docs(
-      project_dir, .planned_documentation_files(name),
-      update_manifest, update_backup
-    )
     documentation_search <- search()
     documentation_namespaces <- loadedNamespaces()
     devtools_available <- requireNamespace("devtools", quietly = TRUE)
@@ -1504,7 +1529,7 @@ StripTrailingWhitespace: Yes"
   retained_documentation <- character()
   if (isTRUE(document) && !doc_ok) {
     retained_documentation <- .reconcile_failed_docs(
-      project_dir, .planned_documentation_files(name),
+      project_dir, documentation_files,
       documentation_snapshot, update_manifest, update_backup
     )
   }

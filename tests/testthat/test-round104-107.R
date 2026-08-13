@@ -109,18 +109,22 @@ test_that("the generation manifest enumerates every generated file", {
   root <- tempfile("bigbang-manifest-plan-")
   destination <- file.path(root, "destination")
   dir.create(destination, recursive = TRUE)
-  generated <- create_metapackage(
-    "planfilesverse",
-    system.file("extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"),
-    dest_dir = destination, document = TRUE, verbose = FALSE,
-    import_deps = character(), force_deps = character()
-  )
-  manifest <- readRDS(file.path(generated$path, .generation_manifest_name))
-  actual <- list.files(
-    generated$path, recursive = TRUE, all.files = TRUE,
-    no.. = TRUE, include.dirs = FALSE
-  )
-  expect_setequal(actual, c(manifest$files, .generation_manifest_name))
+  for (reexport in c(FALSE, TRUE)) {
+    name <- if (reexport) "planfilesreexport" else "planfilesattach"
+    generated <- create_metapackage(
+      name,
+      system.file("extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"),
+      dest_dir = destination, document = TRUE, verbose = FALSE,
+      import_deps = character(), force_deps = character(),
+      reexport = reexport
+    )
+    manifest <- readRDS(file.path(generated$path, .generation_manifest_name))
+    actual <- list.files(
+      generated$path, recursive = TRUE, all.files = TRUE,
+      no.. = TRUE, include.dirs = FALSE
+    )
+    expect_setequal(actual, c(manifest$files, .generation_manifest_name))
+  }
 })
 
 test_that("manifest recording rejects a planned file that was not written", {
