@@ -230,7 +230,90 @@
   manifest
 }
 
+.snapshot_untracked_docs <- function(project_dir, documentation_files,
+                                     update_manifest = NULL,
+                                     update_backup = NULL) {
+  tracked <- if (is.null(update_manifest)) {
+    character()
+  } else {
+    intersect(documentation_files, update_manifest$files)
+  }
+  candidates <- setdiff(documentation_files, tracked)
+  .validate_project_write_paths(project_dir, candidates)
+  paths <- file.path(project_dir, candidates)
+  existing <- candidates[file.exists(paths) & !dir.exists(paths)]
+  if (length(existing) == 0L) {
+    return(list(
+      path = NULL, files = character(), hashes = character(),
+      candidates = candidates
+    ))
+  }
+  if (is.null(update_backup)) {
+    stop("Internal error: documentation backup is unavailable", call. = FALSE)
+  }
+
+  backup_dir <- file.path(update_backup$path, ".untracked-documentation")
+  if (!dir.create(backup_dir)) {
+    stop(.bb_trf("Could not create temporary directory for %s", project_dir),
+         call. = FALSE)
+  }
+  complete <- FALSE
+  on.exit({
+    if (!complete) unlink(backup_dir, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
+  for (relative in existing) {
+    source <- file.path(project_dir, relative)
+    destination <- file.path(backup_dir, relative)
+    parent <- dirname(destination)
+    if (!dir.exists(parent) && !dir.create(parent, recursive = TRUE)) {
+      stop(.bb_trf("Could not create temporary directory for %s", relative),
+           call. = FALSE)
+    }
+    if (!file.copy(source, destination, overwrite = FALSE)) {
+      stop(.bb_trf("Could not back up generated file: %s", source),
+           call. = FALSE)
+    }
+  }
+  hashes <- vapply(
+    file.path(project_dir, existing), .file_digest, character(1L)
+  )
+  names(hashes) <- existing
+  complete <- TRUE
+  list(
+    path = backup_dir, files = existing, hashes = hashes,
+    candidates = candidates
+  )
+}
+
+.restore_untracked_docs <- function(project_dir, snapshot) {
+  if (is.null(snapshot)) return(invisible(TRUE))
+  .validate_project_write_paths(project_dir, snapshot$candidates)
+  current <- snapshot$candidates[file.exists(file.path(
+    project_dir, snapshot$candidates
+  ))]
+  appeared <- setdiff(current, snapshot$files)
+  .remove_stale_generation_files(project_dir, appeared)
+
+  for (relative in snapshot$files) {
+    .atomic_copy(
+      file.path(snapshot$path, relative),
+      file.path(project_dir, relative)
+    )
+  }
+  restored <- vapply(
+    file.path(project_dir, snapshot$files), .file_digest, character(1L)
+  )
+  if (!identical(unname(restored), unname(snapshot$hashes[snapshot$files]))) {
+    stop(.bb_trf(
+      "Could not restore generated files after a failed update: %s",
+      paste(snapshot$files, collapse = ", ")
+    ), call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 .reconcile_failed_docs <- function(project_dir, documentation_files,
+                                   documentation_snapshot = NULL,
                                    update_manifest = NULL,
                                    update_backup = NULL) {
   tracked <- if (is.null(update_manifest)) {
@@ -238,13 +321,11 @@
   } else {
     intersect(documentation_files, update_manifest$files)
   }
-  new_files <- setdiff(documentation_files, tracked)
-
   # A failed roxygen run may have written only part of its output. Files that
-  # were not tracked before this call are generated scratch output and are
-  # removed; tracked documentation is restored byte-for-byte from the update
-  # backup so it remains valid and owned by the manifest.
-  .remove_stale_generation_files(project_dir, new_files)
+  # appeared during this call are removed, while pre-existing untracked files
+  # are restored without becoming manifest-owned. Tracked documentation is
+  # restored byte-for-byte from the main update backup.
+  .restore_untracked_docs(project_dir, documentation_snapshot)
   if (length(tracked) > 0L) {
     if (is.null(update_backup)) {
       stop("Internal error: documentation backup is unavailable", call. = FALSE)
@@ -483,7 +564,11 @@
 #'   available on the search path, but it does not copy those functions into the
 #'   meta-package namespace.
 #' @param document Logical. If `TRUE`, runs `devtools::document()`
-#'   automatically. Defaults to `TRUE`.
+#'   automatically. Defaults to `TRUE`. The planned `man/<name>_*.Rd` and
+#'   internal-helper Rd filenames are reserved for generated documentation;
+#'   custom Rd files should use different names. A successful documentation run
+#'   may adopt a reserved filename into the generation manifest, after which a
+#'   later update with `document = FALSE` removes it as generated output.
 #' @param verbose Logical. If `TRUE`, shows verbose messages. The default follows
 #'   `getOption("bigbang.verbose", interactive())`.
 #' @param authors Character. Content for the `Authors@R` field of DESCRIPTION.
@@ -550,6 +635,7 @@
 #'   retried. Documentation files requested by `document = TRUE` can always be
 #'   regenerated: they can be restored after documentation was disabled, and an
 #'   update that cannot regenerate them retains the previously tracked Rd files.
+#'   See `document` for the reserved generated-documentation filenames.
 #' @param install_upgrade Character default upgrade policy emitted in the
 #'   generated installer function: "newer", "always", or "never".
 #'   This controls whether a generated installer keeps newer installed
@@ -951,6 +1037,7 @@ create_metapackage <- function(
   }
   documentation_search <- NULL
   documentation_namespaces <- NULL
+  documentation_snapshot <- NULL
   on.exit({
     if (!is.null(documentation_search)) {
       .restore_documentation_session(
@@ -992,11 +1079,19 @@ create_metapackage <- function(
       # unlink() to remove an empty directory on all supported platforms.
       .rollback_unlink(dest_dir)
     }
+    documentation_restored <- TRUE
+    if (!generation_complete && !is.null(documentation_snapshot)) {
+      documentation_restored <- tryCatch({
+        .restore_untracked_docs(project_dir, documentation_snapshot)
+        TRUE
+      }, error = function(e) FALSE)
+    }
     backup_restored <- TRUE
     if (!generation_complete && !is.null(update_backup)) {
       backup_restored <- .restore_update_backup(project_dir, update_backup)
     }
-    if (generation_complete || backup_restored) {
+    recovery_complete <- backup_restored && documentation_restored
+    if (generation_complete || recovery_complete) {
       .discard_update_backup(update_backup)
     } else if (!is.null(update_backup)) {
       warning(.bb_trf(
@@ -1326,6 +1421,10 @@ StripTrailingWhitespace: Yes"
   doc_ok <- FALSE
   devtools_available <- FALSE
   if (isTRUE(document)) {
+    documentation_snapshot <- .snapshot_untracked_docs(
+      project_dir, .planned_documentation_files(name),
+      update_manifest, update_backup
+    )
     documentation_search <- search()
     documentation_namespaces <- loadedNamespaces()
     devtools_available <- requireNamespace("devtools", quietly = TRUE)
@@ -1360,7 +1459,7 @@ StripTrailingWhitespace: Yes"
   if (isTRUE(document) && !doc_ok) {
     retained_documentation <- .reconcile_failed_docs(
       project_dir, .planned_documentation_files(name),
-      update_manifest, update_backup
+      documentation_snapshot, update_manifest, update_backup
     )
   }
 

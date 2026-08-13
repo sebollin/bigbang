@@ -117,6 +117,10 @@ user updating from 0.1.0 should read both sections.
 
 ## Bug fixes
 
+- A failed documentation run during `update = TRUE` no longer deletes or leaves
+  partially overwritten an untracked Rd file whose name is reserved for
+  generated documentation. Such files are backed up before roxygen runs and
+  restored without being adopted into the generation manifest.
 - Migrating a development-era schema 1 generation manifest now adopts only the
   shipped component archives that belong to the current plan. An unrelated
   archive placed by the user under `inst/archives/` remains untracked and is

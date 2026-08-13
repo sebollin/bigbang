@@ -66,7 +66,11 @@ available on the search path, but it does not copy those functions into the
 meta-package namespace.}
 
 \item{document}{Logical. If \code{TRUE}, runs \code{devtools::document()}
-automatically. Defaults to \code{TRUE}.}
+automatically. Defaults to \code{TRUE}. The planned \verb{man/<name>_*.Rd} and
+internal-helper Rd filenames are reserved for generated documentation;
+custom Rd files should use different names. A successful documentation run
+may adopt a reserved filename into the generation manifest, after which a
+later update with \code{document = FALSE} removes it as generated output.}
 
 \item{verbose}{Logical. If \code{TRUE}, shows verbose messages. The default follows
 \code{getOption("bigbang.verbose", interactive())}.}
@@ -149,7 +153,8 @@ Before changing the project, an update backs up every generated file and
 its manifest. A failed update restores that state so the same update can be
 retried. Documentation files requested by \code{document = TRUE} can always be
 regenerated: they can be restored after documentation was disabled, and an
-update that cannot regenerate them retains the previously tracked Rd files.}
+update that cannot regenerate them retains the previously tracked Rd files.
+See \code{document} for the reserved generated-documentation filenames.}
 
 \item{install_upgrade}{Character default upgrade policy emitted in the
 generated installer function: "newer", "always", or "never".
