@@ -214,7 +214,8 @@
 }
 
 .resolve_components <- function(packages, pkg_dir = NULL, ext = ".tar.gz",
-                                on_component_error = "abort") {
+                                on_component_error = "abort",
+                                reexport = FALSE) {
   if (!is.character(packages) || length(packages) < 1L) {
     stop(.bb_tr("'packages' must be a non-empty character vector"), call. = FALSE)
   }
@@ -249,7 +250,9 @@
         error = function(e) NULL
       )
       resolved <- tryCatch({
-        metadata <- .read_archive_metadata(path_result, ext = actual_ext)
+        metadata <- .read_archive_metadata(
+          path_result, ext = actual_ext, include_exports = isTRUE(reexport)
+        )
         list(
           path = path_result,
           ext = actual_ext,
@@ -259,7 +262,8 @@
           package = metadata$package,
           version = metadata$version,
           dependencies = metadata$dependencies,
-          constraints = metadata$constraints
+          constraints = metadata$constraints,
+          exports = .or_null(metadata$exports, character())
         )
       }, error = identity)
     } else {
@@ -267,7 +271,8 @@
     }
     if (inherits(resolved, "error")) {
       if (identical(on_component_error, "abort") ||
-            inherits(resolved, "bigbang_error_duplicate_component")) {
+            inherits(resolved, "bigbang_error_duplicate_component") ||
+            inherits(resolved, "bigbang_error_reexport_namespace")) {
         stop(resolved)
       }
       component_name <- if (!is.null(declared_identity)) {
@@ -336,7 +341,8 @@
   )
 }
 
-.read_archive_metadata <- function(package, pkg_dir = NULL, ext = NULL) {
+.read_archive_metadata <- function(package, pkg_dir = NULL, ext = NULL,
+                                   include_exports = FALSE) {
   archive <- if (file.exists(package) && !dir.exists(package)) {
     normalizePath(package, winslash = "/", mustWork = TRUE)
   } else {
@@ -386,6 +392,76 @@
     vapply(c("Depends", "Imports", "LinkingTo"), field, character(1L))
   )
 
+  exports <- character()
+  if (isTRUE(include_exports)) {
+    namespace_path <- file.path(package_root, "NAMESPACE")
+    if (!file.exists(namespace_path) || dir.exists(namespace_path)) {
+      .bigbang_abort(
+        "bigbang_error_reexport_namespace",
+        .bb_trf(
+          "Could not read NAMESPACE from archive %s: the file is missing.",
+          archive
+        ),
+        archive = archive
+      )
+    }
+    namespace <- tryCatch(
+      base::parseNamespaceFile(
+        basename(package_root), dirname(package_root), mustExist = TRUE
+      ),
+      error = identity
+    )
+    if (inherits(namespace, "error")) {
+      .bigbang_abort(
+        "bigbang_error_reexport_namespace",
+        .bb_trf(
+          "Could not read NAMESPACE from archive %s: %s",
+          archive, conditionMessage(namespace)
+        ),
+        archive = archive
+      )
+    }
+    if (length(namespace$exportPatterns) > 0L ||
+          length(namespace$exportClassPatterns) > 0L) {
+      .bigbang_abort(
+        "bigbang_error_reexport_namespace",
+        .bb_trf(
+          paste0(
+            "Could not determine explicit exports in NAMESPACE from archive %s: ",
+            "export patterns are not supported for reexport."
+          ),
+          archive
+        ),
+        archive = archive
+      )
+    }
+    explicit <- namespace$exports
+    if (length(explicit) > 0L && any(nzchar(names(explicit)))) {
+      exported_names <- names(explicit)
+      exported_names[!nzchar(exported_names)] <- unname(
+        explicit[!nzchar(exported_names)]
+      )
+      exports <- exported_names
+    } else {
+      exports <- unname(explicit)
+    }
+    exports <- unique(c(
+      exports,
+      namespace$exportClasses,
+      namespace$exportMethods
+    ))
+    if (any(!nzchar(exports))) {
+      .bigbang_abort(
+        "bigbang_error_reexport_namespace",
+        .bb_trf(
+          "Could not read explicit exports from NAMESPACE in archive %s.",
+          archive
+        ),
+        archive = archive
+      )
+    }
+  }
+
   list(
     path = normalizePath(archive, winslash = "/", mustWork = TRUE),
     ext = ext,
@@ -393,7 +469,8 @@
     package = declared_package,
     version = declared_version,
     dependencies = parsed_dependencies$dependencies,
-    constraints = parsed_dependencies$constraints
+    constraints = parsed_dependencies$constraints,
+    exports = exports
   )
 }
 
@@ -1090,7 +1167,8 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
 }
 
 .validate_generation <- function(
-  resolved, tolerate = character(), on_component_error = "abort"
+  resolved, tolerate = character(), on_component_error = "abort",
+  reexport = FALSE, metapackage_name = NULL
 ) {
   omitted <- resolved$omitted
   validation <- .validate_component_archives(resolved, tolerate = tolerate)
@@ -1113,6 +1191,54 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
       ),
       paths = duplicate_paths
     )
+  }
+  if (isTRUE(reexport)) {
+    component_exports <- lapply(resolved$components, function(component) {
+      exports <- .or_null(component$exports, character())
+      unique(exports[nzchar(exports)])
+    })
+    exported_symbols <- unlist(component_exports, use.names = FALSE)
+    if (anyDuplicated(exported_symbols)) {
+      duplicated_symbols <- unique(exported_symbols[duplicated(exported_symbols)])
+      owners <- vapply(duplicated_symbols, function(symbol) {
+        packages <- vapply(seq_along(component_exports), function(index) {
+          if (symbol %in% component_exports[[index]]) {
+            resolved$components[[index]]$package
+          } else {
+            NA_character_
+          }
+        }, character(1L))
+        paste(stats::na.omit(packages), collapse = ", ")
+      }, character(1L))
+      .bigbang_abort(
+        "bigbang_error_reexport_collision",
+        .bb_trf(
+          "Cannot re-export symbol(s) %s because components collide: %s.",
+          paste(duplicated_symbols, collapse = ", "),
+          paste(
+            paste0(duplicated_symbols, " (", owners, ")"),
+            collapse = "; "
+          )
+        ),
+        symbols = duplicated_symbols,
+        components = owners
+      )
+    }
+    if (!is.null(metapackage_name)) {
+      own_symbols <- .generated_metapackage_symbols(metapackage_name)
+      conflicting <- intersect(unique(exported_symbols), own_symbols)
+      if (length(conflicting) > 0L) {
+        .bigbang_abort(
+          "bigbang_error_reexport_collision",
+          .bb_trf(
+            "Cannot re-export symbol(s) %s because they belong to generated metapackage code.",
+            paste(conflicting, collapse = ", ")
+          ),
+          symbols = conflicting,
+          components = metapackage_name
+        )
+      }
+    }
   }
   list(resolved = resolved, validation = validation, omitted = omitted)
 }

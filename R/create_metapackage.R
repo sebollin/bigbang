@@ -54,7 +54,8 @@
 .planned_generation_files <- function(name, components, workflow = NULL,
                                       include_archives = TRUE,
                                       license = "MIT + file LICENSE",
-                                      document = FALSE) {
+                                      document = FALSE,
+                                      reexport = FALSE) {
   files <- c(
     "DESCRIPTION", "NAMESPACE", "README.md", ".Rbuildignore", ".gitignore",
     ".BBSoptions", paste0(name, ".Rproj"),
@@ -67,6 +68,9 @@
     file.path("inst", "po", "es", "LC_MESSAGES", paste0("R-", name, ".mo")),
     .generation_manifest_name
   )
+  if (isTRUE(reexport)) {
+    files <- c(files, file.path("R", "reexports.R"))
+  }
   if (grepl("file[[:space:]]+LICENSE", license, ignore.case = TRUE)) {
     files <- c(files, "LICENSE")
   }
@@ -75,6 +79,12 @@
   }
   if (isTRUE(document)) {
     files <- c(files, .planned_documentation_files(name))
+    if (isTRUE(reexport)) {
+      exports <- unique(unlist(lapply(components, function(component) {
+        .or_null(component$exports, character())
+      }), use.names = FALSE))
+      if (length(exports) > 0L) files <- c(files, file.path("man", "reexports.Rd"))
+    }
   }
   if (isTRUE(include_archives) && length(components) > 0L) {
     files <- c(files, file.path(
@@ -558,11 +568,16 @@
 #' @param dest_dir Character. Required destination directory. The function writes
 #'   the generated meta-package exclusively inside this directory; there is no
 #'   default path. Use `tempdir()` for disposable output.
-#' @param reexport Deprecated logical argument retained in its original position
-#'   for positional-call compatibility. It is ignored. Loading the generated
-#'   meta-package attaches installed components, making their exported functions
-#'   available on the search path, but it does not copy those functions into the
-#'   meta-package namespace.
+#' @param reexport Logical flag retained in its original position for
+#'   positional-call compatibility. The default `FALSE` attaches installed
+#'   components as usual. With `TRUE`, explicit exports read from each
+#'   component's NAMESPACE are exposed through read-only active bindings.
+#'   Components are never added to `Imports` or `Depends`, so the generated
+#'   package still installs offline without them. Accessing a binding before
+#'   its component is installed gives a clear error; installing the component
+#'   later makes the same binding work without reloading the metapackage. An
+#'   object restored with `readRDS()` does not load a component by itself, so
+#'   base R cannot dispatch that component's S3 method until it is loaded.
 #' @param document Logical. If `TRUE`, runs `devtools::document()`
 #'   automatically. Defaults to `TRUE`. The planned `man/<name>_*.Rd` and
 #'   internal-helper Rd filenames are reserved for generated documentation;
@@ -704,8 +719,12 @@
 #'
 #' Loading the generated meta-package attaches installed components, so their
 #' exported functions can be called directly or through `component::function()`.
-#' Component functions are not copied into the meta-package namespace, so
-#' `meta::component_function()` is not supported.
+#' With `reexport = TRUE`, explicit component exports are instead exposed through
+#' read-only active bindings in the meta-package namespace. This does not add
+#' components to `Imports` or `Depends`: loading remains possible without them,
+#' and a binding resolves the component on every access. An object restored with
+#' `readRDS()` cannot load a component by itself, so base R cannot dispatch that
+#' component's S3 method until the component has been loaded.
 #'
 #' @section Requirements:
 #' - Each component must be an existing archive path or a stem resolvable in
@@ -770,14 +789,8 @@ create_metapackage <- function(
   debug <- isTRUE(debug)
   on_component_error <- match.arg(on_component_error)
   install_upgrade <- match.arg(install_upgrade)
-  if (!missing(reexport)) {
-    warning(.bb_tr(
-      paste0(
-        "'reexport' is deprecated and ignored. Loading the generated ",
-        "metapackage attaches installed components, but their functions are ",
-        "not exported from the metapackage namespace."
-      )
-    ), call. = FALSE)
+  if (!is.logical(reexport) || length(reexport) != 1L || is.na(reexport)) {
+    stop(.bb_tr("'reexport' must be TRUE or FALSE"), call. = FALSE)
   }
 
   # Validate public arguments before touching the filesystem.
@@ -843,11 +856,13 @@ create_metapackage <- function(
   }
 
   resolved_components <- .resolve_components(
-    packages, pkg_dir, ext, on_component_error = on_component_error
+    packages, pkg_dir, ext, on_component_error = on_component_error,
+    reexport = isTRUE(reexport)
   )
   validated <- .validate_generation(
     resolved_components, tolerate = tolerate,
-    on_component_error = on_component_error
+    on_component_error = on_component_error,
+    reexport = isTRUE(reexport), metapackage_name = name
   )
   resolved_components <- validated$resolved
   validation <- validated$validation
@@ -948,7 +963,8 @@ create_metapackage <- function(
   requested_files <- setdiff(
     .planned_generation_files(
       name, resolved_components$components, workflow,
-      include_archives, license = license, document = document
+      include_archives, license = license, document = document,
+      reexport = isTRUE(reexport)
     ),
     .generation_manifest_name
   )
@@ -970,6 +986,7 @@ create_metapackage <- function(
     } else {
       character()
     }
+    if (isTRUE(reexport)) regenerable <- c(regenerable, file.path("R", "reexports.R"))
     untracked <- setdiff(
       requested_files, union(update_manifest$files, regenerable)
     )
@@ -1002,7 +1019,7 @@ create_metapackage <- function(
       order = .component_topological_order(components),
       files = .planned_generation_files(
         name, components, workflow, include_archives,
-        license = license, document = document
+        license = license, document = document, reexport = isTRUE(reexport)
       ),
       removed_files = stale_files,
       findings = generation_findings,
@@ -1232,7 +1249,9 @@ create_metapackage <- function(
   if (!is.null(workflow)) {
     write_workflow_vignette(name, workflow, project_dir)
   }
-  write_metapackage_readme(name, project_dir, include_archives)
+  write_metapackage_readme(
+    name, project_dir, include_archives, reexport = isTRUE(reexport)
+  )
   write_consistency_test(name, project_dir)
   if (debug) {
     log_debug("Basic vignette created for R CMD check")
@@ -1244,7 +1263,14 @@ create_metapackage <- function(
     namespace_path = file.path(project_dir, "NAMESPACE"),
     implicit_deps = hard_implicit_deps,
     import_deps = import_deps,
-    verbose = debug
+    verbose = debug,
+    reexport_symbols = if (isTRUE(reexport)) {
+      unique(unlist(lapply(components, function(component) {
+        .or_null(component$exports, character())
+      }), use.names = FALSE))
+    } else {
+      character()
+    }
   )
 
   log_debug("NAMESPACE file created")
@@ -1403,8 +1429,28 @@ StripTrailingWhitespace: Yes"
     include_archives = include_archives,
     verbose = debug,
     overwrite = update,
-    install_upgrade = install_upgrade
+    install_upgrade = install_upgrade,
+    reexport = isTRUE(reexport),
+    reexport_specs = if (isTRUE(reexport)) {
+      specs <- lapply(components, function(component) {
+        exports <- unique(.or_null(component$exports, character()))
+        lapply(exports, function(symbol) {
+          list(package = component$package, symbol = symbol)
+        })
+      })
+      unname(unlist(specs, recursive = FALSE))
+    } else {
+      list()
+    }
   )
+  if (isTRUE(reexport) && isTRUE(document)) {
+    .write_reexport_documentation(
+      project_dir,
+      unique(unlist(lapply(components, function(component) {
+        .or_null(component$exports, character())
+      }), use.names = FALSE))
+    )
+  }
   log_debug("Additional metapackage files created")
 
 
@@ -1465,12 +1511,22 @@ StripTrailingWhitespace: Yes"
 
   # Keep the emitted NAMESPACE deterministic when documentation rewrites it.
   .deduplicate_namespace_imports(file.path(project_dir, "NAMESPACE"))
+  .ensure_namespace_exports(
+    file.path(project_dir, "NAMESPACE"),
+    if (isTRUE(reexport)) {
+      unique(unlist(lapply(components, function(component) {
+        .or_null(component$exports, character())
+      }), use.names = FALSE))
+    } else {
+      character()
+    }
+  )
 
   manifest_files <- union(
     setdiff(
       .planned_generation_files(
         name, components, workflow, include_archives,
-        license = license, document = doc_ok
+        license = license, document = doc_ok, reexport = isTRUE(reexport)
       ),
       .generation_manifest_name
     ),

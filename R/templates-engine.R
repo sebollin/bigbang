@@ -1010,7 +1010,9 @@ write_metapackage_files <- function(
     include_archives = FALSE,
     verbose = FALSE,
     overwrite = FALSE,
-    install_upgrade = "newer"
+    install_upgrade = "newer",
+    reexport = FALSE,
+    reexport_specs = list()
 ) {
 
   log_debug <- function(debug_message) {
@@ -1027,6 +1029,18 @@ write_metapackage_files <- function(
     extension = "NULL",
     pkg_dir_default = .archive_dir_default(name, include_archives),
     install_upgrade = install_upgrade,
+    reexport = isTRUE(reexport),
+    reexport_on_load = if (isTRUE(reexport)) {
+      paste0(".install_reexport_bindings(pkgname)")
+    } else {
+      "invisible()"
+    },
+    reexport_library_setup = if (isTRUE(reexport)) {
+      ".set_reexport_library(lib)"
+    } else {
+      "invisible()"
+    },
+    reexport_specs = .r_literal(reexport_specs),
     install_call = if (isTRUE(include_archives)) {
       paste0(name, "_install()")
     } else {
@@ -1053,6 +1067,7 @@ write_metapackage_files <- function(
 
   # Templates for the generated runtime files.
   templates <- list(
+    reexports = '\n.component_reexport_specs <- {{{ reexport_specs }}}\n.reexport_state <- new.env(parent = emptyenv())\n.reexport_state$library <- character()\n.reexport_library_paths <- function() {\n  unique(c(.reexport_state$library[dir.exists(.reexport_state$library)], .libPaths()))\n}\n.set_reexport_library <- function(lib) {\n  .reexport_state$library <- normalizePath(lib, winslash = "/", mustWork = TRUE)\n  invisible(NULL)\n}\n\n.reexport_component_value <- function(package, symbol) {\n  if (!requireNamespace(package, quietly = TRUE,\n                        lib.loc = .reexport_library_paths())) {\n    return(function(...) {\n      stop(.meta_trf("Component package \'%s\' is not installed.", package), call. = FALSE)\n    })\n  }\n  getExportedValue(package, symbol)\n}\n\n.make_reexport_binding <- function(package, symbol) {\n  force(package)\n  force(symbol)\n  function(value) {\n    if (!missing(value)) {\n      stop(.meta_tr("Runtime re-export bindings are read-only."), call. = FALSE)\n    }\n    .reexport_component_value(package, symbol)\n  }\n}\n\n.install_reexport_bindings <- function(pkgname) {\n  namespace <- asNamespace(pkgname)\n  for (spec in .component_reexport_specs) {\n    makeActiveBinding(\n      spec$symbol,\n      .make_reexport_binding(spec$package, spec$symbol),\n      namespace\n    )\n  }\n  invisible(NULL)\n}\n',
     attach = '
 utils::globalVariables(".pkgs")
 .pkgs <- {{{ package_list }}}
@@ -1148,6 +1163,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
          call. = FALSE)
   }
   packages <- {{{ local_packages }}}
+  {{{ reexport_library_setup }}}
   result <- install_packages_in_order(
     packages, pkg_dir, ext, verbose = verbose,
     repos = repos, cran_deps = cran_deps, upgrade = upgrade,
@@ -1600,6 +1616,7 @@ zzz = '
 
 .onLoad <- function(libname, pkgname) {
   # Safety fix 2026-07: .onLoad never installs packages or deletes files.
+  {{{ reexport_on_load }}}
   invisible()
 }
 
@@ -1618,10 +1635,17 @@ zzz = '
   # Safety fix 2026-07: no deletion and no installation from startup.
   pkg_base_names <- .component_names
 
-  # Tidyverse-style startup hook: delegate search-path changes to a helper.
+{{^reexport}}  # Tidyverse-style startup hook: delegate search-path changes to a helper.
   result <- attach_installed_packages(pkg_base_names, warn_missing = FALSE)
   missing <- result$missing
   installed <- setdiff(pkg_base_names, missing)
+{{/reexport}}{{#reexport}}  # Runtime re-exports stay lazy; do not attach components here.
+  missing <- pkg_base_names[!vapply(
+    pkg_base_names, requireNamespace, logical(1), quietly = TRUE,
+    lib.loc = .reexport_library_paths()
+  )]
+  installed <- setdiff(pkg_base_names, missing)
+{{/reexport}}
 
   if (isTRUE(getOption("{{ name }}.quiet", FALSE))) return(invisible())
 
@@ -1672,9 +1696,11 @@ zzz = '
 
   # No cleanup or deletion operation is allowed here.
   invisible()
-}
+    }
 '
   )
+
+  if (!isTRUE(reexport)) templates$reexports <- NULL
 
   # Ensure the destination directory exists.
   if (!dir.exists(dest_dir)) {

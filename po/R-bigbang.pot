@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.3.0\n"
+"Project-Id-Version: bigbang 0.3.0.9000\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -428,4 +428,10 @@ msgid "Removing generated files no longer in the plan: %s"
 msgstr ""
 
 msgid "Component archive %s could not be read; skip propagation uses filename-derived name '%s'; dependents may fail on the recipient if that name differs from Package."
+msgstr ""
+
+msgid "Component package '%s' is not installed."
+msgstr ""
+
+msgid "Runtime re-export bindings are read-only."
 msgstr ""

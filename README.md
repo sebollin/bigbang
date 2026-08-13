@@ -133,6 +133,14 @@ Attached component exports are available directly (for example, `report()`)
 or through their own namespace (`reports::report()`). They are not copied into
 the metapackage namespace, so `teamverse::report()` is not supported.
 
+To expose explicit component exports through read-only runtime bindings, use
+`reexport = TRUE` when generating. Components remain outside `Imports` and
+`Depends`, so the metapackage can be installed and loaded offline before they
+exist. A binding reports a clear error until its component is installed, then
+resolves the real function or object without reloading the metapackage. An
+object restored with `readRDS()` does not load a component by itself, so base R
+cannot dispatch that component's S3 method until the component has been loaded.
+
 `teamverse` carries its components, so the call takes no arguments and that is
 all anyone who receives it has to do. Hand over the built
 `teamverse_0.1.0.tar.gz` and nothing else: no folder of archives alongside it,

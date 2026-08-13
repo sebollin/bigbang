@@ -812,7 +812,7 @@ test_that("already installed messages report the installed version", {
   )
 })
 
-test_that("the deprecated reexport argument warns and is ignored", {
+test_that("reexport FALSE keeps the attach-only generation path", {
   sandbox <- tempfile("bigbang-reexport-")
   archives <- file.path(sandbox, "archives")
   destination <- file.path(sandbox, "destination")
@@ -823,13 +823,10 @@ test_that("the deprecated reexport argument warns and is ignored", {
   )
   file.copy(toy, archives)
   result <- NULL
-  expect_warning(
-    result <- create_metapackage(
-      "reexportverse", "toycomponent_0.1.0", archives,
-      dest_dir = destination, reexport = TRUE, document = FALSE,
-      verbose = FALSE, import_deps = character(), force_deps = character()
-    ),
-    "deprecated and ignored"
+  result <- create_metapackage(
+    "reexportverse", "toycomponent_0.1.0", archives,
+    dest_dir = destination, reexport = FALSE, document = FALSE,
+    verbose = FALSE, import_deps = character(), force_deps = character()
   )
   expect_false(file.exists(file.path(result$path, "R", "reexports.R")))
   expect_false(any(grepl("importFrom\\(toycomponent", readLines(

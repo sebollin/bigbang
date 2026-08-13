@@ -59,11 +59,16 @@ element is an existing archive path.}
 the generated meta-package exclusively inside this directory; there is no
 default path. Use \code{tempdir()} for disposable output.}
 
-\item{reexport}{Deprecated logical argument retained in its original position
-for positional-call compatibility. It is ignored. Loading the generated
-meta-package attaches installed components, making their exported functions
-available on the search path, but it does not copy those functions into the
-meta-package namespace.}
+\item{reexport}{Logical flag retained in its original position for
+positional-call compatibility. The default \code{FALSE} attaches installed
+components as usual. With \code{TRUE}, explicit exports read from each
+component's NAMESPACE are exposed through read-only active bindings.
+Components are never added to \code{Imports} or \code{Depends}, so the generated
+package still installs offline without them. Accessing a binding before
+its component is installed gives a clear error; installing the component
+later makes the same binding work without reloading the metapackage. An
+object restored with \code{readRDS()} does not load a component by itself, so
+base R cannot dispatch that component's S3 method until it is loaded.}
 
 \item{document}{Logical. If \code{TRUE}, runs \code{devtools::document()}
 automatically. Defaults to \code{TRUE}. The planned \verb{man/<name>_*.Rd} and
@@ -234,8 +239,12 @@ happens exclusively under \code{cran_deps = "install"}.
 
 Loading the generated meta-package attaches installed components, so their
 exported functions can be called directly or through \verb{component::function()}.
-Component functions are not copied into the meta-package namespace, so
-\code{meta::component_function()} is not supported.
+With \code{reexport = TRUE}, explicit component exports are instead exposed through
+read-only active bindings in the meta-package namespace. This does not add
+components to \code{Imports} or \code{Depends}: loading remains possible without them,
+and a binding resolves the component on every access. An object restored with
+\code{readRDS()} cannot load a component by itself, so base R cannot dispatch that
+component's S3 method until the component has been loaded.
 }
 
 \section{Requirements}{

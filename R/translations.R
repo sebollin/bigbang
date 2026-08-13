@@ -142,7 +142,9 @@
     "Could not restore generated files after a failed update: %s" = "No se pudieron restaurar los archivos generados despu\u00e9s de una actualizaci\u00f3n fallida: %s",
     "The update backup was retained for manual recovery at: %s" = "El respaldo de la actualizaci\u00f3n se conserv\u00f3 para recuperaci\u00f3n manual en: %s",
     "Removing generated files no longer in the plan: %s" = "Eliminando archivos generados que ya no est\u00e1n en el plan: %s",
-    "Component archive %s could not be read; skip propagation uses filename-derived name '%s'; dependents may fail on the recipient if that name differs from Package." = "No se pudo leer el archivo del componente %s; el arrastre del descarte usa el nombre derivado del archivo '%s'; los dependientes pueden fallar en el receptor si ese nombre difiere de Package."
+    "Component archive %s could not be read; skip propagation uses filename-derived name '%s'; dependents may fail on the recipient if that name differs from Package." = "No se pudo leer el archivo del componente %s; el arrastre del descarte usa el nombre derivado del archivo '%s'; los dependientes pueden fallar en el receptor si ese nombre difiere de Package.",
+    "Component package '%s' is not installed." = "El componente '%s' no est\u00e1 instalado.",
+    "Runtime re-export bindings are read-only." = "Los bindings de reexportaci\u00f3n son de solo lectura."
   )
 }
 
@@ -245,7 +247,9 @@
       "No se pudo crear la biblioteca de instalaci\u00f3n: %s",
       "'only' debe contener nombres de paquetes componentes.",
       "Componente(s) desconocido(s) en 'only': %s.",
-      "Se agregaron dependencias locales de los componentes seleccionados: %s"
+      "Se agregaron dependencias locales de los componentes seleccionados: %s",
+      "El componente '%s' no est\u00e1 instalado.",
+      "Los bindings de reexportaci\u00f3n son de solo lectura."
     ),
     c(
       "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives.",
@@ -321,7 +325,9 @@
       "Could not create installation library: %s",
       "'only' must contain component package names.",
       "Unknown component(s) in 'only': %s.",
-      "Added local dependencies of selected components: %s"
+      "Added local dependencies of selected components: %s",
+      "Component package '%s' is not installed.",
+      "Runtime re-export bindings are read-only."
     )
   )
 }

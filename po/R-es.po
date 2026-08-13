@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.3.0\n"
+"Project-Id-Version: bigbang 0.3.0.9000\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -429,3 +429,9 @@ msgstr "Eliminando archivos generados que ya no están en el plan: %s"
 
 msgid "Component archive %s could not be read; skip propagation uses filename-derived name '%s'; dependents may fail on the recipient if that name differs from Package."
 msgstr "No se pudo leer el archivo del componente %s; el arrastre del descarte usa el nombre derivado del archivo '%s'; los dependientes pueden fallar en el receptor si ese nombre difiere de Package."
+
+msgid "Component package '%s' is not installed."
+msgstr "El componente '%s' no está instalado."
+
+msgid "Runtime re-export bindings are read-only."
+msgstr "Los bindings de reexportación son de solo lectura."

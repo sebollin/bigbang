@@ -1,5 +1,12 @@
 # bigbang (development version)
 
+## New features
+
+- `create_metapackage(reexport = TRUE)` now exposes explicit component exports
+  through lazy, read-only active bindings without making components installation
+  dependencies. Generated metapackages can load offline before their components
+  are installed, and the bindings resolve after a later installation.
+
 # bigbang 0.3.0
 
 This release makes the package accept component packages as an organisation
