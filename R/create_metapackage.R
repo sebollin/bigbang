@@ -107,7 +107,8 @@
   list(schema = 2L, files = rel, hashes = stats::setNames(hashes, rel))
 }
 
-.legacy_owned_generation_files <- function(project_dir, files) {
+.legacy_owned_generation_files <- function(project_dir, files,
+                                           requested_files = character()) {
   name <- basename(normalizePath(
     project_dir, winslash = "/", mustWork = TRUE
   ))
@@ -120,11 +121,16 @@
     .generation_manifest_name
   )
   known <- c(known, file.path("R", "reexports.R"))
-  shipped_archive <- grepl(
+  requested_archives <- requested_files[grepl(
     "^inst/archives/[^/]+\\.(tar\\.gz|tar|zip)$",
-    files, ignore.case = TRUE, perl = TRUE
-  )
-  files[files %in% known | shipped_archive]
+    requested_files, ignore.case = TRUE, perl = TRUE
+  )]
+  # Schema 1 scanned the whole tree and could therefore claim archives placed
+  # there by the user. During migration, only canonical archive paths in the
+  # current plan are adopted. An archive for a component removed in this same
+  # legacy update remains untracked and must be cleaned up manually; retaining
+  # it is safer than guessing ownership and deleting the only surviving copy.
+  files[files %in% known | files %in% requested_archives]
 }
 
 .preserve_omitted_archives <- function(stale_files, omitted) {
@@ -153,7 +159,8 @@
   tryCatch(readRDS(path), error = function(e) NULL)
 }
 
-.validate_update_manifest <- function(project_dir) {
+.validate_update_manifest <- function(project_dir,
+                                      requested_files = character()) {
   manifest_path <- file.path(project_dir, .generation_manifest_name)
   if (.path_is_symlink(manifest_path)) {
     .bigbang_abort(
@@ -197,7 +204,7 @@
   }
   if (is.null(manifest$schema) || identical(manifest$schema, 1L)) {
     manifest$files <- .legacy_owned_generation_files(
-      project_dir, manifest$files
+      project_dir, manifest$files, requested_files
     )
     manifest$hashes <- manifest$hashes[manifest$files]
   }
@@ -221,6 +228,35 @@
     )
   }
   manifest
+}
+
+.reconcile_failed_docs <- function(project_dir, documentation_files,
+                                   update_manifest = NULL,
+                                   update_backup = NULL) {
+  tracked <- if (is.null(update_manifest)) {
+    character()
+  } else {
+    intersect(documentation_files, update_manifest$files)
+  }
+  new_files <- setdiff(documentation_files, tracked)
+
+  # A failed roxygen run may have written only part of its output. Files that
+  # were not tracked before this call are generated scratch output and are
+  # removed; tracked documentation is restored byte-for-byte from the update
+  # backup so it remains valid and owned by the manifest.
+  .remove_stale_generation_files(project_dir, new_files)
+  if (length(tracked) > 0L) {
+    if (is.null(update_backup)) {
+      stop("Internal error: documentation backup is unavailable", call. = FALSE)
+    }
+    for (relative in tracked) {
+      .atomic_copy(
+        file.path(update_backup$path, relative),
+        file.path(project_dir, relative)
+      )
+    }
+  }
+  tracked
 }
 
 .create_update_backup <- function(project_dir, manifest) {
@@ -511,7 +547,9 @@
 #'   also removes its shipped archive, which may be the last available copy.
 #'   Before changing the project, an update backs up every generated file and
 #'   its manifest. A failed update restores that state so the same update can be
-#'   retried.
+#'   retried. Documentation files requested by `document = TRUE` can always be
+#'   regenerated: they can be restored after documentation was disabled, and an
+#'   update that cannot regenerate them retains the previously tracked Rd files.
 #' @param install_upgrade Character default upgrade policy emitted in the
 #'   generated installer function: "newer", "always", or "never".
 #'   This controls whether a generated installer keeps newer installed
@@ -821,6 +859,13 @@ create_metapackage <- function(
   update_manifest <- NULL
   stale_files <- character()
   preserved_files <- character()
+  requested_files <- setdiff(
+    .planned_generation_files(
+      name, resolved_components$components, workflow,
+      include_archives, license = license, document = document
+    ),
+    .generation_manifest_name
+  )
   if (isTRUE(update)) {
     if (!dir.exists(project_dir)) {
       .bigbang_abort(
@@ -831,15 +876,17 @@ create_metapackage <- function(
         path = project_dir
       )
     }
-    update_manifest <- .validate_update_manifest(project_dir)
-    requested_files <- setdiff(
-      .planned_generation_files(
-        name, resolved_components$components, workflow,
-        include_archives, license = license, document = document
-      ),
-      .generation_manifest_name
+    update_manifest <- .validate_update_manifest(
+      project_dir, requested_files
     )
-    untracked <- setdiff(requested_files, update_manifest$files)
+    regenerable <- if (isTRUE(document)) {
+      .planned_documentation_files(name)
+    } else {
+      character()
+    }
+    untracked <- setdiff(
+      requested_files, union(update_manifest$files, regenerable)
+    )
     if (length(untracked) > 0L) {
       .bigbang_abort(
         "bigbang_error_modified_generated_file",
@@ -1309,6 +1356,14 @@ StripTrailingWhitespace: Yes"
     message(.bb_tr("Install package 'devtools' to generate documentation automatically."))
   }
 
+  retained_documentation <- character()
+  if (isTRUE(document) && !doc_ok) {
+    retained_documentation <- .reconcile_failed_docs(
+      project_dir, .planned_documentation_files(name),
+      update_manifest, update_backup
+    )
+  }
+
   # Keep the emitted NAMESPACE deterministic when documentation rewrites it.
   .deduplicate_namespace_imports(file.path(project_dir, "NAMESPACE"))
 
@@ -1320,7 +1375,7 @@ StripTrailingWhitespace: Yes"
       ),
       .generation_manifest_name
     ),
-    preserved_files
+    union(preserved_files, retained_documentation)
   )
   manifest <- .manifest_records(project_dir, manifest_files)
   .atomic_save_rds(manifest, file.path(project_dir, .generation_manifest_name))

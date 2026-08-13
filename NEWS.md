@@ -117,6 +117,14 @@ user updating from 0.1.0 should read both sections.
 
 ## Bug fixes
 
+- Migrating a development-era schema 1 generation manifest now adopts only the
+  shipped component archives that belong to the current plan. An unrelated
+  archive placed by the user under `inst/archives/` remains untracked and is
+  never removed by a later update.
+- Documentation outputs can be disabled and re-enabled across updates. If
+  roxygen fails during an update, previously tracked Rd files are restored and
+  retained in the manifest, while partial newly generated Rd files are removed,
+  so a later documentation update remains possible.
 - Update manifests are now built from the explicit generation plan instead of
   scanning the project tree. Repeated updates no longer absorb and later delete
   user files, including files under `.git/`.

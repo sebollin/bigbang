@@ -147,7 +147,9 @@ no longer in the plan are reported in \code{removed_files}. Removing a component
 also removes its shipped archive, which may be the last available copy.
 Before changing the project, an update backs up every generated file and
 its manifest. A failed update restores that state so the same update can be
-retried.}
+retried. Documentation files requested by \code{document = TRUE} can always be
+regenerated: they can be restored after documentation was disabled, and an
+update that cannot regenerate them retains the previously tracked Rd files.}
 
 \item{install_upgrade}{Character default upgrade policy emitted in the
 generated installer function: "newer", "always", or "never".
