@@ -91,7 +91,12 @@ create_metapackage(
 
   Logical. If `TRUE`, runs
   [`devtools::document()`](https://devtools.r-lib.org/reference/document.html)
-  automatically. Defaults to `TRUE`.
+  automatically. Defaults to `TRUE`. The planned `man/<name>_*.Rd` and
+  internal-helper Rd filenames are reserved for generated documentation;
+  custom Rd files should use different names. A successful documentation
+  run may adopt a reserved filename into the generation manifest, after
+  which a later update with `document = FALSE` removes it as generated
+  output.
 
 - verbose:
 
@@ -186,15 +191,29 @@ create_metapackage(
   exposes its DESCRIPTION, propagation uses its declared `Package`;
   otherwise the filename-derived name is used and the limitation is
   reported. If that fallback name differs from `Package`, a dependent
-  may fail on the recipient.
+  may fail on the recipient. During an update, omitted inputs never
+  authorize deletion of a previously shipped archive. When the old
+  component cannot be identified unambiguously, archive reconciliation
+  is deferred until a clean update rather than risking the only
+  surviving copy.
 
 - update:
 
   Logical. If TRUE, update a previously generated project only when its
   bigbang manifest is present and all generated files are unchanged.
   Files outside that manifest are never touched. Updates are refused
-  when a manifest file or any path component inside the generated
-  project is a symbolic link, so writes cannot escape the project tree.
+  when the generated project root, a manifest file, or any path
+  component inside the project is a symbolic link, so writes cannot
+  escape the project tree. Generated files no longer in the plan are
+  reported in `removed_files`. Removing a component also removes its
+  shipped archive, which may be the last available copy. Before changing
+  the project, an update backs up every generated file and its manifest.
+  A failed update restores that state so the same update can be retried.
+  Documentation files requested by `document = TRUE` can always be
+  regenerated: they can be restored after documentation was disabled,
+  and an update that cannot regenerate them retains the previously
+  tracked Rd files. See `document` for the reserved
+  generated-documentation filenames.
 
 - install_upgrade:
 
@@ -206,8 +225,8 @@ create_metapackage(
 ## Value
 
 Invisibly, a `bigbang_result` containing the generated path, component
-archives, dependency classification, applied tolerations, and
-documentation status.
+archives, dependency classification, applied tolerations, generated
+files removed by an update, and documentation status.
 
 ## Details
 

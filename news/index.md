@@ -94,8 +94,13 @@ sections.
   atomically, so a regeneration cannot write outside the project tree.
 - When components or options are dropped, `update` reconciles: generated
   files and shipped component archives that the new plan no longer
-  includes are removed, so the regenerated meta-package cannot end up
-  importing from a component it no longer declares.
+  includes are removed transactionally, so the regenerated meta-package
+  cannot end up importing from a component it no longer declares. Before
+  changing an existing project, bigbang backs up all generated files and
+  its manifest. If generation or reconciliation fails, that state is
+  restored and the update remains retryable. Dry runs and completed
+  updates report the affected paths in `removed_files`; removing a
+  component may remove the last available copy of its shipped archive.
 
 ### Generated installers
 
@@ -118,14 +123,49 @@ sections.
 - Real generation results now include the same topological `order` field
   as dry-run plans. The planned `files` field remains specific to dry
   runs.
+- When installing a source component fails,
+  [`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md)
+  and generated installers now report the error lines of the
+  installation subprocess itself – for example, which dependency it
+  could not find – instead of only a generic verification failure.
 
 ### Bug fixes
 
+- A failed documentation run during `update = TRUE` no longer deletes or
+  leaves partially overwritten an untracked Rd file whose name is
+  reserved for generated documentation. Such files are backed up before
+  roxygen runs and restored without being adopted into the generation
+  manifest.
+- Migrating a development-era schema 1 generation manifest now adopts
+  only the shipped component archives that belong to the current plan.
+  An unrelated archive placed by the user under `inst/archives/` remains
+  untracked and is never removed by a later update.
+- Documentation outputs can be disabled and re-enabled across updates.
+  If roxygen fails during an update, previously tracked Rd files are
+  restored and retained in the manifest, while partial newly generated
+  Rd files are removed, so a later documentation update remains
+  possible.
+- Update manifests are now built from the explicit generation plan
+  instead of scanning the project tree. Repeated updates no longer
+  absorb and later delete user files, including files under `.git/`.
+- With `on_component_error = "skip"`, a failed update input no longer
+  authorizes deletion of a previously shipped component archive. If the
+  old component cannot be identified safely, archive reconciliation is
+  deferred until a clean update.
+- Updates now reject a generated project whose root entry is itself a
+  symbolic link, in addition to links below the project root.
+- Successful source-install transcripts now honor `verbose = FALSE` in
+  both
+  [`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md)
+  and generated installers; failure details still retain the child
+  process’s `ERROR` lines.
 - `install_local_pkg(lib = ...)` and generated installers now
   distinguish the component destination from the dependency search path:
   a component present only elsewhere is installed into `lib`, while a
   non-local dependency already available elsewhere on
-  [`.libPaths()`](https://rdrr.io/r/base/libPaths.html) is reused.
+  [`.libPaths()`](https://rdrr.io/r/base/libPaths.html) is reused. This
+  also works under the dependency isolation used by `R CMD check` on
+  Windows.
 - A component archive with an upper-case extension — `PKG_1.0.TAR.GZ`,
   as they often arrive from Windows — was shipped under its original
   name while the generated installer looked for the normalised one. The
