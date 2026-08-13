@@ -115,11 +115,13 @@ Every result below was obtained on the source of this submission.
   manual and installation tests: 0 errors, 0 warnings, 2 notes. One is the
   days-since-update note; the other is the absence of HTML Tidy, which is not
   installed here.
-- win-builder, R-devel: <PENDING>
-- R-hub v2, R-devel on the Linux, Windows and macOS containers: <PENDING>
+- win-builder, R-devel (2026-08-12 r90394 ucrt): 1 note, the days-since-update
+  note explained above.
+- R-hub v2, R-devel on the Linux, Windows and macOS containers: all three
+  passed (GitHub Actions run 31683239938).
 - GitHub Actions: Ubuntu (release, devel, oldrel-1), Windows (release) and macOS
-  (release), with the PDF manual enabled: <PENDING>
-- The test suite is 137 `test_that` blocks. Tests that install packages are
+  (release), with the PDF manual enabled: all five passed (run 31683076375).
+- The test suite is 160 `test_that` blocks. Tests that install packages are
   skipped on CRAN itself and exercised by setting `NOT_CRAN=true` in every CI
   configuration; the destructive data-loss verification runs on Ubuntu release.
 - Generated meta-packages were built and checked with `R CMD check --as-cran`
