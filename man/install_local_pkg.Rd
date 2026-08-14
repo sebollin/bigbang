@@ -22,7 +22,8 @@ as \code{"uspr_0.8.5"} to resolve in \code{pkg_dir}. An existing file is always
 treated as a path; only a non-existing element is resolved as a stem. A
 bare package name such as \code{"uspr"} resolves when exactly one archive in
 those directories declares that \code{Package} identity; multiple matches are
-an ambiguity error.}
+an ambiguity error. Supported archives that cannot be read during this
+identity search are excluded with a warning that names the archive.}
 
 \item{pkg_dir}{Character. Optional directory or directories containing local
 archives. It is not needed when \code{package} is an existing path.}

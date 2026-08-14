@@ -18,6 +18,8 @@
 
 .or_null <- function(x, y) if (is.null(x)) y else x
 
+.untar_quiet <- function(...) utils::untar(..., tar = "internal")
+
 .archive_extension <- function(path) {
   path_lower <- tolower(path)
   match <- .archive_extensions[vapply(
@@ -153,7 +155,16 @@
     }, logical(1L))]
   }), use.names = FALSE))
   identities <- lapply(archives, function(path) {
-    .read_archive_identity(path, .archive_extension(path))
+    tryCatch(
+      .read_archive_identity(path, .archive_extension(path)),
+      error = function(error) {
+        warning(.bb_trf(
+          "Could not read archive %s; excluding it from the archive inventory: %s",
+          path, conditionMessage(error)
+        ), call. = FALSE)
+        NULL
+      }
+    )
   })
   matches <- vapply(identities, function(identity) {
     !is.null(identity) && identical(identity$package, package)
@@ -498,59 +509,90 @@
 # rejected for another invariant (for example, multiple package roots).
 .read_archive_identity <- function(archive, ext) {
   temp_dir <- tempfile("bigbang-identity-")
-  if (!dir.create(temp_dir)) return(NULL)
+  if (!dir.create(temp_dir)) {
+    stop(.bb_trf("Could not create temporary directory for %s", archive),
+         call. = FALSE)
+  }
   on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
 
   listing <- tryCatch(suppressWarnings({
     if (identical(tolower(ext), ".zip")) {
       utils::unzip(archive, list = TRUE)
     } else {
-      utils::untar(archive, list = TRUE)
+      .untar_quiet(archive, list = TRUE)
     }
-  }), error = function(e) NULL)
-  if (is.null(listing)) return(NULL)
+  }), error = identity)
+  if (inherits(listing, "error")) {
+    stop(.bb_trf(
+      "Could not extract archive %s: %s", archive, conditionMessage(listing)
+    ), call. = FALSE)
+  }
   listing_status <- attr(listing, "status")
   if (is.numeric(listing_status) && length(listing_status) == 1L &&
-        listing_status != 0) return(NULL)
+        listing_status != 0) {
+    stop(.bb_trf(
+      "Could not extract archive %s: extraction returned status %d.",
+      archive, listing_status
+    ), call. = FALSE)
+  }
   members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
   members <- as.character(members)
-  if (length(members) == 0L) return(NULL)
-  checked <- tryCatch(
-    .validate_archive_members(members), error = function(e) NULL
-  )
-  if (is.null(checked)) return(NULL)
+  if (length(members) == 0L) {
+    stop(.bb_trf("Archive %s must contain one package root directory.", archive),
+         call. = FALSE)
+  }
+  .validate_archive_members(members)
   normalized <- sub("^\\./", "", gsub("\\\\", "/", members))
   candidates <- which(
     normalized == "DESCRIPTION" |
       grepl("^[^/]+/DESCRIPTION$", normalized)
   )
-  if (length(candidates) != 1L) return(NULL)
+  if (length(candidates) == 0L) {
+    stop(.bb_trf("Archive %s has no DESCRIPTION at the package root.", archive),
+         call. = FALSE)
+  }
+  if (length(candidates) != 1L) {
+    stop(.bb_trf("Archive %s must contain one package root directory.", archive),
+         call. = FALSE)
+  }
   member <- members[[candidates[[1L]]]]
   extraction <- tryCatch(suppressWarnings({
     if (identical(tolower(ext), ".zip")) {
       utils::unzip(archive, files = member, exdir = temp_dir)
     } else {
-      utils::untar(archive, files = member, exdir = temp_dir)
+      .untar_quiet(archive, files = member, exdir = temp_dir)
     }
-  }), error = function(e) NULL)
-  if (is.null(extraction) ||
-        (is.numeric(extraction) && length(extraction) == 1L &&
-           extraction != 0)) return(NULL)
-  links_ok <- tryCatch({
-    .validate_extracted_links(temp_dir, archive)
-    TRUE
-  }, error = function(e) FALSE)
-  if (!links_ok) return(NULL)
+  }), error = identity)
+  if (inherits(extraction, "error")) {
+    stop(.bb_trf(
+      "Could not extract archive %s: %s", archive, conditionMessage(extraction)
+    ), call. = FALSE)
+  }
+  if (is.numeric(extraction) && length(extraction) == 1L && extraction != 0) {
+    stop(.bb_trf(
+      "Could not extract archive %s: extraction returned status %d.",
+      archive, extraction
+    ), call. = FALSE)
+  }
+  .validate_extracted_links(temp_dir, archive)
   description_files <- list.files(
     temp_dir, pattern = "^DESCRIPTION$", recursive = TRUE,
     full.names = TRUE, all.files = TRUE
   )
-  if (length(description_files) != 1L) return(NULL)
+  if (length(description_files) != 1L) {
+    stop(.bb_trf("Archive %s has no DESCRIPTION at the package root.", archive),
+         call. = FALSE)
+  }
   description <- tryCatch(
     read.dcf(description_files[[1L]], fields = c("Package", "Version")),
-    error = function(e) NULL
+    error = identity
   )
-  if (is.null(description) || nrow(description) == 0L) return(NULL)
+  if (inherits(description, "error")) stop(description)
+  if (nrow(description) == 0L) {
+    stop(.bb_trf(
+      "Archive %s must declare non-empty Package and Version fields.", archive
+    ), call. = FALSE)
+  }
   field <- function(name) {
     if (!name %in% colnames(description)) return(NA_character_)
     value <- unname(description[1L, name])
@@ -558,7 +600,11 @@
   }
   package <- field("Package")
   version <- field("Version")
-  if (is.na(package) || !nzchar(package)) return(NULL)
+  if (is.na(package) || !nzchar(package)) {
+    stop(.bb_trf(
+      "Archive %s must declare non-empty Package and Version fields.", archive
+    ), call. = FALSE)
+  }
   list(package = package, version = version)
 }
 
@@ -574,7 +620,7 @@
     if (identical(tolower(ext), ".zip")) {
       utils::unzip(archive, list = TRUE)
     } else {
-      utils::untar(archive, list = TRUE)
+      .untar_quiet(archive, list = TRUE)
     }
   }), error = identity)
   if (inherits(listing, "error")) {
@@ -608,7 +654,7 @@
     if (identical(tolower(ext), ".zip")) {
       utils::unzip(archive, files = member, exdir = temp_dir)
     } else {
-      utils::untar(archive, files = member, exdir = temp_dir)
+      .untar_quiet(archive, files = member, exdir = temp_dir)
     }
   }), error = identity)
   if (inherits(extraction, "error")) {
@@ -753,7 +799,7 @@
     if (identical(tolower(ext), ".zip")) {
       utils::unzip(archive, list = TRUE)
     } else if (ext %in% c(".tar.gz", ".tar")) {
-      utils::untar(archive, list = TRUE)
+      .untar_quiet(archive, list = TRUE)
     }
   }), error = identity)
   if (inherits(listing, "error")) {
@@ -775,7 +821,7 @@
     if (identical(tolower(ext), ".zip")) {
       utils::unzip(archive, exdir = extract_dir)
     } else {
-      utils::untar(archive, exdir = extract_dir)
+      .untar_quiet(archive, exdir = extract_dir)
     }
   }), error = identity)
   if (inherits(extraction, "error")) {

@@ -113,6 +113,19 @@
   paste(deparse(x, width.cutoff = 500L), collapse = "")
 }
 
+.escape_non_ascii <- function(text) {
+  codepoints <- utf8ToInt(enc2utf8(text))
+  paste(vapply(codepoints, function(codepoint) {
+    if (codepoint <= 0x7fL) return(intToUtf8(codepoint))
+    if (codepoint <= 0xffffL) return(sprintf("\\u%04x", codepoint))
+    sprintf("\\U%08x", codepoint)
+  }, character(1L)), collapse = "")
+}
+
+.r_ascii_literal <- function(x) {
+  .escape_non_ascii(.r_literal(x))
+}
+
 .copyright_holders <- function(authors) {
   expression <- tryCatch(parse(text = authors)[[1L]], error = function(e) NULL)
   if (is.null(expression)) return("Authors listed in Authors@R")

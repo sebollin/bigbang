@@ -322,6 +322,110 @@ test_that("S4 namespace directives do not become active bindings", {
   expect_true(methods::isClass("s4thing", where = asNamespace("s4re")))
 })
 
+test_that("non-syntactic and Unicode exports remain installable bindings", {
+  testthat::skip_on_cran()
+  testthat::skip_if_not_installed("devtools")
+  sandbox <- tempfile("bigbang-reexport-symbols-")
+  source_root <- file.path(sandbox, "sources")
+  package_dir <- file.path(source_root, "oddexports")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  meta_library <- file.path(sandbox, "meta-library")
+  component_library <- file.path(sandbox, "component-library")
+  dir.create(file.path(package_dir, "R"), recursive = TRUE)
+  dir.create(archive_dir)
+  dir.create(destination)
+  dir.create(meta_library)
+  dir.create(component_library)
+  space_symbol <- "con espacios"
+  unicode_symbol <- paste0("a", intToUtf8(0x00f1L), "o")
+  writeLines(c(
+    "Package: oddexports",
+    "Version: 0.1.0",
+    "Title: Non-Syntactic Export Fixture",
+    "Description: Exercises quoted namespace exports.",
+    "License: MIT",
+    "Encoding: UTF-8",
+    "Author: Test Author",
+    "Maintainer: Test Author <test@example.org>"
+  ), file.path(package_dir, "DESCRIPTION"), useBytes = TRUE)
+  writeLines(c(
+    paste0("export(\"", space_symbol, "\")"),
+    paste0("export(\"", unicode_symbol, "\")")
+  ), file.path(package_dir, "NAMESPACE"), useBytes = TRUE)
+  writeLines(c(
+    paste0("`", space_symbol, "` <- function() 11L"),
+    paste0("`", unicode_symbol, "` <- function() 22L")
+  ), file.path(package_dir, "R", "exports.R"), useBytes = TRUE)
+  archive <- file.path(archive_dir, "oddexports_0.1.0.tar.gz")
+  withr::with_dir(source_root, utils::tar(
+    archive, "oddexports", compression = "gzip"
+  ))
+
+  generated <- create_metapackage(
+    "symbolverse", archive, dest_dir = destination, document = TRUE,
+    verbose = FALSE, import_deps = character(), force_deps = character(),
+    reexport = TRUE
+  )
+  namespace <- readLines(file.path(generated$path, "NAMESPACE"), warn = FALSE)
+  expect_true(paste0("export(`", space_symbol, "`)") %in% namespace)
+  expect_true("export(\"a\\u00f1o\")" %in% namespace)
+  specs <- readLines(file.path(generated$path, "R", "reexports.R"), warn = FALSE)
+  expect_true(any(grepl(space_symbol, specs, fixed = TRUE)))
+  aliases <- readLines(
+    file.path(generated$path, "man", "reexports.Rd"), warn = FALSE
+  )
+  expect_true(paste0("\\alias{", space_symbol, "}") %in% aliases)
+  expect_true(paste0("\\alias{", unicode_symbol, "}") %in% aliases)
+
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  withr::local_envvar(c(`_R_CHECK_CRAN_INCOMING_REMOTE_` = "false"))
+  build_output <- withr::with_dir(sandbox, system2(
+    r_binary, c("CMD", "build", shQuote(generated$path)),
+    stdout = TRUE, stderr = TRUE
+  ))
+  build_status <- attr(build_output, "status")
+  if (is.null(build_status)) build_status <- 0L
+  expect_identical(
+    build_status, 0L, info = paste(build_output, collapse = "\n")
+  )
+  tarball <- file.path(sandbox, "symbolverse_0.1.0.tar.gz")
+  expect_true(file.exists(tarball))
+  check_output <- withr::with_dir(sandbox, system2(
+    r_binary,
+    c("CMD", "check", "--as-cran", "--no-manual", shQuote(tarball)),
+    stdout = TRUE, stderr = TRUE
+  ))
+  status <- check_output[grepl("^Status:", check_output)]
+  expect_equal(
+    length(status), 1L, info = paste(check_output, collapse = "\n")
+  )
+  expect_false(
+    grepl("ERROR|WARNING", status),
+    info = paste(check_output, collapse = "\n")
+  )
+  expect_identical(system2(
+    r_binary,
+    c("CMD", "INSTALL", "-l", shQuote(meta_library), shQuote(generated$path)),
+    stdout = FALSE, stderr = FALSE
+  ), 0L)
+  expect_identical(system2(
+    r_binary,
+    c("CMD", "INSTALL", "-l", shQuote(component_library), shQuote(archive)),
+    stdout = FALSE, stderr = FALSE
+  ), 0L)
+  withr::local_libpaths(c(meta_library, component_library, .libPaths()))
+  loadNamespace("symbolverse")
+  withr::defer({
+    if ("symbolverse" %in% loadedNamespaces()) unloadNamespace("symbolverse")
+    if ("oddexports" %in% loadedNamespaces()) unloadNamespace("oddexports")
+  })
+  expect_identical(getExportedValue("symbolverse", space_symbol)(), 11L)
+  expect_identical(getExportedValue("symbolverse", unicode_symbol)(), 22L)
+})
+
 test_that("reexport rejects namespace export patterns", {
   sandbox <- tempfile("bigbang-reexport-pattern-")
   source_root <- file.path(sandbox, "sources")

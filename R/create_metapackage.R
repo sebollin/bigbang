@@ -557,6 +557,8 @@
 #'   A bare package name such as `"myPackage"` resolves when exactly one archive
 #'   in those directories declares that `Package` identity. Zero matches use the
 #'   usual unresolved-archive error; multiple matches are an ambiguity error.
+#'   Supported archives that cannot be read during this identity search are
+#'   excluded with a warning that names the archive.
 #'   Existing paths may come from different directories. A single existing text
 #'   file without a recognized archive extension is treated as a manifest, with
 #'   one component per line; relative paths in that file are resolved relative
@@ -583,6 +585,7 @@
 #'   component is installed. The same binding then works without reloading the
 #'   metapackage. Only explicit `export()` directives become bindings. S4
 #'   classes and methods remain available by loading their component package.
+#'   Non-syntactic explicit export names are quoted in the generated NAMESPACE.
 #'   An object restored with `readRDS()` does not load a
 #'   component by itself, so base R cannot dispatch that component's S3 method
 #'   until it is loaded.

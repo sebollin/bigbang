@@ -137,11 +137,12 @@ conexión antes de que existan. Antes de instalarlo, leer un binding devuelve un
 función provisoria; el error claro de componente faltante aparece solo al
 llamarla. Para exports que no son funciones, el acceso devuelve esa función en
 lugar del objeto hasta la instalación. Después el binding resuelve la función u
-objeto real sin recargar el metapaquete. Solo las directivas `export()` explícitas se
-convierten en bindings. Las clases y métodos S4 quedan disponibles cargando el
-componente. Un objeto restaurado con `readRDS()` no carga un componente por sí
-mismo, así que R no puede despachar su método S3 hasta que el componente se haya
-cargado.
+objeto real sin recargar el metapaquete. Solo las directivas `export()`
+explícitas se convierten en bindings, incluidos los nombres no sintácticos, que
+se citan de forma segura en NAMESPACE. Las clases y métodos S4 quedan disponibles
+cargando el componente. Un objeto restaurado con `readRDS()` no carga un
+componente por sí mismo, así que R no puede despachar su método S3 hasta que el
+componente se haya cargado.
 
 bigbang mantiene como errores duros todas las validaciones que protegen a quien
 recibe el metapaquete: archivos inseguros o malformados, metadatos inválidos,
@@ -206,7 +207,8 @@ También se puede usar un nombre de paquete pelado como `"geomides"` cuando un
 único archivo de `pkg_dir` declara `Package: geomides`. La comparación usa la
 identidad declarada, por lo que `"geo"` nunca selecciona `geomides`; si coinciden
 varias versiones o fuentes, bigbang lista los candidatos y pide un stem o una
-ruta explícitos.
+ruta explícitos. Los archivos ilegibles encontrados durante esa búsqueda se
+excluyen con un aviso que nombra cada archivo afectado.
 
 Los directorios fuente se construyen con el paquete opcional `pkgbuild`, en un
 temporal, y requieren `include_archives = TRUE`, porque ese archivo temporal no

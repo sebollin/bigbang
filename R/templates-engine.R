@@ -1040,7 +1040,7 @@ write_metapackage_files <- function(
     } else {
       "invisible()"
     },
-    reexport_specs = .r_literal(reexport_specs),
+    reexport_specs = .r_ascii_literal(reexport_specs),
     install_call = if (isTRUE(include_archives)) {
       paste0(name, "_install()")
     } else {

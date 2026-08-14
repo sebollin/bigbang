@@ -143,6 +143,15 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
     "is_path_inside", ".meta_tr", ".meta_trf", ".onLoad", ".onAttach", ".onUnload")
 }
 
+.namespace_export_directive <- function(symbol) {
+  quoted <- if (any(utf8ToInt(enc2utf8(symbol)) > 0x7fL)) {
+    .r_ascii_literal(symbol)
+  } else {
+    paste(deparse(as.name(symbol), backtick = TRUE), collapse = "")
+  }
+  paste0("export(", quoted, ")")
+}
+
 #' Write a generated metapackage NAMESPACE
 #'
 #' @param name Character metapackage name.
@@ -169,7 +178,9 @@ write_namespace_file <- function(name, namespace_path,
     "S3method(print,", name, "_conflicts)\n"
   )
   reexports <- if (length(reexport_symbols) > 0L) {
-    paste0("export(", reexport_symbols, ")", collapse = "\n")
+    paste(vapply(
+      reexport_symbols, .namespace_export_directive, character(1L)
+    ), collapse = "\n")
   } else {
     character()
   }
@@ -203,7 +214,9 @@ write_namespace_file <- function(name, namespace_path,
     return(invisible(NULL))
   }
   lines <- readLines(namespace_path, warn = FALSE, encoding = "UTF-8")
-  directives <- paste0("export(", symbols, ")")
+  directives <- vapply(
+    symbols, .namespace_export_directive, character(1L)
+  )
   missing <- setdiff(directives, trimws(lines))
   if (length(missing) > 0L) .write_utf8(c(lines, missing), namespace_path)
   invisible(NULL)

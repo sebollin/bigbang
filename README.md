@@ -141,8 +141,9 @@ its clear missing-component error appears only when that function is called.
 For non-function exports, access returns the placeholder instead of the object
 until installation. The binding then resolves the real function or object
 without reloading the metapackage. Only explicit
-`export()` directives become bindings. S4 classes and methods remain available
-by loading the component. An object restored with `readRDS()` does not load a
+`export()` directives become bindings, including non-syntactic names, which are
+quoted safely in NAMESPACE. S4 classes and methods remain available by loading
+the component. An object restored with `readRDS()` does not load a
 component by itself, so base R cannot dispatch that component's S3 method until
 the component has been loaded.
 
@@ -233,6 +234,8 @@ A bare package name such as `"geomides"` also works when exactly one archive in
 `pkg_dir` declares `Package: geomides`. Matching uses the declared package
 identity, so `"geo"` never selects `geomides`; if several versions or sources
 match, bigbang lists the candidates and asks for an explicit stem or path.
+Unreadable archives encountered during that search are excluded with a warning
+that names each affected file.
 
 Source directories are built with the optional `pkgbuild` package, in a
 temporary directory, and require `include_archives = TRUE`, because the archive

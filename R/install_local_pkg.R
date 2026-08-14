@@ -130,7 +130,8 @@
 #'   treated as a path; only a non-existing element is resolved as a stem. A
 #'   bare package name such as `"uspr"` resolves when exactly one archive in
 #'   those directories declares that `Package` identity; multiple matches are
-#'   an ambiguity error.
+#'   an ambiguity error. Supported archives that cannot be read during this
+#'   identity search are excluded with a warning that names the archive.
 #' @param pkg_dir Character. Optional directory or directories containing local
 #'   archives. It is not needed when `package` is an existing path.
 #' @param ext Character. Fallback archive extension for stems; existing paths

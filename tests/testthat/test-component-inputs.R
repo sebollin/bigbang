@@ -269,6 +269,84 @@ test_that("ambiguous bare package names list every archive candidate", {
   expect_true(grepl(normalizePath(second, winslash = "/"), message, fixed = TRUE))
 })
 
+test_that("bare package discovery warns about unreadable archives without raw noise", {
+  sandbox <- tempfile("bigbang-bare-unreadable-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  healthy <- make_input_archive(
+    "kuno", "1.0.0", file.path(archives, "kuno_1.0.0.tar.gz"),
+    source_root
+  )
+  corrupt <- file.path(archives, "kuno_9.9.9.tar.gz")
+  writeBin(charToRaw("not a tar archive"), corrupt)
+
+  resolved <- NULL
+  expect_warning(
+    resolved <- .resolve_archive_input("kuno", archives),
+    regexp = basename(corrupt), fixed = TRUE
+  )
+  expect_identical(
+    resolved, normalizePath(healthy, winslash = "/", mustWork = TRUE)
+  )
+
+  package_path <- getNamespaceInfo(asNamespace("bigbang"), "path")
+  if (file.exists(file.path(package_path, "Meta", "package.rds"))) {
+    package_library <- dirname(package_path)
+  } else {
+    package_library <- file.path(sandbox, "bigbang-library")
+    dir.create(package_library)
+    r_binary <- file.path(
+      R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+    )
+    install_output <- system2(
+      r_binary,
+      c("CMD", "INSTALL", "-l", shQuote(package_library),
+        shQuote(package_path)),
+      stdout = TRUE, stderr = TRUE
+    )
+    install_status <- attr(install_output, "status")
+    if (is.null(install_status)) install_status <- 0L
+    if (install_status != 0L) {
+      stop(paste(install_output, collapse = "\n"), call. = FALSE)
+    }
+  }
+  libraries <- tempfile("bigbang-child-libraries-", fileext = ".rds")
+  saveRDS(unique(c(package_library, .libPaths())), libraries)
+  child <- tempfile("bigbang-bare-child-", fileext = ".R")
+  writeLines(c(
+    "args <- commandArgs(TRUE)",
+    ".libPaths(readRDS(args[[1L]]))",
+    "library(bigbang)",
+    "withCallingHandlers({",
+    "  path <- bigbang:::.resolve_archive_input('kuno', args[[2L]])",
+    "  cat('RESOLVED:', basename(path), '\\n')",
+    "}, warning = function(w) {",
+    "  cat('STRUCTURED:', conditionMessage(w), '\\n')",
+    "  invokeRestart('muffleWarning')",
+    "})"
+  ), child, useBytes = TRUE)
+  rscript <- file.path(R.home("bin"), "Rscript")
+  output <- system2(
+    rscript, c(shQuote(child), shQuote(libraries), shQuote(archives)),
+    stdout = TRUE, stderr = TRUE
+  )
+  raw_noise <- "(^|[ /\\\\])(?:tar(?:\\.exe)?|gzip):"
+  expect_true(any(grepl("STRUCTURED:.*kuno_9.9.9", output)))
+  expect_false(any(grepl(raw_noise, output, ignore.case = TRUE, perl = TRUE)))
+
+  noise_probe <- tempfile("bigbang-noise-probe-", fileext = ".R")
+  writeLines("cat('tar: RAW_ARCHIVER_NOISE\\n', file = stderr())",
+             noise_probe, useBytes = TRUE)
+  probe_output <- system2(
+    rscript, shQuote(noise_probe), stdout = TRUE, stderr = TRUE
+  )
+  expect_true(any(grepl(
+    raw_noise, probe_output, ignore.case = TRUE, perl = TRUE
+  )))
+})
+
 test_that("install_local_pkg accepts a bare package name", {
   skip_on_cran()
   sandbox <- tempfile("bigbang-install-bare-package-")

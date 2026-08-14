@@ -28,6 +28,13 @@
 
 ## Bug fixes
 
+- Bare package-name discovery now warns when an unreadable archive is excluded
+  and suppresses uncontrolled tar diagnostics while retaining readable matches.
+
+- Runtime re-exports quote non-syntactic names in generated NAMESPACE files, so
+  legal exports containing spaces or Unicode characters produce installable
+  metapackages and working active bindings.
+
 - `removed_files` now includes partial documentation outputs that a generation
   call created and cleaned up after roxygen failed. Dry-run plans continue to
   report only removals that are knowable before generation starts.
