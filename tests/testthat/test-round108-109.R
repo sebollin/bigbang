@@ -103,6 +103,7 @@ test_that("documentation can be disabled and enabled across updates", {
   expect_true(isTRUE(failed$updated))
   expect_false(isTRUE(failed$documented))
   expect_false(any(file.exists(file.path(initial$path, documentation))))
+  expect_true(documentation[[1L]] %in% failed$removed_files)
   round108_expect_exact_manifest(initial$path)
 
   enabled <- round108_generate(

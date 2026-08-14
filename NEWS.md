@@ -26,6 +26,12 @@
   retain the precise credit for the initial metapackage-builder suggestion, and
   identify `pegeler/metapackage` as a related online declarative metapackage.
 
+## Bug fixes
+
+- `removed_files` now includes partial documentation outputs that a generation
+  call created and cleaned up after roxygen failed. Dry-run plans continue to
+  report only removals that are knowable before generation starts.
+
 # bigbang 0.3.0
 
 This release makes the package accept component packages as an organisation

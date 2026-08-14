@@ -274,7 +274,9 @@ all, so it is a safe way to see what a call would do before it does it.
   and its manifest. A failed update restores that state so the same update can
   be retried. Both dry runs and real results list removed paths in
   `removed_files`. Removing a component removes its shipped archive, which may
-  be the last available copy.
+  be the last available copy. A real result also lists partial documentation
+  files created and cleaned up after a failed roxygen run; a dry run cannot
+  predict those failure-dependent cleanups.
   Updates also refuse to write through a symbolic project root or symbolic
   links inside the generated project, including links in parent directories of
   generated files.

@@ -296,7 +296,7 @@
 }
 
 .restore_untracked_docs <- function(project_dir, snapshot) {
-  if (is.null(snapshot)) return(invisible(TRUE))
+  if (is.null(snapshot)) return(invisible(character()))
   .validate_project_write_paths(project_dir, snapshot$candidates)
   current <- snapshot$candidates[file.exists(file.path(
     project_dir, snapshot$candidates
@@ -319,7 +319,7 @@
       paste(snapshot$files, collapse = ", ")
     ), call. = FALSE)
   }
-  invisible(TRUE)
+  invisible(appeared)
 }
 
 .reconcile_failed_docs <- function(project_dir, documentation_files,
@@ -335,7 +335,7 @@
   # appeared during this call are removed, while pre-existing untracked files
   # are restored without becoming manifest-owned. Tracked documentation is
   # restored byte-for-byte from the main update backup.
-  .restore_untracked_docs(project_dir, documentation_snapshot)
+  removed <- .restore_untracked_docs(project_dir, documentation_snapshot)
   if (length(tracked) > 0L) {
     if (is.null(update_backup)) {
       stop("Internal error: documentation backup is unavailable", call. = FALSE)
@@ -347,7 +347,7 @@
       )
     }
   }
-  tracked
+  list(retained = tracked, removed = removed)
 }
 
 .create_update_backup <- function(project_dir, manifest) {
@@ -653,6 +653,9 @@
 #'   Generated files
 #'   no longer in the plan are reported in `removed_files`. Removing a component
 #'   also removes its shipped archive, which may be the last available copy.
+#'   The same field includes partial documentation outputs created and cleaned
+#'   up after a failed documentation run. A dry run cannot predict those
+#'   failure-dependent cleanups and reports only planned removals.
 #'   Before changing the project, an update backs up every generated file and
 #'   its manifest. A failed update restores that state so the same update can be
 #'   retried. Documentation files requested by `document = TRUE` can always be
@@ -668,7 +671,7 @@
 #'
 #' @return Invisibly, a `bigbang_result` containing the generated path,
 #'   component archives, dependency classification, applied tolerations,
-#'   generated files removed by an update, and documentation status.
+#'   files removed by the call, and documentation status.
 #'
 #' @details
 #' The function performs the following steps:
@@ -1530,11 +1533,14 @@ StripTrailingWhitespace: Yes"
   }
 
   retained_documentation <- character()
+  reverted_documentation <- character()
   if (isTRUE(document) && !doc_ok) {
-    retained_documentation <- .reconcile_failed_docs(
+    reconciliation <- .reconcile_failed_docs(
       project_dir, documentation_files,
       documentation_snapshot, update_manifest, update_backup
     )
+    retained_documentation <- reconciliation$retained
+    reverted_documentation <- reconciliation$removed
   }
 
   # Keep the emitted NAMESPACE deterministic when documentation rewrites it.
@@ -1570,7 +1576,7 @@ StripTrailingWhitespace: Yes"
       packages = component_packages,
       archives = archive_stems,
       order = .component_topological_order(components),
-      removed_files = stale_files,
+      removed_files = unique(c(stale_files, reverted_documentation)),
       local_dependencies = local_deps,
       cran_dependencies = cran_deps,
       implicit_dependencies = detected_implicit_deps,

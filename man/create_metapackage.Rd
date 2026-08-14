@@ -162,6 +162,9 @@ project is a symbolic link, so writes cannot escape the project tree.
 Generated files
 no longer in the plan are reported in \code{removed_files}. Removing a component
 also removes its shipped archive, which may be the last available copy.
+The same field includes partial documentation outputs created and cleaned
+up after a failed documentation run. A dry run cannot predict those
+failure-dependent cleanups and reports only planned removals.
 Before changing the project, an update backs up every generated file and
 its manifest. A failed update restores that state so the same update can be
 retried. Documentation files requested by \code{document = TRUE} can always be
@@ -177,7 +180,7 @@ versions, reinstalls every component, or skips archive inspection.}
 \value{
 Invisibly, a \code{bigbang_result} containing the generated path,
 component archives, dependency classification, applied tolerations,
-generated files removed by an update, and documentation status.
+files removed by the call, and documentation status.
 }
 \description{
 Creates the full structure and files of a meta-package that installs, manages

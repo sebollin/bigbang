@@ -247,7 +247,10 @@ segura de ver qué haría una llamada antes de que la haga.
   archivo generado y su manifiesto. Si el update falla, restaura ese estado para
   poder reintentarlo. Tanto el dry run como el resultado real enumeran las rutas
   eliminadas en `removed_files`.
-  Quitar un componente elimina su archivo embarcado, que puede ser la última copia.
+  Quitar un componente elimina su archivo embarcado, que puede ser la última
+  copia. Un resultado real también incluye los archivos parciales de
+  documentación creados y limpiados tras un fallo de roxygen; un dry run no
+  puede predecir esas limpiezas dependientes de un fallo.
   También se niega a escribir a través de una raíz de proyecto simbólica o de
   enlaces simbólicos dentro del proyecto generado, incluidos los enlaces en
   directorios padre de los archivos generados.
