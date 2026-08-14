@@ -6,7 +6,7 @@
 [![CRAN status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.org/package=bigbang)
 [![r-universe](https://sebollin.r-universe.dev/bigbang/badges/version)](https://sebollin.r-universe.dev/bigbang)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-8AB46A.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-0D9786.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 [![docs: español](https://img.shields.io/badge/docs-espa%C3%B1ol-0D9786.svg)](https://github.com/sebollin/bigbang/blob/main/README.es.md)
 
 **bigbang** builds tidyverse-style metapackages from local package archives.
@@ -363,7 +363,7 @@ place. The full remediation procedure is documented in the Spanish guide and in
 ## 🙏 Acknowledgments
 
 bigbang started from a suggestion by
-[Richard Detomasi](https://github.com/RichDeto), who proposed building a
+[Richard Detomasi](https://github.com/Richard-Detomasi), who proposed building a
 metapackage tool and pointed to
 [pegeler/metapackage](https://github.com/pegeler/metapackage) as an antecedent.
 The design and implementation—including the graph-based dependency

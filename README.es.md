@@ -6,6 +6,7 @@
 [![CRAN status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.org/package=bigbang)
 [![r-universe](https://sebollin.r-universe.dev/bigbang/badges/version)](https://sebollin.r-universe.dev/bigbang)
 [![Licencia: GPL v3](https://img.shields.io/badge/licencia-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Ciclo de vida: estable](https://img.shields.io/badge/ciclo%20de%20vida-estable-0D9786.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 [![docs: English](https://img.shields.io/badge/docs-English-0D9786.svg)](https://github.com/sebollin/bigbang/blob/main/README.md)
 
 **bigbang** construye metapaquetes estilo tidyverse a partir de archivos locales.
@@ -320,7 +321,7 @@ ruta nueva y vacía. Nunca regenere in-place una fuente no clasificada.
 ## 🙏 Agradecimientos
 
 bigbang nació de una sugerencia de
-[Richard Detomasi](https://github.com/RichDeto), quien propuso construir una
+[Richard Detomasi](https://github.com/Richard-Detomasi), quien propuso construir una
 herramienta de metapaquetes y señaló
 [pegeler/metapackage](https://github.com/pegeler/metapackage) como antecedente.
 El diseño y la implementación —incluida la resolución de dependencias mediante
