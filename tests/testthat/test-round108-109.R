@@ -114,6 +114,41 @@ test_that("documentation can be disabled and enabled across updates", {
   round108_expect_exact_manifest(initial$path)
 })
 
+test_that("documentation recovers after an initial generation failure", {
+  skip_if_not_installed("devtools")
+  root <- tempfile("bigbang-initial-document-failure-")
+  destination <- file.path(root, "destination")
+  dir.create(destination, recursive = TRUE)
+  failed <- NULL
+  expect_warning(
+    failed <- testthat::with_mocked_bindings(
+      round108_generate(
+        "initialdocverse", destination, document = TRUE
+      ),
+      document = function(...) stop("forced initial documentation failure"),
+      .package = "devtools"
+    ),
+    "Error generating documentation: forced initial documentation failure"
+  )
+  documentation <- .planned_documentation_files("initialdocverse")
+  initial_manifest <- readRDS(file.path(
+    failed$path, .generation_manifest_name
+  ))
+  expect_false(isTRUE(failed$documented))
+  expect_false(any(file.exists(file.path(failed$path, documentation))))
+  expect_false(any(documentation %in% initial_manifest$files))
+  round108_expect_exact_manifest(failed$path)
+
+  retry <- round108_generate(
+    "initialdocverse", destination, document = TRUE, update = TRUE
+  )
+  retry_manifest <- round108_expect_exact_manifest(retry$path)
+  expect_true(isTRUE(retry$updated))
+  expect_true(isTRUE(retry$documented))
+  expect_true(all(file.exists(file.path(retry$path, documentation))))
+  expect_true(all(documentation %in% retry_manifest$files))
+})
+
 test_that("failed documentation keeps tracked Rd files and remains retryable", {
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-document-update-failure-")
