@@ -1,140 +1,74 @@
 ## Update
 
-This is an update from 0.1.0, published on 2026-08-08. It supersedes 0.2.0, which
-was prepared and verified on 2026-08-09 but never submitted, because submissions
-were closed between 2026-08-05 and 2026-08-19. The calendar gap is that closure
-rather than a habit of frequent releases; the work in both versions was done in
-the days following the 0.1.0 acceptance, and we will keep to the usual pace from
-here. `NEWS.md` documents 0.2.0 and 0.3.0 separately, because a user updating
-from 0.1.0 receives both.
+This is an update from 0.1.0, published on 2026-08-08. It supersedes 0.2.0
+and 0.3.0, which were prepared and verified but never submitted because CRAN
+submissions were closed from 2026-08-05 through 2026-08-19. The version gap
+reflects that closure rather than a pattern of frequent releases. `NEWS.md`
+documents 0.2.0, 0.3.0 and 0.4.0 separately so that users updating from 0.1.0
+can distinguish the changes from each development cycle.
 
-The release changes what the package accepts as input, and it stops the package
-from producing artifacts that fail on someone else's machine.
+## What it does and what is new
 
-## What it does
+`bigbang` generates self-contained meta-packages from local R package archives.
+By default the component archives travel inside the generated meta-package;
+the recipient installs that one artifact and can then install its components
+in dependency order without knowing any path from the generating machine.
+Repositories are contacted only when the user explicitly requests installation
+of a component's non-local dependencies.
 
-`bigbang` builds a meta-package from a set of local package archives. Until now
-those archives had to sit in one directory, share one extension, and carry the
-version in the filename, because a single expression reconstructed each path from
-a stem. They can now be supplied as paths from several directories, with
-`.tar.gz`, `.tar` and `.zip` mixed, and with any filename: package identity and
-version are read from each archive's `DESCRIPTION`, which is the authority. A
-component may also be a source directory, which is built with the optional
-`pkgbuild` package.
+The changes prepared in 0.2.0 and 0.3.0 made that distribution model portable
+and data-safe. Component identity and version come from `DESCRIPTION`; inputs
+may mix archive formats and source directories from several locations; manifests,
+dry runs, selective installation, explicit destination libraries and controlled
+in-place updates are supported. Generated projects track only files written by
+bigbang and preserve untracked user files.
 
-`create_metapackage(dry_run = TRUE)` resolves and validates everything and
-returns the plan — components, installation order, files that would be written,
-and every finding — without creating the destination or writing anything.
+In 0.4.0, `reexport = TRUE` exposes explicit component exports through lazy,
+read-only active bindings. Components remain outside `Imports` and `Depends`, so
+the generated meta-package still installs and loads offline before its components
+exist. Bare package names now resolve by the declared `Package` identity when
+exactly one readable archive matches. The lifecycle is documented as stable,
+and `removed_files` now includes partial documentation output created and cleaned
+up by the same failed documentation attempt.
 
-Three defects fixed here produced a meta-package that installed on the machine
-that generated it and failed on the recipient's: an archive whose extension was
-upper-case was shipped under its original name while the generated installer
-looked for the normalised one, so the component was never installed on a
-case-sensitive filesystem; a component manifest could not find archives supplied
-through `pkg_dir`; and an unreadable unrelated archive left in a source directory
-aborted generation.
-
-## Validation strictness
-
-The release adds a `tolerate` argument, and we want to be precise about its
-scope, because "relaxable validation" is easy to misread.
-
-Validations that protect whoever installs the generated meta-package **cannot be
-disabled**, and there is no argument that switches validation off as a whole.
-During generation these remain hard errors: an unsatisfiable version constraint
-between components, a dependency cycle, an archive whose extraction fails,
-archive members with absolute or parent-traversal paths, symbolic links pointing
-outside an archive, an archive without a single package root, a missing or empty
-`Package`/`Version`, an invalid meta-package name, and two archives for the same
-component. A test enumerates that list and asserts that no value of `tolerate`
-reaches any of it.
-
-`tolerate` takes a closed list of two named relaxations, both about the tidiness
-of the person generating rather than the correctness of what is distributed: a
-filename that disagrees with the archive's `DESCRIPTION`, and a declared local
-dependency that is present in a supplied source directory but deliberately not
-included. An unknown name is an error, not a silent no-op, and every applied
-relaxation is recorded in the result. The help states that the second relaxation
-means the dependency does not travel, so the recipient must supply it.
-
-The installer is deliberately more tolerant than generation, and the
-documentation now says so explicitly: when a component is already installed and
-the policy would leave it alone, its archive is not read at all. Generation
-validates hard because it produces an artifact for another machine; installation
-does not need to read archives it will not use.
+Generation and installation deliberately have different strictness. Generation
+validates every archive and rejects conditions that could produce an artifact
+which fails on the recipient's machine. Installation is tolerant of an unreadable
+archive only when the selected policy leaves an already installed component
+untouched, because that archive will not be used.
 
 ## Files on disk
 
-`create_metapackage(update = TRUE)` regenerates in place, which relaxes the rule
-that a destination must be new or empty. It is constrained: generation records a
-manifest of the files it wrote together with their content hashes, `update`
-rewrites only those files and reconciles generated files and shipped archives
-removed from the new plan. It refuses to proceed if the manifest is absent or
-if any recorded file was modified or removed. Files the package did not write are
-never touched; updates also refuse a symbolic project root and refuse to write
-through symbolic links in the generated project. Before changing an existing
-project, bigbang backs up every
-generated file and its manifest; a failed update restores that state and remains
-retryable. Dry runs and completed updates report generated files that would be or
-were removed. Nothing is installed or removed unless the user calls a function
-explicitly, and no repository is contacted unless the user selects
-`cran_deps = "install"`.
-
-## Behaviour changes that are not backwards compatible
-
-All in the direction of failing early rather than misleading, and all listed in
-`NEWS.md`. Arguments added in this release come last in every signature, so a
-positional call written against 0.1.0 still binds to the same parameters.
-
-The ones a 0.1.0 user would notice: source-code dependency guesses are
-diagnostic rather than binding; components left untouched by the installation
-policy are reported in a new `unchanged` element instead of appearing in
-`installed`; the deprecated Spanish aliases were removed; `reexport` is now a
-deprecated, ignored positional placeholder because importing components would
-make them installation-time dependencies; and generation rejects inputs it used
-to accept, in every case because the resulting meta-package could not have been
-installed.
-
-## Included component archives
-
-`include_archives = TRUE`, the default, copies the user's own package archives
-into the meta-package that `bigbang` generates on the user's machine. It does not
-ship third-party content inside `bigbang`; the archives are supplied by whoever
-calls the function. The help states that distributing them this way is a
-redistribution, so their licenses have to allow it, that it makes the generated
-tarball as large as its components, and that CRAN prefers source tarballs under
-10 MB and does not accept binary executables in them — which matters only if a
-generated meta-package is ever submitted there.
+`create_metapackage(update = TRUE)` rewrites only files recorded in its generated
+manifest and reconciles generated files and shipped archives removed from the new
+plan. It refuses modified or missing tracked files, untracked paths it would need
+to overwrite, and symbolic links within the generated project. Before writing,
+it backs up every tracked file and the manifest; a failed update restores the
+previous state and remains retryable. Files bigbang did not write are never
+touched. Dry runs report predictable removals, and completed calls report both
+planned removals and partial outputs created and cleaned during the call.
 
 ## Test environments
 
-Every result below was obtained on the source of this submission.
+Every result below refers to the source of this submission.
 
 - Local Linux (Pop!_OS 22.04), R 4.6.1:
-  `NOT_CRAN=true R CMD check --as-cran bigbang_0.3.0.tar.gz`, including the PDF
+  `NOT_CRAN=true R CMD check --as-cran bigbang_0.4.0.tar.gz`, including the PDF
   manual and installation tests: 0 errors, 0 warnings, 2 notes. One is the
-  days-since-update note; the other is the absence of HTML Tidy, which is not
-  installed here.
-- win-builder, R-devel (2026-08-12 r90394 ucrt): 1 note, the days-since-update
-  note explained above.
-- R-hub v2, R-devel on the Linux, Windows and macOS containers: all three
-  passed (GitHub Actions run 31683239938).
-- GitHub Actions: Ubuntu (release, devel, oldrel-1), Windows (release) and macOS
-  (release), with the PDF manual enabled: all five passed (run 31683076375).
-- The test suite is 160 `test_that` blocks. Tests that install packages are
-  skipped on CRAN itself and exercised by setting `NOT_CRAN=true` in every CI
-  configuration; the destructive data-loss verification runs on Ubuntu release.
-- Generated meta-packages were built and checked with `R CMD check --as-cran`
-  in all four combinations of shipped/external archives and workflow/no
-  workflow. A project was also updated while changing those options and removing
-  a component, then built, checked, installed and exercised without the removed
-  component in the recipient library.
-- A generated meta-package carrying its components was built, its source tree and
-  the original archive directory were deleted, and it was installed into an empty
-  library on its own. `<meta>_install()` with no arguments installed its
-  components in dependency order.
+  days-since-last-update note caused by the submission closure described above;
+  the other is environmental because HTML Tidy is not installed locally.
+- win-builder, R-devel: `<PENDING>`.
+- R-hub v2, R-devel on Linux, Windows and macOS: `<PENDING>`.
+- GitHub Actions matrix (Ubuntu release/devel/oldrel-1, Windows release and
+  macOS release): `<PENDING>`.
+
+The suite contains 179 `test_that` blocks and 964 assertions. With
+`NOT_CRAN=true`, all installation tests run and the result is 964 passed,
+0 failed, 0 warnings and 0 skipped. The destructive data-loss verification also
+runs on Ubuntu release. Generated meta-packages are built and checked across the
+shipping, workflow, re-export and update combinations that alter their contents.
 
 ## Reverse dependencies
 
-There are none. Checked against the 24705 packages available from CRAN: no
+There are none. Checked against the 24732 packages available from CRAN: no
 package declares `bigbang` in Depends, Imports, Suggests, LinkingTo or Enhances.
