@@ -144,6 +144,23 @@
   normalizePath(pkg_dir, winslash = "/", mustWork = TRUE)
 }
 
+.archives_for_package_identity <- function(package, dirs) {
+  archives <- unique(unlist(lapply(dirs, function(dir) {
+    files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
+    files <- files[file.exists(files) & !dir.exists(files)]
+    files[vapply(files, function(path) {
+      !is.null(tryCatch(.archive_extension(path), error = function(e) NULL))
+    }, logical(1L))]
+  }), use.names = FALSE))
+  identities <- lapply(archives, function(path) {
+    .read_archive_identity(path, .archive_extension(path))
+  })
+  matches <- vapply(identities, function(identity) {
+    !is.null(identity) && identical(identity$package, package)
+  }, logical(1L))
+  normalizePath(archives[matches], winslash = "/", mustWork = TRUE)
+}
+
 .resolve_archive_input <- function(input, pkg_dir = NULL, ext = ".tar.gz") {
   if (!is.character(input) || length(input) != 1L || is.na(input) || !nzchar(input)) {
     stop(.bb_tr("Each component must be one non-empty archive path or stem"), call. = FALSE)
@@ -180,6 +197,12 @@
     # A path containing a separator is explicit.  Do not reinterpret it as a
     # stem and search unrelated directories when the path is missing.
     found <- character()
+  } else if (!grepl("_", input, fixed = TRUE)) {
+    # A bare package name is resolved by the Package field, never by a string
+    # prefix. This also supports archives whose filenames are build labels or
+    # omit their version while keeping traditional name_version stems intact.
+    discovered <- .archives_for_package_identity(input, dirs)
+    found <- discovered
   } else {
     candidates <- file.path(dirs, paste0(input, ext))
     found <- candidates[file.exists(candidates) & !dir.exists(candidates)]

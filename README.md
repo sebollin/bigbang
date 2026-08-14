@@ -229,6 +229,11 @@ A filename without a version is fine: `Package` and `Version` come from the
 archive's `DESCRIPTION`. If the filename disagrees, bigbang warns and trusts the
 `DESCRIPTION`.
 
+A bare package name such as `"geomides"` also works when exactly one archive in
+`pkg_dir` declares `Package: geomides`. Matching uses the declared package
+identity, so `"geo"` never selects `geomides`; if several versions or sources
+match, bigbang lists the candidates and asks for an explicit stem or path.
+
 Source directories are built with the optional `pkgbuild` package, in a
 temporary directory, and require `include_archives = TRUE`, because the archive
 built for them does not outlive the call.

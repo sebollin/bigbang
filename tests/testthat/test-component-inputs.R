@@ -203,6 +203,94 @@ test_that("stems retain the old fallback while pkg_dir is optional for paths", {
   expect_true(file.exists(archive))
 })
 
+test_that("bare package names resolve by exact DESCRIPTION identity", {
+  sandbox <- tempfile("bigbang-bare-package-identity-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  dir.create(destination)
+  geomides <- make_input_archive(
+    "geomides", "1.2.0", file.path(archives, "geomides_1.2.0.tar.gz"),
+    source_root
+  )
+  underscored <- make_input_archive(
+    "mipkg", "1.0.0", file.path(archives, "mi_pkg_1.0.tar.gz"),
+    file.path(sandbox, "underscore-source")
+  )
+
+  expect_identical(
+    .resolve_archive_input("geomides", archives),
+    normalizePath(geomides, winslash = "/", mustWork = TRUE)
+  )
+  expect_error(
+    .resolve_archive_input("geo", archives),
+    "Package archive does not exist"
+  )
+  expect_identical(
+    .resolve_archive_input("mi_pkg_1.0", archives),
+    normalizePath(underscored, winslash = "/", mustWork = TRUE)
+  )
+
+  generated <- create_metapackage(
+    "bareverse", "geomides", pkg_dir = archives,
+    dest_dir = destination, document = FALSE, verbose = FALSE,
+    import_deps = character(), force_deps = character()
+  )
+  expect_identical(generated$packages, "geomides")
+})
+
+test_that("ambiguous bare package names list every archive candidate", {
+  sandbox <- tempfile("bigbang-bare-package-ambiguity-")
+  first_source <- file.path(sandbox, "first-source")
+  second_source <- file.path(sandbox, "second-source")
+  first_dir <- file.path(sandbox, "first")
+  second_dir <- file.path(sandbox, "second")
+  dir.create(first_source, recursive = TRUE)
+  dir.create(second_source, recursive = TRUE)
+  dir.create(first_dir)
+  dir.create(second_dir)
+  first <- make_input_archive(
+    "multipkg", "1.0.0", file.path(first_dir, "multipkg_1.0.0.tar.gz"),
+    first_source
+  )
+  second <- make_input_archive(
+    "multipkg", "2.0.0", file.path(second_dir, "multipkg_2.0.0.zip"),
+    second_source
+  )
+
+  condition <- expect_error(
+    .resolve_archive_input("multipkg", c(first_dir, second_dir)),
+    class = "bigbang_error_duplicate_component"
+  )
+  message <- conditionMessage(condition)
+  expect_true(grepl(normalizePath(first, winslash = "/"), message, fixed = TRUE))
+  expect_true(grepl(normalizePath(second, winslash = "/"), message, fixed = TRUE))
+})
+
+test_that("install_local_pkg accepts a bare package name", {
+  skip_on_cran()
+  sandbox <- tempfile("bigbang-install-bare-package-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  library_dir <- file.path(sandbox, "library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  dir.create(library_dir)
+  make_input_archive(
+    "bareinstall", "1.0.0", file.path(archives, "bareinstall_1.0.0.tar.gz"),
+    source_root
+  )
+
+  result <- install_local_pkg(
+    "bareinstall", pkg_dir = archives, lib = library_dir,
+    upgrade = "always", verbose = FALSE
+  )
+  expect_length(result$failed, 0L)
+  expect_true(dir.exists(file.path(library_dir, "bareinstall")))
+})
+
 test_that("a stem collision across archive formats names the stem", {
   sandbox <- tempfile("bigbang-stem-collision-")
   first_source <- file.path(sandbox, "first-source")

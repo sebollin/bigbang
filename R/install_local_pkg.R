@@ -127,7 +127,10 @@
 #'
 #' @param package Character. An existing archive path, or a package stem such
 #'   as `"uspr_0.8.5"` to resolve in `pkg_dir`. An existing file is always
-#'   treated as a path; only a non-existing element is resolved as a stem.
+#'   treated as a path; only a non-existing element is resolved as a stem. A
+#'   bare package name such as `"uspr"` resolves when exactly one archive in
+#'   those directories declares that `Package` identity; multiple matches are
+#'   an ambiguity error.
 #' @param pkg_dir Character. Optional directory or directories containing local
 #'   archives. It is not needed when `package` is an existing path.
 #' @param ext Character. Fallback archive extension for stems; existing paths

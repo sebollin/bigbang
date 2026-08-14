@@ -202,6 +202,12 @@ Un nombre de archivo sin versión es válido: `Package` y `Version` salen del
 `DESCRIPTION` del archivo. Si el nombre discrepa, bigbang avisa y le cree al
 `DESCRIPTION`.
 
+También se puede usar un nombre de paquete pelado como `"geomides"` cuando un
+único archivo de `pkg_dir` declara `Package: geomides`. La comparación usa la
+identidad declarada, por lo que `"geo"` nunca selecciona `geomides`; si coinciden
+varias versiones o fuentes, bigbang lista los candidatos y pide un stem o una
+ruta explícitos.
+
 Los directorios fuente se construyen con el paquete opcional `pkgbuild`, en un
 temporal, y requieren `include_archives = TRUE`, porque ese archivo temporal no
 sobrevive a la llamada.

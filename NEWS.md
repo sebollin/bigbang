@@ -16,6 +16,10 @@
   files during updates, avoid loading components for startup reporting, and
   support installation into a new library directory.
 
+- Component inputs now accept a bare package name when exactly one archive in
+  the supplied directories declares that `Package` identity. Ambiguous versions
+  or sources are rejected with the full candidate list.
+
 ## Documentation
 
 - The acknowledgments now use Richard Detomasi's current contact and profile,

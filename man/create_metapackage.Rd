@@ -40,6 +40,9 @@ underscores \verb{_}).}
 \item{packages}{Character vector. Archive paths or stems of the local
 packages to include. An existing file is always used as a path; otherwise
 the element is resolved as a stem in \code{pkg_dir}, e.g. \code{"myPackage_1.0.0"}.
+A bare package name such as \code{"myPackage"} resolves when exactly one archive
+in those directories declares that \code{Package} identity. Zero matches use the
+usual unresolved-archive error; multiple matches are an ambiguity error.
 Existing paths may come from different directories. A single existing text
 file without a recognized archive extension is treated as a manifest, with
 one component per line; relative paths in that file are resolved relative
@@ -47,8 +50,8 @@ to the manifest directory, absolute paths and \code{~} paths are used as written
 and bare archive filenames may also be found in \code{pkg_dir}.}
 
 \item{pkg_dir}{Character. Optional directory or directories containing local
-archives used to resolve stems. It is not needed when every \code{packages}
-element is an existing archive path.}
+archives used to resolve stems and bare package names. It is not needed
+when every \code{packages} element is an existing archive path.}
 
 \item{ext}{Character. Fallback archive extension for stems. Defaults to
 \code{".tar.gz"}; each existing archive path keeps its own extension.}

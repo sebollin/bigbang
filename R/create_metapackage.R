@@ -554,14 +554,17 @@
 #' @param packages Character vector. Archive paths or stems of the local
 #'   packages to include. An existing file is always used as a path; otherwise
 #'   the element is resolved as a stem in `pkg_dir`, e.g. `"myPackage_1.0.0"`.
+#'   A bare package name such as `"myPackage"` resolves when exactly one archive
+#'   in those directories declares that `Package` identity. Zero matches use the
+#'   usual unresolved-archive error; multiple matches are an ambiguity error.
 #'   Existing paths may come from different directories. A single existing text
 #'   file without a recognized archive extension is treated as a manifest, with
 #'   one component per line; relative paths in that file are resolved relative
 #'   to the manifest directory, absolute paths and `~` paths are used as written,
 #'   and bare archive filenames may also be found in `pkg_dir`.
 #' @param pkg_dir Character. Optional directory or directories containing local
-#'   archives used to resolve stems. It is not needed when every `packages`
-#'   element is an existing archive path.
+#'   archives used to resolve stems and bare package names. It is not needed
+#'   when every `packages` element is an existing archive path.
 #' @param ext Character. Fallback archive extension for stems. Defaults to
 #'   `".tar.gz"`; each existing archive path keeps its own extension.
 #' @param version Character. Version of the meta-package. Defaults to `"0.1.0"`.
