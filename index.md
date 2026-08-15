@@ -9,7 +9,7 @@ status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.or
 [![License: GPL
 v3](https://img.shields.io/badge/license-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Lifecycle:
-experimental](https://img.shields.io/badge/lifecycle-experimental-8AB46A.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+stable](https://img.shields.io/badge/lifecycle-stable-0D9786.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 [![docs:
 español](https://img.shields.io/badge/docs-espa%C3%B1ol-0D9786.svg)](https://github.com/sebollin/bigbang/blob/main/README.es.md)
 
@@ -152,6 +152,21 @@ Attached component exports are available directly (for example,
 are not copied into the metapackage namespace, so `teamverse::report()`
 is not supported.
 
+To expose explicit component exports through read-only runtime bindings,
+use `reexport = TRUE` when generating. Components remain outside
+`Imports` and `Depends`, so the metapackage can be installed and loaded
+offline before they exist. Before installation, reading a binding
+returns a placeholder function; its clear missing-component error
+appears only when that function is called. For non-function exports,
+access returns the placeholder instead of the object until installation.
+The binding then resolves the real function or object without reloading
+the metapackage. Only explicit `export()` directives become bindings,
+including non-syntactic names, which are quoted safely in NAMESPACE. S4
+classes and methods remain available by loading the component. An object
+restored with [`readRDS()`](https://rdrr.io/r/base/readRDS.html) does
+not load a component by itself, so base R cannot dispatch that
+component’s S3 method until the component has been loaded.
+
 `teamverse` carries its components, so the call takes no arguments and
 that is all anyone who receives it has to do. Hand over the built
 `teamverse_0.1.0.tar.gz` and nothing else: no folder of archives
@@ -247,6 +262,13 @@ A filename without a version is fine: `Package` and `Version` come from
 the archive’s `DESCRIPTION`. If the filename disagrees, bigbang warns
 and trusts the `DESCRIPTION`.
 
+A bare package name such as `"geomides"` also works when exactly one
+archive in `pkg_dir` declares `Package: geomides`. Matching uses the
+declared package identity, so `"geo"` never selects `geomides`; if
+several versions or sources match, bigbang lists the candidates and asks
+for an explicit stem or path. Unreadable archives encountered during
+that search are excluded with a warning that names each affected file.
+
 Source directories are built with the optional `pkgbuild` package, in a
 temporary directory, and require `include_archives = TRUE`, because the
 archive built for them does not outlive the call.
@@ -290,9 +312,11 @@ before it does it.
   update restores that state so the same update can be retried. Both dry
   runs and real results list removed paths in `removed_files`. Removing
   a component removes its shipped archive, which may be the last
-  available copy. Updates also refuse to write through a symbolic
-  project root or symbolic links inside the generated project, including
-  links in parent directories of generated files.
+  available copy. A real result also lists partial documentation files
+  created and cleaned up after a failed roxygen run; a dry run cannot
+  predict those failure-dependent cleanups. Updates also refuse to write
+  through a symbolic project root or symbolic links inside the generated
+  project, including links in parent directories of generated files.
 - `install_upgrade` fixes the default upgrade policy of the installer
   that gets emitted, so you decide when generating whether recipients
   stay pinned to the versions you ship (`"always"`) or keep anything
@@ -397,7 +421,7 @@ the Spanish guide and in `RELEASE.md`.
 ## 🙏 Acknowledgments
 
 bigbang started from a suggestion by [Richard
-Detomasi](https://github.com/RichDeto), who proposed building a
+Detomasi](https://github.com/Richard-Detomasi), who proposed building a
 metapackage tool and pointed to
 [pegeler/metapackage](https://github.com/pegeler/metapackage) as an
 antecedent. The design and implementation—including the graph-based

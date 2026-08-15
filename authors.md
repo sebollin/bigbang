@@ -15,13 +15,13 @@ Source:
 [`DESCRIPTION`](https://github.com/sebollin/bigbang/blob/main/DESCRIPTION)
 
 Lucas S (2026). *bigbang: Build 'Tidyverse'-Style Meta-Packages from
-Local Package Files*. R package version 0.3.0,
+Local Package Files*. R package version 0.4.0,
 <https://sebollin.github.io/bigbang/>.
 
     @Manual{,
       title = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},
       author = {Sebastián Lucas},
       year = {2026},
-      note = {R package version 0.3.0},
+      note = {R package version 0.4.0},
       url = {https://sebollin.github.io/bigbang/},
     }

@@ -15,7 +15,7 @@ installed as source packages."><meta property="og:image" content="https://seboll
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -71,7 +71,11 @@ installed as source packages.</p>
 <dl><dt id="arg-package">package<a class="anchor" aria-label="anchor" href="#arg-package"></a></dt>
 <dd><p>Character. An existing archive path, or a package stem such
 as <code>"uspr_0.8.5"</code> to resolve in <code>pkg_dir</code>. An existing file is always
-treated as a path; only a non-existing element is resolved as a stem.</p></dd>
+treated as a path; only a non-existing element is resolved as a stem. A
+bare package name such as <code>"uspr"</code> resolves when exactly one archive in
+those directories declares that <code>Package</code> identity; multiple matches are
+an ambiguity error. Supported archives that cannot be read during this
+identity search are excluded with a warning that names the archive.</p></dd>
 
 
 <dt id="arg-pkg-dir">pkg_dir<a class="anchor" aria-label="anchor" href="#arg-pkg-dir"></a></dt>

@@ -1,5 +1,52 @@
 # Changelog
 
+## bigbang 0.4.0
+
+### New features
+
+- The project lifecycle is now documented as stable: its public API has
+  remained stable since 0.1.0 and is protected by an extensive
+  regression suite and repeated independent adversarial reviews.
+
+- `create_metapackage(reexport = TRUE)` now exposes explicit component
+  exports through lazy, read-only active bindings without making
+  components installation dependencies. Generated metapackages can load
+  offline before their components are installed, and the bindings
+  resolve after a later installation.
+
+- Runtime re-exports now exclude S4 class and method directives, reserve
+  every generated helper symbol, preserve untracked `reexports.R` and
+  `reexports.Rd` files during updates, avoid loading components for
+  startup reporting, and support installation into a new library
+  directory.
+
+- Component inputs now accept a bare package name when exactly one
+  archive in the supplied directories declares that `Package` identity.
+  Ambiguous versions or sources are rejected with the full candidate
+  list.
+
+### Documentation
+
+- The acknowledgments now use Richard Detomasi’s current contact and
+  profile, retain the precise credit for the initial metapackage-builder
+  suggestion, and identify `pegeler/metapackage` as a related online
+  declarative metapackage.
+
+### Bug fixes
+
+- Bare package-name discovery now warns when an unreadable archive is
+  excluded and suppresses uncontrolled tar diagnostics while retaining
+  readable matches.
+
+- Runtime re-exports quote non-syntactic names in generated NAMESPACE
+  files, so legal exports containing spaces or Unicode characters
+  produce installable metapackages and working active bindings.
+
+- `removed_files` now includes partial documentation outputs that a
+  generation call created and cleaned up after roxygen failed. Dry-run
+  plans continue to report only removals that are knowable before
+  generation starts.
+
 ## bigbang 0.3.0
 
 This release makes the package accept component packages as an

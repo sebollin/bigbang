@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,26 @@
       <small>Source: <a href="https://github.com/sebollin/bigbang/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.4.0" id="bigbang-040">bigbang 0.4.0<a class="anchor" aria-label="anchor" href="#bigbang-040"></a></h2>
+<div class="section level3">
+<h3 id="new-features-0-4-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-4-0"></a></h3>
+<ul><li><p>The project lifecycle is now documented as stable: its public API has remained stable since 0.1.0 and is protected by an extensive regression suite and repeated independent adversarial reviews.</p></li>
+<li><p><code>create_metapackage(reexport = TRUE)</code> now exposes explicit component exports through lazy, read-only active bindings without making components installation dependencies. Generated metapackages can load offline before their components are installed, and the bindings resolve after a later installation.</p></li>
+<li><p>Runtime re-exports now exclude S4 class and method directives, reserve every generated helper symbol, preserve untracked <code>reexports.R</code> and <code>reexports.Rd</code> files during updates, avoid loading components for startup reporting, and support installation into a new library directory.</p></li>
+<li><p>Component inputs now accept a bare package name when exactly one archive in the supplied directories declares that <code>Package</code> identity. Ambiguous versions or sources are rejected with the full candidate list.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-0-4-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-4-0"></a></h3>
+<ul><li>The acknowledgments now use Richard Detomasi’s current contact and profile, retain the precise credit for the initial metapackage-builder suggestion, and identify <code>pegeler/metapackage</code> as a related online declarative metapackage.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-0-4-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-4-0"></a></h3>
+<ul><li><p>Bare package-name discovery now warns when an unreadable archive is excluded and suppresses uncontrolled tar diagnostics while retaining readable matches.</p></li>
+<li><p>Runtime re-exports quote non-syntactic names in generated NAMESPACE files, so legal exports containing spaces or Unicode characters produce installable metapackages and working active bindings.</p></li>
+<li><p><code>removed_files</code> now includes partial documentation outputs that a generation call created and cleaned up after roxygen failed. Dry-run plans continue to report only removals that are knowable before generation starts.</p></li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.0" id="bigbang-030">bigbang 0.3.0<a class="anchor" aria-label="anchor" href="#bigbang-030"></a></h2>
 <p>This release makes the package accept component packages as an organisation actually keeps them, instead of requiring one directory, one archive extension, and a version in every filename. Package identity now comes from each archive’s <code>DESCRIPTION</code> rather than its filename, generation can report a plan without writing anything, and the checks that concern project tidiness can be relaxed individually. The checks that protect whoever installs the generated meta-package cannot: they remain hard errors during generation.</p>

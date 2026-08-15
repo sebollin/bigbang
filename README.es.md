@@ -8,6 +8,8 @@ status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.or
 [![r-universe](https://sebollin.r-universe.dev/bigbang/badges/version)](https://sebollin.r-universe.dev/bigbang)
 [![Licencia: GPL
 v3](https://img.shields.io/badge/licencia-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Ciclo de vida:
+estable](https://img.shields.io/badge/ciclo%20de%20vida-estable-0D9786.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 [![docs:
 English](https://img.shields.io/badge/docs-English-0D9786.svg)](https://github.com/sebollin/bigbang/blob/main/README.md)
 
@@ -148,6 +150,22 @@ workflow = c("Importación" = "datos", "Informe" = "reportes")
 
 ## Validación y tolerancias explícitas
 
+Para exponer las exportaciones explícitas mediante bindings activos de
+solo lectura, usá `reexport = TRUE` al generar. Los componentes quedan
+fuera de `Imports` y `Depends`, así que el metapaquete se puede instalar
+y cargar sin conexión antes de que existan. Antes de instalarlo, leer un
+binding devuelve una función provisoria; el error claro de componente
+faltante aparece solo al llamarla. Para exports que no son funciones, el
+acceso devuelve esa función en lugar del objeto hasta la instalación.
+Después el binding resuelve la función u objeto real sin recargar el
+metapaquete. Solo las directivas `export()` explícitas se convierten en
+bindings, incluidos los nombres no sintácticos, que se citan de forma
+segura en NAMESPACE. Las clases y métodos S4 quedan disponibles cargando
+el componente. Un objeto restaurado con
+[`readRDS()`](https://rdrr.io/r/base/readRDS.html) no carga un
+componente por sí mismo, así que R no puede despachar su método S3 hasta
+que el componente se haya cargado.
+
 bigbang mantiene como errores duros todas las validaciones que protegen
 a quien recibe el metapaquete: archivos inseguros o malformados,
 metadatos inválidos, componentes duplicados, restricciones locales
@@ -213,6 +231,14 @@ Un nombre de archivo sin versión es válido: `Package` y `Version` salen
 del `DESCRIPTION` del archivo. Si el nombre discrepa, bigbang avisa y le
 cree al `DESCRIPTION`.
 
+También se puede usar un nombre de paquete pelado como `"geomides"`
+cuando un único archivo de `pkg_dir` declara `Package: geomides`. La
+comparación usa la identidad declarada, por lo que `"geo"` nunca
+selecciona `geomides`; si coinciden varias versiones o fuentes, bigbang
+lista los candidatos y pide un stem o una ruta explícitos. Los archivos
+ilegibles encontrados durante esa búsqueda se excluyen con un aviso que
+nombra cada archivo afectado.
+
 Los directorios fuente se construyen con el paquete opcional `pkgbuild`,
 en un temporal, y requieren `include_archives = TRUE`, porque ese
 archivo temporal no sobrevive a la llamada.
@@ -256,10 +282,13 @@ forma segura de ver qué haría una llamada antes de que la haga.
   manifiesto. Si el update falla, restaura ese estado para poder
   reintentarlo. Tanto el dry run como el resultado real enumeran las
   rutas eliminadas en `removed_files`. Quitar un componente elimina su
-  archivo embarcado, que puede ser la última copia. También se niega a
-  escribir a través de una raíz de proyecto simbólica o de enlaces
-  simbólicos dentro del proyecto generado, incluidos los enlaces en
-  directorios padre de los archivos generados.
+  archivo embarcado, que puede ser la última copia. Un resultado real
+  también incluye los archivos parciales de documentación creados y
+  limpiados tras un fallo de roxygen; un dry run no puede predecir esas
+  limpiezas dependientes de un fallo. También se niega a escribir a
+  través de una raíz de proyecto simbólica o de enlaces simbólicos
+  dentro del proyecto generado, incluidos los enlaces en directorios
+  padre de los archivos generados.
 - `install_upgrade` fija la política de actualización por defecto del
   instalador emitido, así que decidís al generar si los destinatarios
   quedan clavados en las versiones que distribuís (`"always"`) o
@@ -349,8 +378,8 @@ clasificada.
 ## 🙏 Agradecimientos
 
 bigbang nació de una sugerencia de [Richard
-Detomasi](https://github.com/RichDeto), quien propuso construir una
-herramienta de metapaquetes y señaló
+Detomasi](https://github.com/Richard-Detomasi), quien propuso construir
+una herramienta de metapaquetes y señaló
 [pegeler/metapackage](https://github.com/pegeler/metapackage) como
 antecedente. El diseño y la implementación —incluida la resolución de
 dependencias mediante grafos— son de Sebastián Lucas. El logo hexagonal

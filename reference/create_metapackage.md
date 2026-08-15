@@ -50,6 +50,11 @@ create_metapackage(
   Character vector. Archive paths or stems of the local packages to
   include. An existing file is always used as a path; otherwise the
   element is resolved as a stem in `pkg_dir`, e.g. `"myPackage_1.0.0"`.
+  A bare package name such as `"myPackage"` resolves when exactly one
+  archive in those directories declares that `Package` identity. Zero
+  matches use the usual unresolved-archive error; multiple matches are
+  an ambiguity error. Supported archives that cannot be read during this
+  identity search are excluded with a warning that names the archive.
   Existing paths may come from different directories. A single existing
   text file without a recognized archive extension is treated as a
   manifest, with one component per line; relative paths in that file are
@@ -60,8 +65,8 @@ create_metapackage(
 - pkg_dir:
 
   Character. Optional directory or directories containing local archives
-  used to resolve stems. It is not needed when every `packages` element
-  is an existing archive path.
+  used to resolve stems and bare package names. It is not needed when
+  every `packages` element is an existing archive path.
 
 - ext:
 
@@ -81,11 +86,23 @@ create_metapackage(
 
 - reexport:
 
-  Deprecated logical argument retained in its original position for
-  positional-call compatibility. It is ignored. Loading the generated
-  meta-package attaches installed components, making their exported
-  functions available on the search path, but it does not copy those
-  functions into the meta-package namespace.
+  Logical flag retained in its original position for positional-call
+  compatibility. The default `FALSE` attaches installed components as
+  usual. With `TRUE`, explicit exports read from each component's
+  NAMESPACE are exposed through read-only active bindings. Components
+  are never added to `Imports` or `Depends`, so the generated package
+  still installs offline without them. Before installation, reading a
+  binding returns a placeholder function whose clear missing-component
+  error appears only when that function is called. For non-function
+  exports, access therefore returns the placeholder instead of the
+  object until the component is installed. The same binding then works
+  without reloading the metapackage. Only explicit `export()` directives
+  become bindings. S4 classes and methods remain available by loading
+  their component package. Non-syntactic explicit export names are
+  quoted in the generated NAMESPACE. An object restored with
+  [`readRDS()`](https://rdrr.io/r/base/readRDS.html) does not load a
+  component by itself, so base R cannot dispatch that component's S3
+  method until it is loaded.
 
 - document:
 
@@ -206,13 +223,16 @@ create_metapackage(
   component inside the project is a symbolic link, so writes cannot
   escape the project tree. Generated files no longer in the plan are
   reported in `removed_files`. Removing a component also removes its
-  shipped archive, which may be the last available copy. Before changing
-  the project, an update backs up every generated file and its manifest.
-  A failed update restores that state so the same update can be retried.
-  Documentation files requested by `document = TRUE` can always be
-  regenerated: they can be restored after documentation was disabled,
-  and an update that cannot regenerate them retains the previously
-  tracked Rd files. See `document` for the reserved
+  shipped archive, which may be the last available copy. The same field
+  includes partial documentation outputs created and cleaned up after a
+  failed documentation run. A dry run cannot predict those
+  failure-dependent cleanups and reports only planned removals. Before
+  changing the project, an update backs up every generated file and its
+  manifest. A failed update restores that state so the same update can
+  be retried. Documentation files requested by `document = TRUE` can
+  always be regenerated: they can be restored after documentation was
+  disabled, and an update that cannot regenerate them retains the
+  previously tracked Rd files. See `document` for the reserved
   generated-documentation filenames.
 
 - install_upgrade:
@@ -225,8 +245,8 @@ create_metapackage(
 ## Value
 
 Invisibly, a `bigbang_result` containing the generated path, component
-archives, dependency classification, applied tolerations, generated
-files removed by an update, and documentation status.
+archives, dependency classification, applied tolerations, files removed
+by the call, and documentation status.
 
 ## Details
 
@@ -307,9 +327,16 @@ must come from a repository, which happens exclusively under
 
 Loading the generated meta-package attaches installed components, so
 their exported functions can be called directly or through
-`component::function()`. Component functions are not copied into the
-meta-package namespace, so `meta::component_function()` is not
-supported.
+`component::function()`. With `reexport = TRUE`, explicit component
+exports are instead exposed through read-only active bindings in the
+meta-package namespace. This does not add components to `Imports` or
+`Depends`: loading remains possible without them, and a binding resolves
+the component on every access. Only explicit `export()` directives are
+rebound; S4 classes and methods are used through the loaded component
+namespace. An object restored with
+[`readRDS()`](https://rdrr.io/r/base/readRDS.html) cannot load a
+component by itself, so base R cannot dispatch that component's S3
+method until the component has been loaded.
 
 ## Requirements
 
