@@ -57,10 +57,12 @@ Every result below refers to the source of this submission.
   manual and installation tests: 0 errors, 0 warnings, 2 notes. One is the
   days-since-last-update note caused by the submission closure described above;
   the other is environmental because HTML Tidy is not installed locally.
-- win-builder, R-devel: `<PENDING>`.
-- R-hub v2, R-devel on Linux, Windows and macOS: `<PENDING>`.
+- win-builder, R-devel (2026-08-14 r90407 ucrt): Status OK — no errors,
+  warnings or notes.
+- R-hub v2, R-devel on Linux, Windows and macOS: all three passed
+  (GitHub Actions run 31859081215).
 - GitHub Actions matrix (Ubuntu release/devel/oldrel-1, Windows release and
-  macOS release): `<PENDING>`.
+  macOS release): all five passed (run 31859076052).
 
 The suite contains 179 `test_that` blocks and 964 assertions. With
 `NOT_CRAN=true`, all installation tests run and the result is 964 passed,
