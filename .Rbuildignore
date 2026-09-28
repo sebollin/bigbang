@@ -13,3 +13,4 @@
 ^RELEASE\.md$
 ^tests/integration$
 ^tools/WORDLIST-es$
+^CRAN-SUBMISSION$
