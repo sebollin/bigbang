@@ -2,6 +2,8 @@
 
 ## bigbang 0.4.0
 
+CRAN release: 2026-08-19
+
 ### New features
 
 - The project lifecycle is now documented as stable: its public API has

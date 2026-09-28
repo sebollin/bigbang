@@ -69,7 +69,7 @@
 <ol style="list-style-type: decimal"><li>Confirm the release commit is published at <code>https://github.com/sebollin/bigbang</code>.</li>
 <li>Confirm that <code>.github/workflows/R-CMD-check.yaml</code> is green for <code>ubuntu-release</code>, <code>ubuntu-devel</code>, <code>ubuntu-oldrel</code>, <code>windows-release</code>, and <code>macos-release</code>.</li>
 <li>Record the CI commit SHA and the covr percentage produced from that exact SHA in <code>cran-comments.md</code>.</li>
-<li>Review the complete <code><a href="https://lintr.r-lib.org/reference/lint.html" class="external-link">lintr::lint_package()</a></code> result. Every remaining item must be either fixed or explicitly justified in the release notes.</li>
+<li>Review the complete <code>lintr::lint_package()</code> result. Every remaining item must be either fixed or explicitly justified in the release notes.</li>
 </ol></div>
 <div class="section level2">
 <h2 id="id_3-external-cran-like-gates">3. External CRAN-like gates<a class="anchor" aria-label="anchor" href="#id_3-external-cran-like-gates"></a></h2>
