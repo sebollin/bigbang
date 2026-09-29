@@ -435,7 +435,7 @@ test_that("the published argument prefix stays stable through 0.4.0", {
     "additional_deps", "ignore_deps", "import_deps", "force_deps", "debug",
     "workflow", "include_archives", "tolerate", "dry_run",
     "on_component_error", "update", "install_upgrade",
-    "reexport_prefer", "reexport_exclude"
+    "reexport_prefer", "reexport_exclude", "recover"
   )
   expect_identical(
     names(formals(create_metapackage))[seq_along(released_create)],

@@ -439,7 +439,52 @@ msgstr ""
 msgid "Could not restore generated files after a failed update: %s"
 msgstr ""
 
-msgid "The update backup was retained for manual recovery at: %s"
+msgid "'recover' must be TRUE or FALSE"
+msgstr ""
+
+msgid "'recover' requires update = TRUE"
+msgstr ""
+
+msgid "Cannot update %s because %s is not a recognized bigbang update journal for this project. Move it aside or restore the expected journal."
+msgstr ""
+
+msgid "The update journal at %s has an invalid intention log."
+msgstr ""
+
+msgid "The unarmed update journal at %s contains unexpected files."
+msgstr ""
+
+msgid "Discarded an unarmed update journal at %s."
+msgstr ""
+
+msgid "The update journal at %s has invalid armed state."
+msgstr ""
+
+msgid "The armed update journal at %s contains unexpected files."
+msgstr ""
+
+msgid "The update journal at %s contains unexpected files."
+msgstr ""
+
+msgid "The previous update had completed; discarded its journal at %s."
+msgstr ""
+
+msgid "An update may still be running for %s (journal: %s). If no other update is running, call again with recover = TRUE."
+msgstr ""
+
+msgid "The interrupted update left files in an unknown state: %s. Journal: %s. Use recover = TRUE to preserve them and recover."
+msgstr ""
+
+msgid "Preserved unknown files from the interrupted update at %s."
+msgstr ""
+
+msgid "Recovered an interrupted update using %s."
+msgstr ""
+
+msgid "Dry run: pending update journal action is %s at %s."
+msgstr ""
+
+msgid "The update journal was retained for recovery at: %s"
 msgstr ""
 
 msgid "Removing generated files no longer in the plan: %s"

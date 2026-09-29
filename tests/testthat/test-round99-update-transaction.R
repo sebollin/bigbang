@@ -169,41 +169,73 @@ test_that("an update dry run reports every generated file it would remove", {
   round99_expect_unchanged(fixture$project, before)
 })
 
-test_that("an incomplete restoration reports failure and preserves its backup", {
+test_that("an incomplete restoration preserves its durable journal", {
   fixture <- round99_fixture("bigbang-update-restore-failure-")
   manifest <- readRDS(file.path(
     fixture$project, .generation_manifest_name
   ))
-  backup <- .create_update_backup(fixture$project, manifest)
-  on.exit(.discard_update_backup(backup), add = TRUE)
+  journal <- .create_update_journal(
+    fixture$project, "roundnineverse", manifest
+  )
+  removed <- file.path(fixture$project, manifest$files[[1L]])
+  .activate_update_journal(journal, fixture$project, "roundnineverse")
+  .record_update_delete(removed)
+  .deactivate_update_journal()
+  unlink(removed)
 
   local({
     testthat::local_mocked_bindings(
       .atomic_copy = function(...) stop("forced restoration failure"),
       .package = "bigbang"
     )
-    expect_warning(
-      restored <- .restore_update_backup(fixture$project, backup),
-      "Could not restore generated files after a failed update"
+    expect_error(
+      .recover_pending_update(
+        fixture$project, "roundnineverse", recover = TRUE
+      ),
+      "forced restoration failure"
     )
-    expect_false(restored)
   })
 
-  expect_true(dir.exists(backup$path))
-  expect_invisible(.discard_update_backup(NULL))
+  expect_true(dir.exists(journal$path))
+  expect_message(
+    recovered <- .recover_pending_update(
+      fixture$project, "roundnineverse", recover = TRUE
+    ),
+    "Recovered an interrupted update"
+  )
+  expect_true(recovered$recovered)
 })
 
-test_that("a failed backup is removed before the project can be changed", {
+test_that("a failed journal arm leaves an explicit unarmed journal", {
   fixture <- round99_fixture("bigbang-update-backup-failure-")
-  pattern <- file.path(tempdir(), "bigbang-update-backup-*")
-  before <- Sys.glob(pattern)
+  manifest <- readRDS(file.path(fixture$project, .generation_manifest_name))
+  calls <- 0L
+  journal_backup_copy <- .journal_backup_copy
 
-  expect_error(
-    suppressWarnings(.create_update_backup(
-      fixture$project, list(files = "missing-generated-file")
-    )),
-    "Could not back up generated file"
+  local({
+    testthat::local_mocked_bindings(
+      .journal_backup_copy = function(...) {
+        calls <<- calls + 1L
+        if (calls == 2L) stop("forced journal backup failure")
+        journal_backup_copy(...)
+      },
+      .package = "bigbang"
+    )
+    expect_error(
+      .create_update_journal(
+        fixture$project, "roundnineverse", manifest
+      ),
+      "forced journal backup failure"
+    )
+  })
+
+  journal <- .update_journal_path(fixture$project)
+  expect_true(dir.exists(journal))
+  expect_false(file.exists(file.path(journal, "state.rds")))
+  expect_message(
+    cleaned <- .recover_pending_update(fixture$project, "roundnineverse"),
+    "Discarded an unarmed update journal"
   )
-
-  expect_setequal(Sys.glob(pattern), before)
+  expect_false(cleaned$recovered)
+  expect_false(dir.exists(journal))
 })

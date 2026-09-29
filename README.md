@@ -291,12 +291,22 @@ all, so it is a safe way to see what a call would do before it does it.
   and its manifest. A failed update restores that state so the same update can
   be retried. Both dry runs and real results list removed paths in
   `removed_files`. Removing a component removes its shipped archive, which may
-  be the last available copy. A real result also lists partial documentation
-  files created and cleaned up after a failed roxygen run; a dry run cannot
-  predict those failure-dependent cleanups.
+  be the last available copy.
   Updates also refuse to write through a symbolic project root or symbolic
   links inside the generated project, including links in parent directories of
   generated files.
+- Interrupted updates use a durable `.<name>.bigbang-update` journal beside the
+  project. It is armed before the first mutation, records every intended write
+  and removal, and survives SIGKILL, SIGTERM, SIGHUP, terminal closure, and a
+  system restart. The next `update = TRUE` call discards an unarmed journal,
+  recognizes an update whose new manifest was already completed, or restores
+  the previous bytes before continuing. If a path contains neither its original
+  nor an intended value, recovery stops instead of overwriting it. After
+  confirming that no update is still running, `recover = TRUE` preserves those
+  unknown bytes in a reported sibling directory and then recovers. A dry run
+  reports the pending action without changing the project or journal. On
+  Windows liveness is never tested with `tools::pskill()`, because it would
+  terminate the probed process.
 - `install_upgrade` fixes the default upgrade policy of the installer that gets
   emitted, so you decide when generating whether recipients stay pinned to the
   versions you ship (`"always"`) or keep anything newer they already have

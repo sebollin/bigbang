@@ -32,7 +32,8 @@ create_metapackage(
   update = FALSE,
   install_upgrade = c("newer", "always", "never"),
   reexport_prefer = character(),
-  reexport_exclude = character()
+  reexport_exclude = character(),
+  recover = FALSE
 )
 }
 \arguments{
@@ -167,9 +168,6 @@ project is a symbolic link, so writes cannot escape the project tree.
 Generated files
 no longer in the plan are reported in \code{removed_files}. Removing a component
 also removes its shipped archive, which may be the last available copy.
-The same field includes partial documentation outputs created and cleaned
-up after a failed documentation run. A dry run cannot predict those
-failure-dependent cleanups and reports only planned removals.
 Before changing the project, an update backs up every generated file and
 its manifest. A failed update restores that state so the same update can be
 retried. Documentation files requested by \code{document = TRUE} can always be
@@ -190,12 +188,21 @@ named component must be included and export the mapped symbol.}
 \item{reexport_exclude}{Character vector of symbols that must not be
 re-exported. Symbols are validated against the explicit exports of the
 included components and cannot also appear in \code{reexport_prefer}.}
+
+\item{recover}{Logical. With \code{update = TRUE}, force recovery when a durable
+update journal exists but the owning process cannot safely be proved dead,
+or when a file has user content that is neither the original nor an
+intended update value. Unknown content is copied byte for byte to a new
+preserved directory beside the project before recovery; that directory is
+reported and is never removed automatically. Defaults to \code{FALSE}.}
 }
 \value{
 Invisibly, a \code{bigbang_result} containing the generated path,
 component archives, dependency classification, applied tolerations,
 files removed by the call, documentation status, the \code{reexports} table,
-and \code{reexport_excluded} symbols.
+\code{reexport_excluded} symbols, and whether an interrupted update was
+recovered. Recovery details include any directory used to preserve unknown
+user content.
 }
 \description{
 Creates the full structure and files of a meta-package that installs, manages
@@ -291,6 +298,36 @@ binding to a component that will not travel with the metapackage. The result,
 \code{dry_run}, generated \code{man/reexports.Rd}, and \verb{<name>_conflicts()} report the
 selected resolution. The latter checks installed same-origin owners for
 \code{identical()} objects when they are available, without installing anything.
+}
+
+\section{Interrupted updates}{
+
+Before an in-place update mutates the project, bigbang creates a durable
+journal beside it at \verb{.<name>.bigbang-update}, copies every manifest-owned
+file and its manifest, verifies their hashes, and marks the journal armed.
+Every later file write or removal records its intention first. Generated
+files, shipped component archives, catalogs, \code{.Rbuildignore}, and the final
+manifest are replaced atomically. Roxygen runs in a staging copy and only its
+known outputs are promoted atomically to the project.
+
+The journal survives process termination, terminal closure, and system
+shutdown, including SIGKILL, SIGTERM, and SIGHUP on POSIX systems. The next
+\code{create_metapackage(update = TRUE)} call examines it before validating the
+generation manifest. An unarmed journal is discarded because the project was
+not touched; an already completed update is recognized by its new manifest;
+otherwise a dead owner's changes are rolled back and the requested update
+continues. On POSIX systems liveness uses the PID and, where Linux \verb{/proc}
+exposes it, the process start time to reject PID reuse. Windows is never
+probed with \code{tools::pskill()} because that operation terminates a process;
+use \code{recover = TRUE} only after confirming that no update is running.
+
+Automatic recovery proceeds only when every affected path contains its
+original bytes, intended bytes, or an expected absence. Other content raises
+\code{bigbang_error_interrupted_update}; \code{recover = TRUE} preserves it outside the
+project before rollback. Recovery is idempotent, so another interruption can
+be recovered by a later call. \code{dry_run = TRUE} reports the pending action and
+leaves both project and journal untouched. A handled error uses this same
+journal for immediate rollback and retains it if verification cannot finish.
 }
 
 \section{Requirements}{

@@ -15,6 +15,7 @@ html
 installable
 knitr
 lazydb
+liveness
 Lifecycle
 macOS
 md
@@ -27,6 +28,7 @@ Paul
 pegeler
 pkgdown
 pkgbuild
+PID
 pre
 repos
 README
@@ -36,6 +38,9 @@ rmarkdown
 roxygen
 runtime
 Sebastián
+SIGHUP
+SIGKILL
+SIGTERM
 tarball
 tarballs
 tempdir

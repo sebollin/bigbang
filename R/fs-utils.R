@@ -62,6 +62,7 @@
 }
 
 .atomic_replace <- function(source, destination) {
+  .record_update_write(source, destination)
   if (file.rename(source, destination)) return(invisible(TRUE))
 
   # Windows cannot replace an existing file with rename(). Remove only the
@@ -79,19 +80,27 @@
   invisible(TRUE)
 }
 
+.atomic_temporary <- function(path) {
+  context <- .update_journal_runtime$current
+  tmpdir <- dirname(path)
+  if (!is.null(context) &&
+        (!is.null(.project_relative_destination(path, context$project)) ||
+           startsWith(normalizePath(path, winslash = "/", mustWork = FALSE),
+                      paste0(context$path, "/")))) {
+    tmpdir <- file.path(context$path, "staging")
+  }
+  tempfile(pattern = paste0(".", basename(path), "-"), tmpdir = tmpdir)
+}
+
 .write_utf8 <- function(text, path) {
-  parent <- dirname(path)
-  temporary <- tempfile(pattern = paste0(".", basename(path), "-"),
-                        tmpdir = parent)
+  temporary <- .atomic_temporary(path)
   on.exit(unlink(temporary, force = TRUE), add = TRUE)
   brio::write_lines(text, temporary)
   .atomic_replace(temporary, path)
 }
 
 .atomic_copy <- function(source, destination) {
-  parent <- dirname(destination)
-  temporary <- tempfile(pattern = paste0(".", basename(destination), "-"),
-                        tmpdir = parent)
+  temporary <- .atomic_temporary(destination)
   on.exit(unlink(temporary, force = TRUE), add = TRUE)
   if (!file.copy(source, temporary, overwrite = FALSE)) {
     stop(.bb_trf("Could not copy the component archive: %s", source),
@@ -101,9 +110,7 @@
 }
 
 .atomic_save_rds <- function(object, path) {
-  parent <- dirname(path)
-  temporary <- tempfile(pattern = paste0(".", basename(path), "-"),
-                        tmpdir = parent)
+  temporary <- .atomic_temporary(path)
   on.exit(unlink(temporary, force = TRUE), add = TRUE)
   saveRDS(object, temporary)
   .atomic_replace(temporary, path)

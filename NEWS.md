@@ -1,5 +1,17 @@
 # bigbang (development version)
 
+- `create_metapackage(update = TRUE)` now journals updates durably beside the
+  project before the first mutation. A later call automatically recovers after
+  SIGKILL, SIGTERM, SIGHUP, terminal closure, or shutdown, recognizes a fully
+  written new manifest, and refuses to overwrite post-interruption user edits.
+  `recover = TRUE` preserves unknown bytes outside the project before forcing
+  recovery; dry runs report the pending action without modifying it.
+
+- Every update output is promoted atomically after its intention is recorded,
+  including shipped archives, catalogs, `.Rbuildignore`, and the generation
+  manifest. Roxygen now runs in a staging copy so its unknown intermediate
+  writes never reach the project.
+
 - `create_metapackage()` now accepts `reexport_prefer` and `reexport_exclude`.
   Unique exports and conservatively proven same-origin exports resolve
   automatically; genuine collisions report candidates and static-proof reasons.

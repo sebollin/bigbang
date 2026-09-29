@@ -74,8 +74,10 @@
   translation_offsets <- translation_strings + c(0L, cumsum(lengths(value_raw) + 1L)[-n])
 
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
-  connection <- file(path, open = "wb")
-  on.exit(close(connection), add = TRUE)
+  temporary <- .atomic_temporary(path)
+  on.exit(unlink(temporary, force = TRUE), add = TRUE)
+  connection <- file(temporary, open = "wb")
+  on.exit(if (!is.null(connection)) close(connection), add = TRUE)
   writeBin(as.raw(c(0xde, 0x12, 0x04, 0x95)), connection)
   writeBin(
     as.integer(c(0L, n, original_table, translation_table, 0L, 0L)),
@@ -87,6 +89,9 @@
            connection, size = 4L, endian = "little")
   for (value in id_raw) writeBin(c(value, as.raw(0)), connection)
   for (value in value_raw) writeBin(c(value, as.raw(0)), connection)
+  close(connection)
+  connection <- NULL
+  .atomic_replace(temporary, path)
   invisible(path)
 }
 

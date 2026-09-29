@@ -103,7 +103,7 @@ test_that("documentation can be disabled and enabled across updates", {
   expect_true(isTRUE(failed$updated))
   expect_false(isTRUE(failed$documented))
   expect_false(any(file.exists(file.path(initial$path, documentation))))
-  expect_true(documentation[[1L]] %in% failed$removed_files)
+  expect_false(documentation[[1L]] %in% failed$removed_files)
   round108_expect_exact_manifest(initial$path)
 
   enabled <- round108_generate(
@@ -169,7 +169,7 @@ test_that("failed documentation keeps tracked Rd files and remains retryable", {
         "docretryverse", destination, document = TRUE, update = TRUE
       ),
       document = function(pkg, ...) {
-        writeLines("partial documentation", documentation_paths[[1L]])
+        writeLines("partial documentation", file.path(pkg, documentation[[1L]]))
         stop("forced documentation update failure")
       },
       .package = "devtools"
@@ -245,8 +245,9 @@ test_that("failed documentation restores a partially overwritten user Rd", {
         "restoreuserdocverse", destination,
         document = TRUE, update = TRUE
       ),
-      document = function(...) {
-        writeLines("partial generated documentation", user_file, useBytes = TRUE)
+      document = function(pkg, ...) {
+        writeLines("partial generated documentation",
+                   file.path(pkg, relative), useBytes = TRUE)
         stop("forced failure after overwrite")
       },
       .package = "devtools"

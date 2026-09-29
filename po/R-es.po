@@ -439,8 +439,53 @@ msgstr "No se pudo respaldar el archivo generado: %s"
 msgid "Could not restore generated files after a failed update: %s"
 msgstr "No se pudieron restaurar los archivos generados después de una actualización fallida: %s"
 
-msgid "The update backup was retained for manual recovery at: %s"
-msgstr "El respaldo de la actualización se conservó para recuperación manual en: %s"
+msgid "'recover' must be TRUE or FALSE"
+msgstr "'recover' debe ser TRUE o FALSE"
+
+msgid "'recover' requires update = TRUE"
+msgstr "'recover' requiere update = TRUE"
+
+msgid "Cannot update %s because %s is not a recognized bigbang update journal for this project. Move it aside or restore the expected journal."
+msgstr "No se puede actualizar %s porque %s no es un diario de actualización de bigbang reconocido para este proyecto. Muévalo a otro lugar o restaure el diario esperado."
+
+msgid "The update journal at %s has an invalid intention log."
+msgstr "El diario de actualización en %s tiene un registro de intenciones no válido."
+
+msgid "The unarmed update journal at %s contains unexpected files."
+msgstr "El diario de actualización sin armar en %s contiene archivos inesperados."
+
+msgid "Discarded an unarmed update journal at %s."
+msgstr "Se descartó un diario de actualización sin armar en %s."
+
+msgid "The update journal at %s has invalid armed state."
+msgstr "El diario de actualización en %s tiene un estado armado no válido."
+
+msgid "The armed update journal at %s contains unexpected files."
+msgstr "El diario de actualización armado en %s contiene archivos inesperados."
+
+msgid "The update journal at %s contains unexpected files."
+msgstr "El diario de actualización en %s contiene archivos inesperados."
+
+msgid "The previous update had completed; discarded its journal at %s."
+msgstr "El update anterior había terminado; se descartó su diario en %s."
+
+msgid "An update may still be running for %s (journal: %s). If no other update is running, call again with recover = TRUE."
+msgstr "Puede haber un update todavía en ejecución para %s (diario: %s). Si no hay otro update ejecutándose, vuelva a llamar con recover = TRUE."
+
+msgid "The interrupted update left files in an unknown state: %s. Journal: %s. Use recover = TRUE to preserve them and recover."
+msgstr "El update interrumpido dejó archivos en un estado desconocido: %s. Diario: %s. Use recover = TRUE para preservarlos y recuperar."
+
+msgid "Preserved unknown files from the interrupted update at %s."
+msgstr "Se preservaron los archivos desconocidos del update interrumpido en %s."
+
+msgid "Recovered an interrupted update using %s."
+msgstr "Se recuperó un update interrumpido usando %s."
+
+msgid "Dry run: pending update journal action is %s at %s."
+msgstr "Dry run: la acción pendiente del diario de actualización es %s en %s."
+
+msgid "The update journal was retained for recovery at: %s"
+msgstr "El diario de actualización se conservó para recuperación en: %s"
 
 msgid "Removing generated files no longer in the plan: %s"
 msgstr "Eliminando archivos generados que ya no están en el plan: %s"

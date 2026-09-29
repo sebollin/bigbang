@@ -245,171 +245,6 @@
   manifest
 }
 
-.snapshot_untracked_docs <- function(project_dir, documentation_files,
-                                     update_manifest = NULL,
-                                     update_backup = NULL) {
-  tracked <- if (is.null(update_manifest)) {
-    character()
-  } else {
-    intersect(documentation_files, update_manifest$files)
-  }
-  candidates <- setdiff(documentation_files, tracked)
-  .validate_project_write_paths(project_dir, candidates)
-  paths <- file.path(project_dir, candidates)
-  existing <- candidates[file.exists(paths) & !dir.exists(paths)]
-  if (length(existing) == 0L) {
-    return(list(
-      path = NULL, files = character(), hashes = character(),
-      candidates = candidates
-    ))
-  }
-  if (is.null(update_backup)) {
-    stop("Internal error: documentation backup is unavailable", call. = FALSE)
-  }
-
-  backup_dir <- file.path(update_backup$path, ".untracked-documentation")
-  if (!dir.create(backup_dir)) {
-    stop(.bb_trf("Could not create temporary directory for %s", project_dir),
-         call. = FALSE)
-  }
-  complete <- FALSE
-  on.exit({
-    if (!complete) unlink(backup_dir, recursive = TRUE, force = TRUE)
-  }, add = TRUE)
-  for (relative in existing) {
-    source <- file.path(project_dir, relative)
-    destination <- file.path(backup_dir, relative)
-    parent <- dirname(destination)
-    if (!dir.exists(parent) && !dir.create(parent, recursive = TRUE)) {
-      stop(.bb_trf("Could not create temporary directory for %s", relative),
-           call. = FALSE)
-    }
-    if (!file.copy(source, destination, overwrite = FALSE)) {
-      stop(.bb_trf("Could not back up generated file: %s", source),
-           call. = FALSE)
-    }
-  }
-  hashes <- vapply(
-    file.path(project_dir, existing), .file_digest, character(1L)
-  )
-  names(hashes) <- existing
-  complete <- TRUE
-  list(
-    path = backup_dir, files = existing, hashes = hashes,
-    candidates = candidates
-  )
-}
-
-.restore_untracked_docs <- function(project_dir, snapshot) {
-  if (is.null(snapshot)) return(invisible(character()))
-  .validate_project_write_paths(project_dir, snapshot$candidates)
-  current <- snapshot$candidates[file.exists(file.path(
-    project_dir, snapshot$candidates
-  ))]
-  appeared <- setdiff(current, snapshot$files)
-  .remove_stale_generation_files(project_dir, appeared)
-
-  for (relative in snapshot$files) {
-    .atomic_copy(
-      file.path(snapshot$path, relative),
-      file.path(project_dir, relative)
-    )
-  }
-  restored <- vapply(
-    file.path(project_dir, snapshot$files), .file_digest, character(1L)
-  )
-  if (!identical(unname(restored), unname(snapshot$hashes[snapshot$files]))) {
-    stop(.bb_trf(
-      "Could not restore generated files after a failed update: %s",
-      paste(snapshot$files, collapse = ", ")
-    ), call. = FALSE)
-  }
-  invisible(appeared)
-}
-
-.reconcile_failed_docs <- function(project_dir, documentation_files,
-                                   documentation_snapshot = NULL,
-                                   update_manifest = NULL,
-                                   update_backup = NULL) {
-  tracked <- if (is.null(update_manifest)) {
-    character()
-  } else {
-    intersect(documentation_files, update_manifest$files)
-  }
-  # A failed roxygen run may have written only part of its output. Files that
-  # appeared during this call are removed, while pre-existing untracked files
-  # are restored without becoming manifest-owned. Tracked documentation is
-  # restored byte-for-byte from the main update backup.
-  removed <- .restore_untracked_docs(project_dir, documentation_snapshot)
-  if (length(tracked) > 0L) {
-    if (is.null(update_backup)) {
-      stop("Internal error: documentation backup is unavailable", call. = FALSE)
-    }
-    for (relative in tracked) {
-      .atomic_copy(
-        file.path(update_backup$path, relative),
-        file.path(project_dir, relative)
-      )
-    }
-  }
-  list(retained = tracked, removed = removed)
-}
-
-.create_update_backup <- function(project_dir, manifest) {
-  files <- unique(c(manifest$files, .generation_manifest_name))
-  backup_dir <- tempfile("bigbang-update-backup-")
-  if (!dir.create(backup_dir)) {
-    stop(.bb_trf("Could not create temporary directory for %s", project_dir),
-         call. = FALSE)
-  }
-  complete <- FALSE
-  on.exit({
-    if (!complete) unlink(backup_dir, recursive = TRUE, force = TRUE)
-  }, add = TRUE)
-
-  for (relative in files) {
-    source <- file.path(project_dir, relative)
-    destination <- file.path(backup_dir, relative)
-    parent <- dirname(destination)
-    if (!dir.exists(parent) && !dir.create(parent, recursive = TRUE)) {
-      stop(.bb_trf("Could not create temporary directory for %s", relative),
-           call. = FALSE)
-    }
-    if (!file.copy(source, destination, overwrite = FALSE)) {
-      stop(.bb_trf("Could not back up generated file: %s", source),
-           call. = FALSE)
-    }
-  }
-  complete <- TRUE
-  list(path = backup_dir, files = files)
-}
-
-.restore_update_backup <- function(project_dir, backup) {
-  failures <- character()
-  for (relative in backup$files) {
-    source <- file.path(backup$path, relative)
-    destination <- file.path(project_dir, relative)
-    restored <- tryCatch({
-      .atomic_copy(source, destination)
-      TRUE
-    }, error = function(e) FALSE)
-    if (!restored) failures <- c(failures, relative)
-  }
-  if (length(failures) > 0L) {
-    warning(.bb_trf(
-      "Could not restore generated files after a failed update: %s",
-      paste(failures, collapse = ", ")
-    ), call. = FALSE)
-  }
-  invisible(length(failures) == 0L)
-}
-
-.discard_update_backup <- function(backup) {
-  if (is.null(backup)) return(invisible(NULL))
-  unlink(backup$path, recursive = TRUE, force = TRUE)
-  invisible(NULL)
-}
-
 .stale_unlink <- function(path) {
   unlink(path, recursive = FALSE, force = TRUE)
 }
@@ -435,6 +270,7 @@
         path = project_dir, files = relative
       )
     }
+    .record_update_delete(path)
     if (.stale_unlink(path) != 0L) {
       stop(.bb_trf("Could not remove completely: %s", path), call. = FALSE)
     }
@@ -696,9 +532,6 @@
 #'   Generated files
 #'   no longer in the plan are reported in `removed_files`. Removing a component
 #'   also removes its shipped archive, which may be the last available copy.
-#'   The same field includes partial documentation outputs created and cleaned
-#'   up after a failed documentation run. A dry run cannot predict those
-#'   failure-dependent cleanups and reports only planned removals.
 #'   Before changing the project, an update backs up every generated file and
 #'   its manifest. A failed update restores that state so the same update can be
 #'   retried. Documentation files requested by `document = TRUE` can always be
@@ -716,13 +549,21 @@
 #' @param reexport_exclude Character vector of symbols that must not be
 #'   re-exported. Symbols are validated against the explicit exports of the
 #'   included components and cannot also appear in `reexport_prefer`.
+#' @param recover Logical. With `update = TRUE`, force recovery when a durable
+#'   update journal exists but the owning process cannot safely be proved dead,
+#'   or when a file has user content that is neither the original nor an
+#'   intended update value. Unknown content is copied byte for byte to a new
+#'   preserved directory beside the project before recovery; that directory is
+#'   reported and is never removed automatically. Defaults to `FALSE`.
 #' @param debug Logical. If `TRUE`, emits detailed debugging messages. Defaults
 #'   to `FALSE`.
 #'
 #' @return Invisibly, a `bigbang_result` containing the generated path,
 #'   component archives, dependency classification, applied tolerations,
 #'   files removed by the call, documentation status, the `reexports` table,
-#'   and `reexport_excluded` symbols.
+#'   `reexport_excluded` symbols, and whether an interrupted update was
+#'   recovered. Recovery details include any directory used to preserve unknown
+#'   user content.
 #'
 #' @details
 #' The function performs the following steps:
@@ -806,6 +647,34 @@
 #' selected resolution. The latter checks installed same-origin owners for
 #' `identical()` objects when they are available, without installing anything.
 #'
+#' @section Interrupted updates:
+#' Before an in-place update mutates the project, bigbang creates a durable
+#' journal beside it at `.<name>.bigbang-update`, copies every manifest-owned
+#' file and its manifest, verifies their hashes, and marks the journal armed.
+#' Every later file write or removal records its intention first. Generated
+#' files, shipped component archives, catalogs, `.Rbuildignore`, and the final
+#' manifest are replaced atomically. Roxygen runs in a staging copy and only its
+#' known outputs are promoted atomically to the project.
+#'
+#' The journal survives process termination, terminal closure, and system
+#' shutdown, including SIGKILL, SIGTERM, and SIGHUP on POSIX systems. The next
+#' `create_metapackage(update = TRUE)` call examines it before validating the
+#' generation manifest. An unarmed journal is discarded because the project was
+#' not touched; an already completed update is recognized by its new manifest;
+#' otherwise a dead owner's changes are rolled back and the requested update
+#' continues. On POSIX systems liveness uses the PID and, where Linux `/proc`
+#' exposes it, the process start time to reject PID reuse. Windows is never
+#' probed with `tools::pskill()` because that operation terminates a process;
+#' use `recover = TRUE` only after confirming that no update is running.
+#'
+#' Automatic recovery proceeds only when every affected path contains its
+#' original bytes, intended bytes, or an expected absence. Other content raises
+#' `bigbang_error_interrupted_update`; `recover = TRUE` preserves it outside the
+#' project before rollback. Recovery is idempotent, so another interruption can
+#' be recovered by a later call. `dry_run = TRUE` reports the pending action and
+#' leaves both project and journal untouched. A handled error uses this same
+#' journal for immediate rollback and retains it if verification cannot finish.
+#'
 #' @section Requirements:
 #' - Each component must be an existing archive path or a stem resolvable in
 #'   one of the optional `pkg_dir` directories; `ext` is only a fallback for
@@ -865,7 +734,8 @@ create_metapackage <- function(
   update = FALSE,
   install_upgrade = c("newer", "always", "never"),
   reexport_prefer = character(),
-  reexport_exclude = character()
+  reexport_exclude = character(),
+  recover = FALSE
 ) {
   verbose <- isTRUE(verbose)
   debug <- isTRUE(debug)
@@ -906,6 +776,12 @@ create_metapackage <- function(
   if (!is.logical(update) || length(update) != 1L || is.na(update)) {
     stop(.bb_tr("'update' must be TRUE or FALSE"), call. = FALSE)
   }
+  if (!is.logical(recover) || length(recover) != 1L || is.na(recover)) {
+    stop(.bb_tr("'recover' must be TRUE or FALSE"), call. = FALSE)
+  }
+  if (isTRUE(recover) && !isTRUE(update)) {
+    stop(.bb_tr("'recover' requires update = TRUE"), call. = FALSE)
+  }
 
   # Resolve caller-supplied paths before any generated files are written. A
   # component may be an existing archive path or a stem resolved in pkg_dir.
@@ -936,6 +812,31 @@ create_metapackage <- function(
       "characters, start with a letter, continue with letters, digits or dots, ",
       "and do not end with a dot."
     ), name), call. = FALSE)
+  }
+
+  project_path <- file.path(dest_dir, name)
+  if (isTRUE(update)) .validate_project_root_path(project_path)
+  project_dir <- normalizePath(project_path, winslash = "/", mustWork = FALSE)
+  recovery <- list(pending = FALSE, recovered = FALSE, preserved = NULL)
+  if (isTRUE(update)) {
+    recovery <- .recover_pending_update(
+      project_dir, name, recover = recover, dry_run = dry_run
+    )
+    if (isTRUE(dry_run) && isTRUE(recovery$pending)) {
+      message(.bb_trf("Dry run: pending update journal action is %s at %s.",
+                      recovery$action, .update_journal_path(project_dir)))
+      return(invisible(structure(list(
+        path = project_dir, name = name, packages = character(),
+        archives = character(), components = list(), reexports = data.frame(),
+        reexport_excluded = character(), order = character(),
+        files = character(), removed_files = character(), findings = list(),
+        local_dependencies = character(), cran_dependencies = character(),
+        implicit_dependencies = character(), tolerated = character(),
+        omitted = data.frame(), workflow = workflow, documented = FALSE,
+        dry_run = TRUE, updated = FALSE, recovered = FALSE,
+        recovery = recovery
+      ), class = "bigbang_result")))
+    }
   }
 
   resolved_components <- .resolve_components(
@@ -1038,11 +939,6 @@ create_metapackage <- function(
     }
   }
 
-  project_path <- file.path(dest_dir, name)
-  if (isTRUE(update)) .validate_project_root_path(project_path)
-  project_dir <- normalizePath(
-    project_path, winslash = "/", mustWork = FALSE
-  )
   update_manifest <- NULL
   stale_files <- character()
   preserved_files <- character()
@@ -1130,7 +1026,9 @@ create_metapackage <- function(
       workflow = workflow,
       documented = FALSE,
       dry_run = TRUE,
-      updated = FALSE
+      updated = FALSE,
+      recovered = isTRUE(recovery$recovered),
+      recovery = recovery
     ), class = "bigbang_result")
     return(invisible(result))
   }
@@ -1146,14 +1044,19 @@ create_metapackage <- function(
   project_created <- FALSE
   destination_created <- !dir.exists(dest_dir)
   generation_complete <- FALSE
-  update_backup <- if (isTRUE(update)) {
-    .create_update_backup(project_dir, update_manifest)
+  update_journal <- if (isTRUE(update)) {
+    .create_update_journal(
+      project_dir, name, update_manifest,
+      extra_files = setdiff(requested_files, update_manifest$files)
+    )
   } else {
     NULL
   }
+  if (!is.null(update_journal)) {
+    .activate_update_journal(update_journal, project_dir, name)
+  }
   documentation_search <- NULL
   documentation_namespaces <- NULL
-  documentation_snapshot <- NULL
   documentation_files <- if (isTRUE(document)) {
     c(
       .planned_documentation_files(name),
@@ -1172,6 +1075,7 @@ create_metapackage <- function(
         documentation_search, documentation_namespaces, name
       )
     }
+    .deactivate_update_journal()
 
     # Roll back only a project directory created by this exact invocation.
     # Pre-existing directories, including empty ones, are never removed.
@@ -1207,25 +1111,19 @@ create_metapackage <- function(
       # unlink() to remove an empty directory on all supported platforms.
       .rollback_unlink(dest_dir)
     }
-    documentation_restored <- TRUE
-    if (!generation_complete && !is.null(documentation_snapshot)) {
-      documentation_restored <- tryCatch({
-        .restore_untracked_docs(project_dir, documentation_snapshot)
+    if (!generation_complete && !is.null(update_journal)) {
+      restored <- tryCatch({
+        .recover_pending_update(
+          project_dir, name, recover = TRUE, handled = TRUE
+        )
         TRUE
       }, error = function(e) FALSE)
-    }
-    backup_restored <- TRUE
-    if (!generation_complete && !is.null(update_backup)) {
-      backup_restored <- .restore_update_backup(project_dir, update_backup)
-    }
-    recovery_complete <- backup_restored && documentation_restored
-    if (generation_complete || recovery_complete) {
-      .discard_update_backup(update_backup)
-    } else if (!is.null(update_backup)) {
-      warning(.bb_trf(
-        "The update backup was retained for manual recovery at: %s",
-        update_backup$path
-      ), call. = FALSE)
+      if (!restored) {
+        warning(.bb_trf(
+          "The update journal was retained for recovery at: %s",
+          update_journal$path
+        ), call. = FALSE)
+      }
     }
   }, add = TRUE)
 
@@ -1547,17 +1445,6 @@ StripTrailingWhitespace: Yes"
       list()
     }
   )
-  if (isTRUE(document)) {
-    documentation_snapshot <- .snapshot_untracked_docs(
-      project_dir, documentation_files, update_manifest, update_backup
-    )
-  }
-  if (isTRUE(reexport) && isTRUE(document)) {
-    .write_reexport_documentation(
-      project_dir,
-      reexport_plan$table
-    )
-  }
   log_debug("Additional metapackage files created")
 
 
@@ -1583,14 +1470,34 @@ StripTrailingWhitespace: Yes"
       message(.bb_trf("Generating documentation for %s...", name))
     }
 
-    # Run roxygen without loading unclassified legacy source.
+    # Run roxygen in a staging copy. Only known outputs are promoted through
+    # the atomic writer, after their intentions have been recorded.
     tryCatch({
+      staging_parent <- tempfile("bigbang-document-staging-")
+      dir.create(staging_parent)
+      on.exit(unlink(staging_parent, recursive = TRUE, force = TRUE), add = TRUE)
+      if (!file.copy(project_dir, staging_parent, recursive = TRUE)) {
+        stop(.bb_trf("Could not create temporary directory for %s", project_dir),
+             call. = FALSE)
+      }
+      staging_project <- file.path(staging_parent, basename(project_dir))
+      if (isTRUE(reexport)) {
+        .write_reexport_documentation(staging_project, reexport_plan$table)
+      }
       if (verbose) {
-        devtools::document(pkg = project_dir, quiet = TRUE)
+        devtools::document(pkg = staging_project, quiet = TRUE)
       } else {
         suppressPackageStartupMessages(
-          devtools::document(pkg = project_dir, quiet = TRUE)
+          devtools::document(pkg = staging_project, quiet = TRUE)
         )
+      }
+      staged_outputs <- unique(c(documentation_files, "NAMESPACE", "DESCRIPTION"))
+      staged_outputs <- staged_outputs[file.exists(file.path(
+        staging_project, staged_outputs
+      )) & !dir.exists(file.path(staging_project, staged_outputs))]
+      for (relative in staged_outputs) {
+        .atomic_copy(file.path(staging_project, relative),
+                     file.path(project_dir, relative))
       }
       if (verbose) {
         message(.bb_tr("Documentation generated successfully."))
@@ -1604,16 +1511,13 @@ StripTrailingWhitespace: Yes"
     message(.bb_tr("Install package 'devtools' to generate documentation automatically."))
   }
 
-  retained_documentation <- character()
-  reverted_documentation <- character()
-  if (isTRUE(document) && !doc_ok) {
-    reconciliation <- .reconcile_failed_docs(
-      project_dir, documentation_files,
-      documentation_snapshot, update_manifest, update_backup
-    )
-    retained_documentation <- reconciliation$retained
-    reverted_documentation <- reconciliation$removed
+  retained_documentation <- if (isTRUE(document) && !doc_ok &&
+                                  !is.null(update_manifest)) {
+    intersect(documentation_files, update_manifest$files)
+  } else {
+    character()
   }
+  reverted_documentation <- character()
 
   # Keep the emitted NAMESPACE deterministic when documentation rewrites it.
   .deduplicate_namespace_imports(file.path(project_dir, "NAMESPACE"))
@@ -1640,6 +1544,12 @@ StripTrailingWhitespace: Yes"
   manifest <- .manifest_records(project_dir, manifest_files)
   .atomic_save_rds(manifest, file.path(project_dir, .generation_manifest_name))
 
+  if (!is.null(update_journal)) {
+    .deactivate_update_journal()
+    .discard_update_journal(update_journal, project_dir, name)
+    update_journal <- NULL
+  }
+
   result <- structure(
     list(
       path = normalizePath(project_dir, winslash = "/", mustWork = TRUE),
@@ -1659,6 +1569,8 @@ StripTrailingWhitespace: Yes"
       documented = doc_ok,
       dry_run = FALSE,
       updated = isTRUE(update),
+      recovered = isTRUE(recovery$recovered),
+      recovery = recovery,
       findings = generation_findings
     ),
     class = "bigbang_result"
