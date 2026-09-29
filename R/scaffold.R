@@ -223,18 +223,36 @@ write_namespace_file <- function(name, namespace_path,
 }
 
 .write_reexport_documentation <- function(project_dir, symbols) {
+  table <- if (is.data.frame(symbols)) symbols else NULL
+  symbols <- if (is.null(table)) symbols else table$symbol
   symbols <- unique(symbols[nzchar(symbols)])
   if (length(symbols) == 0L) return(invisible(NULL))
+  rd_symbols <- gsub("%", "\\%", symbols, fixed = TRUE)
+  details <- if (is.null(table)) {
+    character()
+  } else {
+    table <- table[match(symbols, table$symbol), , drop = FALSE]
+    paste0(
+      "\\item \\code{", gsub("%", "\\%", table$symbol, fixed = TRUE), "}: ",
+      table$package, " (",
+      table$resolution, ")."
+    )
+  }
   content <- c(
     "\\name{reexports}",
     "\\alias{reexports}",
-    paste0("\\alias{", symbols, "}"),
+    paste0("\\alias{", rd_symbols, "}"),
     "\\title{Runtime component re-exports}",
     paste0(
       "\\description{Explicit exports from component packages are resolved ",
       "through read-only active bindings when the component is installed.}"
     ),
     "\\details{The component package is loaded lazily when a binding is read.}",
+    if (length(details) > 0L) {
+      c("\\section{Resolved symbols}{", "\\itemize{", details, "}", "}")
+    } else {
+      character()
+    },
     "\\keyword{internal}"
   )
   .write_utf8(content, file.path(project_dir, "man", "reexports.Rd"))
@@ -288,7 +306,16 @@ write_metapackage_readme <- function(name, project_dir,
         "directives become bindings; S4 classes and methods remain available by",
         "loading their component package.",
         "An object restored with readRDS() does not load a component by itself,",
-        "so base R cannot dispatch that component's S3 method until it is loaded."
+        "so base R cannot dispatch that component's S3 method until it is loaded.",
+        "When several components export the same symbol, identical import origins",
+        "are deduplicated only when a conservative static proof succeeds.",
+        "Use reexport_prefer = c(symbol = \"component\") to choose a provider,",
+        "or reexport_exclude = \"symbol\" to omit it.",
+        "Unproven collisions stop generation; dry_run, man/reexports.Rd, and",
+        paste0(name, "_conflicts() report the selected resolutions and checks installed"),
+        "same-origin owners without installing missing components.",
+        "If on_component_error = \"skip\" omits a required owner, generation errors",
+        "instead of leaving a binding that points to a component that does not travel."
       )
     } else {
       c(
@@ -441,7 +468,8 @@ write_consistency_test <- function(name, project_dir) {
 #' @noRd
 
 write_basic_vignette <- function(name, packages, project_dir,
-                                 include_archives = FALSE, verbose = FALSE) {
+                                 include_archives = FALSE,
+                                 reexport = FALSE, verbose = FALSE) {
   project_dir <- normalizePath(project_dir, winslash = "/", mustWork = TRUE)
   desc_file <- file.path(project_dir, "DESCRIPTION")
   if (!file.exists(desc_file)) {
@@ -486,7 +514,18 @@ write_basic_vignette <- function(name, packages, project_dir,
       "library(", name, ")\n",
       "```\n\n",
       "Attached component exports are available directly or through their own",
-      "package namespace; they are not copied into this metapackage namespace.\n\n",
+      if (isTRUE(reexport)) {
+        paste0(
+          "package namespace; explicit exports are exposed through read-only bindings.\n\n",
+          "## Re-export collisions\n\n",
+          "Use `reexport_prefer = c(symbol = \"component\")` to choose a provider or ",
+          "`reexport_exclude = \"symbol\"` to omit a symbol. Same-origin exports are ",
+          "deduplicated only after a conservative static proof over NAMESPACE, parsed ",
+          "R source, and `R/sysdata.rda`; unresolved collisions stop generation.\n\n"
+        )
+      } else {
+        "package namespace; they are not copied into this metapackage namespace.\n\n"
+      },
       "## Available functions\n\n",
       if (isTRUE(include_archives)) {
         paste0("* `", name, "_install()`: installs the components shipped inside this package.\n")

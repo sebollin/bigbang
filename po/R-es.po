@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.4.0\n"
+"Project-Id-Version: bigbang 0.4.0.9000\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -453,3 +453,72 @@ msgstr "El componente '%s' no está instalado."
 
 msgid "Runtime re-export bindings are read-only."
 msgstr "Los bindings de reexportación son de solo lectura."
+
+msgid "'reexport_exclude' must be a character vector of non-empty symbols"
+msgstr "'reexport_exclude' debe ser un vector de caracteres con símbolos no vacíos"
+
+msgid "'reexport_prefer' must be a named character vector with one component per symbol"
+msgstr "'reexport_prefer' debe ser un vector de caracteres con nombre y un componente por símbolo"
+
+msgid "'reexport_prefer' must have non-empty, unique names"
+msgstr "'reexport_prefer' debe tener nombres no vacíos y sin duplicados"
+
+msgid "'reexport_prefer' and 'reexport_exclude' require reexport = TRUE"
+msgstr "'reexport_prefer' y 'reexport_exclude' requieren reexport = TRUE"
+
+msgid "Unknown re-export symbol(s): %s. No component exports them."
+msgstr "Símbolo(s) de reexportación desconocido(s): %s. Ningún componente los exporta."
+
+msgid "Re-export symbol(s) cannot be both preferred and excluded: %s."
+msgstr "Los símbolos de reexportación no pueden estar a la vez elegidos y excluidos: %s."
+
+msgid "Preferred re-export target(s) are invalid: %s. Each component must be in the generation and export its symbol."
+msgstr "Los destinos preferidos de reexportación no son válidos: %s. Cada componente debe estar en la generación y exportar su símbolo."
+
+msgid "Generated metapackage symbol(s) %s can only be resolved with reexport_exclude: %s."
+msgstr "Los símbolos %s del metapaquete generado solo pueden resolverse con reexport_exclude: %s."
+
+msgid "Re-export proof cycle while following '%s'."
+msgstr "Se detectó un ciclo en la prueba de reexportación al seguir '%s'."
+
+msgid "Assignment to re-export symbol '%s' in %s:%d."
+msgstr "Asignación al símbolo de reexportación '%s' en %s:%d."
+
+msgid "Call %s targets re-export symbol '%s' in %s:%d."
+msgstr "La llamada %s apunta al símbolo de reexportación '%s' en %s:%d."
+
+msgid "Call %s has a non-literal first argument in %s:%d."
+msgstr "La llamada %s tiene un primer argumento no literal en %s:%d."
+
+msgid "Dynamic namespace mutation via %s in %s:%d."
+msgstr "Mutación dinámica del namespace mediante %s en %s:%d."
+
+msgid "Could not parse R file %s: %s"
+msgstr "No se pudo analizar el archivo R %s: %s"
+
+msgid "Could not inspect R/sysdata.rda: %s"
+msgstr "No se pudo inspeccionar R/sysdata.rda: %s"
+
+msgid "R/sysdata.rda contains re-export symbol '%s'."
+msgstr "R/sysdata.rda contiene el símbolo de reexportación '%s'."
+
+msgid "NAMESPACE does not declare a unique import source for '%s'."
+msgstr "NAMESPACE no declara una fuente de importación única para '%s'."
+
+msgid "NAMESPACE imports '%s' from external package '%s' with import()."
+msgstr "NAMESPACE importa '%s' desde el paquete externo '%s' con import()."
+
+msgid "NAMESPACE imports '%s' from component '%s', which was skipped."
+msgstr "NAMESPACE importa '%s' desde el componente '%s', que fue omitido."
+
+msgid "NAMESPACE imports '%s' from component '%s', which is not in this generation."
+msgstr "NAMESPACE importa '%s' desde el componente '%s', que no está en esta generación."
+
+msgid "NAMESPACE imports '%s' from component '%s', but that component does not export it."
+msgstr "NAMESPACE importa '%s' desde el componente '%s', pero ese componente no lo exporta."
+
+msgid "Cannot resolve re-export symbol(s) because skipped components are required: %s."
+msgstr "No se pueden resolver los símbolos de reexportación porque se necesitan componentes omitidos: %s."
+
+msgid "Cannot resolve re-export collision(s): %s. Candidates and proof failures: %s. Resolve with %s."
+msgstr "No se pueden resolver las colisiones de reexportación: %s. Candidatos y fallas de la prueba: %s. Resuelva con %s."

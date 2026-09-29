@@ -1064,6 +1064,88 @@ write_metapackage_files <- function(
     log_debug(paste("extension:", template_data$extension))
   }
 
+  conflicts_function <- if (isTRUE(reexport)) {
+    paste(c(
+      "#' Report resolved re-export origins",
+      "#'",
+      "#' Checks the selected component and, for same-origin resolutions,",
+      "#' compares installed owners without installing missing components.",
+      "#'",
+      "#' @return A data frame with resolution and installed-identity details.",
+      "#' @export",
+      paste0(name, "_conflicts <- function() {"),
+      "  specs <- Filter(function(spec) spec$resolution %in% c(\"same_origin\", \"preferred\"), .component_reexport_specs)",
+      "  empty <- data.frame(symbol = character(), package = character(), resolution = character(), candidates = character(), installed = character(), missing = character(), identical = logical(), stringsAsFactors = FALSE)",
+      "  if (length(specs) == 0L) return(empty)",
+      "  rows <- lapply(specs, function(spec) {",
+      "    installed <- vapply(spec$candidates, requireNamespace, logical(1L), quietly = TRUE, lib.loc = .reexport_library_paths())",
+      "    missing <- spec$candidates[!installed]",
+      "    same <- NA",
+      "    if (identical(spec$resolution, \"same_origin\") && length(missing) == 0L) {",
+      "      values <- tryCatch(lapply(spec$candidates, function(package) getExportedValue(package, spec$symbol)), error = function(e) NULL)",
+      "      if (!is.null(values) && length(values) > 0L) same <- all(vapply(values[-1L], identical, logical(1L), y = values[[1L]]))",
+      "    }",
+      "    data.frame(symbol = spec$symbol, package = spec$package, resolution = spec$resolution, candidates = paste(spec$candidates, collapse = \", \"), installed = paste(spec$candidates[installed], collapse = \", \"), missing = paste(missing, collapse = \", \"), identical = same, stringsAsFactors = FALSE)",
+      "  })",
+      paste0("  structure(do.call(rbind, rows), class = c(\"", name, "_conflicts\", \"data.frame\"))"),
+      "}",
+      "",
+      "#' @export",
+      paste0("print.", name, "_conflicts <- function(x, ...) {"),
+      "  if (nrow(x) == 0L) {",
+      "    cat(.meta_tr(\"No re-export resolutions found.\"), \"\\n\")",
+      "    return(invisible(x))",
+      "  }",
+      "  cat(.meta_tr(\"Re-export resolutions:\"), \"\\n\")",
+      "  for (index in seq_len(nrow(x))) {",
+      "    status <- if (is.na(x$identical[[index]])) .meta_tr(\"not verified\") else as.character(x$identical[[index]])",
+      "    missing <- if (nzchar(x$missing[[index]])) paste0(\"; \", .meta_trf(\"missing: %s\", x$missing[[index]])) else \"\"",
+      "    cat(\"  \", x$symbol[[index]], \": \", x$package[[index]], \" [\", x$resolution[[index]], \"]; identical=\", status, missing, \"\\n\", sep = \"\")",
+      "  }",
+      "  invisible(x)",
+      "}"
+    ), collapse = "\n")
+  } else {
+    paste(c(
+      "#' Report masking conflicts involving metapackage components",
+      "#'",
+      "#' Examines attached package environments and reports names exported by more",
+      "#' than one package when at least one owner is a metapackage component.",
+      "#'",
+      "#' @return A named list of conflicting package search entries.",
+      "#' @export",
+      paste0(name, "_conflicts <- function() {"),
+      "  package_entries <- grep(\"^package:\", search(), value = TRUE)",
+      "  component_entries <- intersect(paste0(\"package:\", .pkgs), package_entries)",
+      "  if (length(component_entries) == 0L) {",
+      paste0("    return(structure(list(), class = c(\"", name, "_conflicts\", \"list\")))"),
+      "  }",
+      "  objects <- lapply(package_entries, function(entry) ls(envir = as.environment(entry), all.names = TRUE))",
+      "  names(objects) <- package_entries",
+      "  candidates <- unique(unlist(objects[component_entries], use.names = FALSE))",
+      "  conflicts <- lapply(candidates, function(object) package_entries[vapply(objects, function(exports) object %in% exports, logical(1))])",
+      "  names(conflicts) <- candidates",
+      "  conflicts <- conflicts[vapply(conflicts, length, integer(1)) > 1L]",
+      paste0("  structure(conflicts, class = c(\"", name, "_conflicts\", \"list\"))"),
+      "}",
+      "",
+      "#' @export",
+      paste0("print.", name, "_conflicts <- function(x, ...) {"),
+      "  if (length(x) == 0L) {",
+      "    cat(.meta_tr(\"No conflicts found.\"), \"\\n\")",
+      "    return(invisible(x))",
+      "  }",
+      "  cat(.meta_tr(\"Conflicts:\"), \"\\n\")",
+      "  for (object in names(x)) {",
+      "    owners <- sub(\"^package:\", \"\", x[[object]])",
+      "    cat(\"  \", object, \": \", paste(owners, collapse = \", \"), \"\\n\", sep = \"\")",
+      "  }",
+      "  invisible(x)",
+      "}"
+    ), collapse = "\n")
+  }
+  template_data$conflicts_function <- conflicts_function
+
 
   # Templates for the generated runtime files.
   templates <- list(
@@ -1263,48 +1345,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
   .pkgs
 }
 
-#\' Report masking conflicts involving metapackage components
-#\'
-#\' Examines attached package environments and reports names exported by more
-#\' than one package when at least one owner is a metapackage component.
-#\'
-#\' @return A named list of conflicting package search entries.
-#\' @export
-{{ name }}_conflicts <- function() {
-  package_entries <- grep("^package:", search(), value = TRUE)
-  component_entries <- intersect(paste0("package:", .pkgs), package_entries)
-  if (length(component_entries) == 0L) {
-    return(structure(list(), class = c("{{ name }}_conflicts", "list")))
-  }
-
-  objects <- lapply(package_entries, function(entry) {
-    ls(envir = as.environment(entry), all.names = TRUE)
-  })
-  names(objects) <- package_entries
-  candidates <- unique(unlist(objects[component_entries], use.names = FALSE))
-  conflicts <- lapply(candidates, function(object) {
-    package_entries[vapply(objects, function(exports) {
-      object %in% exports
-    }, logical(1))]
-  })
-  names(conflicts) <- candidates
-  conflicts <- conflicts[vapply(conflicts, length, integer(1)) > 1L]
-  structure(conflicts, class = c("{{ name }}_conflicts", "list"))
-}
-
-#\' @export
-print.{{ name }}_conflicts <- function(x, ...) {
-  if (length(x) == 0L) {
-    cat(.meta_tr("No conflicts found."), "\\n")
-    return(invisible(x))
-  }
-  cat(.meta_tr("Conflicts:"), "\\n")
-  for (object in names(x)) {
-    owners <- sub("^package:", "", x[[object]])
-    cat("  ", object, ": ", paste(owners, collapse = ", "), "\\n", sep = "")
-  }
-  invisible(x)
-}
+{{{ conflicts_function }}}
 
 #\' Attach all components without a preflight check
 #\'

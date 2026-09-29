@@ -1,5 +1,15 @@
 # bigbang (development version)
 
+- `create_metapackage()` now accepts `reexport_prefer` and `reexport_exclude`.
+  Unique exports and conservatively proven same-origin exports resolve
+  automatically; genuine collisions report candidates and static-proof reasons.
+  Generated packages expose the selected resolution in `reexports.Rd`,
+  `dry_run`, and `<meta>_conflicts()`.
+
+- Re-export analysis uses the extracted NAMESPACE and parsed component source.
+  A skipped component required by a selected binding is an explicit generation
+  error, so generated bindings never point at an omitted package.
+
 # bigbang 0.4.0
 
 ## New features

@@ -144,6 +144,21 @@ cargando el componente. Un objeto restaurado con `readRDS()` no carga un
 componente por sí mismo, así que R no puede despachar su método S3 hasta que el
 componente se haya cargado.
 
+### Colisiones de reexportacion
+
+Cuando varios componentes exportan el mismo simbolo, usa
+`reexport_prefer = c(simbolo = "componente")` para elegir su proveedor o
+`reexport_exclude = "simbolo"` para excluirlo. Las exportaciones unicas y las
+reexportaciones con el mismo origen se resuelven solas unicamente cuando una
+prueba estatica conservadora sobre NAMESPACE, asignaciones y llamadas parseadas
+de `R/`, y `R/sysdata.rda` tiene exito. Las colisiones genuinas detienen la
+generacion con sus candidatos y los motivos de la prueba; `dry_run`,
+`man/reexports.Rd` y `<meta>_conflicts()` muestran la resolucion.
+`<meta>_conflicts()` tambien compara con `identical()` los objetos instalados de
+un mismo origen cuando estan todos presentes, sin instalar componentes faltantes.
+Si `on_component_error = "skip"` omite un dueno necesario, la generacion falla
+en vez de crear un binding hacia un componente que no viaja.
+
 bigbang mantiene como errores duros todas las validaciones que protegen a quien
 recibe el metapaquete: archivos inseguros o malformados, metadatos inválidos,
 componentes duplicados, restricciones locales insatisfechas y ciclos. Esas

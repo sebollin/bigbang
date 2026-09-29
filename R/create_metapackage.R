@@ -55,7 +55,8 @@
                                       include_archives = TRUE,
                                       license = "MIT + file LICENSE",
                                       document = FALSE,
-                                      reexport = FALSE) {
+                                      reexport = FALSE,
+                                      reexport_symbols = NULL) {
   files <- c(
     "DESCRIPTION", "NAMESPACE", "README.md", ".Rbuildignore", ".gitignore",
     ".BBSoptions", paste0(name, ".Rproj"),
@@ -80,9 +81,13 @@
   if (isTRUE(document)) {
     files <- c(files, .planned_documentation_files(name))
     if (isTRUE(reexport)) {
-      exports <- unique(unlist(lapply(components, function(component) {
-        .or_null(component$exports, character())
-      }), use.names = FALSE))
+      exports <- if (is.null(reexport_symbols)) {
+        unique(unlist(lapply(components, function(component) {
+          .or_null(component$exports, character())
+        }), use.names = FALSE))
+      } else {
+        unique(reexport_symbols)
+      }
       if (length(exports) > 0L) files <- c(files, file.path("man", "reexports.Rd"))
     }
   }
@@ -508,6 +513,41 @@
   tolerate
 }
 
+.validate_reexport_options <- function(reexport, prefer, exclude) {
+  if (!is.character(exclude) || anyNA(exclude) || any(!nzchar(exclude))) {
+    .bigbang_abort(
+      "bigbang_error_reexport_exclude",
+      .bb_tr("'reexport_exclude' must be a character vector of non-empty symbols")
+    )
+  }
+  if (!is.character(prefer) || anyNA(prefer) || any(!nzchar(prefer))) {
+    .bigbang_abort(
+      "bigbang_error_reexport_prefer",
+      .bb_tr("'reexport_prefer' must be a named character vector with one component per symbol")
+    )
+  }
+  if (length(prefer) > 0L) {
+    prefer_names <- names(prefer)
+    if (is.null(prefer_names) || length(prefer_names) != length(prefer) ||
+          anyNA(prefer_names) || any(!nzchar(prefer_names)) ||
+          anyDuplicated(prefer_names)) {
+      .bigbang_abort(
+        "bigbang_error_reexport_prefer",
+        .bb_tr("'reexport_prefer' must have non-empty, unique names")
+      )
+    }
+  }
+  if (!isTRUE(reexport) && (length(prefer) > 0L || length(exclude) > 0L)) {
+    .bigbang_abort(
+      "bigbang_error_reexport_options",
+      .bb_tr(
+        "'reexport_prefer' and 'reexport_exclude' require reexport = TRUE"
+      )
+    )
+  }
+  invisible(list(prefer = prefer, exclude = exclude))
+}
+
 # Keep rollback's filesystem operation behind a package binding so its
 # defensive failure path can be tested without replacing base::unlink globally.
 .rollback_unlink <- function(path) {
@@ -669,12 +709,20 @@
 #'   generated installer function: "newer", "always", or "never".
 #'   This controls whether a generated installer keeps newer installed
 #'   versions, reinstalls every component, or skips archive inspection.
+#' @param reexport_prefer Named character vector mapping symbols to the one
+#'   component that should provide them when `reexport = TRUE`, for example
+#'   `c(filter = "componentb")`. Names and values must be non-empty and each
+#'   named component must be included and export the mapped symbol.
+#' @param reexport_exclude Character vector of symbols that must not be
+#'   re-exported. Symbols are validated against the explicit exports of the
+#'   included components and cannot also appear in `reexport_prefer`.
 #' @param debug Logical. If `TRUE`, emits detailed debugging messages. Defaults
 #'   to `FALSE`.
 #'
 #' @return Invisibly, a `bigbang_result` containing the generated path,
 #'   component archives, dependency classification, applied tolerations,
-#'   files removed by the call, and documentation status.
+#'   files removed by the call, documentation status, the `reexports` table,
+#'   and `reexport_excluded` symbols.
 #'
 #' @details
 #' The function performs the following steps:
@@ -742,6 +790,22 @@
 #' load a component by itself, so base R cannot dispatch that component's S3
 #' method until the component has been loaded.
 #'
+#' @section Re-export collisions:
+#' When more than one component exports a symbol, `reexport_prefer` chooses its
+#' provider explicitly and `reexport_exclude` removes it from the generated
+#' namespace. A collision is deduplicated automatically only when every owner
+#' can be conservatively proven to follow the same import origin, or when one
+#' component is the unique owner. The proof inspects the extracted NAMESPACE,
+#' parsed R assignments and calls, and `R/sysdata.rda`; it is deliberately
+#' conservative because runtime code and loaded values cannot be known during
+#' generation. Other collisions stop generation with candidates and proof
+#' reasons. If `on_component_error = "skip"` omits a component required by a
+#' same-origin or preferred binding, generation errors instead of creating a
+#' binding to a component that will not travel with the metapackage. The result,
+#' `dry_run`, generated `man/reexports.Rd`, and `<name>_conflicts()` report the
+#' selected resolution. The latter checks installed same-origin owners for
+#' `identical()` objects when they are available, without installing anything.
+#'
 #' @section Requirements:
 #' - Each component must be an existing archive path or a stem resolvable in
 #'   one of the optional `pkg_dir` directories; `ext` is only a fallback for
@@ -799,7 +863,9 @@ create_metapackage <- function(
   dry_run = FALSE,
   on_component_error = c("abort", "skip"),
   update = FALSE,
-  install_upgrade = c("newer", "always", "never")
+  install_upgrade = c("newer", "always", "never"),
+  reexport_prefer = character(),
+  reexport_exclude = character()
 ) {
   verbose <- isTRUE(verbose)
   debug <- isTRUE(debug)
@@ -808,6 +874,7 @@ create_metapackage <- function(
   if (!is.logical(reexport) || length(reexport) != 1L || is.na(reexport)) {
     stop(.bb_tr("'reexport' must be TRUE or FALSE"), call. = FALSE)
   }
+  .validate_reexport_options(reexport, reexport_prefer, reexport_exclude)
 
   # Validate public arguments before touching the filesystem.
   if (missing(dest_dir) || is.null(dest_dir) ||
@@ -878,13 +945,16 @@ create_metapackage <- function(
   validated <- .validate_generation(
     resolved_components, tolerate = tolerate,
     on_component_error = on_component_error,
-    reexport = isTRUE(reexport), metapackage_name = name
+    reexport = isTRUE(reexport), metapackage_name = name,
+    reexport_prefer = reexport_prefer,
+    reexport_exclude = reexport_exclude
   )
   resolved_components <- validated$resolved
   validation <- validated$validation
   omitted <- validated$omitted
   components <- validation$components
   tolerated <- validation$tolerated
+  reexport_plan <- validated$reexport
   component_packages <- vapply(components, `[[`, character(1L), "package")
   archive_stems <- vapply(components, `[[`, character(1L), "stem")
   archive_paths <- vapply(components, `[[`, character(1L), "path")
@@ -980,7 +1050,8 @@ create_metapackage <- function(
     .planned_generation_files(
       name, resolved_components$components, workflow,
       include_archives, license = license, document = document,
-      reexport = isTRUE(reexport)
+      reexport = isTRUE(reexport),
+      reexport_symbols = reexport_plan$table$symbol
     ),
     .generation_manifest_name
   )
@@ -1041,10 +1112,13 @@ create_metapackage <- function(
       packages = component_packages,
       archives = archive_stems,
       components = components,
+      reexports = reexport_plan$table,
+      reexport_excluded = reexport_plan$excluded,
       order = .component_topological_order(components),
       files = .planned_generation_files(
         name, components, workflow, include_archives,
-        license = license, document = document, reexport = isTRUE(reexport)
+        license = license, document = document, reexport = isTRUE(reexport),
+        reexport_symbols = reexport_plan$table$symbol
       ),
       removed_files = stale_files,
       findings = generation_findings,
@@ -1083,7 +1157,11 @@ create_metapackage <- function(
   documentation_files <- if (isTRUE(document)) {
     c(
       .planned_documentation_files(name),
-      if (isTRUE(reexport)) file.path("man", "reexports.Rd") else character()
+      if (isTRUE(reexport) && nrow(reexport_plan$table) > 0L) {
+        file.path("man", "reexports.Rd")
+      } else {
+        character()
+      }
     )
   } else {
     character()
@@ -1278,7 +1356,8 @@ create_metapackage <- function(
 
   # Create the basic vignette after DESCRIPTION exists.
   write_basic_vignette(name, component_packages, project_dir,
-                       include_archives = include_archives, verbose = debug)
+                       include_archives = include_archives,
+                       reexport = isTRUE(reexport), verbose = debug)
   if (!is.null(workflow)) {
     write_workflow_vignette(name, workflow, project_dir)
   }
@@ -1298,9 +1377,7 @@ create_metapackage <- function(
     import_deps = import_deps,
     verbose = debug,
     reexport_symbols = if (isTRUE(reexport)) {
-      unique(unlist(lapply(components, function(component) {
-        .or_null(component$exports, character())
-      }), use.names = FALSE))
+      reexport_plan$table$symbol
     } else {
       character()
     }
@@ -1465,13 +1542,7 @@ StripTrailingWhitespace: Yes"
     install_upgrade = install_upgrade,
     reexport = isTRUE(reexport),
     reexport_specs = if (isTRUE(reexport)) {
-      specs <- lapply(components, function(component) {
-        exports <- unique(.or_null(component$exports, character()))
-        lapply(exports, function(symbol) {
-          list(package = component$package, symbol = symbol)
-        })
-      })
-      unname(unlist(specs, recursive = FALSE))
+      unname(reexport_plan$specs)
     } else {
       list()
     }
@@ -1484,9 +1555,7 @@ StripTrailingWhitespace: Yes"
   if (isTRUE(reexport) && isTRUE(document)) {
     .write_reexport_documentation(
       project_dir,
-      unique(unlist(lapply(components, function(component) {
-        .or_null(component$exports, character())
-      }), use.names = FALSE))
+      reexport_plan$table
     )
   }
   log_debug("Additional metapackage files created")
@@ -1551,9 +1620,7 @@ StripTrailingWhitespace: Yes"
   .ensure_namespace_exports(
     file.path(project_dir, "NAMESPACE"),
     if (isTRUE(reexport)) {
-      unique(unlist(lapply(components, function(component) {
-        .or_null(component$exports, character())
-      }), use.names = FALSE))
+      reexport_plan$table$symbol
     } else {
       character()
     }
@@ -1563,7 +1630,8 @@ StripTrailingWhitespace: Yes"
     setdiff(
       .planned_generation_files(
         name, components, workflow, include_archives,
-        license = license, document = doc_ok, reexport = isTRUE(reexport)
+        license = license, document = doc_ok, reexport = isTRUE(reexport),
+        reexport_symbols = reexport_plan$table$symbol
       ),
       .generation_manifest_name
     ),
@@ -1578,6 +1646,8 @@ StripTrailingWhitespace: Yes"
       name = name,
       packages = component_packages,
       archives = archive_stems,
+      reexports = reexport_plan$table,
+      reexport_excluded = reexport_plan$excluded,
       order = .component_topological_order(components),
       removed_files = unique(c(stale_files, reverted_documentation)),
       local_dependencies = local_deps,

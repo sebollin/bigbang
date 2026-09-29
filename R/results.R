@@ -36,6 +36,17 @@ print.bigbang_result <- function(x, ...) {
   if (is.data.frame(x$omitted) && nrow(x$omitted) > 0L) {
     cat("  Omitted: ", paste(x$omitted$component, collapse = ", "), "\n", sep = "")
   }
+  if (is.data.frame(x$reexports) && nrow(x$reexports) > 0L) {
+    summary <- paste0(
+      x$reexports$symbol, " -> ", x$reexports$package,
+      " (", x$reexports$resolution, ")"
+    )
+    cat("  Re-exports: ", paste(summary, collapse = ", "), "\n", sep = "")
+  }
+  if (length(x$reexport_excluded) > 0L) {
+    cat("  Re-exports excluded: ",
+        paste(x$reexport_excluded, collapse = ", "), "\n", sep = "")
+  }
   if (length(x$cran_dependencies) > 0L) {
     cat("  Non-local dependencies: ",
         paste(x$cran_dependencies, collapse = ", "), "\n", sep = "")

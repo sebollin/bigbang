@@ -150,7 +150,30 @@
     "Removing generated files no longer in the plan: %s" = "Eliminando archivos generados que ya no est\u00e1n en el plan: %s",
     "Component archive %s could not be read; skip propagation uses filename-derived name '%s'; dependents may fail on the recipient if that name differs from Package." = "No se pudo leer el archivo del componente %s; el arrastre del descarte usa el nombre derivado del archivo '%s'; los dependientes pueden fallar en el receptor si ese nombre difiere de Package.",
     "Component package '%s' is not installed." = "El componente '%s' no est\u00e1 instalado.",
-    "Runtime re-export bindings are read-only." = "Los bindings de reexportaci\u00f3n son de solo lectura."
+    "Runtime re-export bindings are read-only." = "Los bindings de reexportaci\u00f3n son de solo lectura.",
+    "'reexport_exclude' must be a character vector of non-empty symbols" = "'reexport_exclude' debe ser un vector de caracteres con s\u00edmbolos no vac\u00edos",
+    "'reexport_prefer' must be a named character vector with one component per symbol" = "'reexport_prefer' debe ser un vector de caracteres con nombre y un componente por s\u00edmbolo",
+    "'reexport_prefer' must have non-empty, unique names" = "'reexport_prefer' debe tener nombres no vac\u00edos y sin duplicados",
+    "'reexport_prefer' and 'reexport_exclude' require reexport = TRUE" = "'reexport_prefer' y 'reexport_exclude' requieren reexport = TRUE",
+    "Unknown re-export symbol(s): %s. No component exports them." = "S\u00edmbolo(s) de reexportaci\u00f3n desconocido(s): %s. Ning\u00fan componente los exporta.",
+    "Re-export symbol(s) cannot be both preferred and excluded: %s." = "Los s\u00edmbolos de reexportaci\u00f3n no pueden estar a la vez elegidos y excluidos: %s.",
+    "Preferred re-export target(s) are invalid: %s. Each component must be in the generation and export its symbol." = "Los destinos preferidos de reexportaci\u00f3n no son v\u00e1lidos: %s. Cada componente debe estar en la generaci\u00f3n y exportar su s\u00edmbolo.",
+    "Generated metapackage symbol(s) %s can only be resolved with reexport_exclude: %s." = "Los s\u00edmbolos %s del metapaquete generado solo pueden resolverse con reexport_exclude: %s.",
+    "Re-export proof cycle while following '%s'." = "Se detect\u00f3 un ciclo en la prueba de reexportaci\u00f3n al seguir '%s'.",
+    "Assignment to re-export symbol '%s' in %s:%d." = "Asignaci\u00f3n al s\u00edmbolo de reexportaci\u00f3n '%s' en %s:%d.",
+    "Call %s targets re-export symbol '%s' in %s:%d." = "La llamada %s apunta al s\u00edmbolo de reexportaci\u00f3n '%s' en %s:%d.",
+    "Call %s has a non-literal first argument in %s:%d." = "La llamada %s tiene un primer argumento no literal en %s:%d.",
+    "Dynamic namespace mutation via %s in %s:%d." = "Mutaci\u00f3n din\u00e1mica del namespace mediante %s en %s:%d.",
+    "Could not parse R file %s: %s" = "No se pudo analizar el archivo R %s: %s",
+    "Could not inspect R/sysdata.rda: %s" = "No se pudo inspeccionar R/sysdata.rda: %s",
+    "R/sysdata.rda contains re-export symbol '%s'." = "R/sysdata.rda contiene el s\u00edmbolo de reexportaci\u00f3n '%s'.",
+    "NAMESPACE does not declare a unique import source for '%s'." = "NAMESPACE no declara una fuente de importaci\u00f3n \u00fanica para '%s'.",
+    "NAMESPACE imports '%s' from external package '%s' with import()." = "NAMESPACE importa '%s' desde el paquete externo '%s' con import().",
+    "NAMESPACE imports '%s' from component '%s', which was skipped." = "NAMESPACE importa '%s' desde el componente '%s', que fue omitido.",
+    "NAMESPACE imports '%s' from component '%s', which is not in this generation." = "NAMESPACE importa '%s' desde el componente '%s', que no est\u00e1 en esta generaci\u00f3n.",
+    "NAMESPACE imports '%s' from component '%s', but that component does not export it." = "NAMESPACE importa '%s' desde el componente '%s', pero ese componente no lo exporta.",
+    "Cannot resolve re-export symbol(s) because skipped components are required: %s." = "No se pueden resolver los s\u00edmbolos de reexportaci\u00f3n porque se necesitan componentes omitidos: %s.",
+    "Cannot resolve re-export collision(s): %s. Candidates and proof failures: %s. Resolve with %s." = "No se pueden resolver las colisiones de reexportaci\u00f3n: %s. Candidatos y fallas de la prueba: %s. Resuelva con %s."
   )
 }
 
@@ -255,7 +278,11 @@
       "Componente(s) desconocido(s) en 'only': %s.",
       "Se agregaron dependencias locales de los componentes seleccionados: %s",
       "El componente '%s' no est\u00e1 instalado.",
-      "Los bindings de reexportaci\u00f3n son de solo lectura."
+      "Los bindings de reexportaci\u00f3n son de solo lectura.",
+      "No se encontraron resoluciones de reexportaci\u00f3n.",
+      "Resoluciones de reexportaci\u00f3n:",
+      "no verificado",
+      "faltan: %s"
     ),
     c(
       "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives.",
@@ -333,7 +360,11 @@
       "Unknown component(s) in 'only': %s.",
       "Added local dependencies of selected components: %s",
       "Component package '%s' is not installed.",
-      "Runtime re-export bindings are read-only."
+      "Runtime re-export bindings are read-only.",
+      "No re-export resolutions found.",
+      "Re-export resolutions:",
+      "not verified",
+      "missing: %s"
     )
   )
 }

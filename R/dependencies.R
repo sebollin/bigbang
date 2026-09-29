@@ -297,7 +297,11 @@
           version = metadata$version,
           dependencies = metadata$dependencies,
           constraints = metadata$constraints,
-          exports = .or_null(metadata$exports, character())
+          exports = .or_null(metadata$exports, character()),
+          imports = .or_null(metadata$imports, list()),
+          reexport_evidence = .or_null(
+            metadata$reexport_evidence, .reexport_empty_evidence()
+          )
         )
       }, error = identity)
     } else {
@@ -427,6 +431,8 @@
   )
 
   exports <- character()
+  imports <- list()
+  reexport_evidence <- .reexport_empty_evidence()
   if (isTRUE(include_exports)) {
     namespace_path <- file.path(package_root, "NAMESPACE")
     if (!file.exists(namespace_path) || dir.exists(namespace_path)) {
@@ -469,6 +475,7 @@
       )
     }
     explicit <- namespace$exports
+    imports <- .or_null(namespace$imports, list())
     if (length(explicit) > 0L && any(nzchar(names(explicit)))) {
       exported_names <- names(explicit)
       exported_names[!nzchar(exported_names)] <- unname(
@@ -489,6 +496,7 @@
         archive = archive
       )
     }
+    reexport_evidence <- .reexport_source_evidence(package_root)
   }
 
   list(
@@ -499,7 +507,9 @@
     version = declared_version,
     dependencies = parsed_dependencies$dependencies,
     constraints = parsed_dependencies$constraints,
-    exports = exports
+    exports = exports,
+    imports = imports,
+    reexport_evidence = reexport_evidence
   )
 }
 
@@ -837,6 +847,218 @@
   }
   .validate_extracted_links(extract_dir, archive)
   invisible(extraction)
+}
+
+.reexport_empty_evidence <- function() {
+  list(
+    assignments = list(), calls = list(), dynamic = list(),
+    parse_errors = list(), sysdata_names = character(),
+    sysdata_error = NULL
+  )
+}
+
+.reexport_source_label <- function(path, package_root) {
+  root <- normalizePath(package_root, winslash = "/", mustWork = TRUE)
+  path <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  substring(path, nchar(root) + 2L)
+}
+
+.reexport_parse_target <- function(text) {
+  expression <- tryCatch(
+    parse(text = paste0("function() ", text))[[1L]][[3L]],
+    error = function(e) NULL
+  )
+  if (is.symbol(expression)) return(as.character(expression))
+  if (is.character(expression) && length(expression) == 1L &&
+        !is.na(expression)) return(expression)
+  NULL
+}
+
+.reexport_call_expression <- function(data, function_id) {
+  current <- function_id
+  repeat {
+    row <- data[data$id == current, , drop = FALSE]
+    if (nrow(row) == 0L) return(NULL)
+    if (row$token[[1L]] %in% c("expr", "expr_or_assign_or_help") &&
+          any(data$parent == current & data$token == "'('")) {
+      return(row[["id"]][[1L]])
+    }
+    parent <- row$parent[[1L]]
+    if (identical(parent, 0L)) return(NULL)
+    current <- parent
+  }
+}
+
+.reexport_call_first_argument <- function(data, call_id) {
+  open <- data[data$parent == call_id & data$token == "'('", , drop = FALSE]
+  if (nrow(open) == 0L) return(NULL)
+  arguments <- data[
+    data$parent == call_id &
+      data$token %in% c("expr", "expr_or_assign_or_help") &
+      data$col1 > open$col1[[1L]],
+    , drop = FALSE
+  ]
+  if (nrow(arguments) == 0L) return(NULL)
+  arguments <- arguments[order(arguments$col1, arguments$id), , drop = FALSE]
+  first <- arguments[1L, , drop = FALSE]
+  parsed <- tryCatch(
+    parse(text = paste0("f(", first$text[[1L]], ")"))[[1L]][[2L]],
+    error = function(e) NULL
+  )
+  if (is.call(parsed) && identical(as.character(parsed[[1L]]), "=")) {
+    parsed <- parsed[[3L]]
+  }
+  if (is.character(parsed) && length(parsed) == 1L && !is.na(parsed)) {
+    return(list(literal = TRUE, value = parsed))
+  }
+  list(literal = FALSE, value = NULL)
+}
+
+.reexport_qualify_function <- function(data, function_id) {
+  row <- data[data$id == function_id, , drop = FALSE]
+  if (nrow(row) == 0L) return(list(package = NULL, function_name = NULL))
+  parent <- row$parent[[1L]]
+  parent_row <- data[data$id == parent, , drop = FALSE]
+  if (nrow(parent_row) == 1L && parent_row$token[[1L]] == "NS_GET") {
+    package <- data[
+      data$parent == parent & data$token == "SYMBOL_PACKAGE",
+      "text", drop = TRUE
+    ]
+    return(list(
+      package = if (length(package) == 1L) package else NULL,
+      function_name = row$text[[1L]]
+    ))
+  }
+  if (nrow(parent_row) == 1L &&
+        parent_row$token[[1L]] %in% c("expr", "expr_or_assign_or_help")) {
+    ns_get <- data[data$parent == parent & data$token == "NS_GET", , drop = FALSE]
+    if (nrow(ns_get) == 1L) {
+      package <- data[
+        data$parent == parent & data$token == "SYMBOL_PACKAGE",
+        "text", drop = TRUE
+      ]
+      return(list(
+        package = if (length(package) == 1L) package else NULL,
+        function_name = row$text[[1L]]
+      ))
+    }
+  }
+  list(package = NULL, function_name = row$text[[1L]])
+}
+
+.reexport_parse_source <- function(path, package_root) {
+  label <- .reexport_source_label(path, package_root)
+  evidence <- list(
+    assignments = list(), calls = list(), dynamic = list(),
+    parse_errors = list()
+  )
+  parsed <- tryCatch(
+    parse(file = path, keep.source = TRUE),
+    error = identity
+  )
+  if (inherits(parsed, "error")) {
+    evidence$parse_errors <- list(list(
+      file = label, error = conditionMessage(parsed)
+    ))
+    return(evidence)
+  }
+  data <- utils::getParseData(parsed, includeText = TRUE)
+  if (is.null(data) || nrow(data) == 0L) return(evidence)
+
+  assignment_tokens <- c(
+    "LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2"
+  )
+  assignment_rows <- which(data$token %in% assignment_tokens)
+  for (row_index in assignment_rows) {
+    assignment <- data[row_index, , drop = FALSE]
+    candidates <- data[
+      data$parent == assignment$parent[[1L]] &
+        data$token %in% c("expr", "expr_or_assign_or_help"),
+      , drop = FALSE
+    ]
+    if (nrow(candidates) == 0L) next
+    candidates <- candidates[order(candidates$col1, candidates$id), , drop = FALSE]
+    before <- candidates$col1 < assignment$col1[[1L]]
+    index <- if (assignment$token %in% c("RIGHT_ASSIGN", "RIGHT_ASSIGN2")) {
+      which(!before)[1L]
+    } else {
+      which(before)[1L]
+    }
+    if (length(index) == 0L || is.na(index)) next
+    target <- .reexport_parse_target(candidates$text[[index]])
+    if (!is.null(target)) {
+      evidence$assignments[[length(evidence$assignments) + 1L]] <- list(
+        symbol = target, file = label, line = assignment$line1[[1L]]
+      )
+    }
+  }
+
+  target_calls <- c(
+    "assign", "delayedAssign", "makeActiveBinding", "setGeneric",
+    "setClass", "setRefClass", "setValidity", "setGroupGeneric", "setMethod"
+  )
+  function_rows <- which(data$token == "SYMBOL_FUNCTION_CALL")
+  for (row_index in function_rows) {
+    function_row <- data[row_index, , drop = FALSE]
+    call_id <- .reexport_call_expression(data, function_row$id)
+    if (is.null(call_id)) next
+    qualification <- .reexport_qualify_function(data, function_row$id)
+    first <- .reexport_call_first_argument(data, call_id)
+    record <- list(
+      name = qualification$function_name,
+      package = qualification$package,
+      file = label,
+      line = function_row$line1[[1L]],
+      literal = if (is.null(first)) FALSE else isTRUE(first$literal),
+      value = if (is.null(first)) NULL else first$value
+    )
+    function_name <- qualification$function_name
+    is_env_bind <- identical(qualification$package, "rlang") &&
+      startsWith(function_name, "env_bind")
+    is_namespace_assign <- identical(qualification$package, "utils") &&
+      identical(function_name, "assignInMyNamespace")
+    is_dynamic <- function_name %in% c("list2env", "sys.source") ||
+      is_env_bind || is_namespace_assign ||
+      (identical(function_name, "eval") && !is.null(first) &&
+         !isTRUE(first$literal) &&
+         grepl("(^|[[(,[:space:]])parse[[:space:]]*\\(",
+               data[data$id == call_id, "text", drop = TRUE], perl = TRUE))
+    if (is_dynamic) {
+      evidence$dynamic[[length(evidence$dynamic) + 1L]] <- record
+    }
+    if (function_name %in% target_calls) {
+      evidence$calls[[length(evidence$calls) + 1L]] <- record
+    }
+  }
+  evidence
+}
+
+.reexport_source_evidence <- function(package_root) {
+  evidence <- .reexport_empty_evidence()
+  r_dir <- file.path(package_root, "R")
+  if (dir.exists(r_dir)) {
+    files <- sort(list.files(
+      r_dir, pattern = "\\.[Rr]$", full.names = TRUE, recursive = TRUE
+    ))
+    parsed <- lapply(files, .reexport_parse_source, package_root = package_root)
+    evidence$assignments <- unlist(lapply(parsed, `[[`, "assignments"),
+                                   recursive = FALSE)
+    evidence$calls <- unlist(lapply(parsed, `[[`, "calls"), recursive = FALSE)
+    evidence$dynamic <- unlist(lapply(parsed, `[[`, "dynamic"), recursive = FALSE)
+    evidence$parse_errors <- unlist(lapply(parsed, `[[`, "parse_errors"),
+                                    recursive = FALSE)
+  }
+  sysdata <- file.path(r_dir, "sysdata.rda")
+  if (file.exists(sysdata) && !dir.exists(sysdata)) {
+    environment <- new.env(parent = emptyenv())
+    loaded <- tryCatch(load(sysdata, envir = environment), error = identity)
+    if (inherits(loaded, "error")) {
+      evidence$sysdata_error <- conditionMessage(loaded)
+    } else {
+      evidence$sysdata_names <- sort(unique(as.character(loaded)))
+    }
+  }
+  evidence
 }
 
 .version_matches <- function(left, right) {
@@ -1230,9 +1452,441 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   state$ordered
 }
 
+.reexport_empty_table <- function() {
+  data.frame(
+    symbol = character(), package = character(), resolution = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+.reexport_symbol_literal <- function(symbol) {
+  .r_ascii_literal(symbol)
+}
+
+.reexport_prefer_literal <- function(symbol, package) {
+  .r_ascii_literal(stats::setNames(package, symbol))
+}
+
+.reexport_import_sources <- function(component, symbol, components) {
+  imports <- .or_null(component$imports, list())
+  sources <- list()
+  if (length(imports) == 0L) return(sources)
+  for (entry in imports) {
+    if (is.character(entry) && length(entry) == 1L) {
+      package <- entry[[1L]]
+      if (package %in% vapply(components, `[[`, character(1L), "package")) {
+        owner <- components[[match(
+          package, vapply(components, `[[`, character(1L), "package")
+        )]]
+        if (symbol %in% .or_null(owner$exports, character())) {
+          sources[[length(sources) + 1L]] <- list(
+            package = package, kind = "full", external = FALSE
+          )
+        }
+      } else {
+        sources[[length(sources) + 1L]] <- list(
+          package = package, kind = "full", external = TRUE
+        )
+      }
+      next
+    }
+    if (is.list(entry) && length(entry) >= 2L) {
+      package <- as.character(entry[[1L]])[[1L]]
+      symbols <- as.character(entry[[2L]])
+      if (symbol %in% symbols) {
+        sources[[length(sources) + 1L]] <- list(
+          package = package, kind = "from", external = !package %in%
+            vapply(components, `[[`, character(1L), "package")
+        )
+      }
+    }
+  }
+  sources
+}
+
+.reexport_probe_failure <- function(reason, skipped = FALSE) {
+  list(demonstrated = FALSE, skipped = isTRUE(skipped), reason = reason)
+}
+
+.reexport_probe <- function(component, symbol, components, omitted_names,
+                            trail = character()) {
+  package <- component$package
+  key <- paste(package, symbol, sep = "::")
+  if (key %in% trail) {
+    return(.reexport_probe_failure(
+      .bb_trf("Re-export proof cycle while following '%s'.", symbol)
+    ))
+  }
+
+  sources <- .reexport_import_sources(component, symbol, components)
+  if (length(sources) == 0L) {
+    return(list(
+      demonstrated = TRUE, skipped = FALSE, root_type = "component",
+      root = package, reason = NULL
+    ))
+  }
+  if (length(sources) != 1L) {
+    return(.reexport_probe_failure(.bb_trf(
+      "NAMESPACE does not declare a unique import source for '%s'.", symbol
+    )))
+  }
+  source <- sources[[1L]]
+  if (identical(source$kind, "full") && isTRUE(source$external)) {
+    return(.reexport_probe_failure(.bb_trf(
+      "NAMESPACE imports '%s' from external package '%s' with import().",
+      symbol, source$package
+    )))
+  }
+  if (source$package %in% omitted_names) {
+    return(.reexport_probe_failure(.bb_trf(
+      "NAMESPACE imports '%s' from component '%s', which was skipped.",
+      symbol, source$package
+    ), skipped = TRUE))
+  }
+  external_source <- identical(source$kind, "from") && isTRUE(source$external)
+  if (!external_source) {
+    index <- match(
+      source$package, vapply(components, `[[`, character(1L), "package")
+    )
+    if (is.na(index)) {
+      return(.reexport_probe_failure(.bb_trf(
+        "NAMESPACE imports '%s' from component '%s', which is not in this generation.",
+        symbol, source$package
+      ), skipped = TRUE))
+    }
+    parent <- components[[index]]
+    if (!symbol %in% .or_null(parent$exports, character())) {
+      return(.reexport_probe_failure(.bb_trf(
+        "NAMESPACE imports '%s' from component '%s', but that component does not export it.",
+        symbol, source$package
+      )))
+    }
+  }
+
+  evidence <- .or_null(
+    component$reexport_evidence, .reexport_empty_evidence()
+  )
+  assignment <- Filter(
+    function(item) identical(item$symbol, symbol),
+    .or_null(evidence$assignments, list())
+  )
+  if (length(assignment) > 0L) {
+    item <- assignment[[1L]]
+    return(.reexport_probe_failure(.bb_trf(
+      "Assignment to re-export symbol '%s' in %s:%d.",
+      symbol, item$file, item$line
+    )))
+  }
+
+  calls <- Filter(function(item) {
+    !isTRUE(item$literal) || identical(item$value, symbol)
+  }, .or_null(evidence$calls, list()))
+  if (length(calls) > 0L) {
+    item <- calls[[1L]]
+    if (isTRUE(item$literal)) {
+      return(.reexport_probe_failure(.bb_trf(
+        "Call %s targets re-export symbol '%s' in %s:%d.",
+        item$name, symbol, item$file, item$line
+      )))
+    }
+    return(.reexport_probe_failure(.bb_trf(
+      "Call %s has a non-literal first argument in %s:%d.",
+      item$name, item$file, item$line
+    )))
+  }
+
+  dynamic <- .or_null(evidence$dynamic, list())
+  if (length(dynamic) > 0L) {
+    item <- dynamic[[1L]]
+    return(.reexport_probe_failure(.bb_trf(
+      "Dynamic namespace mutation via %s in %s:%d.",
+      item$name, item$file, item$line
+    )))
+  }
+
+  parse_errors <- .or_null(evidence$parse_errors, list())
+  if (length(parse_errors) > 0L) {
+    item <- parse_errors[[1L]]
+    return(.reexport_probe_failure(.bb_trf(
+      "Could not parse R file %s: %s", item$file, item$error
+    )))
+  }
+
+  sysdata_error <- evidence$sysdata_error
+  if (!is.null(sysdata_error)) {
+    return(.reexport_probe_failure(.bb_trf(
+      "Could not inspect R/sysdata.rda: %s", sysdata_error
+    )))
+  }
+  if (symbol %in% .or_null(evidence$sysdata_names, character())) {
+    return(.reexport_probe_failure(.bb_trf(
+      "R/sysdata.rda contains re-export symbol '%s'.", symbol
+    )))
+  }
+
+  if (external_source) {
+    return(list(
+      demonstrated = TRUE, skipped = FALSE, root_type = "external",
+      root = source$package, reason = NULL
+    ))
+  }
+
+  parent_probe <- .reexport_probe(
+    parent, symbol, components, omitted_names, c(trail, key)
+  )
+  if (!isTRUE(parent_probe$demonstrated)) return(parent_probe)
+  parent_probe
+}
+
+.reexport_collision_choices <- function(symbol, candidates) {
+  preferred <- vapply(
+    candidates, function(package) .reexport_prefer_literal(symbol, package),
+    character(1L)
+  )
+  paste0(
+    "reexport_prefer = ", paste(preferred, collapse = " or "),
+    "; reexport_exclude = ", .reexport_symbol_literal(symbol)
+  )
+}
+
+.resolve_reexport_plan <- function(components, prefer = character(),
+                                   exclude = character(), omitted = NULL,
+                                   metapackage_name = NULL) {
+  component_names <- vapply(components, `[[`, character(1L), "package")
+  exports_by_component <- lapply(components, function(component) {
+    unique(.or_null(component$exports, character()))
+  })
+  names(exports_by_component) <- component_names
+  exported_symbols <- sort(unique(unlist(exports_by_component, use.names = FALSE)))
+  prefer_symbols <- names(prefer)
+  requested <- unique(c(prefer_symbols, exclude))
+  unknown <- setdiff(requested, exported_symbols)
+  if (length(unknown) > 0L) {
+    .bigbang_abort(
+      "bigbang_error_reexport_unknown",
+      .bb_trf(
+        "Unknown re-export symbol(s): %s. No component exports them.",
+        paste(unknown, collapse = ", ")
+      ),
+      unknown = unknown
+    )
+  }
+  overlap <- intersect(prefer_symbols, exclude)
+  if (length(overlap) > 0L) {
+    .bigbang_abort(
+      "bigbang_error_reexport_overlap",
+      .bb_trf(
+        "Re-export symbol(s) cannot be both preferred and excluded: %s.",
+        paste(overlap, collapse = ", ")
+      ),
+      symbols = overlap
+    )
+  }
+  invalid_prefer <- prefer_symbols[
+    vapply(prefer_symbols, function(symbol) {
+      !unname(prefer[[symbol]]) %in% component_names ||
+        !(symbol %in% exports_by_component[[unname(prefer[[symbol]])]])
+    }, logical(1L))
+  ]
+  if (length(invalid_prefer) > 0L) {
+    details <- vapply(invalid_prefer, function(symbol) {
+      paste0(symbol, " = ", unname(prefer[[symbol]]))
+    }, character(1L))
+    .bigbang_abort(
+      "bigbang_error_reexport_prefer_component",
+      .bb_trf(
+        paste0(
+          "Preferred re-export target(s) are invalid: %s. Each component ",
+          "must be in the generation and export its symbol."
+        ),
+        paste(details, collapse = ", ")
+      ),
+      symbols = invalid_prefer,
+      components = unname(prefer[invalid_prefer])
+    )
+  }
+
+  active_symbols <- setdiff(exported_symbols, exclude)
+  own_symbols <- if (is.null(metapackage_name)) {
+    character()
+  } else {
+    intersect(active_symbols, .generated_metapackage_symbols(metapackage_name))
+  }
+  if (length(own_symbols) > 0L) {
+    own_candidates <- vapply(own_symbols, function(symbol) {
+      paste(component_names[vapply(
+        exports_by_component, function(exports) symbol %in% exports, logical(1L)
+      )], collapse = ", ")
+    }, character(1L))
+    own_table <- data.frame(
+      symbol = own_symbols, candidates = own_candidates,
+      reason = "generated metapackage symbol", stringsAsFactors = FALSE
+    )
+    .bigbang_abort(
+      "bigbang_error_reexport_collision",
+      .bb_trf(
+        "Generated metapackage symbol(s) %s can only be resolved with reexport_exclude: %s.",
+        paste(own_symbols, collapse = ", "),
+        paste(vapply(own_symbols, .reexport_symbol_literal, character(1L)),
+              collapse = ", ")
+      ),
+      symbols = own_symbols, components = metapackage_name,
+      collisions = own_table, data = own_table
+    )
+  }
+
+  sorted_components <- components[order(component_names)]
+  installation_order <- .component_topological_order(sorted_components)
+  owner_rank <- match(component_names, installation_order)
+  omitted_names <- if (is.null(omitted)) {
+    character()
+  } else {
+    unique(omitted$component[nzchar(omitted$component)])
+  }
+  rows <- list()
+  specs <- list()
+  collisions <- list()
+  skipped <- list()
+  for (symbol in active_symbols) {
+    owners <- component_names[vapply(
+      exports_by_component, function(exports) symbol %in% exports, logical(1L)
+    )]
+    owners <- owners[order(owner_rank[match(owners, component_names)])]
+    if (length(owners) == 1L) {
+      unique_probe <- .reexport_probe(
+        components[[match(owners[[1L]], component_names)]], symbol,
+        components, omitted_names
+      )
+      if (isTRUE(unique_probe$skipped)) {
+        skipped[[length(skipped) + 1L]] <- data.frame(
+          symbol = symbol, components = owners[[1L]],
+          reason = unique_probe$reason, stringsAsFactors = FALSE
+        )
+        next
+      }
+      rows[[length(rows) + 1L]] <- data.frame(
+        symbol = symbol, package = owners[[1L]], resolution = "unique",
+        stringsAsFactors = FALSE
+      )
+      specs[[length(specs) + 1L]] <- list(
+        symbol = symbol, package = owners[[1L]], resolution = "unique",
+        candidates = owners
+      )
+      next
+    }
+    if (symbol %in% prefer_symbols) {
+      selected <- unname(prefer[[symbol]])
+      rows[[length(rows) + 1L]] <- data.frame(
+        symbol = symbol, package = selected, resolution = "preferred",
+        stringsAsFactors = FALSE
+      )
+      specs[[length(specs) + 1L]] <- list(
+        symbol = symbol, package = selected, resolution = "preferred",
+        candidates = owners
+      )
+      next
+    }
+    probes <- lapply(owners, function(owner) {
+      .reexport_probe(
+        components[[match(owner, component_names)]], symbol, components,
+        omitted_names
+      )
+    })
+    if (any(vapply(probes, `[[`, logical(1L), "skipped"))) {
+      skipped[[length(skipped) + 1L]] <- data.frame(
+        symbol = symbol, components = paste(owners, collapse = ", "),
+        reason = paste(vapply(probes, `[[`, character(1L), "reason"),
+                       collapse = "; "), stringsAsFactors = FALSE
+      )
+      next
+    }
+    demonstrated <- vapply(probes, `[[`, logical(1L), "demonstrated")
+    roots <- if (all(demonstrated)) {
+      paste(vapply(probes, `[[`, character(1L), "root_type"),
+            vapply(probes, `[[`, character(1L), "root"), sep = ":")
+    } else {
+      character()
+    }
+    if (all(demonstrated) && length(unique(roots)) == 1L) {
+      root <- probes[[1L]]$root
+      root_type <- probes[[1L]]$root_type
+      selected <- if (identical(root_type, "component")) root else owners[[1L]]
+      rows[[length(rows) + 1L]] <- data.frame(
+        symbol = symbol, package = selected, resolution = "same_origin",
+        stringsAsFactors = FALSE
+      )
+      specs[[length(specs) + 1L]] <- list(
+        symbol = symbol, package = selected, resolution = "same_origin",
+        candidates = owners
+      )
+    } else {
+      reason <- vapply(seq_along(probes), function(index) {
+        probe <- probes[[index]]
+        detail <- if (isTRUE(probe$demonstrated)) {
+          paste0("root ", probe$root_type, " ", probe$root)
+        } else {
+          probe$reason
+        }
+        paste0(owners[[index]], ": ", detail)
+      }, character(1L))
+      collisions[[length(collisions) + 1L]] <- data.frame(
+        symbol = symbol, candidates = paste(owners, collapse = ", "),
+        reason = paste(reason, collapse = "; "), stringsAsFactors = FALSE
+      )
+    }
+  }
+  if (length(skipped) > 0L) {
+    skipped_table <- do.call(rbind, skipped)
+    .bigbang_abort(
+      "bigbang_error_reexport_skipped",
+      .bb_trf(
+        "Cannot resolve re-export symbol(s) because skipped components are required: %s.",
+        paste(paste0(skipped_table$symbol, " (", skipped_table$reason, ")"),
+              collapse = "; ")
+      ),
+      symbols = skipped_table$symbol, components = skipped_table$components,
+      skipped = skipped_table
+    )
+  }
+  if (length(collisions) > 0L) {
+    collision_table <- do.call(rbind, collisions)
+    choices <- vapply(seq_len(nrow(collision_table)), function(index) {
+      candidates <- strsplit(collision_table$candidates[[index]], ", ", fixed = TRUE)[[1L]]
+      paste0(collision_table$symbol[[index]], ": ",
+             .reexport_collision_choices(collision_table$symbol[[index]], candidates))
+    }, character(1L))
+    .bigbang_abort(
+      "bigbang_error_reexport_collision",
+      .bb_trf(
+        "Cannot resolve re-export collision(s): %s. Candidates and proof failures: %s. Resolve with %s.",
+        paste(collision_table$symbol, collapse = ", "),
+        paste(paste0(collision_table$symbol, " (", collision_table$candidates,
+                     "): ", collision_table$reason), collapse = "; "),
+        paste(choices, collapse = "; ")
+      ),
+      symbols = collision_table$symbol,
+      components = collision_table$candidates,
+      collisions = collision_table, data = collision_table
+    )
+  }
+  table <- if (length(rows) == 0L) {
+    .reexport_empty_table()
+  } else {
+    result <- do.call(rbind, rows)
+    rownames(result) <- NULL
+    result
+  }
+  names(specs) <- vapply(specs, `[[`, character(1L), "symbol")
+  list(
+    table = table, specs = specs, excluded = sort(unique(exclude)),
+    installation_order = installation_order
+  )
+}
+
 .validate_generation <- function(
   resolved, tolerate = character(), on_component_error = "abort",
-  reexport = FALSE, metapackage_name = NULL
+  reexport = FALSE, metapackage_name = NULL,
+  reexport_prefer = character(), reexport_exclude = character()
 ) {
   omitted <- resolved$omitted
   validation <- .validate_component_archives(resolved, tolerate = tolerate)
@@ -1256,55 +1910,22 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
       paths = duplicate_paths
     )
   }
-  if (isTRUE(reexport)) {
-    component_exports <- lapply(resolved$components, function(component) {
-      exports <- .or_null(component$exports, character())
-      unique(exports[nzchar(exports)])
-    })
-    exported_symbols <- unlist(component_exports, use.names = FALSE)
-    if (anyDuplicated(exported_symbols)) {
-      duplicated_symbols <- unique(exported_symbols[duplicated(exported_symbols)])
-      owners <- vapply(duplicated_symbols, function(symbol) {
-        packages <- vapply(seq_along(component_exports), function(index) {
-          if (symbol %in% component_exports[[index]]) {
-            resolved$components[[index]]$package
-          } else {
-            NA_character_
-          }
-        }, character(1L))
-        paste(stats::na.omit(packages), collapse = ", ")
-      }, character(1L))
-      .bigbang_abort(
-        "bigbang_error_reexport_collision",
-        .bb_trf(
-          "Cannot re-export symbol(s) %s because components collide: %s.",
-          paste(duplicated_symbols, collapse = ", "),
-          paste(
-            paste0(duplicated_symbols, " (", owners, ")"),
-            collapse = "; "
-          )
-        ),
-        symbols = duplicated_symbols,
-        components = owners
-      )
-    }
-    if (!is.null(metapackage_name)) {
-      own_symbols <- .generated_metapackage_symbols(metapackage_name)
-      conflicting <- intersect(unique(exported_symbols), own_symbols)
-      if (length(conflicting) > 0L) {
-        .bigbang_abort(
-          "bigbang_error_reexport_collision",
-          .bb_trf(
-            "Cannot re-export symbol(s) %s because they belong to generated metapackage code.",
-            paste(conflicting, collapse = ", ")
-          ),
-          symbols = conflicting,
-          components = metapackage_name
-        )
-      }
-    }
+  reexport_plan <- if (isTRUE(reexport)) {
+    .resolve_reexport_plan(
+      resolved$components, prefer = reexport_prefer,
+      exclude = reexport_exclude, omitted = omitted,
+      metapackage_name = metapackage_name
+    )
+  } else {
+    list(
+      table = .reexport_empty_table(), specs = list(), excluded = character(),
+      installation_order = .component_topological_order(resolved$components)
+    )
   }
-  list(resolved = resolved, validation = validation, omitted = omitted)
+  list(
+    resolved = resolved, validation = validation, omitted = omitted,
+    reexport = reexport_plan
+  )
 }
 
 #' @return A character vector of dependency names declared in DESCRIPTION.

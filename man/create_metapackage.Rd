@@ -30,7 +30,9 @@ create_metapackage(
   dry_run = FALSE,
   on_component_error = c("abort", "skip"),
   update = FALSE,
-  install_upgrade = c("newer", "always", "never")
+  install_upgrade = c("newer", "always", "never"),
+  reexport_prefer = character(),
+  reexport_exclude = character()
 )
 }
 \arguments{
@@ -179,11 +181,21 @@ See \code{document} for the reserved generated-documentation filenames.}
 generated installer function: "newer", "always", or "never".
 This controls whether a generated installer keeps newer installed
 versions, reinstalls every component, or skips archive inspection.}
+
+\item{reexport_prefer}{Named character vector mapping symbols to the one
+component that should provide them when \code{reexport = TRUE}, for example
+\code{c(filter = "componentb")}. Names and values must be non-empty and each
+named component must be included and export the mapped symbol.}
+
+\item{reexport_exclude}{Character vector of symbols that must not be
+re-exported. Symbols are validated against the explicit exports of the
+included components and cannot also appear in \code{reexport_prefer}.}
 }
 \value{
 Invisibly, a \code{bigbang_result} containing the generated path,
 component archives, dependency classification, applied tolerations,
-files removed by the call, and documentation status.
+files removed by the call, documentation status, the \code{reexports} table,
+and \code{reexport_excluded} symbols.
 }
 \description{
 Creates the full structure and files of a meta-package that installs, manages
@@ -261,6 +273,24 @@ and a binding resolves the component on every access. Only explicit
 the loaded component namespace. An object restored with \code{readRDS()} cannot
 load a component by itself, so base R cannot dispatch that component's S3
 method until the component has been loaded.
+}
+
+\section{Re-export collisions}{
+
+When more than one component exports a symbol, \code{reexport_prefer} chooses its
+provider explicitly and \code{reexport_exclude} removes it from the generated
+namespace. A collision is deduplicated automatically only when every owner
+can be conservatively proven to follow the same import origin, or when one
+component is the unique owner. The proof inspects the extracted NAMESPACE,
+parsed R assignments and calls, and \code{R/sysdata.rda}; it is deliberately
+conservative because runtime code and loaded values cannot be known during
+generation. Other collisions stop generation with candidates and proof
+reasons. If \code{on_component_error = "skip"} omits a component required by a
+same-origin or preferred binding, generation errors instead of creating a
+binding to a component that will not travel with the metapackage. The result,
+\code{dry_run}, generated \code{man/reexports.Rd}, and \verb{<name>_conflicts()} report the
+selected resolution. The latter checks installed same-origin owners for
+\code{identical()} objects when they are available, without installing anything.
 }
 
 \section{Requirements}{

@@ -12,7 +12,8 @@ test_that("the public API uses English snake_case names", {
       "reexport", "document", "verbose", "authors", "description",
       "license", "additional_deps", "ignore_deps", "import_deps",
       "force_deps", "debug", "workflow", "include_archives", "tolerate",
-      "dry_run", "on_component_error", "update", "install_upgrade"
+      "dry_run", "on_component_error", "update", "install_upgrade",
+      "reexport_prefer", "reexport_exclude"
     )
   )
   expect_named(
