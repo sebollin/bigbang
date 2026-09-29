@@ -126,6 +126,7 @@ test_that("update reconciles legacy re-exports and removed component archives", 
 test_that("generated artifact option combinations pass R CMD check", {
   skip_on_cran()
   skip_if_not_installed("devtools")
+  withr::local_envvar(c(`_R_CHECK_CRAN_INCOMING_REMOTE_` = "false"))
   sandbox <- tempfile("bigbang-generated-matrix-")
   sources <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")

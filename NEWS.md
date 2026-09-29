@@ -34,6 +34,21 @@
 
 ## Bug fixes
 
+- Generated re-export code now qualifies base operators as well as function
+  calls, leaves strings and comments unchanged, and protects the generated
+  consistency test and evaluated vignette chunks from component name masking.
+  Re-export suggestions now round-trip control-byte symbols as `\\uXXXX`
+  literals.
+- Installation verification now reports installed owners that no longer export
+  a selected symbol, warns from `<meta>_conflicts()`, distinguishes equivalent
+  function copies from distinct objects, and documents its installation snapshot.
+- Interrupted-update recovery recognizes an absent destination only when the
+  matching staged temporary is still present, reports every absent file it
+  restores, and preserves an external deletion as an unknown state until
+  `recover = TRUE` is requested.
+- Skip diagnostics retain the real omission reason and identify the owner of
+  each multi-owner reason.
+
 - Qualified every call emitted by the re-export templates to `base`, `utils`,
   `tools`, or `methods`, fixing `reexport = TRUE` metapackages generated since
   0.4.0 when a component exported one of those helper names. Added a poison

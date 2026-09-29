@@ -476,6 +476,25 @@
   )
 }
 
+.staged_update_write_matches <- function(project_dir, relative, intended) {
+  if (length(intended) == 0L) return(FALSE)
+  staging <- file.path(.update_journal_path(project_dir), "staging")
+  if (!dir.exists(staging)) return(FALSE)
+  entries <- list.files(staging, all.files = TRUE, full.names = TRUE,
+                        no.. = TRUE)
+  prefix <- paste0(".", basename(relative), "-")
+  candidates <- entries[
+    startsWith(basename(entries), prefix) &
+      grepl("-[[:alnum:]]+$", basename(entries), perl = TRUE) &
+      file.exists(entries) & !dir.exists(entries)
+  ]
+  if (length(candidates) == 0L) return(FALSE)
+  any(vapply(candidates, function(path) {
+    digest <- .file_digest(path)
+    !is.na(digest) && digest %in% intended
+  }, logical(1L)))
+}
+
 .manifest_matches_project <- function(project_dir) {
   manifest <- .read_generation_manifest(project_dir)
   if (is.null(manifest) || !is.character(manifest$files) ||
@@ -611,9 +630,14 @@
       if (identical(current, unname(original[[relative]]))) return(FALSE)
       if (!is.na(current) && current %in% intended) return(FALSE)
       # On Windows rename() cannot replace an existing file atomically. If the
-      # process dies after removing the destination but before the rename, an
-      # absent old file with an intended write is the known replacement window.
-      if (is.na(current) && length(intended) > 0L) return(FALSE)
+      # process dies after removing the destination but before the rename, the
+      # intended temporary is still in the journal staging area. An absence is
+      # known only when that temporary has the intended digest; otherwise it is
+      # an unknown user or external state.
+      if (is.na(current) &&
+            .staged_update_write_matches(project_dir, relative, intended)) {
+        return(FALSE)
+      }
       if (is.na(current) && deleting) return(FALSE)
       return(TRUE)
     }
@@ -670,6 +694,10 @@
   .activate_update_journal(journal, project_dir, name, record = FALSE)
   on.exit(.deactivate_update_journal(), add = TRUE)
   original <- state$original_hashes
+  absent_original <- names(original)[vapply(
+    file.path(project_dir, names(original)),
+    function(path) !file.exists(path) && !dir.exists(path), logical(1L)
+  )]
   for (relative in names(original)) {
     destination <- file.path(project_dir, relative)
     if (!dir.exists(dirname(destination)) &&
@@ -704,7 +732,8 @@
                        collapse = ", ")), call. = FALSE)
   }
   .discard_update_journal(journal, project_dir, name)
-  list(recovered = TRUE, preserved = preserved)
+  list(recovered = TRUE, preserved = preserved,
+       restored_absent = absent_original)
 }
 
 .recover_pending_update <- function(project_dir, name, recover = FALSE,
@@ -726,7 +755,8 @@
         path = project_dir, journal = journal_path
       )
     }
-    return(list(pending = FALSE, recovered = FALSE, preserved = NULL))
+    return(list(pending = FALSE, recovered = FALSE, preserved = NULL,
+                restored_absent = character()))
   }
   marker <- .read_update_marker(journal_path, project_dir, name)
   if (!dir.exists(project_dir)) {
@@ -759,12 +789,12 @@
     }
     if (dry_run) {
       return(list(pending = TRUE, recovered = FALSE, preserved = NULL,
-                  action = "discard_unarmed"))
+                  action = "discard_unarmed", restored_absent = character()))
     }
     .discard_update_journal(journal, project_dir, name)
     message(.bb_trf("Discarded an unarmed update journal at %s.", journal_path))
     return(list(pending = FALSE, recovered = FALSE, preserved = NULL,
-                action = "discarded_unarmed"))
+                action = "discarded_unarmed", restored_absent = character()))
   }
   required <- c("pid", "host", "started_utc", "bigbang_version",
                 "original_hashes", "old_manifest_hash")
@@ -823,7 +853,7 @@
   if (completed) {
     if (dry_run) {
       return(list(pending = TRUE, recovered = FALSE, preserved = NULL,
-                  action = "discard_completed"))
+                  action = "discard_completed", restored_absent = character()))
     }
     .discard_update_journal(journal, project_dir, name)
     message(.bb_trf(
@@ -831,7 +861,7 @@
       journal_path
     ))
     return(list(pending = FALSE, recovered = TRUE, preserved = NULL,
-                action = "recognized_completed"))
+                action = "recognized_completed", restored_absent = character()))
   }
   if (!handled && !recover && .update_owner_may_be_alive(state)) {
     .update_journal_problem(
@@ -854,7 +884,8 @@
       "recover"
     }
     return(list(pending = TRUE, recovered = FALSE, preserved = NULL,
-                action = action, unknown = unknown))
+                action = action, unknown = unknown,
+                restored_absent = character()))
   }
   if (length(unknown) > 0L && !recover && !handled) {
     .bigbang_abort(
@@ -878,6 +909,12 @@
   if (!is.null(result$preserved)) {
     message(.bb_trf("Preserved unknown files from the interrupted update at %s.",
                     result$preserved))
+  }
+  if (length(result$restored_absent) > 0L) {
+    message(.bb_trf(
+      "Restored files that were absent when recovery started: %s.",
+      paste(result$restored_absent, collapse = ", ")
+    ))
   }
   message(.bb_trf("Recovered an interrupted update using %s.", journal_path))
   c(list(pending = FALSE, action = "recovered"), result)

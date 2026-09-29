@@ -478,6 +478,9 @@ msgstr "El update interrumpido dejó archivos en un estado desconocido: %s. Diar
 msgid "Preserved unknown files from the interrupted update at %s."
 msgstr "Se preservaron los archivos desconocidos del update interrumpido en %s."
 
+msgid "Restored files that were absent when recovery started: %s."
+msgstr "Se restauraron archivos que estaban ausentes al comenzar la recuperación: %s."
+
 msgid "Recovered an interrupted update using %s."
 msgstr "Se recuperó un update interrumpido usando %s."
 
@@ -600,6 +603,15 @@ msgstr "No se pueden resolver las colisiones de reexportación: %s. Candidatos, 
 
 msgid "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
 msgstr "Los dueños instalados del símbolo de reexportación '%s' difieren: %s. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."
+
+msgid "Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr "No se pudo verificar a los dueños instalados del símbolo de reexportación '%s': %s no lo exporta. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."
+
+msgid "Installed owners for re-export symbol '%s' are distinct objects with equivalent copies (same body and formals): %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr "Los dueños instalados del símbolo de reexportación '%s' son objetos distintos con copias equivalentes (mismo cuerpo y formales): %s. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."
+
+msgid "Installed owners for re-export symbol '%s' differ as distinct objects: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr "Los dueños instalados del símbolo de reexportación '%s' difieren como objetos distintos: %s. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."
 
 msgid "It contains a backup at %s."
 msgstr "Contiene un respaldo en %s."

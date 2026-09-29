@@ -830,7 +830,8 @@ create_metapackage <- function(
   project_path <- file.path(dest_dir, name)
   if (isTRUE(update)) .validate_project_root_path(project_path)
   project_dir <- normalizePath(project_path, winslash = "/", mustWork = FALSE)
-  recovery <- list(pending = FALSE, recovered = FALSE, preserved = NULL)
+  recovery <- list(pending = FALSE, recovered = FALSE, preserved = NULL,
+                   restored_absent = character())
   if (isTRUE(update)) {
     .reconcile_update_siblings(project_dir, name)
     recovery <- .recover_pending_update(

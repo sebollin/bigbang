@@ -201,8 +201,8 @@ Invisibly, a \code{bigbang_result} containing the generated path,
 component archives, dependency classification, applied tolerations,
 files removed by the call, documentation status, the \code{reexports} table,
 \code{reexport_excluded} symbols, and whether an interrupted update was
-recovered. Recovery details include any directory used to preserve unknown
-user content.
+recovered. Recovery details include any directory used to preserve unknown user
+content and the original files restored while absent.
 }
 \description{
 Creates the full structure and files of a meta-package that installs, manages
@@ -292,9 +292,12 @@ analysis remains a diagnostic with \code{probable_same_object},
 \code{distinct_definitions}, or \code{undetermined}, including ordered file,
 line, import, and parse reasons. For a preferred
 \code{probable_same_object}, \verb{<name>_install()} verifies the installed
-owners with \code{identical()} without installing anything extra; missing
-owners remain unverified and the verification is retained in the returned
-result. \verb{<name>_conflicts()} repeats that check on request. If
+owners with \code{identical()} without installing anything extra; this is a
+snapshot of the installation moment. Missing exports produce the same
+verification warning, and the returned result retains the missing owners.
+\verb{<name>_conflicts()} repeats the check and warning on request. A
+\code{FALSE} identity warning distinguishes equivalent function copies (same
+body and formals) from distinct objects. If
 \code{on_component_error = "skip"} omits a component required by a preferred
 binding or an import source, generation errors with an actionable skipped
 condition instead of creating a binding to a component that will not travel
@@ -335,11 +338,14 @@ probed with \code{tools::pskill()} because that operation terminates a process;
 use \code{recover = TRUE} only after confirming that no update is running.
 
 Automatic recovery proceeds only when every affected path contains its
-original bytes, intended bytes, or an expected absence. Other content raises
+original bytes, intended bytes, or an expected absence. An absent destination
+with a write intent is expected only while the matching temporary file remains
+in the journal staging area. Other content raises
 \code{bigbang_error_interrupted_update}; \code{recover = TRUE} preserves it outside the
-project before rollback. Recovery is idempotent, so another interruption can
-be recovered by a later call. \code{dry_run = TRUE} reports the pending action and
-leaves both project and journal untouched. A handled error uses this same
+project before rollback. Every original file restored while absent is listed in
+the recovery result and message. Recovery is idempotent, so another interruption
+can be recovered by a later call. \code{dry_run = TRUE} reports the pending action
+and leaves both project and journal untouched. A handled error uses this same
 journal for immediate rollback and retains it if verification cannot finish.
 }
 

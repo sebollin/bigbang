@@ -1648,12 +1648,22 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
 }
 
 .reexport_symbol_literal <- function(symbol) {
-  .r_ascii_literal(symbol)
+  codepoints <- utf8ToInt(enc2utf8(symbol))
+  ascii <- all(codepoints < 0x80L)
+  control <- any(codepoints < 0x20L | codepoints == 0x7fL)
+  syntactic <- identical(make.names(symbol), symbol) &&
+    !grepl("^[0-9]", symbol) && ascii && !control
+  if (isTRUE(syntactic)) {
+    symbol
+  } else if (ascii && !control) {
+    paste0("`", symbol, "`")
+  } else {
+    .r_string_literal(symbol)
+  }
 }
 
 .reexport_prefer_literal <- function(symbol, package) {
-  value <- .r_ascii_literal(stats::setNames(package, symbol))
-  sub("^c\\((.*)\\)$", "\\1", value)
+  paste0(.reexport_symbol_literal(symbol), " = ", .r_string_literal(package))
 }
 
 .reexport_import_sources <- function(component, symbol, components) {
@@ -1852,6 +1862,12 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
 
 .reexport_probe <- function(component, symbol, components, omitted_names,
                             trail = character()) {
+  omitted_components <- if (is.data.frame(omitted_names) &&
+                              "component" %in% names(omitted_names)) {
+    unique(omitted_names$component[nzchar(omitted_names$component)])
+  } else {
+    omitted_names
+  }
   package <- component$package
   key <- paste(package, symbol, sep = "::")
   if (key %in% trail) {
@@ -1893,11 +1909,17 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   if (identical(source$kind, "full") && isTRUE(source$external)) {
     return(.reexport_probe_failure(paste(reasons, collapse = "; ")))
   }
-  if (source$package %in% omitted_names) {
+  if (source$package %in% omitted_components) {
+    reason <- if (is.data.frame(omitted_names) &&
+                    "reason" %in% names(omitted_names)) {
+      omitted_names$reason[match(source$package, omitted_names$component)]
+    } else {
+      .or_null(names(omitted_names), source$package)
+    }
     return(.reexport_probe_failure(.bb_trf(
       "NAMESPACE imports '%s' from component '%s', which was skipped: %s",
       symbol, source$package,
-      .or_null(names(omitted_names), source$package)
+      .or_null(reason, source$package)
     ), skipped = TRUE))
   }
   external_source <- identical(source$kind, "from") && isTRUE(source$external)
@@ -2080,7 +2102,7 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
     if (length(owners) == 1L) {
       unique_probe <- .reexport_probe(
         components[[match(owners[[1L]], component_names)]], symbol,
-        components, omitted_names
+        components, omitted
       )
       if (isTRUE(unique_probe$skipped)) {
         skipped[[length(skipped) + 1L]] <- data.frame(
@@ -2103,14 +2125,15 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
     probes <- lapply(owners, function(owner) {
       .reexport_probe(
         components[[match(owner, component_names)]], symbol, components,
-        omitted_names
+        omitted
       )
     })
     if (any(vapply(probes, `[[`, logical(1L), "skipped"))) {
       skipped[[length(skipped) + 1L]] <- data.frame(
         symbol = symbol, components = paste(owners, collapse = ", "),
-        reason = paste(vapply(probes, `[[`, character(1L), "reason"),
-                       collapse = "; "), stringsAsFactors = FALSE
+        reason = paste(vapply(seq_along(probes), function(index) {
+          paste0(owners[[index]], ": ", probes[[index]]$reason)
+        }, character(1L)), collapse = "; "), stringsAsFactors = FALSE
       )
       next
     }

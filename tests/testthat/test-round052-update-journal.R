@@ -107,6 +107,34 @@ test_that("unknown user edits are refused and preserved with forced recovery", {
   expect_identical(readBin(preserved, "raw", 1000L), user_bytes)
 })
 
+test_that("an absent file with intent but no matching staging bytes is unknown", {
+  fixture <- round052_fixture("bigbang-round053-absent-user-delete-")
+  relative <- "README.md"
+  journal <- round052_arm(fixture)
+  intended <- round052_intended_write(fixture, journal, relative,
+                                      "content intended by update")
+  unlink(file.path(fixture$project, relative))
+  unlink(list.files(file.path(journal$path, "staging"), all.files = TRUE,
+                    full.names = TRUE, no.. = TRUE), recursive = TRUE)
+
+  plan <- .recover_pending_update(
+    fixture$project, "journalverse", recover = TRUE, dry_run = TRUE
+  )
+  expect_identical(plan$action, "preserve_and_recover")
+  expect_identical(plan$unknown, relative)
+
+  expect_message(
+    recovered <- .recover_pending_update(
+      fixture$project, "journalverse", recover = TRUE
+    ),
+    "absent when recovery started"
+  )
+  expect_true(recovered$recovered)
+  expect_identical(recovered$restored_absent, relative)
+  expect_true(file.exists(file.path(fixture$project, relative)))
+  unlink(intended)
+})
+
 test_that("a user file appearing at an intended new path is never guessed away", {
   fixture <- round052_fixture()
   relative <- .planned_documentation_files("journalverse")[[1L]]
@@ -530,7 +558,7 @@ test_that("a Windows replacement window restores an absent old file from backup"
   destination <- file.path(fixture$project, relative)
   original <- readBin(destination, "raw", n = file.info(destination)$size)
   journal <- round052_arm(fixture)
-  replacement <- tempfile("round053-replacement-")
+  replacement <- file.path(journal$path, "staging", ".README.md-round053window")
   writeLines("replacement that never reached the destination", replacement,
              useBytes = TRUE)
   writeLines(

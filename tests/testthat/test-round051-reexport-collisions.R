@@ -723,9 +723,15 @@ test_that("round 053 verifies probable choices after install and keeps the bindi
 
   withr::with_libpaths(meta_library, {
     loadNamespace("verifyverse")
-    before_install <- getExportedValue(
-      "verifyverse", "verifyverse_conflicts"
-    )()
+    before_warning <- NULL
+    before_install <- withCallingHandlers(
+      getExportedValue("verifyverse", "verifyverse_conflicts")(),
+      warning = function(condition) {
+        before_warning <<- condition
+        invokeRestart("muffleWarning")
+      }
+    )
+    expect_s3_class(before_warning, "bigbang_warning_reexport_verification")
     expect_identical(before_install$missing, "verifyparent, verifychild")
     expect_true(is.na(before_install$identical))
   })
@@ -745,12 +751,163 @@ test_that("round 053 verifies probable choices after install and keeps the bindi
   )
   expect_s3_class(warning_condition, "bigbang_warning_reexport_verification")
   expect_match(conditionMessage(warning_condition), "s", fixed = TRUE)
+  expect_match(conditionMessage(warning_condition), "distinct objects", fixed = TRUE)
   expect_identical(result$reexport_verification$identical, FALSE)
   expect_identical(getExportedValue("verifyverse", "s")(), "parent")
 
-  conflicts <- getExportedValue("verifyverse", "verifyverse_conflicts")()
+  conflicts_warning <- NULL
+  conflicts <- withCallingHandlers(
+    getExportedValue("verifyverse", "verifyverse_conflicts")(),
+    warning = function(condition) {
+      conflicts_warning <<- condition
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_s3_class(conflicts_warning, "bigbang_warning_reexport_verification")
   expect_identical(conflicts$identical, FALSE)
   expect_identical(conflicts$missing, "")
+})
+
+test_that("round 055 verification warns when an installed owner lost its export", {
+  sandbox <- tempfile("bigbang-round055-missing-export-")
+  source_root <- file.path(sandbox, "sources")
+  bad_source_root <- file.path(sandbox, "bad-sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  meta_library <- file.path(sandbox, "meta-library")
+  component_library <- file.path(sandbox, "component-library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(bad_source_root, recursive = TRUE)
+  dir.create(archive_dir)
+  dir.create(destination)
+  dir.create(meta_library)
+  dir.create(component_library)
+
+  parent <- round051_make_archive(
+    source_root, archive_dir, "missingparent", "s",
+    body = "s <- function() 'parent'"
+  )
+  child <- round051_make_archive(
+    source_root, archive_dir, "missingchild", "s",
+    body = "# imported only",
+    namespace_extra = "importFrom(missingparent, s)",
+    imports = "missingparent"
+  )
+  generated <- round051_create(
+    "missingverse", c(parent, child), destination, reexport = TRUE,
+    reexport_prefer = c(s = "missingparent")
+  )
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  build_output <- withr::with_dir(sandbox, system2(
+    r_binary, c("CMD", "build", shQuote(generated$path)),
+    stdout = TRUE, stderr = TRUE
+  ))
+  build_status <- attr(build_output, "status")
+  if (is.null(build_status)) build_status <- 0L
+  expect_identical(build_status, 0L,
+                   info = paste(build_output, collapse = "\n"))
+  meta_archive <- file.path(sandbox, "missingverse_0.1.0.tar.gz")
+  expect_true(file.exists(meta_archive))
+  round051_install(meta_archive, meta_library)
+
+  bad_parent <- round051_make_archive(
+    bad_source_root, archive_dir, "missingparent", character(),
+    body = "invisible(NULL)", version = "0.2.0"
+  )
+  round051_install(bad_parent, component_library)
+  withr::with_libpaths(c(meta_library, component_library), {
+    loadNamespace("missingverse")
+    warning_condition <- NULL
+    result <- withCallingHandlers(
+      getExportedValue("missingverse", "missingverse_conflicts")(),
+      warning = function(condition) {
+        if (inherits(condition, "bigbang_warning_reexport_verification")) {
+          warning_condition <<- condition
+          invokeRestart("muffleWarning")
+        }
+      }
+    )
+    expect_s3_class(warning_condition, "bigbang_warning_reexport_verification")
+    expect_match(conditionMessage(warning_condition), "missingparent", fixed = TRUE)
+    expect_identical(result$missing, "missingparent, missingchild")
+    expect_identical(result$installed, "missingparent")
+    expect_true(is.na(result$identical))
+  })
+})
+
+test_that("round 055 names equivalent copies separately from distinct objects", {
+  sandbox <- tempfile("bigbang-round055-equivalent-copies-")
+  source_root <- file.path(sandbox, "sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  meta_library <- file.path(sandbox, "meta-library")
+  component_library <- file.path(sandbox, "component-library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archive_dir)
+  dir.create(destination)
+  dir.create(meta_library)
+  dir.create(component_library)
+
+  helper <- round051_make_archive(
+    source_root, archive_dir, "helper055", "sneaky",
+    body = "sneaky <- function(name, value, envir) assign(name, value, envir = envir)"
+  )
+  parent <- round051_make_archive(
+    source_root, archive_dir, "equivparent", "s",
+    body = "s <- function() 'same'"
+  )
+  child <- round051_make_archive(
+    source_root, archive_dir, "equivchild", "s",
+    body = c(
+      ".onLoad <- function(lib, pkg) {",
+      "  helper <- base::getExportedValue('helper055', 'sneaky')",
+      "  helper('s', function() 'same', base::asNamespace(pkg))",
+      "}"
+    ),
+    namespace_extra = "importFrom(equivparent, s)",
+    imports = c("equivparent", "helper055")
+  )
+  round051_install(helper, component_library)
+  round051_install(parent, component_library)
+  round051_install(child, component_library)
+  generated <- round051_create(
+    "equivverse", c(parent, child, helper), destination, reexport = TRUE,
+    reexport_prefer = c(s = "equivparent")
+  )
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  build_output <- withr::with_dir(sandbox, system2(
+    r_binary, c("CMD", "build", shQuote(generated$path)),
+    stdout = TRUE, stderr = TRUE
+  ))
+  build_status <- attr(build_output, "status")
+  if (is.null(build_status)) build_status <- 0L
+  expect_identical(build_status, 0L,
+                   info = paste(build_output, collapse = "\n"))
+  meta_archive <- file.path(sandbox, "equivverse_0.1.0.tar.gz")
+  expect_true(file.exists(meta_archive))
+  round051_install(meta_archive, meta_library)
+  withr::with_libpaths(c(meta_library, component_library), {
+    loadNamespace("equivverse")
+    warning_condition <- NULL
+    result <- withCallingHandlers(
+      getExportedValue("equivverse", "equivverse_install")(
+        lib = component_library, verbose = FALSE
+      ),
+      warning = function(condition) {
+        if (inherits(condition, "bigbang_warning_reexport_verification")) {
+          warning_condition <<- condition
+          invokeRestart("muffleWarning")
+        }
+      }
+    )
+    expect_s3_class(warning_condition, "bigbang_warning_reexport_verification")
+    expect_match(conditionMessage(warning_condition), "equivalent copies", fixed = TRUE)
+    expect_identical(result$reexport_verification$identical, FALSE)
+  })
 })
 
 test_that("round 053 poison component cannot mask generated runtime calls", {
@@ -773,11 +930,62 @@ test_that("round 053 poison component cannot mask generated runtime calls", {
     "poisonverse", character(), character(), dest_dir = probe_dir,
     overwrite = TRUE, reexport = TRUE
   )
+  writeLines(c(
+    "Package: poisonverse", "Version: 0.1.0",
+    "Title: Poison probe", "Description: Poison probe.",
+    "License: MIT"
+  ), file.path(probe_dir, "DESCRIPTION"), useBytes = TRUE)
+  bigbang:::write_consistency_test("poisonverse", probe_dir)
+  bigbang:::write_basic_vignette(
+    "poisonverse", character(), probe_dir, verbose = FALSE
+  )
   function_names <- character()
-  for (path in list.files(probe_dir, pattern = "\\.R$", full.names = TRUE)) {
+  special_names <- character()
+  token_name <- function(value) {
+    ifelse(grepl("^`.*`$", value), substring(value, 2L, nchar(value) - 1L), value)
+  }
+  probe_files <- c(
+    list.files(probe_dir, pattern = "\\.R$", full.names = TRUE),
+    list.files(file.path(probe_dir, "tests"), pattern = "\\.R$",
+               full.names = TRUE)
+  )
+  for (path in probe_files) {
     parsed <- parse(file = path, keep.source = TRUE)
     data <- utils::getParseData(parsed, includeText = TRUE)
-    function_names <- c(function_names, data$text[data$token == "SYMBOL_FUNCTION_CALL"])
+    function_names <- c(
+      function_names,
+      token_name(data$text[data$token == "SYMBOL_FUNCTION_CALL"])
+    )
+    special_names <- c(special_names, token_name(data$text[data$token == "SPECIAL"]))
+  }
+  vignette_code <- readLines(
+    file.path(probe_dir, "vignettes", "introduction-poisonverse.Rmd"),
+    warn = FALSE
+  )
+  evaluated <- character()
+  in_chunk <- FALSE
+  include_chunk <- FALSE
+  chunk <- character()
+  for (line in vignette_code) {
+    if (!in_chunk && grepl("^```\\{r", line)) {
+      in_chunk <- TRUE
+      include_chunk <- !grepl("eval[[:space:]]*=[[:space:]]*FALSE",
+                              line, ignore.case = TRUE)
+      chunk <- character()
+    } else if (in_chunk && identical(line, "```")) {
+      if (include_chunk) evaluated <- c(evaluated, chunk)
+      in_chunk <- FALSE
+    } else if (in_chunk) {
+      chunk <- c(chunk, line)
+    }
+  }
+  if (length(evaluated) > 0L) {
+    data <- utils::getParseData(parse(text = evaluated), includeText = TRUE)
+    function_names <- c(
+      function_names,
+      token_name(data$text[data$token == "SYMBOL_FUNCTION_CALL"])
+    )
+    special_names <- c(special_names, token_name(data$text[data$token == "SPECIAL"]))
   }
   install_engine <- bigbang:::.render_install_engine(
     "poisonverse",
@@ -791,15 +999,26 @@ test_that("round 053 poison component cannot mask generated runtime calls", {
   )
   function_names <- c(
     function_names,
-    engine_data$text[engine_data$token == "SYMBOL_FUNCTION_CALL"]
+    token_name(engine_data$text[engine_data$token == "SYMBOL_FUNCTION_CALL"])
+  )
+  special_names <- c(
+    special_names, token_name(engine_data$text[engine_data$token == "SPECIAL"])
   )
   function_names <- sort(unique(function_names))
+  special_names <- sort(unique(special_names))
   own_symbols <- bigbang:::.generated_metapackage_symbols("poisonverse")
-  poison_exports <- sort(unique(c(function_names, own_symbols)))
+  poison_exports <- sort(unique(c(function_names, special_names, own_symbols)))
   excluded <- intersect(poison_exports, own_symbols)
   poison_body <- vapply(
     poison_exports,
-    function(symbol) paste0(symbol, " <- function(...) 'poison'"),
+    function(symbol) {
+      lhs <- if (grepl("^[A-Za-z.][A-Za-z0-9._]*$", symbol)) {
+        symbol
+      } else {
+        paste0("`", symbol, "`")
+      }
+      paste0(lhs, " <- function(...) 'poison'")
+    },
     character(1L)
   )
   poison_archive <- round051_make_archive(
@@ -813,6 +1032,11 @@ test_that("round 053 poison component cannot mask generated runtime calls", {
   )
   generated_files <- list.files(file.path(generated$path, "R"),
                                 pattern = "\\.R$", full.names = TRUE)
+  generated_files <- c(
+    generated_files,
+    list.files(file.path(generated$path, "tests"),
+               pattern = "\\.R$", full.names = TRUE)
+  )
   reexports <- file.path(generated$path, "R", "reexports.R")
   for (path in generated_files) expect_silent(parse(file = path))
 
@@ -828,10 +1052,29 @@ test_that("round 053 poison component cannot mask generated runtime calls", {
   expect_identical(build_status, 0L, info = paste(build_output, collapse = "\n"))
   tarball <- file.path(sandbox, "poisonverse_0.1.0.tar.gz")
   expect_true(file.exists(tarball))
+  check_libs <- paste(c(component_library, Sys.getenv("R_LIBS_USER")),
+                      collapse = .Platform$path.sep)
+  check_output <- withr::with_envvar(
+    c(R_LIBS_USER = check_libs),
+    withr::with_dir(sandbox, system2(
+      r_binary,
+      c("CMD", "check", "--as-cran", "--no-manual", "--no-install",
+        "--no-examples",
+        paste0("--library=", component_library), shQuote(tarball)),
+      stdout = TRUE, stderr = TRUE
+    ))
+  )
+  check_status <- check_output[grepl("^Status:", check_output)]
+  expect_true(length(check_status) == 1L,
+              info = paste(check_output, collapse = "\n"))
+  expect_false(
+    grepl("ERROR|WARNING", check_status),
+    info = paste(check_output, collapse = "\n")
+  )
   round051_install(tarball, meta_library)
   withr::local_libpaths(c(meta_library, component_library, .libPaths()))
   on.exit({
-    if ("package:poisoncomponent" %in% base::search()) {
+    if (base::`%in%`("package:poisoncomponent", base::search())) {
       base::detach("package:poisoncomponent", unload = TRUE,
                    character.only = TRUE)
     }
@@ -868,4 +1111,89 @@ test_that("round 053 poison component cannot mask generated runtime calls", {
     envir = poisoned_env
   )
   expect_error(base::sys.source(unqualified, poisoned_env), "unqualified poison")
+})
+
+test_that("generated call qualification respects parse tokens", {
+  content <- paste(
+    'message <- "symbol nchar( is invalid"',
+    "# comment with paste( and nchar(",
+    "value <- nchar(file.exists(path))",
+    "already <- base::c(nchar(value), as.character.factor(value))",
+    sep = "\n"
+  )
+  qualified <- bigbang:::.qualify_generated_runtime_calls(content)
+  expect_match(qualified, '"symbol nchar( is invalid"', fixed = TRUE)
+  expect_match(qualified, "# comment with paste( and nchar(", fixed = TRUE)
+  expect_match(qualified, "base::nchar(base::file.exists(path))", fixed = TRUE)
+  expect_match(
+    qualified,
+    "base::c(base::nchar(value), base::as.character.factor(value))",
+    fixed = TRUE
+  )
+  expect_no_match(qualified, "base::base::")
+})
+
+test_that("control-byte re-export suggestions round-trip as R literals", {
+  sandbox <- tempfile("bigbang-round055-control-literal-")
+  source_root <- file.path(sandbox, "sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archive_dir)
+  dir.create(destination)
+  symbol <- paste0("a", rawToChar(as.raw(8L)), "b")
+  parent <- round051_make_archive(
+    source_root, archive_dir, "controlparent", symbol,
+    body = paste0("`", symbol, "` <- function() 'parent'")
+  )
+  child <- round051_make_archive(
+    source_root, archive_dir, "controlchild", symbol,
+    body = "# imported only",
+    namespace_extra = paste0("importFrom(controlparent, \"", symbol, "\")")
+  )
+  condition <- round051_collision_condition(round051_create(
+    "controlverse", c(parent, child), destination, reexport = TRUE
+  ))
+  expect_s3_class(condition, "bigbang_error_reexport_collision")
+  suggestion <- bigbang:::.reexport_prefer_literal(symbol, "controlparent")
+  mapping <- eval(parse(text = paste0("c(", suggestion, ")")))
+  expect_identical(names(mapping), symbol)
+  generated <- round051_create(
+    "controlverse", c(parent, child), destination, reexport = TRUE,
+    reexport_prefer = mapping
+  )
+  namespace <- paste(readLines(file.path(generated$path, "NAMESPACE")),
+                     collapse = "\n")
+  expect_true(grepl('export("a\\u0008b")', namespace, fixed = TRUE))
+})
+
+test_that("skipped multi-owner diagnostics keep each owner prefix", {
+  empty <- bigbang:::.reexport_empty_evidence()
+  skipped_parent <- list(
+    package = "skippedparent", exports = "s", imports = list(),
+    reexport_evidence = empty
+  )
+  child <- list(
+    package = "skippedchild", exports = "s",
+    imports = list(list("skippedparent", "s")),
+    reexport_evidence = empty
+  )
+  live <- list(
+    package = "liveowner", exports = "s", imports = list(),
+    reexport_evidence = empty
+  )
+  condition <- tryCatch(
+    bigbang:::.resolve_reexport_plan(
+      list(child, live),
+      omitted = data.frame(
+        component = "skippedparent", input = "broken.tar.gz",
+        reason = "broken archive", stringsAsFactors = FALSE
+      )
+    ),
+    error = identity
+  )
+  expect_s3_class(condition, "bigbang_error_reexport_skipped")
+  expect_match(condition$message, "skippedchild:", fixed = TRUE)
+  expect_match(condition$message, "liveowner:", fixed = TRUE)
+  expect_match(condition$message, "broken archive", fixed = TRUE)
 })

@@ -478,6 +478,9 @@ msgstr ""
 msgid "Preserved unknown files from the interrupted update at %s."
 msgstr ""
 
+msgid "Restored files that were absent when recovery started: %s."
+msgstr ""
+
 msgid "Recovered an interrupted update using %s."
 msgstr ""
 
@@ -599,6 +602,15 @@ msgid "Cannot resolve re-export collision(s): %s. Candidates, diagnoses, and pro
 msgstr ""
 
 msgid "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr ""
+
+msgid "Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr ""
+
+msgid "Installed owners for re-export symbol '%s' are distinct objects with equivalent copies (same body and formals): %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr ""
+
+msgid "Installed owners for re-export symbol '%s' differ as distinct objects: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
 msgstr ""
 
 msgid "It contains a backup at %s."

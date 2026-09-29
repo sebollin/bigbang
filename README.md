@@ -156,8 +156,11 @@ choices because static analysis cannot prove that two exported objects are the
 same at runtime. The diagnostic labels collisions as `probable_same_object`,
 `distinct_definitions`, or `undetermined`, and reports ordered source reasons.
 For a preferred `probable_same_object`, `<meta>_install()` verifies installed
-owners with `identical()` and keeps the result; `<meta>_conflicts()` repeats the
-check without installing missing components. If `on_component_error = "skip"`
+owners with `identical()` and keeps a snapshot of that check; an installed owner
+that no longer exports the symbol is reported with the same verification warning.
+`<meta>_conflicts()` repeats the check and emits the warning again, so it is the
+way to re-verify after installation. A `FALSE` identity warning distinguishes
+equivalent function copies (same body and formals) from distinct objects. If `on_component_error = "skip"`
 omits a required owner, generation errors rather than emitting a binding to a
 component that is not included.
 
@@ -306,7 +309,10 @@ all, so it is a safe way to see what a call would do before it does it.
   hash match the backup. It records every intended write and removal and
   survives SIGKILL, SIGTERM, SIGHUP, terminal closure, and a system restart.
   If a path contains neither its original nor an intended value, recovery stops
-  instead of overwriting it. After confirming that no update is still running,
+  instead of overwriting it. On Windows, an absent destination is known only
+  while the matching intended temporary remains in the journal staging area.
+  Every original file restored while absent is listed in the recovery result and
+  message. After confirming that no update is still running,
   `recover = TRUE` preserves those unknown bytes in a reported sibling
   directory and then recovers. A dry run reports the pending action without
   changing the project or journal. On Windows liveness is never tested with

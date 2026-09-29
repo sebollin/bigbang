@@ -192,6 +192,7 @@
     "An update may still be running for %s (journal: %s). If no other update is running, call again with recover = TRUE." = "Puede haber un update todav\u00eda en ejecuci\u00f3n para %s (diario: %s). Si no hay otro update ejecut\u00e1ndose, vuelva a llamar con recover = TRUE.",
     "The interrupted update left files in an unknown state: %s. Journal: %s. Use recover = TRUE to preserve them and recover." = "El update interrumpido dej\u00f3 archivos en un estado desconocido: %s. Diario: %s. Use recover = TRUE para preservarlos y recuperar.",
     "Preserved unknown files from the interrupted update at %s." = "Se preservaron los archivos desconocidos del update interrumpido en %s.",
+    "Restored files that were absent when recovery started: %s." = "Se restauraron archivos que estaban ausentes al comenzar la recuperaci\u00f3n: %s.",
     "Recovered an interrupted update using %s." = "Se recuper\u00f3 un update interrumpido usando %s.",
     "Dry run: pending update journal action is %s at %s." = "Dry run: la acci\u00f3n pendiente del diario de actualizaci\u00f3n es %s en %s.",
     "The update journal was retained for recovery at: %s" = "El diario de actualizaci\u00f3n se conserv\u00f3 para recuperaci\u00f3n en: %s",
@@ -232,7 +233,10 @@
     "All re-export components were omitted by skip: %s. Repair the omitted archive or remove dependent components from the generation." = "Todos los componentes de reexportaci\u00f3n fueron omitidos por skip: %s. Repare el archivo omitido o quite los componentes dependientes de la generaci\u00f3n.",
     "Cannot resolve re-export symbol(s) because skipped components are required: %s." = "No se pueden resolver los s\u00edmbolos de reexportaci\u00f3n porque se necesitan componentes omitidos: %s.",
     "Cannot resolve re-export collision(s): %s. Candidates, diagnoses, and proof details: %s. %s." = "No se pueden resolver las colisiones de reexportaci\u00f3n: %s. Candidatos, diagn\u00f3sticos y detalles de la prueba: %s. %s.",
-    "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude." = "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' difieren: %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude."
+    "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude." = "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' difieren: %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude.",
+    "Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s. Choose a provider with reexport_prefer or omit it with reexport_exclude." = "No se pudo verificar a los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s': %s no lo exporta. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude.",
+    "Installed owners for re-export symbol '%s' are distinct objects with equivalent copies (same body and formals): %s. Choose a provider with reexport_prefer or omit it with reexport_exclude." = "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' son objetos distintos con copias equivalentes (mismo cuerpo y formales): %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude.",
+    "Installed owners for re-export symbol '%s' differ as distinct objects: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude." = "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' difieren como objetos distintos: %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude."
   )
 }
 
@@ -342,7 +346,10 @@
       "Resoluciones de reexportaci\u00f3n:",
       "no verificado",
       "faltan: %s",
-      "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' difieren: %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude."
+      "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' difieren: %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude.",
+      "No se pudo verificar a los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s': %s no lo exporta. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude.",
+      "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' son objetos distintos con copias equivalentes (mismo cuerpo y formales): %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude.",
+      "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' difieren como objetos distintos: %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude."
     ),
     c(
       "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives.",
@@ -425,7 +432,10 @@
       "Re-export resolutions:",
       "not verified",
       "missing: %s",
-      "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+      "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.",
+      "Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.",
+      "Installed owners for re-export symbol '%s' are distinct objects with equivalent copies (same body and formals): %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.",
+      "Installed owners for re-export symbol '%s' differ as distinct objects: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
     )
   )
 }

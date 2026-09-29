@@ -120,7 +120,7 @@ install_source_component <- function(target, lib, verbose = TRUE) {{
 .component_names <- {package_list_literal}
 
 resolve_component_spec <- function(package, ext = NULL) {{
-  if (package %in% base::names(.component_specs)) return(.component_specs[[package]])
+  if (base::`%in%`(package, base::names(.component_specs))) return(.component_specs[[package]])
   by_stem <- base::vapply(.component_specs, function(spec) base::identical(spec$stem, package),
                     base::logical(1L))
   if (base::sum(by_stem) == 1L) return(.component_specs[[base::which(by_stem)]])
@@ -147,7 +147,7 @@ resolve_component_archive <- function(package, pkg_dir, ext = NULL) {{
     expected <- base::tolower(base::basename(candidates))
     found <- base::unlist(base::lapply(dirs, function(dir) {{
       files <- base::list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
-      files[base::tolower(base::basename(files)) %in% expected & !base::dir.exists(files)]
+      files[base::`%in%`(base::tolower(base::basename(files)), expected) & !base::dir.exists(files)]
     }}), use.names = FALSE)
   }}
   if (base::length(found) == 0L) {{
@@ -183,7 +183,7 @@ read_archive_metadata <- function(package, pkg_dir, ext = NULL) {{
   ), call. = FALSE)
   on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
 
-  if (!identical(tolower(ext), ".zip") && !ext %in% c(".tar.gz", ".tar")) {{
+  if (!identical(tolower(ext), ".zip") && !base::`%in%`(ext, base::c(".tar.gz", ".tar"))) {{
     stop(.meta_trf("Unsupported archive format: %s", ext), call. = FALSE)
   }}
   listing <- tryCatch(suppressWarnings({{
@@ -263,7 +263,7 @@ read_archive_metadata <- function(package, pkg_dir, ext = NULL) {{
     ), call. = FALSE)
   }}
   field <- function(name) {{
-    if (!name %in% colnames(desc)) return(NA_character_)
+    if (!base::`%in%`(name, colnames(desc))) return(NA_character_)
     value <- unname(desc[1L, name])
     if (is.na(value)) NA_character_ else trimws(value)
   }}
@@ -350,7 +350,7 @@ validate_local_constraints <- function(packages, pkg_dir, ext = NULL) {{
   for (index in seq_along(metadata)) {{
     constraints <- metadata[[index]]$constraints
     local <- constraints[vapply(constraints, function(item) {{
-      item$package %in% package_names
+      base::`%in%`(item$package, package_names)
     }}, logical(1L))]
     for (constraint in local) {{
       actual <- unname(versions[[constraint$package]])
@@ -1004,22 +1004,48 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     exports <- exports[grepl("^[A-Za-z.][A-Za-z0-9._]*$", exports)]
     setdiff(exports, c("break", "else", "for", "function", "if", "next", "repeat", "while"))
   })
-  names(package_functions) <- packages
-  qualify <- function(text, names, package) {
-    for (name in names) {
-      escaped <- gsub("([.\\[\\]{}()+*?^$|\\\\])", "\\\\\\1", name,
-                      perl = TRUE)
-      text <- gsub(
-        paste0("(?<![A-Za-z0-9_.:])", escaped, "[[:space:]]*\\("),
-        paste0(package, "::", name, "("), text, perl = TRUE
-      )
+  owners <- character()
+  for (index in seq_along(packages)) {
+    names <- setdiff(package_functions[[index]], names(owners))
+    owners[names] <- packages[[index]]
+  }
+  parsed <- tryCatch(parse(text = content, keep.source = TRUE),
+                     error = function(e) NULL)
+  if (is.null(parsed)) return(content)
+  data <- utils::getParseData(parsed, includeText = TRUE)
+  if (is.null(data) || nrow(data) == 0L) return(content)
+  calls <- data[data$token == "SYMBOL_FUNCTION_CALL" &
+                  data$text %in% names(owners), , drop = FALSE]
+  if (nrow(calls) == 0L) return(content)
+  lines <- strsplit(content, "\n", fixed = TRUE)[[1L]]
+  edits <- lapply(seq_len(nrow(calls)), function(index) {
+    row <- calls[index, , drop = FALSE]
+    line <- lines[[row$line1[[1L]]]]
+    prefix <- if (row$col1[[1L]] <= 1L) "" else {
+      substr(line, 1L, row$col1[[1L]] - 1L)
     }
-    text
+    if (grepl("::[[:space:]]*$", prefix, perl = TRUE)) return(NULL)
+    list(
+      line = row$line1[[1L]], col = row$col1[[1L]],
+      text = paste0(owners[[row$text[[1L]]]], "::")
+    )
+  })
+  edits <- Filter(Negate(is.null), edits)
+  if (length(edits) == 0L) return(content)
+  order_index <- order(
+    vapply(edits, `[[`, integer(1L), "line"),
+    vapply(edits, `[[`, integer(1L), "col"),
+    decreasing = TRUE
+  )
+  for (index in order_index) {
+    edit <- edits[[index]]
+    line <- lines[[edit$line]]
+    lines[[edit$line]] <- paste0(
+      substr(line, 1L, edit$col - 1L), edit$text,
+      substr(line, edit$col, nchar(line))
+    )
   }
-  for (package in packages) {
-    content <- qualify(content, package_functions[[package]], package)
-  }
-  content
+  paste(lines, collapse = "\n")
 }
 
 write_metapackage_files <- function(
@@ -1185,15 +1211,38 @@ write_metapackage_files <- function(
       "    if (base::length(specs) == 0L) return(empty)",
       "    rows <- base::lapply(specs, function(spec) {",
       "      installed <- base::vapply(spec$candidates, base::requireNamespace, base::logical(1), quietly = TRUE, lib.loc = .reexport_library_paths())",
-      "      missing <- spec$candidates[!installed]",
+      "      values <- base::lapply(base::seq_along(spec$candidates), function(index) {",
+      "        if (!installed[[index]]) return(base::list(ok = FALSE))",
+      "        base::tryCatch(",
+      "          base::list(ok = TRUE, value = base::getExportedValue(spec$candidates[[index]], spec$symbol)),",
+      "          error = function(e) base::list(ok = FALSE)",
+      "        )",
+      "      })",
+      "      available <- base::vapply(values, function(value) base::isTRUE(value$ok), base::logical(1))",
+      "      missing <- spec$candidates[!available]",
       "      same <- NA",
-      "      if (identical(spec$diagnosis, \"probable_same_object\") && base::length(missing) == 0L) {",
-      "        values <- tryCatch(base::lapply(spec$candidates, function(package) base::getExportedValue(package, spec$symbol)), error = function(e) NULL)",
-      "        if (!base::is.null(values) && base::length(values) > 0L) same <- base::all(base::vapply(values[-1L], base::identical, base::logical(1), y = values[[1L]]))",
+      "      equivalent <- FALSE",
+      "      if (identical(spec$diagnosis, \"probable_same_object\") && base::all(available)) {",
+      "        objects <- base::lapply(values, base::`[[`, \"value\")",
+      "        same <- base::all(base::vapply(objects[-1L], base::identical, base::logical(1), y = objects[[1L]]))",
+      "        if (base::length(objects) > 1L && identical(same, FALSE)) {",
+      "          equivalent <- base::all(base::vapply(objects[-1L], function(value) {",
+      "            base::is.function(value) && base::is.function(objects[[1L]]) &&",
+      "              base::identical(base::body(value), base::body(objects[[1L]])) &&",
+      "              base::identical(base::formals(value), base::formals(objects[[1L]]))",
+      "          }, base::logical(1)))",
+      "        }",
       "      }",
       "      row <- base::data.frame(symbol = spec$symbol, package = spec$package, resolution = spec$resolution, diagnosis = spec$diagnosis, candidates = base::paste(spec$candidates, collapse = \", \"), installed = base::paste(spec$candidates[installed], collapse = \", \"), missing = base::paste(missing, collapse = \", \"), identical = same, stringsAsFactors = FALSE)",
-      "      if (base::isTRUE(warn) && identical(spec$diagnosis, \"probable_same_object\") && identical(same, FALSE)) {",
-      "        condition <- base::structure(list(message = .meta_trf(\"Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.\", spec$symbol, base::paste(spec$candidates, collapse = \", \")), call = NULL, data = row), class = c(\"bigbang_warning_reexport_verification\", \"warning\", \"condition\"))",
+      "      if (base::isTRUE(warn) && identical(spec$diagnosis, \"probable_same_object\") && (base::length(missing) > 0L || identical(same, FALSE))) {",
+      "        message <- if (base::length(missing) > 0L) {",
+      "          .meta_trf(\"Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.\", spec$symbol, base::paste(missing, collapse = \", \"))",
+      "        } else if (base::isTRUE(equivalent)) {",
+      "          .meta_trf(\"Installed owners for re-export symbol '%s' are distinct objects with equivalent copies (same body and formals): %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.\", spec$symbol, base::paste(spec$candidates, collapse = \", \"))",
+      "        } else {",
+      "          .meta_trf(\"Installed owners for re-export symbol '%s' differ as distinct objects: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.\", spec$symbol, base::paste(spec$candidates, collapse = \", \"))",
+      "        }",
+      "        condition <- base::structure(base::list(message = message, call = NULL, data = row), class = base::c(\"bigbang_warning_reexport_verification\", \"warning\", \"condition\"))",
       "        base::warning(condition)",
       "      }",
       "      row",
@@ -1203,9 +1252,11 @@ write_metapackage_files <- function(
       "",
       "#' Report re-export verification",
       "#'",
+      "#' Installation verification is a snapshot of the owners available at the",
+      "#' time of installation. Call this function to verify them again later.",
       "#' @return A data frame with installed-owner identity checks.",
       "#' @export",
-      paste0(name, "_conflicts <- function() .reexport_verify(warn = FALSE)"),
+      paste0(name, "_conflicts <- function() .reexport_verify(warn = TRUE)"),
       "",
       "#' @export",
       paste0("print.", name, "_conflicts <- function(x, ...) {"),
@@ -1408,7 +1459,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
 
 {{ name }}_detach <- function() {
   search_entries <- base::paste0("package:", .pkgs)
-  base::lapply(search_entries[search_entries %in% base::search()], base::detach, character.only = TRUE)
+  base::lapply(search_entries[base::`%in%`(search_entries, base::search())], base::detach, character.only = TRUE)
   base::invisible()
 }
 
@@ -1638,7 +1689,7 @@ safe_unlink <- function(path, recursive = FALSE, force = FALSE, verify = TRUE) {
         # Apply directory-specific checks.
         if (dir.exists(p)) {
           # Never remove protected directories.
-          if (basename(p) %in% PROTECTED_DIRS) {
+          if (base::`%in%`(basename(p), PROTECTED_DIRS)) {
             message(.meta_trf("SAFETY: Potentially important directory: %s", p))
             return(invisible(FALSE))
           }

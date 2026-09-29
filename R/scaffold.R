@@ -144,10 +144,18 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
 }
 
 .namespace_export_directive <- function(symbol) {
-  quoted <- if (any(utf8ToInt(enc2utf8(symbol)) > 0x7fL)) {
-    .r_ascii_literal(symbol)
+  codepoints <- utf8ToInt(enc2utf8(symbol))
+  ascii <- all(codepoints < 0x80L)
+  control <- any(codepoints < 0x20L | codepoints == 0x7fL)
+  syntactic <- identical(make.names(symbol), symbol) &&
+    !grepl("^[0-9]", symbol) &&
+    ascii && !control
+  quoted <- if (isTRUE(syntactic)) {
+    symbol
+  } else if (ascii && !control) {
+    paste0("`", symbol, "`")
   } else {
-    paste(deparse(as.name(symbol), backtick = TRUE), collapse = "")
+    .r_string_literal(symbol)
   }
   paste0("export(", quoted, ")")
 }
@@ -313,8 +321,10 @@ write_metapackage_readme <- function(name, project_dir,
         "runtime. Diagnostics label collisions as probable_same_object,",
         "distinct_definitions, or undetermined; unchosen collisions stop generation.",
         "dry_run, man/reexports.Rd, and",
-        paste0(name, "_conflicts() report the selected resolutions and checks installed"),
-        "installed owners without installing missing components.",
+        paste0(name, "_conflicts() report selected resolutions and re-verify"),
+        "installed owners without installing missing components. Installation",
+        "verification is a snapshot; warnings identify owners that no longer export",
+        "the symbol and distinguish equivalent function copies from distinct objects.",
         "If on_component_error = \"skip\" omits a required owner, generation errors",
         "instead of leaving a binding that points to a component that does not travel."
       )
@@ -439,19 +449,19 @@ write_consistency_test <- function(name, project_dir) {
   dir.create(test_dir, recursive = TRUE, showWarnings = FALSE)
   test_path <- file.path(test_dir, "component-consistency.R")
   content <- c(
-    paste0("stopifnot(requireNamespace(\"", name, "\", quietly = TRUE))"),
+    paste0("base::stopifnot(base::requireNamespace(\"", name, "\", quietly = TRUE))"),
     paste0("description <- utils::packageDescription(\"", name, "\")"),
-    "declared <- strsplit(description[[\"Config/bigbang/packages\"]], \",\", fixed = TRUE)[[1L]]",
-    "declared <- trimws(declared[nzchar(declared)])",
+    "declared <- base::strsplit(description[[\"Config/bigbang/packages\"]], \",\", fixed = TRUE)[[1L]]",
+    "declared <- base::trimws(declared[base::nzchar(declared)])",
     paste0(
-      "component_packages <- get(\"", name, "_packages\", envir = ",
-      "asNamespace(\"", name, "\"))()"
+      "component_packages <- base::get(\"", name, "_packages\", envir = ",
+      "base::asNamespace(\"", name, "\"))()"
     ),
-    "stopifnot(setequal(component_packages, declared))",
+    "base::stopifnot(base::setequal(component_packages, declared))",
     "imports <- description[[\"Imports\"]]",
-    "imports <- if (is.null(imports)) character() else strsplit(imports, \",\", fixed = TRUE)[[1L]]",
-    "imports <- trimws(gsub(\"\\\\s*\\\\([^)]*\\\\)\", \"\", imports))",
-    "stopifnot(length(intersect(component_packages, imports)) == 0L)"
+    "imports <- if (base::is.null(imports)) base::character() else base::strsplit(imports, \",\", fixed = TRUE)[[1L]]",
+    "imports <- base::trimws(base::gsub(\"\\\\s*\\\\([^)]*\\\\)\", \"\", imports))",
+    "base::stopifnot(base::length(base::intersect(component_packages, imports)) == 0L)"
   )
   .write_utf8(content, test_path)
   invisible(test_path)

@@ -154,7 +154,11 @@ exportados sean el mismo en tiempo de ejecución. El diagnóstico etiqueta cada
 colisión como `probable_same_object`, `distinct_definitions` o `undetermined`,
 y ordena las razones de sus fuentes. Para un `probable_same_object` elegido,
 `<meta>_install()` verifica con `identical()` los dueños instalados y conserva
-el resultado; `<meta>_conflicts()` repite la comprobación sin instalar faltantes.
+una foto del resultado; si un dueño instalado ya no exporta el símbolo, lo informa
+con el mismo aviso de verificación. `<meta>_conflicts()` repite la comprobación y
+emite de nuevo el aviso, por lo que es la forma de verificar otra vez después de
+instalar. Un aviso de identidad `FALSE` distingue copias equivalentes de funciones
+(mismo cuerpo y formales) de objetos distintos.
 Si `on_component_error = "skip"` omite un dueño necesario, la generación falla
 en vez de crear un binding hacia un componente que no viaja.
 
@@ -281,7 +285,10 @@ segura de ver qué haría una llamada antes de que la haga.
   escritura y borrado pretendidos y sobrevive a SIGKILL, SIGTERM, SIGHUP, el
   cierre de la terminal y un reinicio del equipo. Si una ruta no contiene ni
   su valor original ni uno pretendido, la recuperación se detiene en vez de
-  pisarla. Después de confirmar que no sigue corriendo otro update,
+  pisarla. En Windows, una ruta ausente solo se conoce durante la ventana en que
+  el temporal pretendido, con el mismo hash, sigue en el área de preparación del
+  diario. Cada archivo original restaurado estando ausente queda en el resultado
+  y en el mensaje de recuperación. Después de confirmar que no sigue corriendo otro update,
   `recover = TRUE` preserva esos bytes desconocidos en un directorio hermano
   informado y recién entonces recupera. Un dry run informa la acción pendiente
   sin cambiar el proyecto ni el diario. En Windows nunca se prueba la vida con
