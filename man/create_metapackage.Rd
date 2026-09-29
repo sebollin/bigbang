@@ -286,18 +286,19 @@ method until the component has been loaded.
 
 When more than one component exports a symbol, \code{reexport_prefer} chooses its
 provider explicitly and \code{reexport_exclude} removes it from the generated
-namespace. A collision is deduplicated automatically only when every owner
-can be conservatively proven to follow the same import origin, or when one
-component is the unique owner. The proof inspects the extracted NAMESPACE,
-parsed R assignments and calls, and \code{R/sysdata.rda}; it is deliberately
-conservative because runtime code and loaded values cannot be known during
-generation. Other collisions stop generation with candidates and proof
-reasons. If \code{on_component_error = "skip"} omits a component required by a
-same-origin or preferred binding, generation errors instead of creating a
-binding to a component that will not travel with the metapackage. The result,
-\code{dry_run}, generated \code{man/reexports.Rd}, and \verb{<name>_conflicts()} report the
-selected resolution. The latter checks installed same-origin owners for
-\code{identical()} objects when they are available, without installing anything.
+namespace. Every collision requires one of those options because static source
+analysis cannot prove that two exported objects are the same at runtime. The
+analysis remains a diagnostic with \code{probable_same_object},
+\code{distinct_definitions}, or \code{undetermined}, including ordered file,
+line, import, and parse reasons. For a preferred
+\code{probable_same_object}, \verb{<name>_install()} verifies the installed
+owners with \code{identical()} without installing anything extra; missing
+owners remain unverified and the verification is retained in the returned
+result. \verb{<name>_conflicts()} repeats that check on request. If
+\code{on_component_error = "skip"} omits a component required by a preferred
+binding or an import source, generation errors with an actionable skipped
+condition instead of creating a binding to a component that will not travel
+with the metapackage.
 }
 
 \section{Interrupted updates}{
@@ -307,7 +308,8 @@ journal beside it at \verb{.<name>.bigbang-update}, copies every manifest-owned
 file and its manifest, verifies their hashes, and marks the journal armed.
 Every later file write or removal records its intention first. Generated
 files, shipped component archives, catalogs, \code{.Rbuildignore}, and the final
-manifest are replaced atomically. Roxygen runs in a staging copy and only its
+manifest are replaced atomically. On Windows the guarantee is that a file is
+old, new, or temporarily absent with a journal backup. Roxygen runs in a staging copy and only its
 known outputs are promoted atomically to the project.
 
 The journal survives process termination, terminal closure, and system

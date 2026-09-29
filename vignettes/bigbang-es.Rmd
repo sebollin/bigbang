@@ -78,15 +78,16 @@ una condición `bigbang_error_cycle`.
 `options(<meta>.quiet = TRUE)`. Si `cli` no está disponible, el mensaje de
 arranque vuelve al banner ASCII sin fallar.
 
-## Colisiones de reexportacion
+## Colisiones de reexportación
 
-Cuando varios componentes exportan el mismo simbolo, indique
-`reexport_prefer = c(simbolo = "componente")` para elegir el proveedor o
-`reexport_exclude = "simbolo"` para excluirlo. Las exportaciones con el mismo
-origen se deduplican solo despues de una prueba estatica conservadora sobre
-NAMESPACE, el codigo `R/` parseado y `R/sysdata.rda`; una colision no demostrada
-detiene la generacion. El resultado, `dry_run`, `man/reexports.Rd` y
-`<meta>_conflicts()` muestran la decision.
+Cuando varios componentes exportan el mismo símbolo, indique
+`reexport_prefer = c(símbolo = "componente")` para elegir el proveedor o
+`reexport_exclude = "símbolo"` para excluirlo. Toda colisión requiere una de
+esas decisiones porque el análisis estático no puede probar que dos objetos
+exportados sean el mismo en tiempo de ejecución. El diagnóstico etiqueta las
+colisiones como `probable_same_object`, `distinct_definitions` o `undetermined`;
+una colisión probable elegida se verifica contra los dueños instalados mediante
+`<meta>_install()` y `<meta>_conflicts()`.
 
 ## Archivos ZIP
 

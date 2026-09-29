@@ -144,19 +144,18 @@ cargando el componente. Un objeto restaurado con `readRDS()` no carga un
 componente por sí mismo, así que R no puede despachar su método S3 hasta que el
 componente se haya cargado.
 
-### Colisiones de reexportacion
+### Colisiones de reexportación
 
-Cuando varios componentes exportan el mismo simbolo, usa
-`reexport_prefer = c(simbolo = "componente")` para elegir su proveedor o
-`reexport_exclude = "simbolo"` para excluirlo. Las exportaciones unicas y las
-reexportaciones con el mismo origen se resuelven solas unicamente cuando una
-prueba estatica conservadora sobre NAMESPACE, asignaciones y llamadas parseadas
-de `R/`, y `R/sysdata.rda` tiene exito. Las colisiones genuinas detienen la
-generacion con sus candidatos y los motivos de la prueba; `dry_run`,
-`man/reexports.Rd` y `<meta>_conflicts()` muestran la resolucion.
-`<meta>_conflicts()` tambien compara con `identical()` los objetos instalados de
-un mismo origen cuando estan todos presentes, sin instalar componentes faltantes.
-Si `on_component_error = "skip"` omite un dueno necesario, la generacion falla
+Cuando varios componentes exportan el mismo símbolo, usá
+`reexport_prefer = c(símbolo = "componente")` para elegir su proveedor o
+`reexport_exclude = "símbolo"` para excluirlo. Toda colisión requiere una de
+esas decisiones porque el análisis estático no puede probar que dos objetos
+exportados sean el mismo en tiempo de ejecución. El diagnóstico etiqueta cada
+colisión como `probable_same_object`, `distinct_definitions` o `undetermined`,
+y ordena las razones de sus fuentes. Para un `probable_same_object` elegido,
+`<meta>_install()` verifica con `identical()` los dueños instalados y conserva
+el resultado; `<meta>_conflicts()` repite la comprobación sin instalar faltantes.
+Si `on_component_error = "skip"` omite un dueño necesario, la generación falla
 en vez de crear un binding hacia un componente que no viaja.
 
 bigbang mantiene como errores duros todas las validaciones que protegen a quien

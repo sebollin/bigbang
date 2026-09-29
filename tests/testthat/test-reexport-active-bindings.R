@@ -483,7 +483,7 @@ test_that("reexport handles components with no explicit exports", {
   expect_true(file.exists(file.path(result$path, "R", "reexports.R")))
   expect_match(
     paste(readLines(file.path(result$path, "R", "reexports.R")), collapse = "\n"),
-    "component_reexport_specs <- list\\(\\)"
+    "component_reexport_specs <- (base::)?list\\(\\)"
   )
 })
 

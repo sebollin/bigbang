@@ -175,6 +175,8 @@
     "Preferred re-export target(s) are invalid: %s. Each component must be in the generation and export its symbol." = "Los destinos preferidos de reexportaci\u00f3n no son v\u00e1lidos: %s. Cada componente debe estar en la generaci\u00f3n y exportar su s\u00edmbolo.",
     "Generated metapackage symbol(s) %s can only be resolved with reexport_exclude: %s." = "Los s\u00edmbolos %s del metapaquete generado solo pueden resolverse con reexport_exclude: %s.",
     "Re-export proof cycle while following '%s'." = "Se detect\u00f3 un ciclo en la prueba de reexportaci\u00f3n al seguir '%s'.",
+    "Local definition of re-export symbol '%s' in %s:%d." = "Definici\u00f3n local del s\u00edmbolo de reexportaci\u00f3n '%s' en %s:%d.",
+    "Binder or namespace mutation via %s in %s:%d; it is not known whether it changes '%s'." = "Binder o mutaci\u00f3n del namespace mediante %s en %s:%d; no se sabe si cambia '%s'.",
     "Assignment to re-export symbol '%s' in %s:%d." = "Asignaci\u00f3n al s\u00edmbolo de reexportaci\u00f3n '%s' en %s:%d.",
     "Call %s targets re-export symbol '%s' in %s:%d." = "La llamada %s apunta al s\u00edmbolo de reexportaci\u00f3n '%s' en %s:%d.",
     "Call %s has a non-literal first argument in %s:%d." = "La llamada %s tiene un primer argumento no literal en %s:%d.",
@@ -182,13 +184,22 @@
     "Could not parse R file %s: %s" = "No se pudo analizar el archivo R %s: %s",
     "Could not inspect R/sysdata.rda: %s" = "No se pudo inspeccionar R/sysdata.rda: %s",
     "R/sysdata.rda contains re-export symbol '%s'." = "R/sysdata.rda contiene el s\u00edmbolo de reexportaci\u00f3n '%s'.",
+    "NAMESPACE declares useDynLib(), so the exported object's origin is undetermined." = "NAMESPACE declara useDynLib(), por lo que el origen del objeto exportado es indeterminado.",
+    "NAMESPACE does not declare an import source for '%s'." = "NAMESPACE no declara una fuente de importaci\u00f3n para '%s'.",
+    "NAMESPACE imports complete '%s', which could provide '%s'." = "NAMESPACE importa por completo '%s', que podr\u00eda aportar '%s'.",
+    "NAMESPACE imports '%s' from external package '%s'." = "NAMESPACE importa '%s' desde el paquete externo '%s'.",
+    "NAMESPACE imports '%s' from component '%s'." = "NAMESPACE importa '%s' desde el componente '%s'.",
     "NAMESPACE does not declare a unique import source for '%s'." = "NAMESPACE no declara una fuente de importaci\u00f3n \u00fanica para '%s'.",
     "NAMESPACE imports '%s' from external package '%s' with import()." = "NAMESPACE importa '%s' desde el paquete externo '%s' con import().",
     "NAMESPACE imports '%s' from component '%s', which was skipped." = "NAMESPACE importa '%s' desde el componente '%s', que fue omitido.",
     "NAMESPACE imports '%s' from component '%s', which is not in this generation." = "NAMESPACE importa '%s' desde el componente '%s', que no est\u00e1 en esta generaci\u00f3n.",
     "NAMESPACE imports '%s' from component '%s', but that component does not export it." = "NAMESPACE importa '%s' desde el componente '%s', pero ese componente no lo exporta.",
+    "Cannot use reexport_prefer for omitted component(s): %s. The component was omitted by skip; repair it or choose an installed candidate." = "No se puede usar reexport_prefer para componentes omitidos: %s. El componente fue omitido por skip; rep\u00e1relo o elija un candidato instalado.",
+    "No re-export components remain after skip: %s. Repair the omitted archive or choose a complete generation." = "No quedan componentes de reexportaci\u00f3n despu\u00e9s de skip: %s. Repare el archivo omitido o elija una generaci\u00f3n completa.",
+    "All re-export components were omitted by skip: %s. Repair the omitted archive or remove dependent components from the generation." = "Todos los componentes de reexportaci\u00f3n fueron omitidos por skip: %s. Repare el archivo omitido o quite los componentes dependientes de la generaci\u00f3n.",
     "Cannot resolve re-export symbol(s) because skipped components are required: %s." = "No se pueden resolver los s\u00edmbolos de reexportaci\u00f3n porque se necesitan componentes omitidos: %s.",
-    "Cannot resolve re-export collision(s): %s. Candidates and proof failures: %s. Resolve with %s." = "No se pueden resolver las colisiones de reexportaci\u00f3n: %s. Candidatos y fallas de la prueba: %s. Resuelva con %s."
+    "Cannot resolve re-export collision(s): %s. Candidates, diagnoses, and proof details: %s. %s." = "No se pueden resolver las colisiones de reexportaci\u00f3n: %s. Candidatos, diagn\u00f3sticos y detalles de la prueba: %s. %s.",
+    "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude." = "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' difieren: %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude."
   )
 }
 
@@ -297,7 +308,8 @@
       "No se encontraron resoluciones de reexportaci\u00f3n.",
       "Resoluciones de reexportaci\u00f3n:",
       "no verificado",
-      "faltan: %s"
+      "faltan: %s",
+      "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' difieren: %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude."
     ),
     c(
       "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives.",
@@ -379,7 +391,8 @@
       "No re-export resolutions found.",
       "Re-export resolutions:",
       "not verified",
-      "missing: %s"
+      "missing: %s",
+      "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
     )
   )
 }

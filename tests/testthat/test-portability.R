@@ -90,7 +90,9 @@ test_that("all generated text files are valid UTF-8 in the C locale", {
   # The archives ship inside the meta-package, so both entry points default to
   # the shipped directory. The default is a call, resolved when the function
   # runs, and never a path belonging to the generating machine.
-  expected_default <- quote(system.file("archives", package = "portablemeta"))
+  expected_default <- quote(base::system.file(
+    "archives", package = "portablemeta"
+  ))
   expect_identical(
     formals(attach_env$portablemeta_install)[["pkg_dir"]], expected_default
   )

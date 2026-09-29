@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.4.0.9000\n"
+"Project-Id-Version: bigbang 0.5.0\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -526,6 +526,12 @@ msgstr "Los símbolos %s del metapaquete generado solo pueden resolverse con ree
 msgid "Re-export proof cycle while following '%s'."
 msgstr "Se detectó un ciclo en la prueba de reexportación al seguir '%s'."
 
+msgid "Local definition of re-export symbol '%s' in %s:%d."
+msgstr "Definición local del símbolo de reexportación '%s' en %s:%d."
+
+msgid "Binder or namespace mutation via %s in %s:%d; it is not known whether it changes '%s'."
+msgstr "Binder o mutación del namespace mediante %s en %s:%d; no se sabe si cambia '%s'."
+
 msgid "Assignment to re-export symbol '%s' in %s:%d."
 msgstr "Asignación al símbolo de reexportación '%s' en %s:%d."
 
@@ -547,6 +553,21 @@ msgstr "No se pudo inspeccionar R/sysdata.rda: %s"
 msgid "R/sysdata.rda contains re-export symbol '%s'."
 msgstr "R/sysdata.rda contiene el símbolo de reexportación '%s'."
 
+msgid "NAMESPACE declares useDynLib(), so the exported object's origin is undetermined."
+msgstr "NAMESPACE declara useDynLib(), por lo que el origen del objeto exportado es indeterminado."
+
+msgid "NAMESPACE does not declare an import source for '%s'."
+msgstr "NAMESPACE no declara una fuente de importación para '%s'."
+
+msgid "NAMESPACE imports complete '%s', which could provide '%s'."
+msgstr "NAMESPACE importa por completo '%s', que podría aportar '%s'."
+
+msgid "NAMESPACE imports '%s' from external package '%s'."
+msgstr "NAMESPACE importa '%s' desde el paquete externo '%s'."
+
+msgid "NAMESPACE imports '%s' from component '%s'."
+msgstr "NAMESPACE importa '%s' desde el componente '%s'."
+
 msgid "NAMESPACE does not declare a unique import source for '%s'."
 msgstr "NAMESPACE no declara una fuente de importación única para '%s'."
 
@@ -562,8 +583,20 @@ msgstr "NAMESPACE importa '%s' desde el componente '%s', que no está en esta ge
 msgid "NAMESPACE imports '%s' from component '%s', but that component does not export it."
 msgstr "NAMESPACE importa '%s' desde el componente '%s', pero ese componente no lo exporta."
 
+msgid "Cannot use reexport_prefer for omitted component(s): %s. The component was omitted by skip; repair it or choose an installed candidate."
+msgstr "No se puede usar reexport_prefer para componentes omitidos: %s. El componente fue omitido por skip; repárelo o elija un candidato instalado."
+
+msgid "No re-export components remain after skip: %s. Repair the omitted archive or choose a complete generation."
+msgstr "No quedan componentes de reexportación después de skip: %s. Repare el archivo omitido o elija una generación completa."
+
+msgid "All re-export components were omitted by skip: %s. Repair the omitted archive or remove dependent components from the generation."
+msgstr "Todos los componentes de reexportación fueron omitidos por skip: %s. Repare el archivo omitido o quite los componentes dependientes de la generación."
+
 msgid "Cannot resolve re-export symbol(s) because skipped components are required: %s."
 msgstr "No se pueden resolver los símbolos de reexportación porque se necesitan componentes omitidos: %s."
 
-msgid "Cannot resolve re-export collision(s): %s. Candidates and proof failures: %s. Resolve with %s."
-msgstr "No se pueden resolver las colisiones de reexportación: %s. Candidatos y fallas de la prueba: %s. Resuelva con %s."
+msgid "Cannot resolve re-export collision(s): %s. Candidates, diagnoses, and proof details: %s. %s."
+msgstr "No se pueden resolver las colisiones de reexportación: %s. Candidatos, diagnósticos y detalles de la prueba: %s. %s."
+
+msgid "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr "Los dueños instalados del símbolo de reexportación '%s' difieren: %s. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."

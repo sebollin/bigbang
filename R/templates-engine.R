@@ -12,7 +12,7 @@
 #' @noRd
 .archive_dir_default <- function(name, include_archives) {
   if (!isTRUE(include_archives)) return("")
-  paste0(' = system.file("', .archive_subdir, '", package = "', name, '")')
+  paste0(' = base::system.file("', .archive_subdir, '", package = "', name, '")')
 }
 
 #' Subdirectory holding component archives inside a generated meta-package
@@ -35,23 +35,23 @@
   glue::glue('
 
 .bigbang_abort <- function(class, message, ...) {{
-  condition <- structure(
-    c(list(message = message, call = NULL), list(...)),
+  condition <- base::structure(
+    base::c(base::list(message = message, call = NULL), base::list(...)),
     class = c(class, "bigbang_error", "error", "condition")
   )
-  stop(condition)
+  base::stop(condition)
 }}
 
 resolve_upgrade_policy <- function(force, upgrade, upgrade_missing) {{
-  if (!is.logical(force) || length(force) != 1L || is.na(force)) {{
+  if (!base::is.logical(force) || base::length(force) != 1L || base::is.na(force)) {{
     .bigbang_abort(
       "bigbang_error_install_policy",
       .meta_tr("\'force\' must be TRUE or FALSE")
     )
   }}
-    upgrade <- match.arg(upgrade, c("newer", "always", "never"))
-  if (isTRUE(force)) {{
-    if (!isTRUE(upgrade_missing) && !identical(upgrade, "always")) {{
+    upgrade <- base::match.arg(upgrade, base::c("newer", "always", "never"))
+  if (base::isTRUE(force)) {{
+    if (!base::isTRUE(upgrade_missing) && !base::identical(upgrade, "always")) {{
       .bigbang_abort(
         "bigbang_error_install_policy",
         .meta_tr(
@@ -65,22 +65,22 @@ resolve_upgrade_policy <- function(force, upgrade, upgrade_missing) {{
 }}
 
 with_install_library_path <- function(libraries, code) {{
-  libraries <- unique(normalizePath(
-    libraries[dir.exists(libraries)], winslash = "/", mustWork = TRUE
+  libraries <- base::unique(base::normalizePath(
+    libraries[base::dir.exists(libraries)], winslash = "/", mustWork = TRUE
   ))
-  library_path <- paste(libraries, collapse = .Platform$path.sep)
-  previous <- Sys.getenv("R_LIBS_USER", unset = NA_character_)
+  library_path <- base::paste(libraries, collapse = .Platform$path.sep)
+  previous <- base::Sys.getenv("R_LIBS_USER", unset = NA_character_)
   on.exit({{
-    if (is.na(previous)) {{
-      Sys.unsetenv("R_LIBS_USER")
+    if (base::is.na(previous)) {{
+      base::Sys.unsetenv("R_LIBS_USER")
     }} else {{
-      Sys.setenv(R_LIBS_USER = previous)
+      base::Sys.setenv(R_LIBS_USER = previous)
     }}
   }}, add = TRUE)
   # install.packages() always rebuilds R_LIBS from the current .libPaths(), so
   # R_LIBS_USER is the channel that preserves additional libraries for its child.
-  Sys.setenv(R_LIBS_USER = library_path)
-  force(code)
+  base::Sys.setenv(R_LIBS_USER = library_path)
+  base::force(code)
 }}
 
 install_source_component <- function(target, lib, verbose = TRUE) {{
@@ -88,45 +88,45 @@ install_source_component <- function(target, lib, verbose = TRUE) {{
   # local source packages, so a failure only reports a non-zero exit status.
   # Run the same R CMD INSTALL directly and keep the output: the ERROR lines
   # of the child become the failure message instead of a generic one.
-  log_file <- tempfile("bigbang-install-log-")
-  on.exit(unlink(log_file, force = TRUE), add = TRUE)
-  target <- normalizePath(path.expand(target), winslash = "/", mustWork = FALSE)
-  r_binary <- file.path(
-    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  log_file <- base::tempfile("bigbang-install-log-")
+  on.exit(base::unlink(log_file, force = TRUE), add = TRUE)
+  target <- base::normalizePath(base::path.expand(target), winslash = "/", mustWork = FALSE)
+  r_binary <- base::file.path(
+    base::R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
   )
-  status <- system2(
-    r_binary, c("CMD", "INSTALL", "-l", shQuote(lib), shQuote(target)),
+  status <- base::system2(
+    r_binary, base::c("CMD", "INSTALL", "-l", base::shQuote(lib), base::shQuote(target)),
     stdout = log_file, stderr = log_file
   )
-  output <- if (file.exists(log_file)) {{
-    readLines(log_file, warn = FALSE)
+  output <- if (base::file.exists(log_file)) {{
+    base::readLines(log_file, warn = FALSE)
   }} else {{
-    character()
+    base::character()
   }}
-  if (isTRUE(verbose) && length(output) > 0L) cat(output, sep = "\\n")
+  if (base::isTRUE(verbose) && base::length(output) > 0L) base::cat(output, sep = "\\n")
   if (!identical(status, 0L)) {{
-    detail <- grep("ERROR", output, value = TRUE, fixed = TRUE)
-    if (length(detail) == 0L) detail <- utils::tail(output, 5L)
-    detail <- paste(detail, collapse = " | ")
-    if (!nzchar(detail)) {{
-      detail <- sprintf("R CMD INSTALL exited with status %d", status)
+    detail <- base::grep("ERROR", output, value = TRUE, fixed = TRUE)
+    if (base::length(detail) == 0L) detail <- utils::tail(output, 5L)
+    detail <- base::paste(detail, collapse = " | ")
+    if (!base::nzchar(detail)) {{
+      detail <- base::sprintf("R CMD INSTALL exited with status %d", status)
     }}
     stop(detail, call. = FALSE)
   }}
-  invisible(TRUE)
+  base::invisible(TRUE)
 }}
 
 .component_specs <- {component_specs_literal}
 .component_names <- {package_list_literal}
 
 resolve_component_spec <- function(package, ext = NULL) {{
-  if (package %in% names(.component_specs)) return(.component_specs[[package]])
-  by_stem <- vapply(.component_specs, function(spec) identical(spec$stem, package),
-                    logical(1L))
-  if (sum(by_stem) == 1L) return(.component_specs[[which(by_stem)]])
-  fallback_ext <- if (is.null(ext)) ".tar.gz" else ext
+  if (package %in% base::names(.component_specs)) return(.component_specs[[package]])
+  by_stem <- base::vapply(.component_specs, function(spec) base::identical(spec$stem, package),
+                    base::logical(1L))
+  if (base::sum(by_stem) == 1L) return(.component_specs[[base::which(by_stem)]])
+  fallback_ext <- if (base::is.null(ext)) ".tar.gz" else ext
   list(
-    package = sub("_.*", "", package),
+    package = base::sub("_.*", "", package),
     stem = package,
     ext = fallback_ext
   )
@@ -134,29 +134,29 @@ resolve_component_spec <- function(package, ext = NULL) {{
 
 resolve_component_archive <- function(package, pkg_dir, ext = NULL) {{
   spec <- resolve_component_spec(package, ext)
-  if (!is.character(pkg_dir) || length(pkg_dir) < 1L || anyNA(pkg_dir) ||
-      any(!nzchar(pkg_dir))) {{
+  if (!base::is.character(pkg_dir) || base::length(pkg_dir) < 1L || base::anyNA(pkg_dir) ||
+      base::any(!base::nzchar(pkg_dir))) {{
     stop(.meta_tr(
       "The archive directory must be one or more non-empty paths."
     ), call. = FALSE)
   }}
-  dirs <- normalizePath(pkg_dir, winslash = "/", mustWork = FALSE)
-  candidates <- file.path(dirs, paste0(spec$stem, spec$ext))
-  found <- candidates[file.exists(candidates) & !dir.exists(candidates)]
+  dirs <- base::normalizePath(pkg_dir, winslash = "/", mustWork = FALSE)
+  candidates <- base::file.path(dirs, base::paste0(spec$stem, spec$ext))
+  found <- candidates[base::file.exists(candidates) & !base::dir.exists(candidates)]
   if (length(found) == 0L) {{
-    expected <- tolower(basename(candidates))
-    found <- unlist(lapply(dirs, function(dir) {{
-      files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
-      files[tolower(basename(files)) %in% expected & !dir.exists(files)]
+    expected <- base::tolower(base::basename(candidates))
+    found <- base::unlist(base::lapply(dirs, function(dir) {{
+      files <- base::list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
+      files[base::tolower(base::basename(files)) %in% expected & !base::dir.exists(files)]
     }}), use.names = FALSE)
   }}
-  if (length(found) == 0L) {{
+  if (base::length(found) == 0L) {{
     stop(.meta_trf(
       "Could not resolve component \'%s\' in the supplied archive directories.",
       package
     ), call. = FALSE)
   }}
-  list(path = normalizePath(found[[1L]], winslash = "/", mustWork = TRUE),
+  list(path = base::normalizePath(found[[1L]], winslash = "/", mustWork = TRUE),
        ext = spec$ext, stem = spec$stem)
 }}
 
@@ -997,6 +997,31 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
 #'
 #' @return Invisible character vector of created paths.
 #' @noRd
+.qualify_generated_runtime_calls <- function(content) {
+  packages <- c("base", "utils", "tools", "methods")
+  package_functions <- lapply(packages, function(package) {
+    exports <- getNamespaceExports(package)
+    exports <- exports[grepl("^[A-Za-z.][A-Za-z0-9._]*$", exports)]
+    setdiff(exports, c("break", "else", "for", "function", "if", "next", "repeat", "while"))
+  })
+  names(package_functions) <- packages
+  qualify <- function(text, names, package) {
+    for (name in names) {
+      escaped <- gsub("([.\\[\\]{}()+*?^$|\\\\])", "\\\\\\1", name,
+                      perl = TRUE)
+      text <- gsub(
+        paste0("(?<![A-Za-z0-9_.:])", escaped, "[[:space:]]*\\("),
+        paste0(package, "::", name, "("), text, perl = TRUE
+      )
+    }
+    text
+  }
+  for (package in packages) {
+    content <- qualify(content, package_functions[[package]], package)
+  }
+  content
+}
+
 write_metapackage_files <- function(
     name,
     packages,
@@ -1014,6 +1039,8 @@ write_metapackage_files <- function(
     reexport = FALSE,
     reexport_specs = list()
 ) {
+
+  qualify_runtime_calls <- .qualify_generated_runtime_calls
 
   log_debug <- function(debug_message) {
     if (verbose) message(paste0("DEBUG: ", debug_message))
@@ -1039,6 +1066,11 @@ write_metapackage_files <- function(
       ".set_reexport_library(lib)"
     } else {
       "invisible()"
+    },
+    reexport_verification_call = if (isTRUE(reexport)) {
+      ".reexport_verify(warn = TRUE)"
+    } else {
+      "base::data.frame()"
     },
     reexport_specs = .r_ascii_literal(reexport_specs),
     install_call = if (isTRUE(include_archives)) {
@@ -1068,24 +1100,23 @@ write_metapackage_files <- function(
     paste(c(
       "#' Report resolved re-export origins",
       "#'",
-      "#' Checks the selected component and, for same-origin resolutions,",
-      "#' compares installed owners without installing missing components.",
+      "#' Checks preferred re-export resolutions against installed owners.",
       "#'",
       "#' @return A data frame with resolution and installed-identity details.",
       "#' @export",
       paste0(name, "_conflicts <- function() {"),
-      "  specs <- Filter(function(spec) spec$resolution %in% c(\"same_origin\", \"preferred\"), .component_reexport_specs)",
-      "  empty <- data.frame(symbol = character(), package = character(), resolution = character(), candidates = character(), installed = character(), missing = character(), identical = logical(), stringsAsFactors = FALSE)",
+      "  specs <- Filter(function(spec) spec$resolution %in% c(\"preferred\"), .component_reexport_specs)",
+      "  empty <- data.frame(symbol = character(), package = character(), resolution = character(), diagnosis = character(), candidates = character(), installed = character(), missing = character(), identical = logical(), stringsAsFactors = FALSE)",
       "  if (length(specs) == 0L) return(empty)",
       "  rows <- lapply(specs, function(spec) {",
       "    installed <- vapply(spec$candidates, requireNamespace, logical(1L), quietly = TRUE, lib.loc = .reexport_library_paths())",
       "    missing <- spec$candidates[!installed]",
       "    same <- NA",
-      "    if (identical(spec$resolution, \"same_origin\") && length(missing) == 0L) {",
+      "    if (identical(spec$diagnosis, \"probable_same_object\") && length(missing) == 0L) {",
       "      values <- tryCatch(lapply(spec$candidates, function(package) getExportedValue(package, spec$symbol)), error = function(e) NULL)",
       "      if (!is.null(values) && length(values) > 0L) same <- all(vapply(values[-1L], identical, logical(1L), y = values[[1L]]))",
       "    }",
-      "    data.frame(symbol = spec$symbol, package = spec$package, resolution = spec$resolution, candidates = paste(spec$candidates, collapse = \", \"), installed = paste(spec$candidates[installed], collapse = \", \"), missing = paste(missing, collapse = \", \"), identical = same, stringsAsFactors = FALSE)",
+      "    data.frame(symbol = spec$symbol, package = spec$package, resolution = spec$resolution, diagnosis = spec$diagnosis, candidates = paste(spec$candidates, collapse = \", \"), installed = paste(spec$candidates[installed], collapse = \", \"), missing = paste(missing, collapse = \", \"), identical = same, stringsAsFactors = FALSE)",
       "  })",
       paste0("  structure(do.call(rbind, rows), class = c(\"", name, "_conflicts\", \"data.frame\"))"),
       "}",
@@ -1146,34 +1177,81 @@ write_metapackage_files <- function(
   }
   template_data$conflicts_function <- conflicts_function
 
+  if (isTRUE(reexport)) {
+    template_data$conflicts_function <- paste(c(
+      "  .reexport_verify <- function(warn = FALSE) {",
+      "    specs <- Filter(function(spec) identical(spec$resolution, \"preferred\"), .component_reexport_specs)",
+      "    empty <- base::data.frame(symbol = base::character(), package = base::character(), resolution = base::character(), diagnosis = base::character(), candidates = base::character(), installed = base::character(), missing = base::character(), identical = base::logical(), stringsAsFactors = FALSE)",
+      "    if (base::length(specs) == 0L) return(empty)",
+      "    rows <- base::lapply(specs, function(spec) {",
+      "      installed <- base::vapply(spec$candidates, base::requireNamespace, base::logical(1), quietly = TRUE, lib.loc = .reexport_library_paths())",
+      "      missing <- spec$candidates[!installed]",
+      "      same <- NA",
+      "      if (identical(spec$diagnosis, \"probable_same_object\") && base::length(missing) == 0L) {",
+      "        values <- tryCatch(base::lapply(spec$candidates, function(package) base::getExportedValue(package, spec$symbol)), error = function(e) NULL)",
+      "        if (!base::is.null(values) && base::length(values) > 0L) same <- base::all(base::vapply(values[-1L], base::identical, base::logical(1), y = values[[1L]]))",
+      "      }",
+      "      row <- base::data.frame(symbol = spec$symbol, package = spec$package, resolution = spec$resolution, diagnosis = spec$diagnosis, candidates = base::paste(spec$candidates, collapse = \", \"), installed = base::paste(spec$candidates[installed], collapse = \", \"), missing = base::paste(missing, collapse = \", \"), identical = same, stringsAsFactors = FALSE)",
+      "      if (base::isTRUE(warn) && identical(spec$diagnosis, \"probable_same_object\") && identical(same, FALSE)) {",
+      "        condition <- base::structure(list(message = .meta_trf(\"Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.\", spec$symbol, base::paste(spec$candidates, collapse = \", \")), call = NULL, data = row), class = c(\"bigbang_warning_reexport_verification\", \"warning\", \"condition\"))",
+      "        base::warning(condition)",
+      "      }",
+      "      row",
+      "    })",
+      paste0("    base::structure(base::do.call(base::rbind, rows), class = c(\"", name, "_reexport_verification\", \"data.frame\"))"),
+      "  }",
+      "",
+      "#' Report re-export verification",
+      "#'",
+      "#' @return A data frame with installed-owner identity checks.",
+      "#' @export",
+      paste0(name, "_conflicts <- function() .reexport_verify(warn = FALSE)"),
+      "",
+      "#' @export",
+      paste0("print.", name, "_conflicts <- function(x, ...) {"),
+      "  if (base::nrow(x) == 0L) {",
+      "    base::cat(.meta_tr(\"No re-export resolutions found.\"), \"\\n\")",
+      "    return(base::invisible(x))",
+      "  }",
+      "  base::cat(.meta_tr(\"Re-export resolutions:\"), \"\\n\")",
+      "  for (index in base::seq_len(base::nrow(x))) {",
+      "    status <- if (base::is.na(x$identical[[index]])) .meta_tr(\"not verified\") else base::as.character(x$identical[[index]])",
+      "    missing <- if (base::nzchar(x$missing[[index]])) base::paste0(\"; \", .meta_trf(\"missing: %s\", x$missing[[index]])) else \"\"",
+      "    base::cat(\"  \", x$symbol[[index]], \": \", x$package[[index]], \" [\", x$resolution[[index]], \"; \", x$diagnosis[[index]], \"]; identical=\", status, missing, \"\\n\", sep = \"\")",
+      "  }",
+      "  base::invisible(x)",
+      "}"
+    ), collapse = "\n")
+  }
+
 
   # Templates for the generated runtime files.
   templates <- list(
-    reexports = '\n.component_reexport_specs <- {{{ reexport_specs }}}\n.reexport_state <- new.env(parent = emptyenv())\n.reexport_state$library <- character()\n.reexport_library_paths <- function() {\n  unique(c(.reexport_state$library[dir.exists(.reexport_state$library)], .libPaths()))\n}\n.set_reexport_library <- function(lib) {\n  .reexport_state$library <- normalizePath(lib, winslash = "/", mustWork = FALSE)\n  invisible(NULL)\n}\n\n.reexport_component_value <- function(package, symbol) {\n  if (!requireNamespace(package, quietly = TRUE,\n                        lib.loc = .reexport_library_paths())) {\n    return(function(...) {\n      stop(.meta_trf("Component package \'%s\' is not installed.", package), call. = FALSE)\n    })\n  }\n  getExportedValue(package, symbol)\n}\n\n.make_reexport_binding <- function(package, symbol) {\n  force(package)\n  force(symbol)\n  function(value) {\n    if (!missing(value)) {\n      stop(.meta_tr("Runtime re-export bindings are read-only."), call. = FALSE)\n    }\n    .reexport_component_value(package, symbol)\n  }\n}\n\n.install_reexport_bindings <- function(pkgname) {\n  namespace <- asNamespace(pkgname)\n  for (spec in .component_reexport_specs) {\n    makeActiveBinding(\n      spec$symbol,\n      .make_reexport_binding(spec$package, spec$symbol),\n      namespace\n    )\n  }\n  invisible(NULL)\n}\n',
+    reexports = '\n.component_reexport_specs <- {{{ reexport_specs }}}\n.reexport_state <- base::new.env(parent = base::emptyenv())\n.reexport_state$library <- base::character()\n.reexport_library_paths <- function() {\n  base::unique(base::c(.reexport_state$library[base::dir.exists(.reexport_state$library)], base::.libPaths()))\n}\n.set_reexport_library <- function(lib) {\n  .reexport_state$library <- base::normalizePath(lib, winslash = "/", mustWork = FALSE)\n  base::invisible(NULL)\n}\n\n.reexport_component_value <- function(package, symbol) {\n  if (!base::requireNamespace(package, quietly = TRUE,\n                        lib.loc = .reexport_library_paths())) {\n    return(function(...) {\n      base::stop(.meta_trf("Component package \'%s\' is not installed.", package), call. = FALSE)\n    })\n  }\n  base::getExportedValue(package, symbol)\n}\n\n.make_reexport_binding <- function(package, symbol) {\n  base::force(package)\n  base::force(symbol)\n  function(value) {\n    if (!base::missing(value)) {\n      base::stop(.meta_tr("Runtime re-export bindings are read-only."), call. = FALSE)\n    }\n    .reexport_component_value(package, symbol)\n  }\n}\n\n.install_reexport_bindings <- function(pkgname) {\n  namespace <- base::asNamespace(pkgname)\n  for (spec in .component_reexport_specs) {\n    base::makeActiveBinding(\n      spec$symbol,\n      .make_reexport_binding(spec$package, spec$symbol),\n      namespace\n    )\n  }\n  base::invisible(NULL)\n}\n',
     attach = '
 utils::globalVariables(".pkgs")
 .pkgs <- {{{ package_list }}}
 .component_names <- .pkgs
 
 attach_installed_packages <- function(pkgs, warn_missing = TRUE,
-                                      lib.loc = .libPaths()) {
-  already_attached <- gsub("^package:", "", search())
-  to_load <- setdiff(pkgs, already_attached)
-  missing <- to_load[!vapply(to_load, requireNamespace, logical(1),
+                                      lib.loc = base::.libPaths()) {
+  already_attached <- base::gsub("^package:", "", base::search())
+  to_load <- base::setdiff(pkgs, already_attached)
+  missing <- to_load[!base::vapply(to_load, base::requireNamespace, base::logical(1),
                              quietly = TRUE, lib.loc = lib.loc)]
-  if (warn_missing && length(missing) > 0) {
-    warning(gettextf(
+  if (warn_missing && base::length(missing) > 0) {
+    base::warning(base::gettextf(
       "Not installed: %s. Run {{{ install_call }}} to install them.",
-      paste(missing, collapse = ", "), domain = "R-{{ name }}"
+      base::paste(missing, collapse = ", "), domain = "R-{{ name }}"
     ), call. = FALSE)
   }
-  to_load <- setdiff(to_load, missing)
-  if (length(to_load) > 0) {
-    suppressPackageStartupMessages(
-      lapply(to_load, library, character.only = TRUE, lib.loc = lib.loc)
+  to_load <- base::setdiff(to_load, missing)
+  if (base::length(to_load) > 0) {
+    base::suppressPackageStartupMessages(
+      base::lapply(to_load, base::library, character.only = TRUE, lib.loc = lib.loc)
     )
   }
-  invisible(list(attached = to_load, missing = missing))
+  base::invisible(base::list(attached = to_load, missing = missing))
 }
 
 #\' Attach installed local packages
@@ -1221,27 +1299,27 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
 #\' }
 {{ name }}_install <- function(pkg_dir{{{ pkg_dir_default }}},
                                ext = NULL,
-                               cran_deps = c("skip", "error", "install"),
-                               repos = getOption("repos"),
-                               verbose = getOption("bigbang.verbose", interactive()),
+                               cran_deps = base::c("skip", "error", "install"),
+                               repos = base::getOption("repos"),
+                               verbose = base::getOption("bigbang.verbose", base::interactive()),
                                force = FALSE,
                                upgrade = "{{ install_upgrade }}",
                                only = NULL,
-                               lib = .libPaths()[[1L]]) {
-  cran_deps <- match.arg(cran_deps)
-  upgrade <- resolve_upgrade_policy(force, upgrade, missing(upgrade))
+                               lib = base::.libPaths()[[1L]]) {
+  cran_deps <- base::match.arg(cran_deps)
+  upgrade <- resolve_upgrade_policy(force, upgrade, base::missing(upgrade))
   # An empty pkg_dir means the shipped archive directory was not found, which
   # produces a misleading path further down. Say what is wrong instead.
-  if (!is.character(pkg_dir) || length(pkg_dir) < 1L || anyNA(pkg_dir) ||
-      any(!nzchar(pkg_dir))) {
-    stop(.meta_tr(
+  if (!base::is.character(pkg_dir) || base::length(pkg_dir) < 1L || base::anyNA(pkg_dir) ||
+      base::any(!base::nzchar(pkg_dir))) {
+    base::stop(.meta_tr(
       "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives."
     ), call. = FALSE)
   }
-  missing_dirs <- pkg_dir[!dir.exists(pkg_dir)]
-  if (length(missing_dirs) > 0L) {
+  missing_dirs <- pkg_dir[!base::dir.exists(pkg_dir)]
+  if (base::length(missing_dirs) > 0L) {
     stop(.meta_trf("The archive directory does not exist: %s",
-                   paste(missing_dirs, collapse = ", ")),
+                   base::paste(missing_dirs, collapse = ", ")),
          call. = FALSE)
   }
   packages <- {{{ local_packages }}}
@@ -1251,54 +1329,55 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
     repos = repos, cran_deps = cran_deps, upgrade = upgrade,
     only = only, lib = lib
   )
-  if (length(result$failed) > 0) {
-    details <- paste0(
-      names(result$failed), ": ", unlist(result$failed, use.names = FALSE)
+  if (base::length(result$failed) > 0) {
+    details <- base::paste0(
+      base::names(result$failed), ": ", base::unlist(result$failed, use.names = FALSE)
     )
-    condition <- structure(
+    condition <- base::structure(
       list(
-        message = gettextf(
+        message = base::gettextf(
           "Could not install all components: %s",
-          paste(details, collapse = "; "), domain = "R-{{ name }}"
+          base::paste(details, collapse = "; "), domain = "R-{{ name }}"
         ),
         call = NULL,
         failures = result$failed
       ),
       class = c("bigbang_error_install", "bigbang_error", "error", "condition")
     )
-    stop(condition)
+    base::stop(condition)
   }
-  if (length(result$skipped) > 0L) {
-    warning(gettextf(
+  if (base::length(result$skipped) > 0L) {
+    base::warning(base::gettextf(
       "Some components were skipped because non-local dependencies are missing: %s. Install those dependencies, or call {{{ install_call_repo }}} to obtain them from a repository.",
-      paste(names(result$skipped), collapse = ", "), domain = "R-{{ name }}"
+      base::paste(base::names(result$skipped), collapse = ", "), domain = "R-{{ name }}"
     ), call. = FALSE)
   }
-  if (isTRUE(verbose) && length(result$pulled_in) > 0L) {
-    message(.meta_trf(
+  result$reexport_verification <- {{{ reexport_verification_call }}}
+  if (base::isTRUE(verbose) && base::length(result$pulled_in) > 0L) {
+      base::message(.meta_trf(
       "Added local dependencies of selected components: %s",
-      paste(result$pulled_in, collapse = ", ")
+      base::paste(result$pulled_in, collapse = ", ")
     ))
   }
-  if (isTRUE(verbose) && interactive() && length(result$unchanged) > 0L) {
-    message(.meta_trf(
+  if (base::isTRUE(verbose) && base::interactive() && base::length(result$unchanged) > 0L) {
+      base::message(.meta_trf(
       "Use force = TRUE or upgrade = \'always\' to reinstall unchanged packages: %s",
-      paste(names(result$unchanged), collapse = ", ")
+      base::paste(base::names(result$unchanged), collapse = ", ")
     ))
   }
   # A skipped component was just reported with its reason and the call that
   # fixes it, so attaching must not follow it with a vaguer hint.
-  attach_names <- vapply(
+  attach_names <- base::vapply(
     result$selected,
     function(item) resolve_component_spec(item, ext)$package,
     character(1L)
   )
   attach_installed_packages(
     attach_names,
-    warn_missing = length(result$skipped) == 0L,
+    warn_missing = base::length(result$skipped) == 0L,
     lib.loc = lib
   )
-  invisible(result)
+  base::invisible(result)
 }
 
 #\' Deprecated alias for `{{ name }}_attach()`
@@ -1328,9 +1407,9 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
 #\' }
 
 {{ name }}_detach <- function() {
-  search_entries <- paste0("package:", .pkgs)
-  lapply(search_entries[search_entries %in% search()], detach, character.only = TRUE)
-  invisible()
+  search_entries <- base::paste0("package:", .pkgs)
+  base::lapply(search_entries[search_entries %in% base::search()], base::detach, character.only = TRUE)
+  base::invisible()
 }
 
 #\' List metapackage components
@@ -1359,8 +1438,8 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
 #\'   {{ name }}_attach_all()
 #\' }
 {{ name }}_attach_all <- function() {
-  lapply(.pkgs, library, character.only = TRUE)
-  invisible()
+  base::lapply(.pkgs, base::library, character.only = TRUE)
+  base::invisible()
 }
 
 ',
@@ -1388,8 +1467,8 @@ style_startup_text <- function(x) {
 
 package_version <- function(x) {
   version <- base::unclass(utils::packageVersion(x))[[1]]
-  if (length(version) > 3 && requireNamespace("cli", quietly = TRUE)) {
-    version[4:length(version)] <- cli::col_red(as.character(version[4:length(version)]))
+  if (base::length(version) > 3 && base::requireNamespace("cli", quietly = TRUE)) {
+    version[4:base::length(version)] <- cli::col_red(base::as.character(version[4:base::length(version)]))
   }
   paste0(version, collapse = ".")
 }
@@ -1762,6 +1841,7 @@ zzz = '
           partials = list()
         )
         content <- .drop_regular_comment_lines(content)
+        content <- qualify_runtime_calls(content)
 
         # Reject empty rendered output
         if (nchar(content) == 0) {

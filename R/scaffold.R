@@ -129,7 +129,7 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
     ".pkgs", ".component_names", ".component_specs",
     ".component_reexport_specs", ".reexport_state", ".reexport_library_paths",
     ".set_reexport_library", ".reexport_component_value",
-    ".make_reexport_binding", ".install_reexport_bindings",
+    ".make_reexport_binding", ".install_reexport_bindings", ".reexport_verify",
     "attach_installed_packages", ".bigbang_abort",
     "install_packages_in_order", "resolve_upgrade_policy",
     "with_install_library_path", "install_source_component",
@@ -307,13 +307,14 @@ write_metapackage_readme <- function(name, project_dir,
         "loading their component package.",
         "An object restored with readRDS() does not load a component by itself,",
         "so base R cannot dispatch that component's S3 method until it is loaded.",
-        "When several components export the same symbol, identical import origins",
-        "are deduplicated only when a conservative static proof succeeds.",
-        "Use reexport_prefer = c(symbol = \"component\") to choose a provider,",
-        "or reexport_exclude = \"symbol\" to omit it.",
-        "Unproven collisions stop generation; dry_run, man/reexports.Rd, and",
+        "When several components export the same symbol, every collision requires",
+        "reexport_prefer = c(symbol = \"component\") or reexport_exclude = \"symbol\".",
+        "Static analysis cannot prove that two exported objects are the same at",
+        "runtime. Diagnostics label collisions as probable_same_object,",
+        "distinct_definitions, or undetermined; unchosen collisions stop generation.",
+        "dry_run, man/reexports.Rd, and",
         paste0(name, "_conflicts() report the selected resolutions and checks installed"),
-        "same-origin owners without installing missing components.",
+        "installed owners without installing missing components.",
         "If on_component_error = \"skip\" omits a required owner, generation errors",
         "instead of leaving a binding that points to a component that does not travel."
       )
@@ -519,9 +520,10 @@ write_basic_vignette <- function(name, packages, project_dir,
           "package namespace; explicit exports are exposed through read-only bindings.\n\n",
           "## Re-export collisions\n\n",
           "Use `reexport_prefer = c(symbol = \"component\")` to choose a provider or ",
-          "`reexport_exclude = \"symbol\"` to omit a symbol. Same-origin exports are ",
-          "deduplicated only after a conservative static proof over NAMESPACE, parsed ",
-          "R source, and `R/sysdata.rda`; unresolved collisions stop generation.\n\n"
+          "`reexport_exclude = \"symbol\"` to omit a symbol. Every collision requires ",
+          "one of those choices because static analysis cannot prove that two exported ",
+          "objects are the same at runtime. Diagnostics label collisions as ",
+          "`probable_same_object`, `distinct_definitions`, or `undetermined`.\n\n"
         )
       } else {
         "package namespace; they are not copied into this metapackage namespace.\n\n"

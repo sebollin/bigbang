@@ -341,6 +341,18 @@
     }
   }
   if (length(components) == 0L) {
+    if (isTRUE(reexport) && nrow(omitted) > 0L) {
+      .bigbang_abort(
+        "bigbang_error_reexport_skipped",
+        .bb_trf(
+          "No re-export components remain after skip: %s. Repair the omitted archive or choose a complete generation.",
+          paste(paste0(omitted$component, " (", omitted$reason, ")"),
+                collapse = "; ")
+        ),
+        symbols = character(), components = omitted$component,
+        skipped = omitted
+      )
+    }
     stop(.bb_tr("No valid component archives remain after applying the component error policy."),
          call. = FALSE)
   }
@@ -367,6 +379,21 @@
     components <- components[!dependent]
     component_packages <- vapply(components, `[[`, character(1L), "package")
     if (length(components) == 0L) {
+      if (isTRUE(reexport) && nrow(omitted) > 0L) {
+        .bigbang_abort(
+          "bigbang_error_reexport_skipped",
+          .bb_trf(
+            paste0(
+              "All re-export components were omitted by skip: %s. Repair the ",
+              "omitted archive or remove dependent components from the generation."
+            ),
+            paste(paste0(omitted$component, " (", omitted$reason, ")"),
+                  collapse = "; ")
+          ),
+          symbols = character(), components = omitted$component,
+          skipped = omitted
+        )
+      }
       stop(.bb_tr("No valid component archives remain after propagating omitted dependencies."),
            call. = FALSE)
     }
@@ -497,6 +524,8 @@
       )
     }
     reexport_evidence <- .reexport_source_evidence(package_root)
+    reexport_evidence$native <- length(.or_null(namespace$dynlibs, list())) > 0L ||
+      length(.or_null(namespace$nativeRoutines, list())) > 0L
   }
 
   list(
@@ -851,7 +880,8 @@
 
 .reexport_empty_evidence <- function() {
   list(
-    assignments = list(), calls = list(), dynamic = list(),
+    assignments = list(), calls = list(), dynamic = list(), mutations = list(),
+    indirect = list(), native = FALSE,
     parse_errors = list(), sysdata_names = character(),
     sysdata_error = NULL
   )
@@ -949,8 +979,8 @@
 .reexport_parse_source <- function(path, package_root) {
   label <- .reexport_source_label(path, package_root)
   evidence <- list(
-    assignments = list(), calls = list(), dynamic = list(),
-    parse_errors = list()
+    assignments = list(), calls = list(), dynamic = list(), mutations = list(),
+    indirect = list(), parse_errors = list()
   )
   parsed <- tryCatch(
     parse(file = path, keep.source = TRUE),
@@ -964,6 +994,13 @@
   }
   data <- utils::getParseData(parsed, includeText = TRUE)
   if (is.null(data) || nrow(data) == 0L) return(evidence)
+
+  binder_names <- c(
+    "assign", "delayedAssign", "makeActiveBinding", "list2env", "sys.source",
+    "assignInMyNamespace", "assignInNamespace", "source", "load", "attach",
+    "setGeneric", "setClass", "setRefClass", "setValidity", "setGroupGeneric",
+    "setMethod"
+  )
 
   assignment_tokens <- c(
     "LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2"
@@ -990,13 +1027,35 @@
       evidence$assignments[[length(evidence$assignments) + 1L]] <- list(
         symbol = target, file = label, line = assignment$line1[[1L]]
       )
+    } else {
+      target_expression <- tryCatch(
+        parse(text = paste0("function() ", candidates$text[[index]]))[[1L]][[3L]],
+        error = function(e) NULL
+      )
+      if (is.call(target_expression) &&
+            as.character(target_expression[[1L]])[[1L]] %in%
+              c("$", "[[", "@")) {
+        extracted <- if (length(target_expression) >= 3L) {
+          target_expression[[3L]]
+        } else {
+          NULL
+        }
+        literal <- if (is.symbol(extracted)) {
+          as.character(extracted)
+        } else if (is.character(extracted) && length(extracted) == 1L) {
+          extracted
+        } else {
+          NULL
+        }
+        evidence$mutations[[length(evidence$mutations) + 1L]] <- list(
+          symbol = literal, name = as.character(target_expression[[1L]])[[1L]],
+          file = label, line = assignment$line1[[1L]]
+        )
+      }
     }
   }
 
-  target_calls <- c(
-    "assign", "delayedAssign", "makeActiveBinding", "setGeneric",
-    "setClass", "setRefClass", "setValidity", "setGroupGeneric", "setMethod"
-  )
+  target_calls <- binder_names
   function_rows <- which(data$token == "SYMBOL_FUNCTION_CALL")
   for (row_index in function_rows) {
     function_row <- data[row_index, , drop = FALSE]
@@ -1016,18 +1075,56 @@
     is_env_bind <- identical(qualification$package, "rlang") &&
       startsWith(function_name, "env_bind")
     is_namespace_assign <- identical(qualification$package, "utils") &&
-      identical(function_name, "assignInMyNamespace")
-    is_dynamic <- function_name %in% c("list2env", "sys.source") ||
+      function_name %in% c("assignInMyNamespace", "assignInNamespace")
+    call_text <- data[data$id == call_id, "text", drop = TRUE]
+    is_dynamic <- function_name %in% c(
+      "list2env", "sys.source", "source", "load", "attach"
+    ) ||
       is_env_bind || is_namespace_assign ||
-      (identical(function_name, "eval") && !is.null(first) &&
-         !isTRUE(first$literal) &&
-         grepl("(^|[[(,[:space:]])parse[[:space:]]*\\(",
-               data[data$id == call_id, "text", drop = TRUE], perl = TRUE))
+      (function_name %in% c("eval", "evalq") && !is.null(first) &&
+         grepl("(^|[[(,[:space:]])(parse|str2lang|str2expression)[[:space:]]*\\(",
+               call_text, perl = TRUE))
     if (is_dynamic) {
       evidence$dynamic[[length(evidence$dynamic) + 1L]] <- record
     }
     if (function_name %in% target_calls) {
       evidence$calls[[length(evidence$calls) + 1L]] <- record
+    }
+    if (!is.null(qualification$package) &&
+          !identical(qualification$package, "base") &&
+          any(data$text %in% c(".onLoad", ".onAttach"))) {
+      evidence$indirect[[length(evidence$indirect) + 1L]] <- list(
+        name = paste0(qualification$package, "::", function_name),
+        file = label, line = function_row$line1[[1L]]
+      )
+    }
+  }
+
+  # A binder can be passed as a value or by name (for example to lapply(),
+  # do.call(), get(), or match.fun()). Parse data retains both forms.
+  binder_rows <- data[
+    data$token %in% c("SYMBOL", "SYMBOL_FUNCTION_CALL", "STR_CONST"),
+    , drop = FALSE
+  ]
+  if (nrow(binder_rows) > 0L) {
+    string_rows <- binder_rows$token == "STR_CONST"
+    if (any(string_rows)) {
+      binder_rows$text[string_rows] <- vapply(
+        binder_rows$text[string_rows], function(value) {
+          parsed <- tryCatch(parse(text = value)[[1L]], error = function(e) NULL)
+          if (is.character(parsed) && length(parsed) == 1L) parsed else value
+        }, character(1L)
+      )
+    }
+    binder_rows <- binder_rows[binder_rows$text %in% binder_names, , drop = FALSE]
+  }
+  if (nrow(binder_rows) > 0L) {
+    for (index in seq_len(nrow(binder_rows))) {
+      row <- binder_rows[index, , drop = FALSE]
+      evidence$mutations[[length(evidence$mutations) + 1L]] <- list(
+        symbol = NULL, name = row$text[[1L]], file = label,
+        line = row$line1[[1L]]
+      )
     }
   }
   evidence
@@ -1038,13 +1135,15 @@
   r_dir <- file.path(package_root, "R")
   if (dir.exists(r_dir)) {
     files <- sort(list.files(
-      r_dir, pattern = "\\.[Rr]$", full.names = TRUE, recursive = TRUE
+      r_dir, pattern = "\\.(R|r|S|s|q)$", full.names = TRUE, recursive = TRUE
     ))
     parsed <- lapply(files, .reexport_parse_source, package_root = package_root)
     evidence$assignments <- unlist(lapply(parsed, `[[`, "assignments"),
                                    recursive = FALSE)
     evidence$calls <- unlist(lapply(parsed, `[[`, "calls"), recursive = FALSE)
     evidence$dynamic <- unlist(lapply(parsed, `[[`, "dynamic"), recursive = FALSE)
+    evidence$mutations <- unlist(lapply(parsed, `[[`, "mutations"), recursive = FALSE)
+    evidence$indirect <- unlist(lapply(parsed, `[[`, "indirect"), recursive = FALSE)
     evidence$parse_errors <- unlist(lapply(parsed, `[[`, "parse_errors"),
                                     recursive = FALSE)
   }
@@ -1455,6 +1554,7 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
 .reexport_empty_table <- function() {
   data.frame(
     symbol = character(), package = character(), resolution = character(),
+    candidates = character(), diagnosis = character(),
     stringsAsFactors = FALSE
   )
 }
@@ -1464,7 +1564,8 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
 }
 
 .reexport_prefer_literal <- function(symbol, package) {
-  .r_ascii_literal(stats::setNames(package, symbol))
+  value <- .r_ascii_literal(stats::setNames(package, symbol))
+  sub("^c\\((.*)\\)$", "\\1", value)
 }
 
 .reexport_import_sources <- function(component, symbol, components) {
@@ -1501,11 +1602,107 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
       }
     }
   }
-  sources
+  if (length(sources) == 0L) return(sources)
+  keys <- vapply(
+    sources, function(source) {
+      paste(source$package, source$kind, source$external, sep = "\u001f")
+    }, character(1L)
+  )
+  sources[!duplicated(keys)]
 }
 
 .reexport_probe_failure <- function(reason, skipped = FALSE) {
   list(demonstrated = FALSE, skipped = isTRUE(skipped), reason = reason)
+}
+
+.reexport_probe_reasons <- function(component, symbol, sources) {
+  evidence <- .or_null(
+    component$reexport_evidence, .reexport_empty_evidence()
+  )
+  reasons <- character()
+  assignments <- Filter(
+    function(item) identical(item$symbol, symbol),
+    .or_null(evidence$assignments, list())
+  )
+  if (length(assignments) > 0L) {
+    reasons <- c(reasons, vapply(assignments, function(item) {
+      .bb_trf(
+        "Local definition of re-export symbol '%s' in %s:%d.",
+        symbol, item$file, item$line
+      )
+    }, character(1L)))
+  }
+
+  if (!is.null(evidence$sysdata_error)) {
+    reasons <- c(reasons, .bb_trf(
+      "Could not inspect R/sysdata.rda: %s", evidence$sysdata_error
+    ))
+  } else if (symbol %in% .or_null(evidence$sysdata_names, character())) {
+    reasons <- c(reasons, .bb_trf(
+      "R/sysdata.rda contains re-export symbol '%s'.", symbol
+    ))
+  }
+
+  mutation_items <- c(
+    .or_null(evidence$mutations, list()),
+    .or_null(evidence$calls, list()),
+    .or_null(evidence$dynamic, list()),
+    .or_null(evidence$indirect, list())
+  )
+  if (length(mutation_items) > 0L) {
+    keys <- vapply(mutation_items, function(item) {
+      paste(
+        .or_null(item$name, "mutation"), .or_null(item$file, ""),
+        .or_null(item$line, ""), sep = "\u001f"
+      )
+    }, character(1L))
+    mutation_items <- mutation_items[!duplicated(keys)]
+    reasons <- c(reasons, vapply(mutation_items, function(item) {
+      .bb_trf(
+        "Binder or namespace mutation via %s in %s:%d; it is not known whether it changes '%s'.",
+        .or_null(item$name, "mutation"), item$file, item$line, symbol
+      )
+    }, character(1L)))
+  }
+
+  if (isTRUE(evidence$native)) {
+    reasons <- c(reasons, .bb_tr(
+      "NAMESPACE declares useDynLib(), so the exported object's origin is undetermined."
+    ))
+  }
+
+  if (length(sources) == 0L) {
+    reasons <- c(reasons, .bb_trf(
+      "NAMESPACE does not declare an import source for '%s'.", symbol
+    ))
+  } else {
+    reasons <- c(reasons, vapply(sources, function(source) {
+      if (identical(source$kind, "full")) {
+        .bb_trf(
+          "NAMESPACE imports complete '%s', which could provide '%s'.",
+          source$package, symbol
+        )
+      } else if (isTRUE(source$external)) {
+        .bb_trf(
+          "NAMESPACE imports '%s' from external package '%s'.",
+          symbol, source$package
+        )
+      } else {
+        .bb_trf(
+          "NAMESPACE imports '%s' from component '%s'.",
+          symbol, source$package
+        )
+      }
+    }, character(1L)))
+  }
+
+  parse_errors <- .or_null(evidence$parse_errors, list())
+  if (length(parse_errors) > 0L) {
+    reasons <- c(reasons, vapply(parse_errors, function(item) {
+      .bb_trf("Could not parse R file %s: %s", item$file, item$error)
+    }, character(1L)))
+  }
+  unique(reasons)
 }
 
 .reexport_probe <- function(component, symbol, components, omitted_names,
@@ -1519,28 +1716,45 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   }
 
   sources <- .reexport_import_sources(component, symbol, components)
+  evidence <- .or_null(
+    component$reexport_evidence, .reexport_empty_evidence()
+  )
+  reasons <- .reexport_probe_reasons(component, symbol, sources)
+  local_definition <- any(vapply(
+    .or_null(evidence$assignments, list()),
+    function(item) identical(item$symbol, symbol), logical(1L)
+  ))
+  has_blocker <- isTRUE(evidence$native) ||
+    length(.or_null(evidence$mutations, list())) > 0L ||
+    length(.or_null(evidence$calls, list())) > 0L ||
+    length(.or_null(evidence$dynamic, list())) > 0L ||
+    length(.or_null(evidence$indirect, list())) > 0L ||
+    length(.or_null(evidence$parse_errors, list())) > 0L ||
+    !is.null(evidence$sysdata_error) ||
+    symbol %in% .or_null(evidence$sysdata_names, character()) ||
+    (length(sources) > 0L && local_definition)
+  if (has_blocker) {
+    return(.reexport_probe_failure(paste(reasons, collapse = "; ")))
+  }
   if (length(sources) == 0L) {
     return(list(
       demonstrated = TRUE, skipped = FALSE, root_type = "component",
-      root = package, reason = NULL
+      root = package, reason = paste(reasons, collapse = "; "),
+      local_definition = local_definition
     ))
   }
   if (length(sources) != 1L) {
-    return(.reexport_probe_failure(.bb_trf(
-      "NAMESPACE does not declare a unique import source for '%s'.", symbol
-    )))
+    return(.reexport_probe_failure(paste(reasons, collapse = "; ")))
   }
   source <- sources[[1L]]
   if (identical(source$kind, "full") && isTRUE(source$external)) {
-    return(.reexport_probe_failure(.bb_trf(
-      "NAMESPACE imports '%s' from external package '%s' with import().",
-      symbol, source$package
-    )))
+    return(.reexport_probe_failure(paste(reasons, collapse = "; ")))
   }
   if (source$package %in% omitted_names) {
     return(.reexport_probe_failure(.bb_trf(
-      "NAMESPACE imports '%s' from component '%s', which was skipped.",
-      symbol, source$package
+      "NAMESPACE imports '%s' from component '%s', which was skipped: %s",
+      symbol, source$package,
+      .or_null(names(omitted_names), source$package)
     ), skipped = TRUE))
   }
   external_source <- identical(source$kind, "from") && isTRUE(source$external)
@@ -1561,67 +1775,6 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
         symbol, source$package
       )))
     }
-  }
-
-  evidence <- .or_null(
-    component$reexport_evidence, .reexport_empty_evidence()
-  )
-  assignment <- Filter(
-    function(item) identical(item$symbol, symbol),
-    .or_null(evidence$assignments, list())
-  )
-  if (length(assignment) > 0L) {
-    item <- assignment[[1L]]
-    return(.reexport_probe_failure(.bb_trf(
-      "Assignment to re-export symbol '%s' in %s:%d.",
-      symbol, item$file, item$line
-    )))
-  }
-
-  calls <- Filter(function(item) {
-    !isTRUE(item$literal) || identical(item$value, symbol)
-  }, .or_null(evidence$calls, list()))
-  if (length(calls) > 0L) {
-    item <- calls[[1L]]
-    if (isTRUE(item$literal)) {
-      return(.reexport_probe_failure(.bb_trf(
-        "Call %s targets re-export symbol '%s' in %s:%d.",
-        item$name, symbol, item$file, item$line
-      )))
-    }
-    return(.reexport_probe_failure(.bb_trf(
-      "Call %s has a non-literal first argument in %s:%d.",
-      item$name, item$file, item$line
-    )))
-  }
-
-  dynamic <- .or_null(evidence$dynamic, list())
-  if (length(dynamic) > 0L) {
-    item <- dynamic[[1L]]
-    return(.reexport_probe_failure(.bb_trf(
-      "Dynamic namespace mutation via %s in %s:%d.",
-      item$name, item$file, item$line
-    )))
-  }
-
-  parse_errors <- .or_null(evidence$parse_errors, list())
-  if (length(parse_errors) > 0L) {
-    item <- parse_errors[[1L]]
-    return(.reexport_probe_failure(.bb_trf(
-      "Could not parse R file %s: %s", item$file, item$error
-    )))
-  }
-
-  sysdata_error <- evidence$sysdata_error
-  if (!is.null(sysdata_error)) {
-    return(.reexport_probe_failure(.bb_trf(
-      "Could not inspect R/sysdata.rda: %s", sysdata_error
-    )))
-  }
-  if (symbol %in% .or_null(evidence$sysdata_names, character())) {
-    return(.reexport_probe_failure(.bb_trf(
-      "R/sysdata.rda contains re-export symbol '%s'.", symbol
-    )))
   }
 
   if (external_source) {
@@ -1659,6 +1812,40 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   names(exports_by_component) <- component_names
   exported_symbols <- sort(unique(unlist(exports_by_component, use.names = FALSE)))
   prefer_symbols <- names(prefer)
+  omitted_names <- if (is.null(omitted)) {
+    character()
+  } else {
+    unique(omitted$component[nzchar(omitted$component)])
+  }
+  omitted_prefer <- prefer_symbols[unname(prefer[prefer_symbols]) %in% omitted_names]
+  if (length(omitted_prefer) > 0L) {
+    skipped_table <- data.frame(
+      symbol = omitted_prefer,
+      components = unname(prefer[omitted_prefer]),
+      reason = vapply(unname(prefer[omitted_prefer]), function(package) {
+        reasons <- omitted$reason[omitted$component == package]
+        if (length(reasons) == 0L) {
+          .bb_trf("Component '%s' was omitted by skip.", package)
+        } else {
+          paste(reasons, collapse = "; ")
+        }
+      }, character(1L)), stringsAsFactors = FALSE
+    )
+    .bigbang_abort(
+      "bigbang_error_reexport_skipped",
+      .bb_trf(
+        paste0(
+          "Cannot use reexport_prefer for omitted component(s): %s. The ",
+          "component was omitted by skip; repair it or choose an installed ",
+          "candidate."
+        ),
+        paste(paste0(skipped_table$symbol, " = ", skipped_table$components,
+                     " (", skipped_table$reason, ")"), collapse = "; ")
+      ),
+      symbols = skipped_table$symbol, components = skipped_table$components,
+      skipped = skipped_table
+    )
+  }
   requested <- unique(c(prefer_symbols, exclude))
   unknown <- setdiff(requested, exported_symbols)
   if (length(unknown) > 0L) {
@@ -1738,11 +1925,6 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   sorted_components <- components[order(component_names)]
   installation_order <- .component_topological_order(sorted_components)
   owner_rank <- match(component_names, installation_order)
-  omitted_names <- if (is.null(omitted)) {
-    character()
-  } else {
-    unique(omitted$component[nzchar(omitted$component)])
-  }
   rows <- list()
   specs <- list()
   collisions <- list()
@@ -1766,23 +1948,12 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
       }
       rows[[length(rows) + 1L]] <- data.frame(
         symbol = symbol, package = owners[[1L]], resolution = "unique",
+        candidates = owners[[1L]], diagnosis = NA_character_,
         stringsAsFactors = FALSE
       )
       specs[[length(specs) + 1L]] <- list(
         symbol = symbol, package = owners[[1L]], resolution = "unique",
-        candidates = owners
-      )
-      next
-    }
-    if (symbol %in% prefer_symbols) {
-      selected <- unname(prefer[[symbol]])
-      rows[[length(rows) + 1L]] <- data.frame(
-        symbol = symbol, package = selected, resolution = "preferred",
-        stringsAsFactors = FALSE
-      )
-      specs[[length(specs) + 1L]] <- list(
-        symbol = symbol, package = selected, resolution = "preferred",
-        candidates = owners
+        candidates = owners, diagnosis = NA_character_
       )
       next
     }
@@ -1807,31 +1978,46 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
     } else {
       character()
     }
-    if (all(demonstrated) && length(unique(roots)) == 1L) {
-      root <- probes[[1L]]$root
-      root_type <- probes[[1L]]$root_type
-      selected <- if (identical(root_type, "component")) root else owners[[1L]]
+    local_definition <- vapply(owners, function(owner) {
+      evidence <- .or_null(
+        components[[match(owner, component_names)]]$reexport_evidence,
+        .reexport_empty_evidence()
+      )
+      any(vapply(.or_null(evidence$assignments, list()),
+                 function(item) identical(item$symbol, symbol), logical(1L)))
+    }, logical(1L))
+    diagnosis <- if (all(demonstrated) && length(unique(roots)) == 1L) {
+      "probable_same_object"
+    } else if (sum(local_definition) >= 2L) {
+      "distinct_definitions"
+    } else {
+      "undetermined"
+    }
+    reason <- vapply(seq_along(probes), function(index) {
+      probe <- probes[[index]]
+      detail <- if (isTRUE(probe$demonstrated)) {
+        paste0("root ", probe$root_type, " ", probe$root)
+      } else {
+        probe$reason
+      }
+      paste0(owners[[index]], ": ", detail)
+    }, character(1L))
+    if (symbol %in% prefer_symbols) {
+      selected <- unname(prefer[[symbol]])
       rows[[length(rows) + 1L]] <- data.frame(
-        symbol = symbol, package = selected, resolution = "same_origin",
+        symbol = symbol, package = selected, resolution = "preferred",
+        candidates = paste(owners, collapse = ", "), diagnosis = diagnosis,
         stringsAsFactors = FALSE
       )
       specs[[length(specs) + 1L]] <- list(
-        symbol = symbol, package = selected, resolution = "same_origin",
-        candidates = owners
+        symbol = symbol, package = selected, resolution = "preferred",
+        candidates = owners, diagnosis = diagnosis
       )
     } else {
-      reason <- vapply(seq_along(probes), function(index) {
-        probe <- probes[[index]]
-        detail <- if (isTRUE(probe$demonstrated)) {
-          paste0("root ", probe$root_type, " ", probe$root)
-        } else {
-          probe$reason
-        }
-        paste0(owners[[index]], ": ", detail)
-      }, character(1L))
       collisions[[length(collisions) + 1L]] <- data.frame(
         symbol = symbol, candidates = paste(owners, collapse = ", "),
-        reason = paste(reason, collapse = "; "), stringsAsFactors = FALSE
+        reason = paste(reason, collapse = "; "), diagnosis = diagnosis,
+        stringsAsFactors = FALSE
       )
     }
   }
@@ -1850,19 +2036,43 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   }
   if (length(collisions) > 0L) {
     collision_table <- do.call(rbind, collisions)
-    choices <- vapply(seq_len(nrow(collision_table)), function(index) {
-      candidates <- strsplit(collision_table$candidates[[index]], ", ", fixed = TRUE)[[1L]]
-      paste0(collision_table$symbol[[index]], ": ",
-             .reexport_collision_choices(collision_table$symbol[[index]], candidates))
-    }, character(1L))
+    probable <- collision_table$diagnosis == "probable_same_object"
+    probable_choices <- if (any(probable)) {
+      paste(vapply(which(probable), function(index) {
+        candidates <- strsplit(collision_table$candidates[[index]], ", ", fixed = TRUE)[[1L]]
+        .reexport_prefer_literal(collision_table$symbol[[index]], candidates[[1L]])
+      }, character(1L)), collapse = ", ")
+    } else {
+      ""
+    }
+    other_choices <- if (any(!probable)) {
+      paste(vapply(which(!probable), function(index) {
+        paste0(collision_table$symbol[[index]], " (",
+               collision_table$diagnosis[[index]], "): ",
+               collision_table$candidates[[index]])
+      }, character(1L)), collapse = "; ")
+    } else {
+      ""
+    }
+    resolution_text <- paste(c(
+      if (nzchar(probable_choices)) paste0(
+        "For probable_same_object collisions, copy this: reexport_prefer = c(",
+        probable_choices, ")"
+      ) else NULL,
+      if (nzchar(other_choices)) paste0(
+        "For distinct_definitions and undetermined collisions, decide among these candidates: ",
+        other_choices
+      ) else NULL
+    ), collapse = "; ")
     .bigbang_abort(
       "bigbang_error_reexport_collision",
       .bb_trf(
-        "Cannot resolve re-export collision(s): %s. Candidates and proof failures: %s. Resolve with %s.",
+        "Cannot resolve re-export collision(s): %s. Candidates, diagnoses, and proof details: %s. %s.",
         paste(collision_table$symbol, collapse = ", "),
         paste(paste0(collision_table$symbol, " (", collision_table$candidates,
-                     "): ", collision_table$reason), collapse = "; "),
-        paste(choices, collapse = "; ")
+                     "; ", collision_table$diagnosis, "): ", collision_table$reason),
+              collapse = "; "),
+        resolution_text
       ),
       symbols = collision_table$symbol,
       components = collision_table$candidates,
@@ -2020,7 +2230,7 @@ diagnose_dependencies <- function(packages, pkg_dir = NULL, ext = ".tar.gz") {
       next
     }
 
-    r_files <- list.files(r_dir, pattern = "\\.[Rr]$", full.names = TRUE)
+    r_files <- list.files(r_dir, pattern = "\\.(R|r|S|s|q)$", full.names = TRUE)
 
     matrix_refs <- character(0)
     class_refs <- character(0)
@@ -2149,7 +2359,7 @@ detect_implicit_dependencies <- function(
         next
       }
 
-      r_files <- list.files(r_dir, pattern = "\\.[Rr]$", full.names = TRUE)
+      r_files <- list.files(r_dir, pattern = "\\.(R|r|S|s|q)$", full.names = TRUE)
 
       # Scan executable R tokens only. Comments and string literals are not
       # evidence that a component uses a package: a prose sentence containing

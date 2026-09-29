@@ -13,14 +13,21 @@
   writes never reach the project.
 
 - `create_metapackage()` now accepts `reexport_prefer` and `reexport_exclude`.
-  Unique exports and conservatively proven same-origin exports resolve
-  automatically; genuine collisions report candidates and static-proof reasons.
-  Generated packages expose the selected resolution in `reexports.Rd`,
-  `dry_run`, and `<meta>_conflicts()`.
+  Every collision requires one of them because static analysis cannot prove
+  object identity. Diagnostics classify collisions as `probable_same_object`,
+  `distinct_definitions`, or `undetermined`; the selected resolution is shown
+  in `reexports.Rd`, `dry_run`, and `<meta>_conflicts()`.
 
 - Re-export analysis uses the extracted NAMESPACE and parsed component source.
   A skipped component required by a selected binding is an explicit generation
   error, so generated bindings never point at an omitted package.
+
+## Bug fixes
+
+- Qualified every call emitted by the re-export templates to `base`, `utils`,
+  `tools`, or `methods`, fixing `reexport = TRUE` metapackages generated since
+  0.4.0 when a component exported one of those helper names. Added a poison
+  regression test and a control that reproduces the failure without qualification.
 
 # bigbang 0.4.0
 

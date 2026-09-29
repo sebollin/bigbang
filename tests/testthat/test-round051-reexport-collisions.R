@@ -74,7 +74,7 @@ round051_collision_condition <- function(expr) {
   tryCatch(expr, error = identity)
 }
 
-test_that("round 051 resolves simple, chain, and complete-import origins", {
+test_that("round 051 requires an explicit choice for every collision", {
   sandbox <- tempfile("bigbang-round051-origins-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -101,13 +101,21 @@ test_that("round 051 resolves simple, chain, and complete-import origins", {
     body = "# imported only", namespace_extra = "import(originra)",
     imports = "originra"
   )
-  result <- round051_create(
+  collision <- round051_collision_condition(round051_create(
     "originverse", c(origin_c, origin_full, origin_a, origin_b), destination,
     reexport = TRUE
+  ))
+  expect_s3_class(collision, "bigbang_error_reexport_collision")
+  expect_match(collision$message, "reexport_prefer = c\\(shared = \\\"originra\\\"\\)", perl = TRUE)
+
+  result <- round051_create(
+    "originverse", c(origin_c, origin_full, origin_a, origin_b), destination,
+    reexport = TRUE, reexport_prefer = c(shared = "originra")
   )
   expect_identical(result$reexports$symbol, "shared")
   expect_identical(result$reexports$package, "originra")
-  expect_identical(result$reexports$resolution, "same_origin")
+  expect_identical(result$reexports$resolution, "preferred")
+  expect_identical(result$reexports$diagnosis, "probable_same_object")
   expect_identical(result$reexport_excluded, character())
   expect_identical(result$reexports$package, "originra")
 
@@ -167,32 +175,32 @@ test_that("round 051 reports genuine collisions and every selected proof blocker
     condition
   }
 
-  local <- expect_collision("local", body = "s <- function() 'b'", reason = "Assignment")
+  local <- expect_collision("local", body = "s <- function() 'b'", reason = "Local definition")
   expect_match(local$message, "locala.*localb", perl = TRUE)
   expect_collision("onload", body = c(
     ".onLoad <- function(lib, pkg) assign('s', function() 'b', envir = asNamespace(pkg))"
-  ), reason = "Call assign targets")
+  ), reason = "Binder or namespace mutation via assign")
   expect_collision(
     "sysdat", body = "# imported only", sysdata = list(s = function() "b"),
     reason = "sysdata.rda contains"
   )
   expect_collision(
-    "generic", body = "setGeneric('s')", reason = "Call setGeneric targets"
+    "generic", body = "setGeneric('s')", reason = "Binder or namespace mutation via setGeneric"
   )
   expect_collision(
     "dynamic", body = "list2env(list(s = function() 'b'), envir = .GlobalEnv)",
-    reason = "Dynamic namespace mutation"
+    reason = "Binder or namespace mutation via list2env"
   )
   expect_collision(
-    "evaldyn", body = "eval(parse(text = 's <- 2'))", reason = "Dynamic namespace mutation"
+    "evaldyn", body = "eval(parse(text = 's <- 2'))", reason = "Binder or namespace mutation via eval"
   )
   expect_collision(
     "rlangdyn", body = "rlang::env_bind(.GlobalEnv, s = function() 'b')",
-    reason = "Dynamic namespace mutation"
+    reason = "Binder or namespace mutation via env_bind"
   )
   expect_collision(
     "utilsdyn", body = "utils::assignInMyNamespace('s', function() 'b')",
-    reason = "Dynamic namespace mutation"
+    reason = "Binder or namespace mutation via assignInMyNamespace"
   )
   expect_collision(
     "badparse", body = "# imported only",
@@ -201,7 +209,7 @@ test_that("round 051 reports genuine collisions and every selected proof blocker
   expect_collision(
     "dupe", body = "# imported only",
     namespace_extra = c("importFrom(dupea, s)", "importFrom(dupea, s)"),
-    reason = "unique import source"
+    reason = "root component dupea"
   )
 
   literal_calls <- c(
@@ -214,11 +222,11 @@ test_that("round 051 reports genuine collisions and every selected proof blocker
   for (call_name in names(literal_calls)) {
     expect_collision(
       paste0("call", call_name), body = unname(literal_calls[[call_name]]),
-      reason = paste0("Call ", call_name, " targets")
+      reason = paste0("Binder or namespace mutation via ", call_name)
     )
   }
   expect_collision(
-    "nonliteral", body = "setClass(x)", reason = "non-literal first argument"
+    "nonliteral", body = "setClass(x)", reason = "Binder or namespace mutation via setClass"
   )
 
   root_one <- round051_make_archive(
@@ -244,7 +252,7 @@ test_that("round 051 reports genuine collisions and every selected proof blocker
     "externalverse", c(external_root, external_import), destination, reexport = TRUE
   ))
   expect_s3_class(external, "bigbang_error_reexport_collision")
-  expect_match(external$data$reason, "external package 'utils'", fixed = TRUE)
+  expect_match(external$data$reason, "imports complete 'utils', which could provide 'head'", fixed = TRUE)
 })
 
 test_that("round 051 validates options, names, exclusions, preference, and order", {
@@ -399,7 +407,7 @@ test_that("round 051 uses an explicit hard rule for skipped re-export owners", {
   )
   child <- round051_make_archive(
     source_root, archive_dir, "skipchild", "s", body = "# imported only",
-    namespace_extra = "importFrom(skiporigin, s)"
+    namespace_extra = "importFrom(skiporigin, s)", imports = "skiporigin"
   )
   bytes <- readBin(origin, "raw", n = file.info(origin)$size)
   writeBin(bytes[seq_len(max(1L, length(bytes) %/% 2L))], origin)
@@ -410,7 +418,21 @@ test_that("round 051 uses an explicit hard rule for skipped re-export owners", {
   ))
   expect_s3_class(condition, "bigbang_error_reexport_skipped")
   expect_match(condition$message, "skiporigin", fixed = TRUE)
+  expect_match(condition$message, "omitted|skip", ignore.case = TRUE)
   expect_false(dir.exists(file.path(destination, "skipverse")))
+
+  child_prefer <- round051_make_archive(
+    source_root, archive_dir, "skipchildprefer", "s", body = "# imported only",
+    namespace_extra = "importFrom(skiporigin, s)"
+  )
+  preferred_condition <- round051_collision_condition(bigbang::create_metapackage(
+    "skippreferverse", c(origin, child_prefer), dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character(), reexport = TRUE,
+    reexport_prefer = c(s = "skiporigin"), on_component_error = "skip"
+  ))
+  expect_s3_class(preferred_condition, "bigbang_error_reexport_skipped")
+  expect_match(preferred_condition$message, "omitted|skip", ignore.case = TRUE)
 })
 
 test_that("round 051 exercises parser and proof guard edge cases", {
@@ -437,6 +459,154 @@ test_that("round 051 exercises parser and proof guard edge cases", {
   )
   expect_false(cycle$demonstrated)
   expect_match(cycle$reason, "cycle", ignore.case = TRUE)
+})
+
+test_that("round 053 covers the remaining evidence and proof branches", {
+  root <- tempfile("bigbang-round053-evidence-branches-")
+  dir.create(file.path(root, "R"), recursive = TRUE)
+  writeLines(c(
+    "x@s <- 1", "x[[name]] <- 1", "evalq(str2expression('s <- 1'))",
+    "lapply('s', delayedAssign, value = 1)",
+    "do.call('assign', list('s', 1))", "get('assign')('s', 1)",
+    ".onAttach <- function(lib, pkg) otherpkg::mutate()"
+  ), file.path(root, "R", "evidence.R"))
+  writeLines("s <- 1", file.path(root, "R", "extra.s"))
+  writeLines("s <- 1", file.path(root, "R", "extra.q"))
+  evidence <- bigbang:::.reexport_source_evidence(root)
+  expect_true(any(vapply(evidence$mutations, function(item) {
+    identical(item$name, "@") && identical(item$symbol, "s")
+  }, logical(1L))))
+  expect_true(any(vapply(evidence$mutations, function(item) {
+    identical(item$name, "[[") && !identical(item$symbol, "s")
+  }, logical(1L))))
+  expect_length(evidence$dynamic, 1L)
+  expect_true(any(vapply(evidence$indirect, function(item) {
+    identical(item$name, "otherpkg::mutate")
+  }, logical(1L))))
+
+  parse_evidence <- bigbang:::.reexport_empty_evidence()
+  parse_evidence$parse_errors <- list(
+    list(file = "R/broken.R", error = "bad")
+  )
+  no_import_parse <- list(
+    package = "root053parse", exports = "s", imports = list(),
+    reexport_evidence = parse_evidence
+  )
+  parse_probe <- bigbang:::.reexport_probe(
+    no_import_parse, "s", list(no_import_parse), character()
+  )
+  expect_false(parse_probe$demonstrated)
+  expect_match(parse_probe$reason, "Could not parse")
+
+  sysdata_evidence <- bigbang:::.reexport_empty_evidence()
+  sysdata_evidence$sysdata_names <- "s"
+  no_import_sysdata <- list(
+    package = "root053sysdata", exports = "s", imports = list(),
+    reexport_evidence = sysdata_evidence
+  )
+  sysdata_probe <- bigbang:::.reexport_probe(
+    no_import_sysdata, "s", list(no_import_sysdata), character()
+  )
+  expect_false(sysdata_probe$demonstrated)
+
+  external <- list(
+    package = "external053", exports = "s",
+    imports = list(list("utils", "s")),
+    reexport_evidence = bigbang:::.reexport_empty_evidence()
+  )
+  external_probe <- bigbang:::.reexport_probe(
+    external, "s", list(external), character()
+  )
+  expect_true(external_probe$demonstrated)
+  expect_identical(external_probe$root_type, "external")
+
+  parent <- list(
+    package = "parent053", exports = character(), imports = list(),
+    reexport_evidence = bigbang:::.reexport_empty_evidence()
+  )
+  child <- list(
+    package = "child053", exports = "s",
+    imports = list(list("parent053", "s")),
+    reexport_evidence = bigbang:::.reexport_empty_evidence()
+  )
+  missing_export <- bigbang:::.reexport_probe(
+    child, "s", list(child, parent), character()
+  )
+  expect_false(missing_export$demonstrated)
+  expect_false(missing_export$skipped)
+  missing_component <- child
+  missing_component$imports <- list(list("absent053", "s"))
+  absent <- bigbang:::.reexport_probe(
+    missing_component, "s", list(missing_component),
+    structure("absent053", names = "archive failed")
+  )
+  expect_true(absent$skipped)
+
+  multi <- child
+  multi$imports <- list(list("parent053", "s"), list("other053", "s"))
+  multi_sources <- bigbang:::.reexport_probe(
+    multi, "s", list(multi, parent), character()
+  )
+  expect_false(multi_sources$demonstrated)
+})
+
+test_that("round 053 labels every measured static-analysis escape as undetermined", {
+  sandbox <- tempfile("bigbang-round053-vectors-")
+  source_root <- file.path(sandbox, "sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archive_dir)
+  dir.create(destination)
+
+  cases <- list(
+    dollar = list(body = "ns$s <- function() 'child'"),
+    extract = list(body = "ns[[\"s\"]] <- function() 'child'"),
+    do_call = list(body = "do.call(\"assign\", list(\"s\", function() 'child'))"),
+    get_assign = list(body = "get(\"assign\")(\"s\", function() 'child')"),
+    environment_extract = list(body = c(
+      "fn <- function() NULL", "environment(fn)$s <- function() 'child'"
+    )),
+    delayed_object = list(body = c(
+      "lapply(\"s\", delayedAssign, value = function() 'child',",
+      "       assign.env = environment())"
+    )),
+    dynamic_eval = list(body = "eval(str2lang(\"s <- function() 'child'\"))"),
+    source_connection = list(body = "source(textConnection(\"s <- 1\"))"),
+    s_file = list(expected = "distinct_definitions", body = "# imported only", files = list(
+      "R/extra.S" = "s <- function() 'child'"
+    )),
+    load_indirection = list(body = c(
+      ".onLoad <- function(lib, pkg) helper053::sneaky(\"s\", asNamespace(pkg))"
+    )),
+    rcpp_native = list(body = "# imported only", namespace_extra = "useDynLib(helper053)")
+  )
+
+  for (label in names(cases)) {
+    stem <- paste0("v053", gsub("_", "", label, fixed = TRUE))
+    parent <- round051_make_archive(
+      source_root, archive_dir, paste0(stem, "a"), "s",
+      body = "s <- function() 'parent'"
+    )
+    spec <- cases[[label]]
+    child <- round051_make_archive(
+      source_root, archive_dir, paste0(stem, "b"), "s",
+      body = spec$body,
+      namespace_extra = c(
+        paste0("importFrom(", stem, "a, s)"),
+        spec$namespace_extra
+      ),
+      imports = paste0(stem, "a"), files = spec$files
+    )
+    condition <- round051_collision_condition(round051_create(
+      paste0(stem, "verse"), c(parent, child), destination,
+      reexport = TRUE
+    ))
+    expect_true(inherits(condition, "bigbang_error_reexport_collision"), info = label)
+    expect_identical(condition$data$diagnosis,
+                     if (is.null(spec$expected)) "undetermined" else spec$expected,
+                     info = label)
+  }
 })
 
 test_that("round 051 prefers a non-syntactic export and installs its binding", {
@@ -492,4 +662,210 @@ test_that("round 051 prefers a non-syntactic export and installs its binding", {
   expect_identical(getExportedValue("preferverse", "%>%")(), "right pipe")
   conflicts <- getExportedValue("preferverse", "preferverse_conflicts")()
   expect_identical(conflicts$resolution, "preferred")
+})
+
+test_that("round 053 verifies probable choices after install and keeps the binding", {
+  testthat::skip_on_cran()
+  sandbox <- tempfile("bigbang-round053-verify-")
+  source_root <- file.path(sandbox, "sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  meta_library <- file.path(sandbox, "meta-library")
+  component_library <- file.path(sandbox, "component-library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archive_dir)
+  dir.create(destination)
+  dir.create(meta_library)
+  dir.create(component_library)
+
+  helper <- round051_make_archive(
+    source_root, archive_dir, "helper053", "sneaky",
+    body = "sneaky <- function(name, value, envir) assign(name, value, envir = envir)"
+  )
+  parent <- round051_make_archive(
+    source_root, archive_dir, "verifyparent", "s",
+    body = "s <- function() 'parent'"
+  )
+  child <- round051_make_archive(
+    source_root, archive_dir, "verifychild", "s",
+    body = c(
+      ".onLoad <- function(lib, pkg) {",
+      "  helper <- base::getExportedValue('helper053', 'sneaky')",
+      "  helper('s', function() 'child', base::asNamespace(pkg))",
+      "}"
+    ),
+    namespace_extra = "importFrom(verifyparent, s)",
+    imports = "verifyparent"
+  )
+  round051_install(helper, component_library)
+  round051_install(parent, component_library)
+  round051_install(child, component_library)
+
+  generated <- bigbang::create_metapackage(
+    "verifyverse", c(parent, child), dest_dir = destination,
+    document = TRUE, verbose = FALSE, import_deps = character(),
+    force_deps = character(), reexport = TRUE,
+    reexport_prefer = c(s = "verifyparent")
+  )
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  build_output <- withr::with_dir(sandbox, system2(
+    r_binary, c("CMD", "build", shQuote(generated$path)),
+    stdout = TRUE, stderr = TRUE
+  ))
+  build_status <- attr(build_output, "status")
+  if (is.null(build_status)) build_status <- 0L
+  expect_identical(build_status, 0L, info = paste(build_output, collapse = "\n"))
+  tarball <- file.path(sandbox, "verifyverse_0.1.0.tar.gz")
+  expect_true(file.exists(tarball))
+  round051_install(tarball, meta_library)
+
+  withr::with_libpaths(meta_library, {
+    loadNamespace("verifyverse")
+    before_install <- getExportedValue(
+      "verifyverse", "verifyverse_conflicts"
+    )()
+    expect_identical(before_install$missing, "verifyparent, verifychild")
+    expect_true(is.na(before_install$identical))
+  })
+
+  withr::local_libpaths(c(meta_library, component_library, .libPaths()))
+  loadNamespace("verifyverse")
+  install_function <- getExportedValue("verifyverse", "verifyverse_install")
+  warning_condition <- NULL
+  result <- withCallingHandlers(
+    install_function(lib = component_library, verbose = FALSE),
+    warning = function(condition) {
+      if (inherits(condition, "bigbang_warning_reexport_verification")) {
+        warning_condition <<- condition
+        invokeRestart("muffleWarning")
+      }
+    }
+  )
+  expect_s3_class(warning_condition, "bigbang_warning_reexport_verification")
+  expect_match(conditionMessage(warning_condition), "s", fixed = TRUE)
+  expect_identical(result$reexport_verification$identical, FALSE)
+  expect_identical(getExportedValue("verifyverse", "s")(), "parent")
+
+  conflicts <- getExportedValue("verifyverse", "verifyverse_conflicts")()
+  expect_identical(conflicts$identical, FALSE)
+  expect_identical(conflicts$missing, "")
+})
+
+test_that("round 053 poison component cannot mask generated runtime calls", {
+  testthat::skip_on_cran()
+  sandbox <- tempfile("bigbang-round053-poison-")
+  source_root <- file.path(sandbox, "sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  meta_library <- file.path(sandbox, "meta-library")
+  component_library <- file.path(sandbox, "component-library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archive_dir)
+  dir.create(destination)
+  dir.create(meta_library)
+  dir.create(component_library)
+
+  probe_dir <- file.path(sandbox, "probe")
+  dir.create(probe_dir)
+  bigbang:::write_metapackage_files(
+    "poisonverse", character(), character(), dest_dir = probe_dir,
+    overwrite = TRUE, reexport = TRUE
+  )
+  function_names <- character()
+  for (path in list.files(probe_dir, pattern = "\\.R$", full.names = TRUE)) {
+    parsed <- parse(file = path, keep.source = TRUE)
+    data <- utils::getParseData(parsed, includeText = TRUE)
+    function_names <- c(function_names, data$text[data$token == "SYMBOL_FUNCTION_CALL"])
+  }
+  install_engine <- bigbang:::.render_install_engine(
+    "poisonverse",
+    list(list(
+      package = "poisoncomponent", stem = "poisoncomponent_0.1.0",
+      ext = ".tar.gz"
+    ))
+  )
+  engine_data <- utils::getParseData(
+    parse(text = install_engine), includeText = TRUE
+  )
+  function_names <- c(
+    function_names,
+    engine_data$text[engine_data$token == "SYMBOL_FUNCTION_CALL"]
+  )
+  function_names <- sort(unique(function_names))
+  own_symbols <- bigbang:::.generated_metapackage_symbols("poisonverse")
+  poison_exports <- sort(unique(c(function_names, own_symbols)))
+  excluded <- intersect(poison_exports, own_symbols)
+  poison_body <- vapply(
+    poison_exports,
+    function(symbol) paste0(symbol, " <- function(...) 'poison'"),
+    character(1L)
+  )
+  poison_archive <- round051_make_archive(
+    source_root, archive_dir, "poisoncomponent", poison_exports,
+    body = poison_body
+  )
+  generated <- bigbang::create_metapackage(
+    "poisonverse", poison_archive, dest_dir = destination, document = TRUE,
+    verbose = FALSE, import_deps = character(), force_deps = character(),
+    reexport = TRUE, reexport_exclude = excluded
+  )
+  generated_files <- list.files(file.path(generated$path, "R"),
+                                pattern = "\\.R$", full.names = TRUE)
+  reexports <- file.path(generated$path, "R", "reexports.R")
+  for (path in generated_files) expect_silent(parse(file = path))
+
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  build_output <- withr::with_dir(sandbox, system2(
+    r_binary, c("CMD", "build", shQuote(generated$path)),
+    stdout = TRUE, stderr = TRUE
+  ))
+  build_status <- attr(build_output, "status")
+  if (is.null(build_status)) build_status <- 0L
+  expect_identical(build_status, 0L, info = paste(build_output, collapse = "\n"))
+  tarball <- file.path(sandbox, "poisonverse_0.1.0.tar.gz")
+  expect_true(file.exists(tarball))
+  round051_install(tarball, meta_library)
+  withr::local_libpaths(c(meta_library, component_library, .libPaths()))
+  on.exit({
+    if ("package:poisoncomponent" %in% base::search()) {
+      base::detach("package:poisoncomponent", unload = TRUE,
+                   character.only = TRUE)
+    }
+  }, add = TRUE)
+  loadNamespace("poisonverse")
+  attach <- getExportedValue("poisonverse", "poisonverse_attach")
+  missing_before <- NULL
+  withCallingHandlers(attach(), warning = function(condition) {
+    missing_before <<- condition
+    invokeRestart("muffleWarning")
+  })
+  expect_match(conditionMessage(missing_before), "Not installed", fixed = TRUE)
+  round051_install(poison_archive, component_library)
+  missing_after <- NULL
+  withCallingHandlers(attach(), warning = function(condition) {
+    missing_after <<- condition
+    invokeRestart("muffleWarning")
+  })
+  expect_null(missing_after)
+  install_function <- base::getExportedValue("poisonverse", "poisonverse_install")
+  result <- install_function(lib = component_library, verbose = FALSE)
+  expect_true(is.data.frame(result$reexport_verification))
+  conflicts <- base::getExportedValue("poisonverse", "poisonverse_conflicts")()
+  expect_true(is.data.frame(conflicts))
+
+  unqualified <- base::tempfile("bigbang-round053-unqualified-")
+  base::writeLines(
+    base::gsub("base::", "", base::readLines(reexports), fixed = TRUE),
+    unqualified
+  )
+  poisoned_env <- base::new.env(parent = base::baseenv())
+  base::assign(
+    "character", function(...) base::stop("unqualified poison"),
+    envir = poisoned_env
+  )
+  expect_error(base::sys.source(unqualified, poisoned_env), "unqualified poison")
 })

@@ -397,6 +397,10 @@
     if (relative %in% names(original)) {
       if (identical(current, unname(original[[relative]]))) return(FALSE)
       if (!is.na(current) && current %in% intended) return(FALSE)
+      # On Windows rename() cannot replace an existing file atomically. If the
+      # process dies after removing the destination but before the rename, an
+      # absent old file with an intended write is the known replacement window.
+      if (is.na(current) && length(intended) > 0L) return(FALSE)
       if (is.na(current) && deleting) return(FALSE)
       return(TRUE)
     }

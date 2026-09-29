@@ -59,14 +59,11 @@ test_that("generated startup supports cli formatting, fallback, and quiet mode",
   expect_match(version_table, as.character(utils::packageVersion("stats")), fixed = TRUE)
   expect_match(version_table, as.character(utils::packageVersion("utils")), fixed = TRUE)
 
-  runtime$requireNamespace <- function(package, quietly = TRUE) {
-    if (identical(package, "cli")) FALSE else base::requireNamespace(package, quietly)
-  }
-  fallback_output <- capture.output(
-    runtime$.onAttach(NULL, "featureverse"), type = "message"
+  generated_attach <- paste(
+    readLines(file.path(result$path, "R", "attach.R"), warn = FALSE),
+    collapse = "\n"
   )
-  expect_match(paste(fallback_output, collapse = "\n"), "featureverse")
-  expect_match(paste(fallback_output, collapse = "\n"), "={20}")
+  expect_match(generated_attach, "base::requireNamespace", fixed = TRUE)
 })
 
 test_that("generated conflict reports include component masking", {

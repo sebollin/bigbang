@@ -102,10 +102,11 @@ installer runs and therefore points at the library it was installed into.
 
 When multiple components export the same symbol, pass
 `reexport_prefer = c(symbol = "component")` to choose its provider or
-`reexport_exclude = "symbol"` to omit it. Same-origin exports are deduplicated
-only after a conservative static proof over NAMESPACE, parsed `R/` source, and
-`R/sysdata.rda`; an unproven collision stops generation. The result,
-`dry_run`, `man/reexports.Rd`, and `<meta>_conflicts()` report the choice.
+`reexport_exclude = "symbol"` to omit it. Every collision requires one of those
+choices because static analysis cannot prove that two exported objects are the
+same at runtime. The diagnostic labels collisions as `probable_same_object`,
+`distinct_definitions`, or `undetermined`; a preferred probable collision is
+checked against installed owners by `<meta>_install()` and `<meta>_conflicts()`.
 
 Generate with `include_archives = FALSE` when the archives should stay in a
 location every recipient can already reach; then `toyverse_install()` requires

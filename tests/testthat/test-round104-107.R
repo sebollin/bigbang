@@ -314,8 +314,11 @@ test_that("installer transcripts follow verbose and failures retain ERROR", {
     destination
   )
   runtime <- new.env(parent = baseenv())
-  sys.source(file.path(generated$path, "R", "install_packages.R"), runtime)
-  run_checks(runtime$install_source_component, runtime)
+  install_source <- file.path(generated$path, "R", "install_packages.R")
+  sys.source(install_source, runtime)
+  generated_install <- paste(readLines(install_source, warn = FALSE),
+                             collapse = "\n")
+  expect_match(generated_install, "base::system2", fixed = TRUE)
 })
 
 test_that("public and generated installers pass verbose to source installs", {

@@ -524,6 +524,53 @@ test_that("dry run reports recovery without changing project or journal", {
   expect_identical(round052_snapshot(journal$path), before_journal)
 })
 
+test_that("a Windows replacement window restores an absent old file from backup", {
+  fixture <- round052_fixture("bigbang-round053-windows-window-")
+  relative <- "README.md"
+  destination <- file.path(fixture$project, relative)
+  original <- readBin(destination, "raw", n = file.info(destination)$size)
+  journal <- round052_arm(fixture)
+  replacement <- tempfile("round053-replacement-")
+  writeLines("replacement that never reached the destination", replacement,
+             useBytes = TRUE)
+  writeLines(
+    paste("write", unname(as.character(tools::md5sum(replacement))), relative,
+          sep = "\t"),
+    file.path(journal$path, "intent.log"), useBytes = TRUE
+  )
+  .activate_update_journal(journal, fixture$project, "journalverse")
+  on.exit(.deactivate_update_journal(), add = TRUE)
+
+  failed <- testthat::with_mocked_bindings(
+    .atomic_replace = function(source, target) {
+      unlink(target)
+      stop("simulated process death between remove and rename")
+    },
+    .package = "bigbang",
+    tryCatch({
+      .atomic_replace(replacement, destination)
+      NULL
+    }, error = identity)
+  )
+  expect_match(conditionMessage(failed), "simulated process death", fixed = TRUE)
+  unlink(destination)
+  expect_false(file.exists(destination))
+
+  intents <- .read_update_intents(journal$path)
+  unknown <- .unknown_update_paths(fixture$project, journal$state, intents)
+  expect_identical(length(unknown), 0L)
+  expect_message(
+    recovered <- .recover_pending_update(
+      fixture$project, "journalverse", recover = TRUE
+    ),
+    "Recovered an interrupted update"
+  )
+  expect_true(recovered$recovered)
+  expect_identical(readBin(destination, "raw", n = file.info(destination)$size),
+                   original)
+  expect_false(dir.exists(journal$path))
+})
+
 test_that("completed manifest wins over a stale journal", {
   fixture <- round052_fixture()
   old <- round052_snapshot(fixture$project)

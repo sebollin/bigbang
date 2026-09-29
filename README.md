@@ -151,15 +151,15 @@ the component has been loaded.
 
 When several components export the same symbol, use
 `reexport_prefer = c(symbol = "component")` to select its provider or
-`reexport_exclude = "symbol"` to omit it. Unique exports and same-origin
-re-exports are resolved automatically only when a conservative static proof over
-NAMESPACE, parsed `R/` assignments and calls, and `R/sysdata.rda` succeeds.
-Genuine collisions stop generation with their candidates and proof failures;
-`dry_run`, `man/reexports.Rd`, and `<meta>_conflicts()` show the resolution.
-`<meta>_conflicts()` also compares installed same-origin owners with
-`identical()` when all are present, without installing missing components. If
-`on_component_error = "skip"` omits a required owner, generation errors rather
-than emitting a binding to a component that is not included.
+`reexport_exclude = "symbol"` to omit it. Every collision requires one of those
+choices because static analysis cannot prove that two exported objects are the
+same at runtime. The diagnostic labels collisions as `probable_same_object`,
+`distinct_definitions`, or `undetermined`, and reports ordered source reasons.
+For a preferred `probable_same_object`, `<meta>_install()` verifies installed
+owners with `identical()` and keeps the result; `<meta>_conflicts()` repeats the
+check without installing missing components. If `on_component_error = "skip"`
+omits a required owner, generation errors rather than emitting a binding to a
+component that is not included.
 
 `teamverse` carries its components, so the call takes no arguments and that is
 all anyone who receives it has to do. Hand over the built
