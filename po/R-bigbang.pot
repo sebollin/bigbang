@@ -600,3 +600,102 @@ msgstr ""
 
 msgid "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
 msgstr ""
+
+msgid "It contains a backup at %s."
+msgstr ""
+
+msgid "It does not contain a recognized backup."
+msgstr ""
+
+msgid "Cannot update %s because %s is an %s update-journal folder. %s %s Next step: %s"
+msgstr ""
+
+msgid "armed"
+msgstr ""
+
+msgid "unarmed"
+msgstr ""
+
+msgid "discarded"
+msgstr ""
+
+msgid "unknown"
+msgstr ""
+
+msgid "Could not write the update-journal tombstone: %s"
+msgstr ""
+
+msgid "Its tombstone is missing or invalid; nothing was deleted."
+msgstr ""
+
+msgid "keep the folder intact, preserve its contents, and inspect it before retrying."
+msgstr ""
+
+msgid "Could not move the update journal to its discarded state: %s"
+msgstr ""
+
+msgid "It is not a directory with a valid marker."
+msgstr ""
+
+msgid "leave it intact, inspect it, and remove or move it only after preserving its contents."
+msgstr ""
+
+msgid "It has no marker but is not empty; nothing was deleted."
+msgstr ""
+
+msgid "leave it intact, preserve its contents, and inspect the failed preparation before retrying."
+msgstr ""
+
+msgid "Discarded an orphaned armed-update folder at %s."
+msgstr ""
+
+msgid "It is not a directory with a valid tombstone."
+msgstr ""
+
+msgid "leave it intact, preserve its contents, and inspect it before retrying."
+msgstr ""
+
+msgid "It has no valid tombstone; nothing was deleted."
+msgstr ""
+
+msgid "leave the folder intact, preserve its contents, and inspect it before retrying."
+msgstr ""
+
+msgid "It contains unexpected files; nothing was deleted."
+msgstr ""
+
+msgid "leave the folder intact, preserve the backup, and inspect the unexpected entries before retrying."
+msgstr ""
+
+msgid "Its armed state does not match the backup; nothing was deleted."
+msgstr ""
+
+msgid "leave the folder intact, preserve the backup, and inspect the state before retrying."
+msgstr ""
+
+msgid "Its intention log is invalid; nothing was deleted."
+msgstr ""
+
+msgid "leave the folder intact, preserve the backup, and inspect the intention log before retrying."
+msgstr ""
+
+msgid "Cannot update %s because the project directory is missing. It may have been moved without its update journal. Next step: find the moved project and its sibling journal, then retry with dest_dir pointing to that location."
+msgstr ""
+
+msgid "The project directory is missing, so this journal was left behind when the project was moved."
+msgstr ""
+
+msgid "find the moved project, move this journal beside it without changing its contents, and retry there."
+msgstr ""
+
+msgid "An update may still be running; no mutation was performed."
+msgstr ""
+
+msgid "after confirming that no other update is running, call again with recover = TRUE."
+msgstr ""
+
+msgid "The update journal was retained for recovery at: %s. It contains a backup at %s. Next step: confirm that no other update is running and call update = TRUE, recover = TRUE."
+msgstr ""
+
+msgid "The interrupted update left files in an unknown state: %s. Journal: %s. The journal contains a backup at %s. Use recover = TRUE to preserve them and recover."
+msgstr ""

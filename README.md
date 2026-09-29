@@ -295,18 +295,22 @@ all, so it is a safe way to see what a call would do before it does it.
   Updates also refuse to write through a symbolic project root or symbolic
   links inside the generated project, including links in parent directories of
   generated files.
-- Interrupted updates use a durable `.<name>.bigbang-update` journal beside the
-  project. It is armed before the first mutation, records every intended write
-  and removal, and survives SIGKILL, SIGTERM, SIGHUP, terminal closure, and a
-  system restart. The next `update = TRUE` call discards an unarmed journal,
-  recognizes an update whose new manifest was already completed, or restores
-  the previous bytes before continuing. If a path contains neither its original
-  nor an intended value, recovery stops instead of overwriting it. After
-  confirming that no update is still running, `recover = TRUE` preserves those
-  unknown bytes in a reported sibling directory and then recovers. A dry run
-  reports the pending action without changing the project or journal. On
-  Windows liveness is never tested with `tools::pskill()`, because it would
-  terminate the probed process.
+- Interrupted updates are assembled in a durable sibling
+  `.<name>.bigbang-update.armando-*` folder and renamed to
+  `.<name>.bigbang-update` only after the marker and backup have been verified.
+  An empty unmarked preparation is safe to discard; a non-empty unmarked
+  preparation is reported and never deleted. Discarding a journal first writes
+  an atomic tombstone and renames it to `.<name>.bigbang-update.descartado-*`,
+  so cleanup resumes after another interruption. The next `update = TRUE` call
+  also recognizes a moved project when its metapackage name and old-manifest
+  hash match the backup. It records every intended write and removal and
+  survives SIGKILL, SIGTERM, SIGHUP, terminal closure, and a system restart.
+  If a path contains neither its original nor an intended value, recovery stops
+  instead of overwriting it. After confirming that no update is still running,
+  `recover = TRUE` preserves those unknown bytes in a reported sibling
+  directory and then recovers. A dry run reports the pending action without
+  changing the project or journal. On Windows liveness is never tested with
+  `tools::pskill()`, because it would terminate the probed process.
 - `install_upgrade` fixes the default upgrade policy of the installer that gets
   emitted, so you decide when generating whether recipients stay pinned to the
   versions you ship (`"always"`) or keep anything newer they already have

@@ -976,6 +976,90 @@
   list(package = NULL, function_name = row$text[[1L]])
 }
 
+.reexport_parse_descendants <- function(data, roots) {
+  roots <- unique(as.integer(roots))
+  found <- roots
+  repeat {
+    children <- data$id[data$parent %in% found & !data$id %in% found]
+    if (length(children) == 0L) break
+    found <- c(found, children)
+  }
+  found
+}
+
+.reexport_parse_scope <- function(data) {
+  roots <- data$id[data$parent == 0L & data$token == "expr"]
+  function_exprs <- data$id[data$token == "FUNCTION"]
+  function_nodes <- data$parent[data$id %in% function_exprs]
+  definitions <- list()
+  definition_roots <- integer()
+  for (function_node in function_nodes) {
+    root <- data$parent[data$id == function_node]
+    if (length(root) != 1L) next
+    assignment <- data[data$parent == root & data$token %in%
+                         c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2"), ,
+                       drop = FALSE]
+    if (nrow(assignment) != 1L) next
+    lhs <- data[data$parent == root & data$token %in%
+                  c("expr", "expr_or_assign_or_help") & data$col1 < assignment$col1[[1L]],
+                , drop = FALSE]
+    if (nrow(lhs) == 0L) next
+    lhs <- lhs[order(lhs$col1, lhs$id), , drop = FALSE][1L, , drop = FALSE]
+    name <- .reexport_parse_target(lhs$text[[1L]])
+    if (is.null(name)) next
+    body <- data$id[data$parent == function_node & data$token == "expr"]
+    if (length(body) == 0L) next
+    definitions[[name]] <- list(node = function_node, body = body[[1L]])
+    definition_roots <- c(definition_roots, root)
+  }
+
+  active <- integer()
+  for (root in roots) {
+    if (root %in% definition_roots) {
+      lhs <- data[data$parent == root & data$token %in%
+                    c("expr", "expr_or_assign_or_help"), , drop = FALSE]
+      assignment <- data[data$parent == root & data$token %in%
+                           c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2"), ,
+                         drop = FALSE]
+      name <- if (nrow(lhs) > 0L && nrow(assignment) == 1L) {
+        lhs <- lhs[order(lhs$col1, lhs$id), , drop = FALSE]
+        .reexport_parse_target(lhs$text[[1L]])
+      } else {
+        NULL
+      }
+      if (name %in% c(".onLoad", ".onAttach") && !is.null(definitions[[name]])) {
+        active <- c(active, .reexport_parse_descendants(
+          data, definitions[[name]]$body
+        ))
+      } else {
+        active <- c(active, root)
+      }
+    } else {
+      active <- c(active, .reexport_parse_descendants(data, root))
+    }
+  }
+
+  calls <- data[data$token == "SYMBOL_FUNCTION_CALL", , drop = FALSE]
+  followed <- character()
+  repeat {
+    before <- length(active)
+    for (row_index in seq_len(nrow(calls))) {
+      call <- calls[row_index, , drop = FALSE]
+      if (!call$id[[1L]] %in% active) next
+      function_name <- call$text[[1L]]
+      if (!function_name %in% names(definitions) || function_name %in% followed) {
+        next
+      }
+      followed <- c(followed, function_name)
+      active <- c(active, .reexport_parse_descendants(
+        data, definitions[[function_name]]$body
+      ))
+    }
+    if (length(active) == before) break
+  }
+  unique(active)
+}
+
 .reexport_parse_source <- function(path, package_root) {
   label <- .reexport_source_label(path, package_root)
   evidence <- list(
@@ -994,6 +1078,7 @@
   }
   data <- utils::getParseData(parsed, includeText = TRUE)
   if (is.null(data) || nrow(data) == 0L) return(evidence)
+  active_ids <- .reexport_parse_scope(data)
 
   binder_names <- c(
     "assign", "delayedAssign", "makeActiveBinding", "list2env", "sys.source",
@@ -1049,7 +1134,8 @@
         }
         evidence$mutations[[length(evidence$mutations) + 1L]] <- list(
           symbol = literal, name = as.character(target_expression[[1L]])[[1L]],
-          file = label, line = assignment$line1[[1L]]
+          file = label, line = assignment$line1[[1L]],
+          active = assignment$id[[1L]] %in% active_ids
         )
       }
     }
@@ -1069,7 +1155,8 @@
       file = label,
       line = function_row$line1[[1L]],
       literal = if (is.null(first)) FALSE else isTRUE(first$literal),
-      value = if (is.null(first)) NULL else first$value
+      value = if (is.null(first)) NULL else first$value,
+      active = function_row$id[[1L]] %in% active_ids
     )
     function_name <- qualification$function_name
     is_env_bind <- identical(qualification$package, "rlang") &&
@@ -1095,7 +1182,8 @@
           any(data$text %in% c(".onLoad", ".onAttach"))) {
       evidence$indirect[[length(evidence$indirect) + 1L]] <- list(
         name = paste0(qualification$package, "::", function_name),
-        file = label, line = function_row$line1[[1L]]
+        file = label, line = function_row$line1[[1L]],
+        active = function_row$id[[1L]] %in% active_ids
       )
     }
   }
@@ -1123,7 +1211,7 @@
       row <- binder_rows[index, , drop = FALSE]
       evidence$mutations[[length(evidence$mutations) + 1L]] <- list(
         symbol = NULL, name = row$text[[1L]], file = label,
-        line = row$line1[[1L]]
+        line = row$line1[[1L]], active = row$id[[1L]] %in% active_ids
       )
     }
   }
@@ -1615,6 +1703,64 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   list(demonstrated = FALSE, skipped = isTRUE(skipped), reason = reason)
 }
 
+.reexport_relevant_blockers <- function(evidence, symbol) {
+  mutations <- .or_null(evidence$mutations, list())
+  calls <- .or_null(evidence$calls, list())
+  dynamic <- .or_null(evidence$dynamic, list())
+  indirect <- .or_null(evidence$indirect, list())
+  binder_names <- c(
+    "assign", "delayedAssign", "makeActiveBinding", "list2env", "sys.source",
+    "assignInMyNamespace", "assignInNamespace", "source", "load", "attach",
+    "setGeneric", "setClass", "setRefClass", "setValidity", "setGroupGeneric",
+    "setMethod", "lockBinding", "unlockBinding"
+  )
+  relevant <- list()
+  add <- function(items, predicate = function(item) TRUE) {
+    if (length(items) == 0L) return(invisible(NULL))
+    for (item in items) {
+      active <- is.null(item$active) || isTRUE(item$active)
+      if (active && predicate(item)) relevant[[length(relevant) + 1L]] <<- item
+    }
+    invisible(NULL)
+  }
+  add(mutations, function(item) {
+    if (item$name %in% c("$", "[[", "@")) {
+      return(is.null(item$symbol) || identical(item$symbol, symbol))
+    }
+    if (!item$name %in% binder_names) return(TRUE)
+    matching <- Filter(function(call) {
+      identical(call$name, item$name) &&
+        identical(call$file, item$file) && identical(call$line, item$line)
+    }, calls)
+    if (length(matching) == 0L) return(TRUE)
+    call <- matching[[1L]]
+    !isTRUE(call$literal) || is.null(call$value) ||
+      identical(call$value, symbol)
+  })
+  add(calls, function(item) {
+    if (!item$name %in% binder_names) return(FALSE)
+    if (item$name %in% c(
+      "list2env", "sys.source", "source", "load", "attach", "lockBinding",
+      "unlockBinding"
+    )) return(TRUE)
+    !isTRUE(item$literal) || is.null(item$value) || identical(item$value, symbol)
+  })
+  add(dynamic)
+  add(indirect)
+  if (length(relevant) == 0L) return(relevant)
+  keys <- vapply(
+    relevant,
+    function(item) {
+      paste(
+        .or_null(item$name, "mutation"), .or_null(item$file, ""),
+        .or_null(item$line, ""), sep = "\u001f"
+      )
+    },
+    character(1L)
+  )
+  relevant[!duplicated(keys)]
+}
+
 .reexport_probe_reasons <- function(component, symbol, sources) {
   evidence <- .or_null(
     component$reexport_evidence, .reexport_empty_evidence()
@@ -1643,12 +1789,11 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
     ))
   }
 
-  mutation_items <- c(
-    .or_null(evidence$mutations, list()),
-    .or_null(evidence$calls, list()),
-    .or_null(evidence$dynamic, list()),
-    .or_null(evidence$indirect, list())
-  )
+  mutation_items <- if (length(sources) > 0L) {
+    .reexport_relevant_blockers(evidence, symbol)
+  } else {
+    list()
+  }
   if (length(mutation_items) > 0L) {
     keys <- vapply(mutation_items, function(item) {
       paste(
@@ -1720,18 +1865,16 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
     component$reexport_evidence, .reexport_empty_evidence()
   )
   reasons <- .reexport_probe_reasons(component, symbol, sources)
+  root_component <- length(sources) == 0L
   local_definition <- any(vapply(
     .or_null(evidence$assignments, list()),
     function(item) identical(item$symbol, symbol), logical(1L)
   ))
   has_blocker <- isTRUE(evidence$native) ||
-    length(.or_null(evidence$mutations, list())) > 0L ||
-    length(.or_null(evidence$calls, list())) > 0L ||
-    length(.or_null(evidence$dynamic, list())) > 0L ||
-    length(.or_null(evidence$indirect, list())) > 0L ||
     length(.or_null(evidence$parse_errors, list())) > 0L ||
     !is.null(evidence$sysdata_error) ||
     symbol %in% .or_null(evidence$sysdata_names, character()) ||
+    (!root_component && length(.reexport_relevant_blockers(evidence, symbol)) > 0L) ||
     (length(sources) > 0L && local_definition)
   if (has_blocker) {
     return(.reexport_probe_failure(paste(reasons, collapse = "; ")))

@@ -1,5 +1,15 @@
 # bigbang (development version)
 
+- Interrupted-update journals are assembled in private sibling staging folders,
+  use resumable tombstones while being discarded, and recognize a project
+  moved together with its journal by metapackage name and old-manifest hash.
+  Unmarked user folders with journal-looking names are preserved and reported.
+
+- Re-export diagnostics now evaluate only installation and load-time code for
+  re-exporters, follow calls into functions owned by the same package, and
+  leave common-function mutations out of the proof. A package root is judged
+  by its exports, parse result, native declarations, and `sysdata.rda` only.
+
 - `create_metapackage(update = TRUE)` now journals updates durably beside the
   project before the first mutation. A later call automatically recovers after
   SIGKILL, SIGTERM, SIGHUP, terminal closure, or shutdown, recognizes a fully

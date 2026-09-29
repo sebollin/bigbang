@@ -649,19 +649,30 @@
 #' with the metapackage.
 #'
 #' @section Interrupted updates:
-#' Before an in-place update mutates the project, bigbang creates a durable
-#' journal beside it at `.<name>.bigbang-update`, copies every manifest-owned
-#' file and its manifest, verifies their hashes, and marks the journal armed.
+#' Before an in-place update mutates the project, bigbang assembles a durable
+#' journal beside it in a private `.<name>.bigbang-update.armando-*` folder.
+#' The marker is written before the backup, and the complete folder is renamed
+#' to `.<name>.bigbang-update` only after every hash has been verified.
 #' Every later file write or removal records its intention first. Generated
 #' files, shipped component archives, catalogs, `.Rbuildignore`, and the final
 #' manifest are replaced atomically. On Windows the guarantee is that a file is
 #' old, new, or temporarily absent with a journal backup. Roxygen runs in a staging copy and only its
 #' known outputs are promoted atomically to the project.
 #'
+#' If a process dies while preparing the journal, an empty unmarked
+#' `armando-*` folder is discarded; a non-empty unmarked folder is never
+#' deleted. A marked preparation is recognized and discarded because it cannot
+#' have touched the project. Journal disposal first writes an atomic tombstone
+#' and renames the folder to `.<name>.bigbang-update.descartado-*`; cleanup can
+#' therefore resume after another interruption. A discarded folder without a
+#' valid tombstone is left intact and reported as unknown.
+#'
 #' The journal survives process termination, terminal closure, and system
 #' shutdown, including SIGKILL, SIGTERM, and SIGHUP on POSIX systems. The next
 #' `create_metapackage(update = TRUE)` call examines it before validating the
-#' generation manifest. An unarmed journal is discarded because the project was
+#' generation manifest. The marker identifies the metapackage and old-manifest
+#' hash rather than an absolute path, so moving the project together with its
+#' journal remains recoverable. An unarmed journal is discarded because the project was
 #' not touched; an already completed update is recognized by its new manifest;
 #' otherwise a dead owner's changes are rolled back and the requested update
 #' continues. On POSIX systems liveness uses the PID and, where Linux `/proc`
@@ -821,6 +832,7 @@ create_metapackage <- function(
   project_dir <- normalizePath(project_path, winslash = "/", mustWork = FALSE)
   recovery <- list(pending = FALSE, recovered = FALSE, preserved = NULL)
   if (isTRUE(update)) {
+    .reconcile_update_siblings(project_dir, name)
     recovery <- .recover_pending_update(
       project_dir, name, recover = recover, dry_run = dry_run
     )
@@ -1122,8 +1134,12 @@ create_metapackage <- function(
       }, error = function(e) FALSE)
       if (!restored) {
         warning(.bb_trf(
-          "The update journal was retained for recovery at: %s",
-          update_journal$path
+          paste0(
+            "The update journal was retained for recovery at: %s. It contains",
+            " a backup at %s. Next step: confirm that no other update is running",
+            " and call update = TRUE, recover = TRUE."
+          ),
+          update_journal$path, file.path(update_journal$path, "backup")
         ), call. = FALSE)
       }
     }

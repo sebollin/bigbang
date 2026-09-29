@@ -1,11 +1,211 @@
 .update_journal_format <- "bigbang-update-journal"
 .update_journal_version <- 1L
+.update_journal_tombstone_name <- "tombstone.rds"
 .update_journal_runtime <- new.env(parent = emptyenv())
 .update_journal_runtime$current <- NULL
 
 .update_journal_path <- function(project_dir) {
   file.path(dirname(project_dir), paste0(".", basename(project_dir),
                                          ".bigbang-update"))
+}
+
+.update_journal_sibling_paths <- function(project_dir, name, kind) {
+  prefix <- paste0(".", .escape_regex_literal(name), ".bigbang-update.", kind,
+                   "-")
+  pattern <- paste0("^", prefix, "[[:alnum:]-]+$")
+  siblings <- list.files(dirname(project_dir), pattern = pattern,
+                         full.names = TRUE, all.files = TRUE, no.. = TRUE)
+  sort(siblings)
+}
+
+.update_journal_backup_path <- function(path) file.path(path, "backup")
+
+.update_journal_kind_label <- function(kind) {
+  switch(kind,
+    armed = .bb_tr("armed"),
+    unarmed = .bb_tr("unarmed"),
+    discarded = .bb_tr("discarded"),
+    .bb_tr("unknown")
+  )
+}
+
+.update_journal_problem <- function(class, project_dir, path, kind, detail,
+                                    has_backup = FALSE, next_step) {
+  contents <- if (isTRUE(has_backup)) {
+    .bb_trf("It contains a backup at %s.", .update_journal_backup_path(path))
+  } else {
+    .bb_tr("It does not contain a recognized backup.")
+  }
+  .bigbang_abort(
+    class,
+    .bb_trf(
+      "Cannot update %s because %s is an %s update-journal folder. %s %s Next step: %s",
+      project_dir, path, .update_journal_kind_label(kind), detail, contents,
+      next_step
+    ),
+    path = project_dir, journal = path, journal_kind = kind
+  )
+}
+
+.update_journal_tombstone_path <- function(path) {
+  file.path(path, .update_journal_tombstone_name)
+}
+
+.update_journal_tombstone <- function(path, name, marker) {
+  manifest_hash <- unname(marker$backup_hashes[[.generation_manifest_name]])
+  tombstone <- list(
+    format = .update_journal_format,
+    version = .update_journal_version,
+    kind = "discarded",
+    name = name,
+    manifest_hash = manifest_hash,
+    created_utc = format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC")
+  )
+  destination <- .update_journal_tombstone_path(path)
+  temporary <- tempfile(pattern = ".tombstone-", tmpdir = path)
+  on.exit(unlink(temporary, force = TRUE), add = TRUE)
+  saveRDS(tombstone, temporary)
+  if (!file.rename(temporary, destination)) {
+    stop(.bb_trf("Could not write the update-journal tombstone: %s", path),
+         call. = FALSE)
+  }
+  invisible(tombstone)
+}
+
+.read_update_tombstone <- function(path, name) {
+  tombstone_path <- .update_journal_tombstone_path(path)
+  if (!file.exists(tombstone_path) || dir.exists(tombstone_path) ||
+        .path_is_symlink(tombstone_path)) return(NULL)
+  tombstone <- tryCatch(readRDS(tombstone_path), error = function(e) NULL)
+  valid <- is.list(tombstone) &&
+    identical(tombstone$format, .update_journal_format) &&
+    identical(tombstone$version, .update_journal_version) &&
+    identical(tombstone$kind, "discarded") &&
+    identical(tombstone$name, name) &&
+    is.character(tombstone$manifest_hash) &&
+    length(tombstone$manifest_hash) == 1L &&
+    grepl("^[0-9a-f]{32}$", tombstone$manifest_hash)
+  if (isTRUE(valid)) tombstone else NULL
+}
+
+.discard_update_entry <- function(path) {
+  unlink(path, recursive = TRUE, force = TRUE)
+}
+
+.update_journal_after_rename <- function(path) {
+  invisible(path)
+}
+
+.finish_discarded_journal <- function(path, name, tombstone = NULL) {
+  tombstone <- .or_null(tombstone, .read_update_tombstone(path, name))
+  if (is.null(tombstone)) {
+    .update_journal_problem(
+      "bigbang_error_unrecognized_update_journal", path, path, "unknown",
+      .bb_tr("Its tombstone is missing or invalid; nothing was deleted."),
+      has_backup = FALSE,
+      next_step = .bb_tr("keep the folder intact, preserve its contents, and inspect it before retrying.")
+    )
+  }
+  entries <- list.files(path, all.files = TRUE, no.. = TRUE, include.dirs = TRUE)
+  entries <- setdiff(entries, .update_journal_tombstone_name)
+  for (entry in entries) {
+    .discard_update_entry(file.path(path, entry))
+  }
+  remaining <- setdiff(
+    list.files(path, all.files = TRUE, no.. = TRUE, include.dirs = TRUE),
+    .update_journal_tombstone_name
+  )
+  if (length(remaining) > 0L) {
+    stop(.bb_trf("Could not remove completely: %s", path), call. = FALSE)
+  }
+  unlink(.update_journal_tombstone_path(path), force = TRUE)
+  unlink(path, recursive = TRUE, force = TRUE)
+  if (dir.exists(path) || file.exists(path)) {
+    stop(.bb_trf("Could not remove completely: %s", path), call. = FALSE)
+  }
+  invisible(NULL)
+}
+
+.discard_renamed_journal <- function(path, project_dir, name, marker) {
+  .update_journal_tombstone(path, name, marker)
+  stamp <- paste0(format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC"), "-",
+                  Sys.getpid())
+  discarded <- file.path(
+    dirname(path), paste0(".", name, ".bigbang-update.descartado-", stamp)
+  )
+  suffix <- 0L
+  while (file.exists(discarded) || dir.exists(discarded)) {
+    suffix <- suffix + 1L
+    discarded <- paste0(
+      file.path(dirname(path), paste0(".", name,
+                                      ".bigbang-update.descartado-", stamp)),
+      "-", suffix
+    )
+  }
+  if (!file.rename(path, discarded)) {
+    stop(.bb_trf("Could not move the update journal to its discarded state: %s",
+                 path), call. = FALSE)
+  }
+  .update_journal_after_rename(discarded)
+  .finish_discarded_journal(discarded, name)
+  invisible(NULL)
+}
+
+.reconcile_update_siblings <- function(project_dir, name) {
+  armando <- .update_journal_sibling_paths(project_dir, name, "armando")
+  for (path in armando) {
+    if (!dir.exists(path) || .path_is_symlink(path)) {
+      .update_journal_problem(
+        "bigbang_error_unrecognized_update_journal", project_dir, path,
+        "unknown",
+        .bb_tr("It is not a directory with a valid marker."), FALSE,
+        .bb_tr("leave it intact, inspect it, and remove or move it only after preserving its contents.")
+      )
+    }
+    marker_path <- file.path(path, "marker.rds")
+    entries <- list.files(path, all.files = TRUE, recursive = TRUE,
+                          no.. = TRUE, include.dirs = TRUE)
+    if (!file.exists(marker_path)) {
+      if (length(entries) == 0L) {
+        unlink(path, recursive = TRUE, force = TRUE)
+        next
+      }
+      .update_journal_problem(
+        "bigbang_error_unrecognized_update_journal", project_dir, path,
+        "unarmed",
+        .bb_tr("It has no marker but is not empty; nothing was deleted."), FALSE,
+        .bb_tr("leave it intact, preserve its contents, and inspect the failed preparation before retrying.")
+      )
+    }
+    marker <- tryCatch(.read_update_marker(path, project_dir, name),
+                       error = identity)
+    if (inherits(marker, "error")) stop(marker)
+    .discard_renamed_journal(path, project_dir, name, marker)
+    message(.bb_trf("Discarded an orphaned armed-update folder at %s.", path))
+  }
+
+  discarded <- .update_journal_sibling_paths(project_dir, name, "descartado")
+  for (path in discarded) {
+    if (!dir.exists(path) || .path_is_symlink(path)) {
+      .update_journal_problem(
+        "bigbang_error_unrecognized_update_journal", project_dir, path,
+        "unknown",
+        .bb_tr("It is not a directory with a valid tombstone."), FALSE,
+        .bb_tr("leave it intact, preserve its contents, and inspect it before retrying.")
+      )
+    }
+    tombstone <- .read_update_tombstone(path, name)
+    if (is.null(tombstone)) {
+      .update_journal_problem(
+        "bigbang_error_unrecognized_update_journal", project_dir, path,
+        "unknown",
+        .bb_tr("It has no valid tombstone; nothing was deleted."), FALSE,
+        .bb_tr("leave the folder intact, preserve its contents, and inspect it before retrying.")
+      )
+    }
+    .finish_discarded_journal(path, name, tombstone)
+  }
+  invisible(NULL)
 }
 
 .update_process_start <- function(pid = Sys.getpid()) {
@@ -40,7 +240,8 @@
       .bb_trf(
         paste0(
           "Cannot update %s because %s is not a recognized bigbang update ",
-          "journal for this project. Move it aside or restore the expected journal."
+          "journal. It has no recognized backup. Next step: leave it intact, ",
+          "preserve its contents, and inspect or move it aside before retrying."
         ),
         project_dir, journal_path
       ),
@@ -52,10 +253,9 @@
   if (!file.exists(marker_path) || dir.exists(marker_path) ||
         .path_is_symlink(marker_path)) fail()
   marker <- tryCatch(readRDS(marker_path), error = function(e) NULL)
-  expected_project <- normalizePath(project_dir, winslash = "/", mustWork = FALSE)
   valid <- is.list(marker) && identical(marker$format, .update_journal_format) &&
     identical(marker$version, .update_journal_version) &&
-    identical(marker$name, name) && identical(marker$project, expected_project) &&
+    identical(marker$name, name) &&
     is.character(marker$backup_hashes) && !is.null(names(marker$backup_hashes)) &&
     !anyDuplicated(names(marker$backup_hashes)) &&
     all(grepl("^[0-9a-f]{32}$", marker$backup_hashes)) &&
@@ -86,16 +286,17 @@
     .unarmed_journal_is_expected(path, marker)
   }
   if (!expected) {
-    .bigbang_abort(
-      "bigbang_error_unrecognized_update_journal",
-      .bb_trf("The update journal at %s contains unexpected files.", path),
-      path = project_dir, journal = path
+    .update_journal_problem(
+      "bigbang_error_unrecognized_update_journal", project_dir, path,
+      if (is.list(state) && isTRUE(state$armed)) "armed" else "unarmed",
+      .bb_tr("It contains unexpected files; nothing was deleted."),
+      has_backup = isTRUE(length(marker$backup_hashes) > 0L),
+      next_step = .bb_tr(
+        "leave the folder intact, preserve the backup, and inspect the unexpected entries before retrying."
+      )
     )
   }
-  status <- unlink(path, recursive = TRUE, force = TRUE)
-  if (status != 0L || dir.exists(path) || file.exists(path)) {
-    stop(.bb_trf("Could not remove completely: %s", path), call. = FALSE)
-  }
+  .discard_renamed_journal(path, project_dir, name, marker)
   invisible(NULL)
 }
 
@@ -129,7 +330,11 @@
   files <- unique(c(owned, extra_files))
   hashes <- vapply(file.path(project_dir, files), .file_digest, character(1L))
   names(hashes) <- files
-  if (!dir.create(journal_path, showWarnings = FALSE)) {
+  staging_path <- tempfile(
+    pattern = paste0(".", basename(project_dir), ".bigbang-update.armando-"),
+    tmpdir = dirname(project_dir)
+  )
+  if (!dir.create(staging_path, showWarnings = FALSE)) {
     stop(.bb_trf("Could not create temporary directory for %s", journal_path),
          call. = FALSE)
   }
@@ -138,27 +343,26 @@
     format = .update_journal_format,
     version = .update_journal_version,
     name = name,
-    project = normalizePath(project_dir, winslash = "/", mustWork = TRUE),
     backup_hashes = hashes,
     planned_files = planned_files
   )
-  .atomic_save_rds(marker, file.path(journal_path, "marker.rds"))
+  .atomic_save_rds(marker, file.path(staging_path, "marker.rds"))
 
   for (relative in files) {
     .journal_backup_copy(
       file.path(project_dir, relative),
-      file.path(journal_path, "backup", relative)
+      file.path(staging_path, "backup", relative)
     )
   }
   copied <- vapply(
-    file.path(journal_path, "backup", files), .file_digest, character(1L)
+    file.path(staging_path, "backup", files), .file_digest, character(1L)
   )
   if (!identical(unname(copied), unname(hashes[files]))) {
     stop(.bb_trf("Could not back up generated file: %s", project_dir),
          call. = FALSE)
   }
 
-  if (!dir.create(file.path(journal_path, "staging"))) {
+  if (!dir.create(file.path(staging_path, "staging"))) {
     stop(.bb_trf("Could not create temporary directory for %s", journal_path),
          call. = FALSE)
   }
@@ -173,7 +377,15 @@
     original_hashes = hashes,
     old_manifest_hash = unname(hashes[[.generation_manifest_name]])
   )
-  .atomic_save_rds(state, file.path(journal_path, "state.rds"))
+  .atomic_save_rds(state, file.path(staging_path, "state.rds"))
+  if (file.exists(journal_path) || dir.exists(journal_path)) {
+    stop(.bb_trf("Could not arm the update journal because its final path already exists: %s",
+                 journal_path), call. = FALSE)
+  }
+  if (!file.rename(staging_path, journal_path)) {
+    stop(.bb_trf("Could not arm the update journal at %s", journal_path),
+         call. = FALSE)
+  }
   list(path = journal_path, marker = marker, state = state)
 }
 
@@ -230,7 +442,7 @@
   .append_update_intent("delete", relative)
 }
 
-.read_update_intents <- function(journal_path) {
+.read_update_intents <- function(journal_path, project_dir = journal_path) {
   path <- file.path(journal_path, "intent.log")
   if (!file.exists(path)) {
     return(data.frame(operation = character(), hash = character(),
@@ -244,11 +456,12 @@
       .valid_update_relative_path(x[[3L]])
   }, logical(1L))
   if (!all(valid)) {
-    .bigbang_abort(
+    .update_journal_problem(
       "bigbang_error_unrecognized_update_journal",
-      .bb_trf("The update journal at %s has an invalid intention log.",
-              journal_path),
-      journal = journal_path
+      project_dir, journal_path, "armed",
+      .bb_tr("Its intention log is invalid; nothing was deleted."),
+      has_backup = TRUE,
+      next_step = .bb_tr("leave the folder intact, preserve the backup, and inspect the intention log before retrying.")
     )
   }
   if (length(fields) == 0L) {
@@ -498,9 +711,35 @@
                                     dry_run = FALSE, handled = FALSE) {
   journal_path <- .update_journal_path(project_dir)
   if (!file.exists(journal_path) && !dir.exists(journal_path)) {
+    if (!dir.exists(project_dir)) {
+      .bigbang_abort(
+        "bigbang_error_missing_project",
+        .bb_trf(
+          paste0(
+            "Cannot update %s because the project directory is missing. It may",
+            " have been moved without its update journal. Next step: find the",
+            " moved project and its sibling journal, then retry with dest_dir",
+            " pointing to that location."
+          ),
+          project_dir
+        ),
+        path = project_dir, journal = journal_path
+      )
+    }
     return(list(pending = FALSE, recovered = FALSE, preserved = NULL))
   }
   marker <- .read_update_marker(journal_path, project_dir, name)
+  if (!dir.exists(project_dir)) {
+    .update_journal_problem(
+      "bigbang_error_moved_update_journal", project_dir, journal_path,
+      "armed",
+      .bb_tr("The project directory is missing, so this journal was left behind when the project was moved."),
+      has_backup = TRUE,
+      next_step = .bb_tr(
+        "find the moved project, move this journal beside it without changing its contents, and retry there."
+      )
+    )
+  }
   journal <- list(path = journal_path, marker = marker)
   state_path <- file.path(journal_path, "state.rds")
   state <- if (file.exists(state_path) && !dir.exists(state_path)) {
@@ -510,11 +749,12 @@
   }
   if (is.null(state) || !isTRUE(state$armed)) {
     if (!.unarmed_journal_is_expected(journal_path, marker)) {
-      .bigbang_abort(
-        "bigbang_error_unrecognized_update_journal",
-        .bb_trf("The unarmed update journal at %s contains unexpected files.",
-                journal_path),
-        path = project_dir, journal = journal_path
+      .update_journal_problem(
+        "bigbang_error_unrecognized_update_journal", project_dir, journal_path,
+        "unarmed",
+        .bb_tr("It contains unexpected files; nothing was deleted."),
+        has_backup = length(marker$backup_hashes) > 0L,
+        next_step = .bb_tr("leave it intact, preserve the backup, and inspect the unexpected entries before retrying.")
       )
     }
     if (dry_run) {
@@ -541,28 +781,34 @@
     length(state$old_manifest_hash) == 1L &&
     grepl("^[0-9a-f]{32}$", state$old_manifest_hash)
   if (!isTRUE(valid_state) ||
-        !identical(state$original_hashes, marker$backup_hashes)) {
-    .bigbang_abort(
-      "bigbang_error_unrecognized_update_journal",
-      .bb_trf("The update journal at %s has invalid armed state.", journal_path),
-      path = project_dir, journal = journal_path
+        !identical(state$original_hashes, marker$backup_hashes) ||
+        !identical(state$old_manifest_hash,
+                   unname(marker$backup_hashes[[.generation_manifest_name]]))) {
+    .update_journal_problem(
+      "bigbang_error_unrecognized_update_journal", project_dir, journal_path,
+      "armed",
+      .bb_tr("Its armed state does not match the backup; nothing was deleted."),
+      has_backup = TRUE,
+      next_step = .bb_tr("leave it intact, preserve the backup, and inspect the state before retrying.")
     )
   }
   if (!.armed_journal_is_expected(journal_path, marker)) {
-    .bigbang_abort(
-      "bigbang_error_unrecognized_update_journal",
-      .bb_trf("The armed update journal at %s contains unexpected files.",
-              journal_path),
-      path = project_dir, journal = journal_path
+    .update_journal_problem(
+      "bigbang_error_unrecognized_update_journal", project_dir, journal_path,
+      "armed",
+      .bb_tr("It contains unexpected files; nothing was deleted."),
+      has_backup = TRUE,
+      next_step = .bb_tr("leave it intact, preserve the backup, and inspect the unexpected entries before retrying.")
     )
   }
-  intents <- .read_update_intents(journal_path)
+  intents <- .read_update_intents(journal_path, project_dir)
   if (any(!intents$path %in% marker$planned_files)) {
-    .bigbang_abort(
-      "bigbang_error_unrecognized_update_journal",
-      .bb_trf("The update journal at %s has an invalid intention log.",
-              journal_path),
-      path = project_dir, journal = journal_path
+    .update_journal_problem(
+      "bigbang_error_unrecognized_update_journal", project_dir, journal_path,
+      "armed",
+      .bb_tr("Its intention log is invalid; nothing was deleted."),
+      has_backup = TRUE,
+      next_step = .bb_tr("leave it intact, preserve the backup, and inspect the intention log before retrying.")
     )
   }
   current_manifest <- .file_digest(file.path(project_dir, .generation_manifest_name))
@@ -588,16 +834,11 @@
                 action = "recognized_completed"))
   }
   if (!handled && !recover && .update_owner_may_be_alive(state)) {
-    .bigbang_abort(
-      "bigbang_error_update_in_progress",
-      .bb_trf(
-        paste0(
-          "An update may still be running for %s (journal: %s). If no other ",
-          "update is running, call again with recover = TRUE."
-        ),
-        project_dir, journal_path
-      ),
-      path = project_dir, journal = journal_path, pid = state$pid
+    .update_journal_problem(
+      "bigbang_error_update_in_progress", project_dir, journal_path, "armed",
+      .bb_tr("An update may still be running; no mutation was performed."),
+      has_backup = TRUE,
+      next_step = .bb_tr("after confirming that no other update is running, call again with recover = TRUE.")
     )
   }
   .validate_project_write_paths(
@@ -621,9 +862,11 @@
       .bb_trf(
         paste0(
           "The interrupted update left files in an unknown state: %s. ",
-          "Journal: %s. Use recover = TRUE to preserve them and recover."
+          "Journal: %s. The journal contains a backup at %s. Use recover = TRUE ",
+          "to preserve them and recover."
         ),
-        paste(unknown, collapse = ", "), journal_path
+        paste(unknown, collapse = ", "), journal_path,
+        .update_journal_backup_path(journal_path)
       ),
       path = project_dir, journal = journal_path, files = unknown
     )

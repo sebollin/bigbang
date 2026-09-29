@@ -268,18 +268,23 @@ segura de ver qué haría una llamada antes de que la haga.
   También se niega a escribir a través de una raíz de proyecto simbólica o de
   enlaces simbólicos dentro del proyecto generado, incluidos los enlaces en
   directorios padre de los archivos generados.
-- Los updates interrumpidos usan un diario durable
-  `.<nombre>.bigbang-update` al lado del proyecto. Se arma antes de la primera
-  mutación, registra cada escritura y borrado pretendidos, y sobrevive a
-  SIGKILL, SIGTERM, SIGHUP, el cierre de la terminal y un reinicio del equipo.
-  La llamada siguiente con `update = TRUE` descarta un diario sin armar,
-  reconoce un update cuyo manifiesto nuevo ya quedó completo, o restaura los
-  bytes anteriores antes de continuar. Si una ruta no contiene ni su valor
-  original ni uno pretendido, la recuperación se detiene en vez de pisarla.
-  Después de confirmar que no sigue corriendo otro update, `recover = TRUE`
-  preserva esos bytes desconocidos en un directorio hermano informado y recién
-  entonces recupera. Un dry run informa la acción pendiente sin cambiar el
-  proyecto ni el diario. En Windows nunca se prueba la vida con
+- Los updates interrumpidos se arman en una carpeta hermana durable
+  `.<nombre>.bigbang-update.armando-*` y se renombran a
+  `.<nombre>.bigbang-update` solo después de verificar el marcador y el
+  respaldo. Una preparación sin marcador se descarta solo si está vacía; si
+  tiene contenido, se informa y nunca se elimina. Para descartar un diario se
+  escribe primero una lápida atómica y se lo renombra a
+  `.<nombre>.bigbang-update.descartado-*`, de modo que la limpieza se reanuda
+  después de otra interrupción. La llamada siguiente con `update = TRUE`
+  también reconoce un proyecto movido cuando coinciden el nombre del
+  metapaquete y el hash del manifiesto viejo contra el respaldo. Registra cada
+  escritura y borrado pretendidos y sobrevive a SIGKILL, SIGTERM, SIGHUP, el
+  cierre de la terminal y un reinicio del equipo. Si una ruta no contiene ni
+  su valor original ni uno pretendido, la recuperación se detiene en vez de
+  pisarla. Después de confirmar que no sigue corriendo otro update,
+  `recover = TRUE` preserva esos bytes desconocidos en un directorio hermano
+  informado y recién entonces recupera. Un dry run informa la acción pendiente
+  sin cambiar el proyecto ni el diario. En Windows nunca se prueba la vida con
   `tools::pskill()`, porque esa llamada terminaría el proceso sondeado.
 - `install_upgrade` fija la política de actualización por defecto del instalador
   emitido, así que decidís al generar si los destinatarios quedan clavados en las

@@ -600,3 +600,102 @@ msgstr "No se pueden resolver las colisiones de reexportación: %s. Candidatos, 
 
 msgid "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
 msgstr "Los dueños instalados del símbolo de reexportación '%s' difieren: %s. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."
+
+msgid "It contains a backup at %s."
+msgstr "Contiene un respaldo en %s."
+
+msgid "It does not contain a recognized backup."
+msgstr "No contiene un respaldo reconocido."
+
+msgid "Cannot update %s because %s is an %s update-journal folder. %s %s Next step: %s"
+msgstr "No se puede actualizar %s porque %s es una carpeta de diario de actualización %s. %s %s Siguiente paso: %s"
+
+msgid "armed"
+msgstr "armado"
+
+msgid "unarmed"
+msgstr "sin armar"
+
+msgid "discarded"
+msgstr "descartado"
+
+msgid "unknown"
+msgstr "desconocido"
+
+msgid "Could not write the update-journal tombstone: %s"
+msgstr "No se pudo escribir la lápida del diario de actualización: %s"
+
+msgid "Its tombstone is missing or invalid; nothing was deleted."
+msgstr "Falta la lápida o no es válida; no se eliminó nada."
+
+msgid "keep the folder intact, preserve its contents, and inspect it before retrying."
+msgstr "conserve la carpeta intacta, preserve su contenido e inspecciónelo antes de volver a intentar."
+
+msgid "Could not move the update journal to its discarded state: %s"
+msgstr "No se pudo mover el diario de actualización a su estado descartado: %s"
+
+msgid "It is not a directory with a valid marker."
+msgstr "No es un directorio con un marcador válido."
+
+msgid "leave it intact, inspect it, and remove or move it only after preserving its contents."
+msgstr "déjela intacta, inspecciónela y elimínela o muévala solo después de preservar su contenido."
+
+msgid "It has no marker but is not empty; nothing was deleted."
+msgstr "No tiene marcador pero no está vacía; no se eliminó nada."
+
+msgid "leave it intact, preserve its contents, and inspect the failed preparation before retrying."
+msgstr "déjela intacta, preserve su contenido e inspeccione la preparación fallida antes de volver a intentar."
+
+msgid "Discarded an orphaned armed-update folder at %s."
+msgstr "Se descartó una carpeta de armado huérfana en %s."
+
+msgid "It is not a directory with a valid tombstone."
+msgstr "No es un directorio con una lápida válida."
+
+msgid "leave it intact, preserve its contents, and inspect it before retrying."
+msgstr "déjela intacta, preserve su contenido e inspeccione antes de volver a intentar."
+
+msgid "It has no valid tombstone; nothing was deleted."
+msgstr "No tiene una lápida válida; no se eliminó nada."
+
+msgid "leave the folder intact, preserve its contents, and inspect it before retrying."
+msgstr "deje la carpeta intacta, preserve su contenido e inspeccione antes de volver a intentar."
+
+msgid "It contains unexpected files; nothing was deleted."
+msgstr "Contiene archivos inesperados; no se eliminó nada."
+
+msgid "leave the folder intact, preserve the backup, and inspect the unexpected entries before retrying."
+msgstr "deje la carpeta intacta, preserve el respaldo e inspeccione las entradas inesperadas antes de volver a intentar."
+
+msgid "Its armed state does not match the backup; nothing was deleted."
+msgstr "Su estado armado no coincide con el respaldo; no se eliminó nada."
+
+msgid "leave the folder intact, preserve the backup, and inspect the state before retrying."
+msgstr "deje la carpeta intacta, preserve el respaldo e inspeccione el estado antes de volver a intentar."
+
+msgid "Its intention log is invalid; nothing was deleted."
+msgstr "Su registro de intenciones no es válido; no se eliminó nada."
+
+msgid "leave the folder intact, preserve the backup, and inspect the intention log before retrying."
+msgstr "deje la carpeta intacta, preserve el respaldo e inspeccione el registro de intenciones antes de volver a intentar."
+
+msgid "Cannot update %s because the project directory is missing. It may have been moved without its update journal. Next step: find the moved project and its sibling journal, then retry with dest_dir pointing to that location."
+msgstr "No se puede actualizar %s porque falta el directorio del proyecto. Puede haberse movido sin su diario de actualización. Siguiente paso: busque el proyecto movido y su diario hermano y vuelva a intentar con dest_dir apuntando a esa ubicación."
+
+msgid "The project directory is missing, so this journal was left behind when the project was moved."
+msgstr "Falta el directorio del proyecto, por lo que este diario quedó atrás al moverlo."
+
+msgid "find the moved project, move this journal beside it without changing its contents, and retry there."
+msgstr "busque el proyecto movido, coloque este diario a su lado sin cambiar su contenido y vuelva a intentar allí."
+
+msgid "An update may still be running; no mutation was performed."
+msgstr "Puede haber un update todavía en ejecución; no se hizo ninguna mutación."
+
+msgid "after confirming that no other update is running, call again with recover = TRUE."
+msgstr "después de confirmar que no hay otro update en ejecución, vuelva a llamar con recover = TRUE."
+
+msgid "The update journal was retained for recovery at: %s. It contains a backup at %s. Next step: confirm that no other update is running and call update = TRUE, recover = TRUE."
+msgstr "El diario de actualización se conservó para recuperación en: %s. Contiene un respaldo en %s. Siguiente paso: confirme que no hay otro update en ejecución y llame con update = TRUE, recover = TRUE."
+
+msgid "The interrupted update left files in an unknown state: %s. Journal: %s. The journal contains a backup at %s. Use recover = TRUE to preserve them and recover."
+msgstr "El update interrumpido dejó archivos en un estado desconocido: %s. Diario: %s. El diario contiene un respaldo en %s. Use recover = TRUE para preservarlos y recuperar."

@@ -229,13 +229,18 @@ test_that("a failed journal arm leaves an explicit unarmed journal", {
     )
   })
 
-  journal <- .update_journal_path(fixture$project)
-  expect_true(dir.exists(journal))
-  expect_false(file.exists(file.path(journal, "state.rds")))
-  expect_message(
-    cleaned <- .recover_pending_update(fixture$project, "roundnineverse"),
-    "Discarded an unarmed update journal"
+  journal <- list.files(
+    dirname(fixture$project),
+    pattern = paste0("^\\.", basename(fixture$project),
+                     "\\.bigbang-update\\.armando-"),
+    full.names = TRUE, all.files = TRUE
   )
-  expect_false(cleaned$recovered)
-  expect_false(dir.exists(journal))
+  expect_length(journal, 1L)
+  expect_true(dir.exists(journal[[1L]]))
+  expect_false(file.exists(file.path(journal[[1L]], "state.rds")))
+  expect_message(
+    .reconcile_update_siblings(fixture$project, "roundnineverse"),
+    "Discarded an orphaned armed-update folder"
+  )
+  expect_false(dir.exists(journal[[1L]]))
 })
