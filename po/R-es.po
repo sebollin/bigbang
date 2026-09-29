@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.5.0\n"
+"Project-Id-Version: bigbang\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -427,8 +427,14 @@ msgstr "Los componentes de directorio fuente requieren include_archives = TRUE p
 msgid "Cannot update %s because requested generated files are not in its manifest: %s."
 msgstr "No se puede actualizar %s porque los archivos generados solicitados no están en su manifiesto: %s."
 
+msgid "Cannot update %s because its manifest contains invalid paths: %s."
+msgstr "No se puede actualizar %s porque su manifiesto contiene rutas no válidas: %s."
+
 msgid "Cannot update %s because generated path components are symbolic links: %s. Refusing to write outside the project."
 msgstr "No se puede actualizar %s porque algunos componentes de la ruta generada son enlaces simbólicos: %s. Se rechaza escribir fuera del proyecto."
+
+msgid "Archive %s does not match its DESCRIPTION identity (%s %s)."
+msgstr "El archivo %s no coincide con la identidad de su DESCRIPTION (%s %s)."
 
 msgid "Generated files were not written as planned: %s"
 msgstr "Los archivos generados no se escribieron según lo planificado: %s"
@@ -445,8 +451,167 @@ msgstr "'recover' debe ser TRUE o FALSE"
 msgid "'recover' requires update = TRUE"
 msgstr "'recover' requiere update = TRUE"
 
+msgid "'dry_run' must be TRUE or FALSE"
+msgstr "'dry_run' debe ser TRUE o FALSE"
+
+msgid "'update' must be TRUE or FALSE"
+msgstr "'update' debe ser TRUE o FALSE"
+
+msgid "'ext' must be one non-empty archive extension"
+msgstr "'ext' debe ser una extensión de archivo no vacía"
+
+msgid "No valid component archives remain after applying the component error policy."
+msgstr "No quedan archivos de componentes válidos después de aplicar la política de error de componentes."
+
+msgid "Omitted because it depends on omitted component %s."
+msgstr "Omitido porque depende del componente omitido %s."
+
+msgid "No valid component archives remain after propagating omitted dependencies."
+msgstr "No quedan archivos de componentes válidos después de propagar dependencias omitidas."
+
+msgid "NAMESPACE imports '%s' from component '%s', which was skipped: %s"
+msgstr "NAMESPACE importa '%s' desde el componente '%s', que fue omitido: %s"
+
+msgid "Component '%s' was omitted by skip."
+msgstr "El componente '%s' fue omitido."
+
+msgid "Could not replace generated file: %s"
+msgstr "No se pudo reemplazar el archivo generado: %s"
+
+msgid "Could not copy the component archive: %s"
+msgstr "No se pudo copiar el archivo del componente: %s"
+
+msgid "More than one local archive is available for dependency %s."
+msgstr "Hay más de un archivo local disponible para la dependencia %s."
+
 msgid "Cannot update %s because %s is not a recognized bigbang update journal for this project. Move it aside or restore the expected journal."
 msgstr "No se puede actualizar %s porque %s no es un diario de actualización de bigbang reconocido para este proyecto. Muévalo a otro lugar o restaure el diario esperado."
+
+msgid "It contains a backup at %s."
+msgstr "Contiene un respaldo en %s."
+
+msgid "It does not contain a recognized backup."
+msgstr "No contiene un respaldo reconocido."
+
+msgid "Cannot update %s because %s is an %s update-journal folder. %s %s Next step: %s"
+msgstr "No se puede actualizar %s porque %s es una carpeta de diario de actualización %s. %s %s Siguiente paso: %s"
+
+msgid "Cannot update %s because %s is not a recognized bigbang update journal. It has no recognized backup. Next step: leave it intact, preserve its contents, and inspect or move it aside before retrying."
+msgstr "No se puede actualizar %s porque %s no es un diario de actualización de bigbang reconocido. No tiene un respaldo reconocido. Siguiente paso: déjelo intacto, preserve su contenido e inspecciónelo o muévalo a otro lugar antes de volver a intentar."
+
+msgid "Cannot update %s because journal %s belongs to project '%s', not project '%s'. Rename the project and journal back, or rename the journal to match the project."
+msgstr "No se puede actualizar %s porque el diario %s pertenece al proyecto '%s', no al proyecto '%s'. Renombre el proyecto y el diario de vuelta, o renombre el diario para que coincida con el proyecto."
+
+msgid "Could not arm the update journal because its final path already exists: %s"
+msgstr "No se pudo armar el diario de actualización porque su ruta final ya existe: %s"
+
+msgid "Could not arm the update journal at %s"
+msgstr "No se pudo armar el diario de actualización en %s"
+
+msgid "armed"
+msgstr "armado"
+
+msgid "unarmed"
+msgstr "sin armar"
+
+msgid "discarded"
+msgstr "descartado"
+
+msgid "unknown"
+msgstr "desconocido"
+
+msgid "Could not write the update-journal tombstone: %s"
+msgstr "No se pudo escribir la lápida del diario de actualización: %s"
+
+msgid "Its tombstone belongs to project '%s' with manifest hash %s, not project '%s' with manifest hash %s; nothing was deleted."
+msgstr "Su lápida pertenece al proyecto '%s' con hash de manifiesto %s, no al proyecto '%s' con hash de manifiesto %s; no se eliminó nada."
+
+msgid "leave the folder intact, preserve the backup, and move it back beside its project before retrying."
+msgstr "deje la carpeta intacta, preserve el respaldo y muévala junto a su proyecto antes de volver a intentar."
+
+msgid "It contains entries outside its discard inventory; nothing was deleted. Preserved: %s."
+msgstr "Contiene entradas fuera de su inventario de descarte; no se eliminó nada. Se preservaron: %s."
+
+msgid "leave the folder intact, preserve the backup, remove only the reported user entries, and retry."
+msgstr "deje la carpeta intacta, preserve el respaldo, quite solo las entradas de usuario informadas y vuelva a intentar."
+
+msgid "Completed the interrupted discard at %s."
+msgstr "Se completó el descarte interrumpido en %s."
+
+msgid "Its tombstone is missing or invalid; nothing was deleted."
+msgstr "Falta la lápida o no es válida; no se eliminó nada."
+
+msgid "keep the folder intact, preserve its contents, and inspect it before retrying."
+msgstr "conserve la carpeta intacta, preserve su contenido e inspecciónelo antes de volver a intentar."
+
+msgid "Could not move the update journal to its discarded state: %s"
+msgstr "No se pudo mover el diario de actualización a su estado descartado: %s"
+
+msgid "It is not a directory with a valid marker."
+msgstr "No es un directorio con un marcador válido."
+
+msgid "leave it intact, inspect it, and remove or move it only after preserving its contents."
+msgstr "déjela intacta, inspecciónela y elimínela o muévala solo después de preservar su contenido."
+
+msgid "It has no marker but is not empty; nothing was deleted."
+msgstr "No tiene marcador pero no está vacía; no se eliminó nada."
+
+msgid "leave it intact, preserve its contents, and inspect the failed preparation before retrying."
+msgstr "déjela intacta, preserve su contenido e inspeccione la preparación fallida antes de volver a intentar."
+
+msgid "Discarded an orphaned armed-update folder at %s."
+msgstr "Se descartó una carpeta de armado huérfana en %s."
+
+msgid "It is not a directory with a valid tombstone."
+msgstr "No es un directorio con una lápida válida."
+
+msgid "leave it intact, preserve its contents, and inspect it before retrying."
+msgstr "déjela intacta, preserve su contenido e inspeccione antes de volver a intentar."
+
+msgid "It has no valid tombstone; nothing was deleted."
+msgstr "No tiene una lápida válida; no se eliminó nada."
+
+msgid "leave the folder intact, preserve its contents, and inspect it before retrying."
+msgstr "deje la carpeta intacta, preserve su contenido e inspeccione antes de volver a intentar."
+
+msgid "It contains unexpected files; nothing was deleted."
+msgstr "Contiene archivos inesperados; no se eliminó nada."
+
+msgid "leave the folder intact, preserve the backup, and inspect the unexpected entries before retrying."
+msgstr "deje la carpeta intacta, preserve el respaldo e inspeccione las entradas inesperadas antes de volver a intentar."
+
+msgid "Its armed state does not match the backup; nothing was deleted."
+msgstr "Su estado armado no coincide con el respaldo; no se eliminó nada."
+
+msgid "leave the folder intact, preserve the backup, and inspect the state before retrying."
+msgstr "deje la carpeta intacta, preserve el respaldo e inspeccione el estado antes de volver a intentar."
+
+msgid "Its intention log is invalid; nothing was deleted."
+msgstr "Su registro de intenciones no es válido; no se eliminó nada."
+
+msgid "leave the folder intact, preserve the backup, and inspect the intention log before retrying."
+msgstr "deje la carpeta intacta, preserve el respaldo e inspeccione el registro de intenciones antes de volver a intentar."
+
+msgid "Cannot update %s because the project directory is missing. It may have been moved without its update journal. Next step: find the moved project and its sibling journal, then retry with dest_dir pointing to that location."
+msgstr "No se puede actualizar %s porque falta el directorio del proyecto. Puede haberse movido sin su diario de actualización. Siguiente paso: busque el proyecto movido y su diario hermano y vuelva a intentar con dest_dir apuntando a esa ubicación."
+
+msgid "The project directory is missing, so this journal was left behind when the project was moved."
+msgstr "Falta el directorio del proyecto, por lo que este diario quedó atrás al moverlo."
+
+msgid "find the moved project, move this journal beside it without changing its contents, and retry there."
+msgstr "busque el proyecto movido, coloque este diario a su lado sin cambiar su contenido y vuelva a intentar allí."
+
+msgid "An update may still be running; no mutation was performed."
+msgstr "Puede haber un update todavía en ejecución; no se hizo ninguna mutación."
+
+msgid "after confirming that no other update is running, call again with recover = TRUE."
+msgstr "después de confirmar que no hay otro update en ejecución, vuelva a llamar con recover = TRUE."
+
+msgid "The update journal was retained for recovery at: %s. It contains a backup at %s. Next step: confirm that no other update is running and call update = TRUE, recover = TRUE."
+msgstr "El diario de actualización se conservó para recuperación en: %s. Contiene un respaldo en %s. Siguiente paso: confirme que no hay otro update en ejecución y llame con update = TRUE, recover = TRUE."
+
+msgid "The interrupted update left files in an unknown state: %s. Journal: %s. The journal contains a backup at %s. Use recover = TRUE to preserve them and recover."
+msgstr "El update interrumpido dejó archivos en un estado desconocido: %s. Diario: %s. El diario contiene un respaldo en %s. Use recover = TRUE para preservarlos y recuperar."
 
 msgid "The update journal at %s has an invalid intention log."
 msgstr "El diario de actualización en %s tiene un registro de intenciones no válido."
@@ -612,102 +777,3 @@ msgstr "Los dueños instalados del símbolo de reexportación '%s' son objetos d
 
 msgid "Installed owners for re-export symbol '%s' differ as distinct objects: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
 msgstr "Los dueños instalados del símbolo de reexportación '%s' difieren como objetos distintos: %s. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."
-
-msgid "It contains a backup at %s."
-msgstr "Contiene un respaldo en %s."
-
-msgid "It does not contain a recognized backup."
-msgstr "No contiene un respaldo reconocido."
-
-msgid "Cannot update %s because %s is an %s update-journal folder. %s %s Next step: %s"
-msgstr "No se puede actualizar %s porque %s es una carpeta de diario de actualización %s. %s %s Siguiente paso: %s"
-
-msgid "armed"
-msgstr "armado"
-
-msgid "unarmed"
-msgstr "sin armar"
-
-msgid "discarded"
-msgstr "descartado"
-
-msgid "unknown"
-msgstr "desconocido"
-
-msgid "Could not write the update-journal tombstone: %s"
-msgstr "No se pudo escribir la lápida del diario de actualización: %s"
-
-msgid "Its tombstone is missing or invalid; nothing was deleted."
-msgstr "Falta la lápida o no es válida; no se eliminó nada."
-
-msgid "keep the folder intact, preserve its contents, and inspect it before retrying."
-msgstr "conserve la carpeta intacta, preserve su contenido e inspecciónelo antes de volver a intentar."
-
-msgid "Could not move the update journal to its discarded state: %s"
-msgstr "No se pudo mover el diario de actualización a su estado descartado: %s"
-
-msgid "It is not a directory with a valid marker."
-msgstr "No es un directorio con un marcador válido."
-
-msgid "leave it intact, inspect it, and remove or move it only after preserving its contents."
-msgstr "déjela intacta, inspecciónela y elimínela o muévala solo después de preservar su contenido."
-
-msgid "It has no marker but is not empty; nothing was deleted."
-msgstr "No tiene marcador pero no está vacía; no se eliminó nada."
-
-msgid "leave it intact, preserve its contents, and inspect the failed preparation before retrying."
-msgstr "déjela intacta, preserve su contenido e inspeccione la preparación fallida antes de volver a intentar."
-
-msgid "Discarded an orphaned armed-update folder at %s."
-msgstr "Se descartó una carpeta de armado huérfana en %s."
-
-msgid "It is not a directory with a valid tombstone."
-msgstr "No es un directorio con una lápida válida."
-
-msgid "leave it intact, preserve its contents, and inspect it before retrying."
-msgstr "déjela intacta, preserve su contenido e inspeccione antes de volver a intentar."
-
-msgid "It has no valid tombstone; nothing was deleted."
-msgstr "No tiene una lápida válida; no se eliminó nada."
-
-msgid "leave the folder intact, preserve its contents, and inspect it before retrying."
-msgstr "deje la carpeta intacta, preserve su contenido e inspeccione antes de volver a intentar."
-
-msgid "It contains unexpected files; nothing was deleted."
-msgstr "Contiene archivos inesperados; no se eliminó nada."
-
-msgid "leave the folder intact, preserve the backup, and inspect the unexpected entries before retrying."
-msgstr "deje la carpeta intacta, preserve el respaldo e inspeccione las entradas inesperadas antes de volver a intentar."
-
-msgid "Its armed state does not match the backup; nothing was deleted."
-msgstr "Su estado armado no coincide con el respaldo; no se eliminó nada."
-
-msgid "leave the folder intact, preserve the backup, and inspect the state before retrying."
-msgstr "deje la carpeta intacta, preserve el respaldo e inspeccione el estado antes de volver a intentar."
-
-msgid "Its intention log is invalid; nothing was deleted."
-msgstr "Su registro de intenciones no es válido; no se eliminó nada."
-
-msgid "leave the folder intact, preserve the backup, and inspect the intention log before retrying."
-msgstr "deje la carpeta intacta, preserve el respaldo e inspeccione el registro de intenciones antes de volver a intentar."
-
-msgid "Cannot update %s because the project directory is missing. It may have been moved without its update journal. Next step: find the moved project and its sibling journal, then retry with dest_dir pointing to that location."
-msgstr "No se puede actualizar %s porque falta el directorio del proyecto. Puede haberse movido sin su diario de actualización. Siguiente paso: busque el proyecto movido y su diario hermano y vuelva a intentar con dest_dir apuntando a esa ubicación."
-
-msgid "The project directory is missing, so this journal was left behind when the project was moved."
-msgstr "Falta el directorio del proyecto, por lo que este diario quedó atrás al moverlo."
-
-msgid "find the moved project, move this journal beside it without changing its contents, and retry there."
-msgstr "busque el proyecto movido, coloque este diario a su lado sin cambiar su contenido y vuelva a intentar allí."
-
-msgid "An update may still be running; no mutation was performed."
-msgstr "Puede haber un update todavía en ejecución; no se hizo ninguna mutación."
-
-msgid "after confirming that no other update is running, call again with recover = TRUE."
-msgstr "después de confirmar que no hay otro update en ejecución, vuelva a llamar con recover = TRUE."
-
-msgid "The update journal was retained for recovery at: %s. It contains a backup at %s. Next step: confirm that no other update is running and call update = TRUE, recover = TRUE."
-msgstr "El diario de actualización se conservó para recuperación en: %s. Contiene un respaldo en %s. Siguiente paso: confirme que no hay otro update en ejecución y llame con update = TRUE, recover = TRUE."
-
-msgid "The interrupted update left files in an unknown state: %s. Journal: %s. The journal contains a backup at %s. Use recover = TRUE to preserve them and recover."
-msgstr "El update interrumpido dejó archivos en un estado desconocido: %s. Diario: %s. El diario contiene un respaldo en %s. Use recover = TRUE para preservarlos y recuperar."

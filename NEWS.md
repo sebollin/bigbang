@@ -1,5 +1,13 @@
 # bigbang (development version)
 
+- Round 056 hardens interrupted-update cleanup: marker-only atomic remnants and
+  empty discarded shells converge automatically, tombstones carry exact MD5
+  inventories, foreign generations are preserved, and renamed sibling journals
+  are recognized by manifest identity. Re-export diagnostics now follow active
+  string indirection, record `lockBinding()` and `unlockBinding()`, and ignore
+  binder names used only as data. Spanish catalog coverage now includes every
+  package translation call.
+
 - Interrupted-update journals are assembled in private sibling staging folders,
   use resumable tombstones while being discarded, and recognize a project
   moved together with its journal by metapackage name and old-manifest hash.

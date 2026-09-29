@@ -641,7 +641,13 @@
 #' ordered file, line, import, and parse reasons. For a preferred
 #' `probable_same_object`, `<name>_install()` verifies the installed owners with
 #' `identical()` without installing anything extra; missing owners remain
-#' unverified and the verification is retained in the returned result.
+#' unverified and the verification is retained in the returned result. The
+#' diagnostic is a help, not the guarantee: the guarantee is the explicit
+#' `reexport_prefer` or `reexport_exclude` decision plus that verification.
+#' Calling `library(<meta>)` alone does not verify installed owners. The scanner
+#' is deliberately conservative and can count a never-forced `delayedAssign`,
+#' an `if (FALSE)` branch, or a `reg.finalizer()` body; this overcount does not
+#' weaken the explicit decision and installation-verification guarantee.
 #' `<name>_conflicts()` repeats that check on request. If
 #' `on_component_error = "skip"` omits a component required by a preferred
 #' binding or an import source, generation errors with an actionable skipped
@@ -660,19 +666,27 @@
 #' known outputs are promoted atomically to the project.
 #'
 #' If a process dies while preparing the journal, an empty unmarked
-#' `armando-*` folder is discarded; a non-empty unmarked folder is never
-#' deleted. A marked preparation is recognized and discarded because it cannot
-#' have touched the project. Journal disposal first writes an atomic tombstone
-#' and renames the folder to `.<name>.bigbang-update.descartado-*`; cleanup can
-#' therefore resume after another interruption. A discarded folder without a
-#' valid tombstone is left intact and reported as unknown.
+#' `armando-*` folder, or one containing only the exact atomic marker temporary
+#' files, is discarded; any other non-empty unmarked folder is never deleted.
+#' A marked preparation is recognized and discarded because it cannot have
+#' touched the project. Journal disposal first writes an atomic tombstone with
+#' the exact relative-path and MD5 inventory of the entries bigbang wrote, then
+#' renames the folder to `.<name>.bigbang-update.descartado-*`; cleanup can
+#' therefore resume after another interruption. New or changed entries outside
+#' that inventory are preserved and reported. A discarded folder without a
+#' valid tombstone is left intact and reported as unknown; an empty one is
+#' removed as an interrupted cleanup shell.
 #'
 #' The journal survives process termination, terminal closure, and system
 #' shutdown, including SIGKILL, SIGTERM, and SIGHUP on POSIX systems. The next
 #' `create_metapackage(update = TRUE)` call examines it before validating the
 #' generation manifest. The marker identifies the metapackage and old-manifest
 #' hash rather than an absolute path, so moving the project together with its
-#' journal remains recoverable. An unarmed journal is discarded because the project was
+#' journal remains recoverable. A renamed project is also recognized when its
+#' sibling journal's backed-up manifest hash matches the current project; an
+#' unrecognized journal reports the recorded project name and how to rename it
+#' back. A discarded sibling is finished only when its metapackage name and
+#' recorded manifest hash match this project's current manifest. An unarmed journal is discarded because the project was
 #' not touched; an already completed update is recognized by its new manifest;
 #' otherwise a dead owner's changes are rolled back and the requested update
 #' continues. On POSIX systems liveness uses the PID and, where Linux `/proc`

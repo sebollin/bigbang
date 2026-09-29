@@ -987,6 +987,31 @@
   found
 }
 
+.reexport_is_descendant <- function(data, node, ancestor) {
+  current <- as.integer(node)
+  ancestor <- as.integer(ancestor)
+  repeat {
+    if (identical(current, ancestor)) return(TRUE)
+    row <- data[data$id == current, , drop = FALSE]
+    if (nrow(row) == 0L || identical(row$parent[[1L]], 0L)) return(FALSE)
+    current <- row$parent[[1L]]
+  }
+}
+
+.reexport_call_arg_id <- function(data, call_id) {
+  open <- data[data$parent == call_id & data$token == "'('", , drop = FALSE]
+  if (nrow(open) == 0L) return(NULL)
+  arguments <- data[
+    data$parent == call_id &
+      data$token %in% c("expr", "expr_or_assign_or_help") &
+      data$col1 > open$col1[[1L]],
+    , drop = FALSE
+  ]
+  if (nrow(arguments) == 0L) return(NULL)
+  arguments <- arguments[order(arguments$col1, arguments$id), , drop = FALSE]
+  arguments$id[[1L]]
+}
+
 .reexport_parse_scope <- function(data) {
   roots <- data$id[data$parent == 0L & data$token == "expr"]
   function_exprs <- data$id[data$token == "FUNCTION"]
@@ -1041,6 +1066,12 @@
 
   calls <- data[data$token == "SYMBOL_FUNCTION_CALL", , drop = FALSE]
   followed <- character()
+  indirect_names <- c(
+    "do.call", "get", "getFromNamespace", "match.fun", "Recall", "mget",
+    "setLoadAction"
+  )
+  indirect <- list()
+  indirect_seen <- integer()
   repeat {
     before <- length(active)
     for (row_index in seq_len(nrow(calls))) {
@@ -1055,9 +1086,42 @@
         data, definitions[[function_name]]$body
       ))
     }
+    for (row_index in seq_len(nrow(calls))) {
+      call <- calls[row_index, , drop = FALSE]
+      if (!call$id[[1L]] %in% active ||
+            !call$text[[1L]] %in% indirect_names ||
+            call$id[[1L]] %in% indirect_seen) next
+      indirect_seen <- c(indirect_seen, call$id[[1L]])
+      call_id <- .reexport_call_expression(data, call$id[[1L]])
+      first <- if (is.null(call_id)) {
+        NULL
+      } else {
+        .reexport_call_first_argument(data, call_id)
+      }
+      package <- .reexport_qualify_function(data, call$id[[1L]])$package
+      item <- list(
+        name = if (is.null(package)) call$text[[1L]] else
+          paste0(package, "::", call$text[[1L]]),
+        file = NULL, line = call$line1[[1L]],
+        literal = if (is.null(first)) FALSE else isTRUE(first$literal),
+        value = if (is.null(first)) NULL else first$value,
+        active = TRUE, followed = FALSE
+      )
+      if (!is.null(first) && isTRUE(first$literal) &&
+            first$value %in% names(definitions)) {
+        item$followed <- TRUE
+        if (!first$value %in% followed) {
+          followed <- c(followed, first$value)
+          active <- c(active, .reexport_parse_descendants(
+            data, definitions[[first$value]]$body
+          ))
+        }
+      }
+      indirect[[length(indirect) + 1L]] <- item
+    }
     if (length(active) == before) break
   }
-  unique(active)
+  list(active = unique(active), indirect = indirect)
 }
 
 .reexport_parse_source <- function(path, package_root) {
@@ -1078,13 +1142,19 @@
   }
   data <- utils::getParseData(parsed, includeText = TRUE)
   if (is.null(data) || nrow(data) == 0L) return(evidence)
-  active_ids <- .reexport_parse_scope(data)
+  scope <- .reexport_parse_scope(data)
+  active_ids <- scope$active
+  scope_indirect <- lapply(scope$indirect, function(item) {
+    item$file <- label
+    item
+  })
+  evidence$indirect <- c(evidence$indirect, scope_indirect)
 
   binder_names <- c(
     "assign", "delayedAssign", "makeActiveBinding", "list2env", "sys.source",
     "assignInMyNamespace", "assignInNamespace", "source", "load", "attach",
     "setGeneric", "setClass", "setRefClass", "setValidity", "setGroupGeneric",
-    "setMethod"
+    "setMethod", "lockBinding", "unlockBinding"
   )
 
   assignment_tokens <- c(
@@ -1207,8 +1277,46 @@
     binder_rows <- binder_rows[binder_rows$text %in% binder_names, , drop = FALSE]
   }
   if (nrow(binder_rows) > 0L) {
+    indirect_names <- c(
+      "do.call", "get", "getFromNamespace", "match.fun", "Recall", "mget",
+      "setLoadAction"
+    )
+    function_rows <- which(data$token == "SYMBOL_FUNCTION_CALL")
+    call_context <- function(row_id) {
+      for (function_index in function_rows) {
+        function_row <- data[function_index, , drop = FALSE]
+        call_id <- .reexport_call_expression(data, function_row$id[[1L]])
+        if (is.null(call_id)) next
+        first_id <- .reexport_call_arg_id(data, call_id)
+        if (is.null(first_id) || !.reexport_is_descendant(
+          data, row_id, first_id
+        )) next
+        qualification <- .reexport_qualify_function(
+          data, function_row$id[[1L]]
+        )
+        return(list(
+          name = qualification$function_name,
+          package = qualification$package
+        ))
+      }
+      NULL
+    }
     for (index in seq_len(nrow(binder_rows))) {
       row <- binder_rows[index, , drop = FALSE]
+      if (identical(row$token[[1L]], "STR_CONST")) {
+        context <- call_context(row$id[[1L]])
+        if (is.null(context) || !context$name %in% c(
+          binder_names, indirect_names
+        )) next
+        is_indirect <- context$name %in% indirect_names
+        evidence$mutations[[length(evidence$mutations) + 1L]] <- list(
+          symbol = if (is_indirect) NULL else row$text[[1L]],
+          name = if (is_indirect) row$text[[1L]] else context$name,
+          file = label, line = row$line1[[1L]],
+          active = row$id[[1L]] %in% active_ids
+        )
+        next
+      }
       evidence$mutations[[length(evidence$mutations) + 1L]] <- list(
         symbol = NULL, name = row$text[[1L]], file = label,
         line = row$line1[[1L]], active = row$id[[1L]] %in% active_ids
@@ -1756,7 +1864,7 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
     !isTRUE(item$literal) || is.null(item$value) || identical(item$value, symbol)
   })
   add(dynamic)
-  add(indirect)
+  add(indirect, function(item) !isTRUE(item$followed))
   if (length(relevant) == 0L) return(relevant)
   keys <- vapply(
     relevant,

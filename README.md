@@ -164,6 +164,12 @@ equivalent function copies (same body and formals) from distinct objects. If `on
 omits a required owner, generation errors rather than emitting a binding to a
 component that is not included.
 
+The collision analysis is a diagnostic aid. The guarantee is the explicit
+`reexport_prefer` or `reexport_exclude` choice plus `<meta>_install()`'s
+verification; `library(<meta>)` alone does not verify installed owners. The
+scanner is conservative and may count a never-forced `delayedAssign`, an
+`if (FALSE)` branch, or a `reg.finalizer()` body.
+
 `teamverse` carries its components, so the call takes no arguments and that is
 all anyone who receives it has to do. Hand over the built
 `teamverse_0.1.0.tar.gz` and nothing else: no folder of archives alongside it,
@@ -301,12 +307,16 @@ all, so it is a safe way to see what a call would do before it does it.
 - Interrupted updates are assembled in a durable sibling
   `.<name>.bigbang-update.armando-*` folder and renamed to
   `.<name>.bigbang-update` only after the marker and backup have been verified.
-  An empty unmarked preparation is safe to discard; a non-empty unmarked
-  preparation is reported and never deleted. Discarding a journal first writes
-  an atomic tombstone and renames it to `.<name>.bigbang-update.descartado-*`,
-  so cleanup resumes after another interruption. The next `update = TRUE` call
-  also recognizes a moved project when its metapackage name and old-manifest
-  hash match the backup. It records every intended write and removal and
+  An empty unmarked preparation, or one containing only the exact atomic marker
+  temporary files, is safe to discard; any other non-empty unmarked preparation
+  is reported and never deleted. Discarding a journal first writes an atomic
+  tombstone with the exact relative-path and MD5 inventory of entries bigbang
+  wrote, then renames it to `.<name>.bigbang-update.descartado-*`, so cleanup
+  resumes after another interruption. New or changed entries outside that
+  inventory are preserved and reported. The next `update = TRUE` call also
+  recognizes a moved or renamed project when its sibling journal's backed-up
+  manifest hash identifies the project; a discarded sibling from another
+  generation is preserved with an actionable message. It records every intended write and removal and
   survives SIGKILL, SIGTERM, SIGHUP, terminal closure, and a system restart.
   If a path contains neither its original nor an intended value, recovery stops
   instead of overwriting it. On Windows, an absent destination is known only

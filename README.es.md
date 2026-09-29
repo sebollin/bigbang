@@ -162,6 +162,12 @@ instalar. Un aviso de identidad `FALSE` distingue copias equivalentes de funcion
 Si `on_component_error = "skip"` omite un dueño necesario, la generación falla
 en vez de crear un binding hacia un componente que no viaja.
 
+El análisis de colisiones es una ayuda de diagnóstico. La garantía es la decisión
+explícita `reexport_prefer` o `reexport_exclude` más la verificación de
+`<meta>_install()`; `library(<meta>)` por sí sola no verifica los dueños instalados.
+El escáner es conservador y puede contar un `delayedAssign` que nunca se fuerza,
+una rama `if (FALSE)` o el cuerpo de un `reg.finalizer()`.
+
 bigbang mantiene como errores duros todas las validaciones que protegen a quien
 recibe el metapaquete: archivos inseguros o malformados, metadatos inválidos,
 componentes duplicados, restricciones locales insatisfechas y ciclos. Esas
@@ -275,13 +281,17 @@ segura de ver qué haría una llamada antes de que la haga.
 - Los updates interrumpidos se arman en una carpeta hermana durable
   `.<nombre>.bigbang-update.armando-*` y se renombran a
   `.<nombre>.bigbang-update` solo después de verificar el marcador y el
-  respaldo. Una preparación sin marcador se descarta solo si está vacía; si
-  tiene contenido, se informa y nunca se elimina. Para descartar un diario se
-  escribe primero una lápida atómica y se lo renombra a
+  respaldo. Una preparación sin marcador se descarta solo si está vacía o si
+  contiene únicamente los temporales atómicos exactos del marcador; cualquier
+  otro contenido se informa y nunca se elimina. Para descartar un diario se
+  escribe primero una lápida atómica con el inventario exacto de rutas relativas
+  y md5 de lo que escribió bigbang, y se lo renombra a
   `.<nombre>.bigbang-update.descartado-*`, de modo que la limpieza se reanuda
-  después de otra interrupción. La llamada siguiente con `update = TRUE`
-  también reconoce un proyecto movido cuando coinciden el nombre del
-  metapaquete y el hash del manifiesto viejo contra el respaldo. Registra cada
+  después de otra interrupción. Las entradas nuevas o con otro hash se
+  preservan y se informan. La llamada siguiente con `update = TRUE` también
+  reconoce un proyecto movido o renombrado cuando el diario hermano coincide
+  por el hash del manifiesto; un descartado de otra generación queda intacto
+  con un mensaje accionable. Registra cada
   escritura y borrado pretendidos y sobrevive a SIGKILL, SIGTERM, SIGHUP, el
   cierre de la terminal y un reinicio del equipo. Si una ruta no contiene ni
   su valor original ni uno pretendido, la recuperación se detiene en vez de
