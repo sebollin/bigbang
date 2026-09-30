@@ -928,17 +928,20 @@
     parse(text = paste0("function() ", text))[[1L]][[3L]],
     error = function(e) NULL
   )
-  if (is.symbol(expression)) return(as.character(expression))
+  if (is.symbol(expression) && length(expression) == 1L) {
+    return(as.character(expression))
+  }
   if (is.character(expression) && length(expression) == 1L &&
         !is.na(expression)) return(expression)
   NULL
 }
 
 .reexport_call_expression <- function(data, function_id) {
+  if (length(function_id) != 1L || is.na(function_id)) return(NULL)
   current <- function_id
   repeat {
     row <- data[data$id == current, , drop = FALSE]
-    if (nrow(row) == 0L) return(NULL)
+    if (nrow(row) != 1L) return(NULL)
     if (row$token[[1L]] %in% c("expr", "expr_or_assign_or_help") &&
           any(data$parent == current & data$token == "'('")) {
       return(row[["id"]][[1L]])
@@ -949,17 +952,64 @@
   }
 }
 
-.reexport_call_first_argument <- function(data, call_id) {
-  open <- data[data$parent == call_id & data$token == "'('", , drop = FALSE]
-  if (nrow(open) == 0L) return(NULL)
-  arguments <- data[
+.reexport_position_before <- function(left, right) {
+  if (nrow(left) != 1L || nrow(right) != 1L) return(FALSE)
+  left$line1[[1L]] < right$line1[[1L]] ||
+    (identical(left$line1[[1L]], right$line1[[1L]]) &&
+       left$col1[[1L]] < right$col1[[1L]])
+}
+
+.reexport_call_children <- function(data, call_id, open = NULL) {
+  if (length(call_id) != 1L || is.na(call_id)) return(data[0, , drop = FALSE])
+  if (is.null(open)) {
+    open <- data[data$parent == call_id & data$token == "'('", , drop = FALSE]
+  }
+  if (nrow(open) != 1L) return(data[0, , drop = FALSE])
+  children <- data[
     data$parent == call_id &
-      data$token %in% c("expr", "expr_or_assign_or_help") &
-      data$col1 > open$col1[[1L]],
+      data$token %in% c("expr", "expr_or_assign_or_help"),
     , drop = FALSE
   ]
+  if (nrow(children) == 0L) return(children)
+  after_open <- vapply(seq_len(nrow(children)), function(index) {
+    .reexport_position_before(children[index, , drop = FALSE], open)
+  }, logical(1L))
+  after_open <- !after_open & (
+    children$line1 > open$line1[[1L]] |
+      (children$line1 == open$line1[[1L]] &
+         children$col1 > open$col1[[1L]])
+  )
+  children[after_open, , drop = FALSE][order(
+    children$line1[after_open], children$col1[after_open],
+    children$id[after_open]
+  ), , drop = FALSE]
+}
+
+.reexport_call_target <- function(data, open) {
+  if (nrow(open) != 1L) return(NULL)
+  call_id <- open$parent[[1L]]
+  children <- data[
+    data$parent == call_id &
+      data$token %in% c("expr", "expr_or_assign_or_help"),
+    , drop = FALSE
+  ]
+  if (nrow(children) == 0L) return(NULL)
+  before_open <- vapply(seq_len(nrow(children)), function(index) {
+    .reexport_position_before(children[index, , drop = FALSE], open)
+  }, logical(1L))
+  children <- children[before_open, , drop = FALSE]
+  if (nrow(children) == 0L) return(NULL)
+  children <- children[order(
+    children$line1, children$col1, children$id
+  ), , drop = FALSE]
+  children[nrow(children), , drop = FALSE]
+}
+
+.reexport_call_first_argument <- function(data, call_id) {
+  open <- data[data$parent == call_id & data$token == "'('", , drop = FALSE]
+  if (nrow(open) != 1L) return(NULL)
+  arguments <- .reexport_call_children(data, call_id, open)
   if (nrow(arguments) == 0L) return(NULL)
-  arguments <- arguments[order(arguments$col1, arguments$id), , drop = FALSE]
   first <- arguments[1L, , drop = FALSE]
   parsed <- tryCatch(
     parse(text = paste0("f(", first$text[[1L]], ")"))[[1L]][[2L]],
@@ -975,6 +1025,9 @@
 }
 
 .reexport_qualify_function <- function(data, function_id) {
+  if (length(function_id) != 1L || is.na(function_id)) {
+    return(list(package = NULL, function_name = NULL))
+  }
   row <- data[data$id == function_id, , drop = FALSE]
   if (nrow(row) == 0L) return(list(package = NULL, function_name = NULL))
   parent <- row$parent[[1L]]
@@ -1020,8 +1073,13 @@
 .reexport_is_descendant <- function(data, node, ancestor) {
   current <- as.integer(node)
   ancestor <- as.integer(ancestor)
+  if (length(current) != 1L || length(ancestor) != 1L ||
+        is.na(current) || is.na(ancestor)) return(FALSE)
+  seen <- integer()
   repeat {
     if (identical(current, ancestor)) return(TRUE)
+    if (current %in% seen) return(FALSE)
+    seen <- c(seen, current)
     row <- data[data$id == current, , drop = FALSE]
     if (nrow(row) == 0L || identical(row$parent[[1L]], 0L)) return(FALSE)
     current <- row$parent[[1L]]
@@ -1030,15 +1088,9 @@
 
 .reexport_call_arg_id <- function(data, call_id) {
   open <- data[data$parent == call_id & data$token == "'('", , drop = FALSE]
-  if (nrow(open) == 0L) return(NULL)
-  arguments <- data[
-    data$parent == call_id &
-      data$token %in% c("expr", "expr_or_assign_or_help") &
-      data$col1 > open$col1[[1L]],
-    , drop = FALSE
-  ]
+  if (nrow(open) != 1L) return(NULL)
+  arguments <- .reexport_call_children(data, call_id, open)
   if (nrow(arguments) == 0L) return(NULL)
-  arguments <- arguments[order(arguments$col1, arguments$id), , drop = FALSE]
   arguments$id[[1L]]
 }
 
@@ -1048,10 +1100,13 @@
                      , drop = FALSE]
   if (nrow(assignment) != 1L) return(NULL)
   lhs <- data[data$parent == root & data$token %in%
-                c("expr", "expr_or_assign_or_help") &
-                data$col1 < assignment$col1[[1L]], , drop = FALSE]
+                c("expr", "expr_or_assign_or_help"), , drop = FALSE]
+  lhs <- lhs[vapply(seq_len(nrow(lhs)), function(index) {
+    .reexport_position_before(lhs[index, , drop = FALSE], assignment)
+  }, logical(1L)), , drop = FALSE]
   if (nrow(lhs) == 0L) return(NULL)
-  lhs <- lhs[order(lhs$col1, lhs$id), , drop = FALSE][1L, , drop = FALSE]
+  lhs <- lhs[order(lhs$line1, lhs$col1, lhs$id), , drop = FALSE]
+  lhs <- lhs[nrow(lhs), , drop = FALSE]
   .reexport_parse_target(lhs$text[[1L]])
 }
 
@@ -1075,15 +1130,12 @@
 
 .reexport_literal_arg <- function(data, call_id, position) {
   open <- data[data$parent == call_id & data$token == "'('", , drop = FALSE]
-  if (nrow(open) == 0L) return(NULL)
-  arguments <- data[
-    data$parent == call_id &
-      data$token %in% c("expr", "expr_or_assign_or_help") &
-      data$col1 > open$col1[[1L]], , drop = FALSE
-  ]
+  if (nrow(open) != 1L) return(NULL)
+  arguments <- .reexport_call_children(data, call_id, open)
   if (nrow(arguments) == 0L) return(NULL)
-  arguments <- arguments[order(arguments$col1, arguments$id), , drop = FALSE]
-  if (nrow(arguments) < position) return(NULL)
+  if (length(position) != 1L || is.na(position) || nrow(arguments) < position) {
+    return(NULL)
+  }
   parsed <- tryCatch(
     parse(text = paste0("f(", arguments$text[[position]], ")"))[[1L]][[2L]],
     error = function(e) NULL
@@ -1099,15 +1151,78 @@
 }
 
 .reexport_simple_symbol <- function(text) {
-  grepl("^`?[A-Za-z.][A-Za-z0-9._]*`?$", trimws(text), perl = TRUE)
+  text <- trimws(text)
+  grepl("^`?[A-Za-z.][A-Za-z0-9._]*`?$", text, perl = TRUE) ||
+    grepl("^`[^`]+`$", text, perl = TRUE)
 }
 
 .reexport_call_target_root <- function(text) {
+  if (!is.character(text) || length(text) != 1L || is.na(text)) {
+    return(NULL)
+  }
   expression <- tryCatch(
     parse(text = paste0("(", text, ")"))[[1L]][[2L]],
     error = function(e) NULL
   )
-  if (is.call(expression)) as.character(expression[[1L]]) else NULL
+  if (!is.call(expression) || length(expression) == 0L) return(NULL)
+  head <- expression[[1L]]
+  head_text <- tryCatch(as.character(head), error = function(e) character())
+  if (length(head_text) > 0L && !is.na(head_text[[1L]])) {
+    head_text[[1L]]
+  } else {
+    NULL
+  }
+}
+
+.reexport_call_target_kind <- function(text) {
+  if (!is.character(text) || length(text) != 1L || is.na(text)) {
+    return(list(kind = "undetermined", reason = "The call target is not a scalar string."))
+  }
+  trimmed <- trimws(text)
+  if (!nzchar(trimmed)) {
+    return(list(kind = "undetermined", reason = "The call target is empty."))
+  }
+  if (.reexport_simple_symbol(trimmed)) {
+    return(list(kind = "simple", name = trimmed))
+  }
+  expression <- tryCatch(
+    parse(text = paste0("(", trimmed, ")"))[[1L]][[2L]],
+    error = function(e) NULL
+  )
+  if (is.null(expression)) {
+    return(list(
+      kind = "undetermined",
+      reason = "The call target could not be parsed independently."
+    ))
+  }
+  if (is.symbol(expression) && length(expression) == 1L &&
+        identical(trimmed, as.character(expression))) {
+    return(list(kind = "simple", name = as.character(expression)))
+  }
+  head_text <- if (is.call(expression) && length(expression) > 0L) {
+    as.character(expression[[1L]])
+  } else {
+    character()
+  }
+  if (is.call(expression) && length(expression) == 3L &&
+        length(head_text) == 1L && head_text %in% c("::", ":::") &&
+        is.symbol(expression[[2L]]) && is.symbol(expression[[3L]])) {
+    return(list(
+      kind = "qualified", package = as.character(expression[[2L]]),
+      name = as.character(expression[[3L]])
+    ))
+  }
+  root <- .reexport_call_target_root(trimmed)
+  if (length(root) == 1L) {
+    return(list(
+      kind = "calculated", root = root,
+      reason = sprintf("The call target is calculated through '%s'.", root)
+    ))
+  }
+  list(
+    kind = "undetermined",
+    reason = "The call target has no classifiable root expression."
+  )
 }
 
 .reexport_package_scope <- function(parsed, package = NULL) {
@@ -1173,6 +1288,11 @@
       if (!call_key %in% active) next
       function_name <- call$text[[1L]]
       if (!function_name %in% names(definitions) || function_name %in% followed) next
+      qualification <- .reexport_qualify_function(
+        parsed[[call$file_index[[1L]]]]$data, call$id[[1L]]
+      )
+      if (!is.null(qualification$package) && !is.null(package) &&
+            !identical(qualification$package, package)) next
       followed <- c(followed, function_name)
       definition <- definitions[[function_name]]
       active <- c(active, key(definition$file_index,
@@ -1236,23 +1356,22 @@
     if (nrow(open) == 0L) next
     for (row_index in seq_len(nrow(open))) {
       call_id <- open$parent[[row_index]]
-      children <- data[
-        data$parent == call_id &
-          data$token %in% c("expr", "expr_or_assign_or_help") &
-          data$col1 < open$col1[[row_index]], , drop = FALSE
-      ]
-      if (nrow(children) == 0L) next
-      target <- children[order(children$col1, children$id), , drop = FALSE]
-      target <- target[1L, , drop = FALSE]
+      target <- .reexport_call_target(
+        data, open[row_index, , drop = FALSE]
+      )
+      if (is.null(target)) next
       target_text <- trimws(target$text[[1L]])
-      if (.reexport_simple_symbol(target_text)) next
+      target_kind <- .reexport_call_target_kind(target_text)
+      if (target_kind$kind %in% c("simple", "qualified")) next
       root <- .reexport_call_target_root(target_text)
-      if (root %in% indirect_names) next
+      if (length(root) == 1L && root %in% indirect_names) next
       if (key(index, call_id) %in% active) {
+        call_row <- data[data$id == call_id, , drop = FALSE]
+        line <- if (nrow(call_row) == 1L) call_row$line1[[1L]] else NA_integer_
         non_simple[[index]][[length(non_simple[[index]]) + 1L]] <- list(
           name = target_text, file = parsed[[index]]$label,
-          line = data[data$id == call_id, "line1", drop = TRUE][[1L]],
-          active = TRUE, non_simple = TRUE
+          line = line, active = TRUE, non_simple = TRUE,
+          reason = target_kind$reason
         )
       }
     }
@@ -1268,7 +1387,7 @@
 
 .reexport_parse_source <- function(path, package_root, data,
                                    active_ids = NULL, scope_indirect = list(),
-                                   scope_non_simple = list()) {
+                                   scope_non_simple = list(), package = NULL) {
   label <- .reexport_source_label(path, package_root)
   evidence <- list(
     assignments = list(), calls = list(), dynamic = list(), mutations = list(),
@@ -1301,12 +1420,18 @@
       , drop = FALSE
     ]
     if (nrow(candidates) == 0L) next
-    candidates <- candidates[order(candidates$col1, candidates$id), , drop = FALSE]
-    before <- candidates$col1 < assignment$col1[[1L]]
+    candidates <- candidates[order(
+      candidates$line1, candidates$col1, candidates$id
+    ), , drop = FALSE]
+    before <- vapply(seq_len(nrow(candidates)), function(index) {
+      .reexport_position_before(
+        candidates[index, , drop = FALSE], assignment
+      )
+    }, logical(1L))
     index <- if (assignment$token %in% c("RIGHT_ASSIGN", "RIGHT_ASSIGN2")) {
       which(!before)[1L]
     } else {
-      which(before)[1L]
+      which(before)[sum(before)]
     }
     if (length(index) == 0L || is.na(index)) next
     target <- .reexport_parse_target(candidates$text[[index]])
@@ -1350,6 +1475,8 @@
     call_id <- .reexport_call_expression(data, function_row$id)
     if (is.null(call_id)) next
     qualification <- .reexport_qualify_function(data, function_row$id)
+    if (length(qualification$function_name) != 1L ||
+          is.na(qualification$function_name)) next
     first <- .reexport_call_first_argument(data, call_id)
     record <- list(
       name = qualification$function_name,
@@ -1365,7 +1492,8 @@
       startsWith(function_name, "env_bind")
     is_namespace_assign <- identical(qualification$package, "utils") &&
       function_name %in% c("assignInMyNamespace", "assignInNamespace")
-    call_text <- data[data$id == call_id, "text", drop = TRUE]
+    call_row <- data[data$id == call_id, , drop = FALSE]
+    call_text <- if (nrow(call_row) == 1L) call_row$text[[1L]] else ""
     is_dynamic <- function_name %in% c(
       "list2env", "sys.source", "source", "load", "attach"
     ) ||
@@ -1379,8 +1507,12 @@
     if (function_name %in% target_calls) {
       evidence$calls[[length(evidence$calls) + 1L]] <- record
     }
-    if (!is.null(qualification$package) &&
+    if (length(qualification$package) == 1L &&
+          !is.null(qualification$package) &&
           !identical(qualification$package, "base") &&
+          !identical(qualification$package, "utils") &&
+          !identical(function_name, ".") &&
+          (is.null(package) || !identical(qualification$package, package)) &&
           any(data$text %in% c(".onLoad", ".onAttach"))) {
       evidence$indirect[[length(evidence$indirect) + 1L]] <- list(
         name = paste0(qualification$package, "::", function_name),
@@ -1414,24 +1546,49 @@
       "setLoadAction"
     )
     function_rows <- which(data$token == "SYMBOL_FUNCTION_CALL")
-    call_context <- function(row_id) {
-      for (function_index in function_rows) {
-        function_row <- data[function_index, , drop = FALSE]
-        call_id <- .reexport_call_expression(data, function_row$id[[1L]])
-        if (is.null(call_id)) next
-        first_id <- .reexport_call_arg_id(data, call_id)
-        if (is.null(first_id) || !.reexport_is_descendant(
-          data, row_id, first_id
-        )) next
-        qualification <- .reexport_qualify_function(
-          data, function_row$id[[1L]]
+    children_by_parent <- split(data$id, data$parent)
+    call_contexts <- lapply(function_rows, function(function_index) {
+      function_row <- data[function_index, , drop = FALSE]
+      call_id <- .reexport_call_expression(data, function_row$id[[1L]])
+      if (is.null(call_id)) return(NULL)
+      first_id <- .reexport_call_arg_id(data, call_id)
+      if (is.null(first_id)) return(NULL)
+      qualification <- .reexport_qualify_function(
+        data, function_row$id[[1L]]
+      )
+      list(
+        first_id = first_id, name = qualification$function_name,
+        package = qualification$package
+      )
+    })
+    call_contexts <- Filter(Negate(is.null), call_contexts)
+    context_by_row <- new.env(hash = TRUE, parent = emptyenv())
+    for (context in call_contexts) {
+      found <- as.integer(context$first_id)
+      pending <- found
+      while (length(pending) > 0L) {
+        children <- unlist(
+          children_by_parent[as.character(pending)],
+          use.names = FALSE
         )
-        return(list(
-          name = qualification$function_name,
-          package = qualification$package
-        ))
+        children <- unique(as.integer(children))
+        children <- children[!is.na(children) & !children %in% found]
+        if (length(children) == 0L) break
+        found <- c(found, children)
+        pending <- children
       }
-      NULL
+      for (row_id in found) {
+        key <- as.character(row_id)
+        if (!exists(key, envir = context_by_row, inherits = FALSE)) {
+          assign(key, context, envir = context_by_row)
+        }
+      }
+    }
+    call_context <- function(row_id) {
+      key <- as.character(row_id)
+      if (!exists(key, envir = context_by_row, inherits = FALSE)) return(NULL)
+      context <- get(key, envir = context_by_row, inherits = FALSE)
+      list(name = context$name, package = context$package)
     }
     for (index in seq_len(nrow(binder_rows))) {
       row <- binder_rows[index, , drop = FALSE]
@@ -1478,7 +1635,17 @@
           parse_error = conditionMessage(source)
         ))
       }
-      data <- utils::getParseData(source, includeText = TRUE)
+      data <- tryCatch(
+        utils::getParseData(source, includeText = TRUE),
+        error = identity
+      )
+      if (inherits(data, "error")) {
+        return(list(
+          path = path, label = label, data = empty_data,
+          parse_error = paste0("Could not inspect parse data: ",
+                               conditionMessage(data))
+        ))
+      }
       if (is.null(data)) data <- empty_data
       list(path = path, label = label, data = data, parse_error = NULL)
     })
@@ -1488,7 +1655,7 @@
         parsed[[index]]$path, package_root, data = parsed[[index]]$data,
         active_ids = scope$active[[index]],
         scope_indirect = scope$indirect[[index]],
-        scope_non_simple = scope$non_simple[[index]]
+        scope_non_simple = scope$non_simple[[index]], package = package
       )
     })
     parsed_evidence <- lapply(seq_along(parsed_evidence), function(index) {
@@ -2091,6 +2258,8 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
     }, character(1L))
     mutation_items <- mutation_items[!duplicated(keys)]
     reasons <- c(reasons, vapply(mutation_items, function(item) {
+      if (!is.null(item$reason) && length(item$reason) == 1L &&
+            !is.na(item$reason)) return(item$reason)
       .bb_trf(
         "Binder or namespace mutation via %s in %s:%d; it is not known whether it changes '%s'.",
         .or_null(item$name, "mutation"), item$file, item$line, symbol
