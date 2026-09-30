@@ -411,11 +411,14 @@ test_that("round 051 uses an explicit hard rule for skipped re-export owners", {
   )
   bytes <- readBin(origin, "raw", n = file.info(origin)$size)
   writeBin(bytes[seq_len(max(1L, length(bytes) %/% 2L))], origin)
-  condition <- round051_collision_condition(bigbang::create_metapackage(
-    "skipverse", c(origin, child), dest_dir = destination, document = FALSE,
-    verbose = FALSE, import_deps = character(), force_deps = character(),
-    reexport = TRUE, on_component_error = "skip"
-  ))
+  expect_warning(
+    condition <- round051_collision_condition(bigbang::create_metapackage(
+      "skipverse", c(origin, child), dest_dir = destination, document = FALSE,
+      verbose = FALSE, import_deps = character(), force_deps = character(),
+      reexport = TRUE, on_component_error = "skip"
+    )),
+    "skiporigin"
+  )
   expect_s3_class(condition, "bigbang_error_reexport_skipped")
   expect_match(condition$message, "skiporigin", fixed = TRUE)
   expect_match(condition$message, "omitted|skip", ignore.case = TRUE)
@@ -425,12 +428,18 @@ test_that("round 051 uses an explicit hard rule for skipped re-export owners", {
     source_root, archive_dir, "skipchildprefer", "s", body = "# imported only",
     namespace_extra = "importFrom(skiporigin, s)"
   )
-  preferred_condition <- round051_collision_condition(bigbang::create_metapackage(
-    "skippreferverse", c(origin, child_prefer), dest_dir = destination,
-    document = FALSE, verbose = FALSE, import_deps = character(),
-    force_deps = character(), reexport = TRUE,
-    reexport_prefer = c(s = "skiporigin"), on_component_error = "skip"
-  ))
+  expect_warning(
+    expect_warning(
+      preferred_condition <- round051_collision_condition(bigbang::create_metapackage(
+        "skippreferverse", c(origin, child_prefer), dest_dir = destination,
+        document = FALSE, verbose = FALSE, import_deps = character(),
+        force_deps = character(), reexport = TRUE,
+        reexport_prefer = c(s = "skiporigin"), on_component_error = "skip"
+      )),
+      "skiporigin"
+    ),
+    "Could not read archive"
+  )
   expect_s3_class(preferred_condition, "bigbang_error_reexport_skipped")
   expect_match(preferred_condition$message, "omitted|skip", ignore.case = TRUE)
 })
@@ -660,8 +669,15 @@ test_that("round 051 prefers a non-syntactic export and installs its binding", {
   withr::local_libpaths(c(meta_library, component_library, .libPaths()))
   loadNamespace("preferverse")
   expect_identical(getExportedValue("preferverse", "%>%")(), "right pipe")
-  conflicts <- getExportedValue("preferverse", "preferverse_conflicts")()
-  expect_identical(conflicts$resolution, "preferred")
+  conflicts <- NULL
+  expect_warning(
+    conflicts <- getExportedValue("preferverse", "preferverse_conflicts")(),
+    "differ as distinct objects"
+  )
+  expect_s3_class(conflicts, "preferverse_conflicts")
+  expect_s3_class(conflicts$reexport_verification,
+                  "preferverse_reexport_verification")
+  expect_identical(conflicts$reexport_verification$resolution, "preferred")
 })
 
 test_that("round 053 verifies probable choices after install and keeps the binding", {
@@ -732,8 +748,9 @@ test_that("round 053 verifies probable choices after install and keeps the bindi
       }
     )
     expect_s3_class(before_warning, "bigbang_warning_reexport_verification")
-    expect_identical(before_install$missing, "verifyparent, verifychild")
-    expect_true(is.na(before_install$identical))
+    expect_identical(before_install$reexport_verification$missing,
+                     "verifyparent, verifychild")
+    expect_true(is.na(before_install$reexport_verification$identical))
   })
 
   withr::local_libpaths(c(meta_library, component_library, .libPaths()))
@@ -764,8 +781,9 @@ test_that("round 053 verifies probable choices after install and keeps the bindi
     }
   )
   expect_s3_class(conflicts_warning, "bigbang_warning_reexport_verification")
-  expect_identical(conflicts$identical, FALSE)
-  expect_identical(conflicts$missing, "")
+  expect_s3_class(conflicts, "verifyverse_conflicts")
+  expect_identical(conflicts$reexport_verification$identical, FALSE)
+  expect_identical(conflicts$reexport_verification$missing, "")
 })
 
 test_that("round 055 verification warns when an installed owner lost its export", {
@@ -831,9 +849,10 @@ test_that("round 055 verification warns when an installed owner lost its export"
     )
     expect_s3_class(warning_condition, "bigbang_warning_reexport_verification")
     expect_match(conditionMessage(warning_condition), "missingparent", fixed = TRUE)
-    expect_identical(result$missing, "missingparent, missingchild")
-    expect_identical(result$installed, "missingparent")
-    expect_true(is.na(result$identical))
+    expect_identical(result$reexport_verification$missing,
+                     "missingparent, missingchild")
+    expect_identical(result$reexport_verification$installed, "missingparent")
+    expect_true(is.na(result$reexport_verification$identical))
   })
 })
 
@@ -1098,7 +1117,9 @@ test_that("round 053 poison component cannot mask generated runtime calls", {
   result <- install_function(lib = component_library, verbose = FALSE)
   expect_true(is.data.frame(result$reexport_verification))
   conflicts <- base::getExportedValue("poisonverse", "poisonverse_conflicts")()
-  expect_true(is.data.frame(conflicts))
+  expect_s3_class(conflicts, "poisonverse_conflicts")
+  expect_s3_class(conflicts$reexport_verification,
+                  "poisonverse_reexport_verification")
 
   unqualified <- base::tempfile("bigbang-round053-unqualified-")
   base::writeLines(

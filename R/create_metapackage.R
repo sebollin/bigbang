@@ -659,6 +659,10 @@
 #' binding or an import source, generation errors with an actionable skipped
 #' condition instead of creating a binding to a component that will not travel
 #' with the metapackage.
+#' With `reexport = TRUE`, `<name>_conflicts()` retains the masking-conflict
+#' list from earlier releases and adds its installed-owner table in the
+#' `reexport_verification` component. That component keeps the same
+#' `<name>_reexport_verification` class when it has zero rows.
 #'
 #' @section Interrupted updates:
 #' Before an in-place update mutates the project, bigbang assembles a durable

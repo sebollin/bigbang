@@ -453,3 +453,67 @@ test_that("rollback works when a path component is a symbolic link", {
   expect_false(dir.exists(file.path(preexisting, "linkverse")))
   expect_true(dir.exists(preexisting))
 })
+
+test_that("create_metapackage help is generated from roxygen comments", {
+  skip_if_not_installed("roxygen2")
+  package_root <- normalizePath(testthat::test_path("..", ".."),
+                                winslash = "/", mustWork = TRUE)
+  if (!file.exists(file.path(package_root, "DESCRIPTION")) ||
+        !file.exists(file.path(package_root, "R", "create_metapackage.R")) ||
+        !file.exists(file.path(package_root, "man", "create_metapackage.Rd"))) {
+    # R CMD check runs tests from an installed copy, which intentionally has
+    # no source tree for roxygen2 to parse. The source-copy comparison runs
+    # in the repository and in the standalone source test above.
+    expect_true(TRUE)
+    return(invisible(NULL))
+  }
+  copy_root <- tempfile("bigbang-roxygen-")
+  unlink(copy_root, recursive = TRUE, force = TRUE)
+  dir.create(copy_root, recursive = TRUE)
+  on.exit(unlink(copy_root, recursive = TRUE, force = TRUE), add = TRUE)
+  for (entry in c("DESCRIPTION", "NAMESPACE", "R", "man")) {
+    source_entry <- file.path(package_root, entry)
+    target_entry <- file.path(copy_root, entry)
+    if (!file.exists(source_entry) && !dir.exists(source_entry)) next
+    if (dir.exists(source_entry)) {
+      dir.create(target_entry, recursive = TRUE)
+      children <- list.files(source_entry, all.files = TRUE, no.. = TRUE,
+                             full.names = TRUE)
+      if (length(children) > 0L) {
+        file.copy(children, target_entry, recursive = TRUE)
+      }
+    } else {
+      file.copy(source_entry, target_entry)
+    }
+  }
+  root_literal <- encodeString(normalizePath(copy_root, winslash = "/",
+                                             mustWork = TRUE), quote = "\"")
+  expected_path <- file.path(package_root, "man", "create_metapackage.Rd")
+  if (file.exists(expected_path)) {
+    source_literal <- encodeString(package_root, quote = "\"")
+    code <- paste0(
+      "root <- ", root_literal, "; ",
+      "source_root <- ", source_literal, "; ",
+      "roxygen2::roxygenise(root, roclets = 'rd'); ",
+      "expected <- readLines(file.path(source_root, 'man', 'create_metapackage.Rd'), warn = FALSE); ",
+      "generated <- readLines(file.path(root, 'man', 'create_metapackage.Rd'), warn = FALSE); ",
+      "if (!identical(generated, expected)) quit(status = 1L)"
+    )
+  } else {
+    code <- paste0(
+      "root <- ", root_literal, "; ",
+      "roxygen2::roxygenise(root, roclets = 'rd'); ",
+      "generated <- paste(readLines(file.path(root, 'man', 'create_metapackage.Rd'), ",
+      "warn = FALSE), collapse = '\\n'); ",
+      "if (!grepl('reexport_verification', generated, fixed = TRUE)) quit(status = 1L)"
+    )
+  }
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  output <- system2(r_binary, c("--vanilla", "-e", shQuote(code)),
+                    stdout = TRUE, stderr = TRUE)
+  status <- attr(output, "status")
+  if (is.null(status)) status <- 0L
+  expect_identical(status, 0L, info = paste(output, collapse = "\n"))
+})

@@ -111,6 +111,14 @@ argumentos y eso es todo lo que tiene que hacer quien lo recibe: le pasás el
 queden en una ubicación compartida, generá con `include_archives = FALSE` y
 entonces `equipoverse_install()` va a pedir un `pkg_dir` explícito.
 
+### Actualizaciones interrumpidas y recuperación
+
+Un `update = TRUE` interrumpido deja un diario durable junto al proyecto. El
+update siguiente lo revisa antes de escribir; usá `dry_run = TRUE` para ver la
+acción prevista. Después de confirmar que no sigue corriendo otro update, pasá
+`recover = TRUE` para preservar bytes de usuario desconocidos y completar el
+rollback o la recuperación.
+
 `"skip"` es el modo predeterminado y nunca usa la red. `"error"` falla si falta
 una dependencia no local; `"install"` permite instalar desde un `repos`
 configurado explícitamente.
@@ -161,6 +169,8 @@ instalar. Un aviso de identidad `FALSE` distingue copias equivalentes de funcion
 (mismo cuerpo y formales) de objetos distintos.
 Si `on_component_error = "skip"` omite un dueño necesario, la generación falla
 en vez de crear un binding hacia un componente que no viaja.
+El objeto que devuelve conserva los conflictos de enmascaramiento y suma el
+data frame `reexport_verification` como componente separado.
 
 El análisis de colisiones es una ayuda de diagnóstico. La garantía es la decisión
 explícita `reexport_prefer` o `reexport_exclude` más la verificación de

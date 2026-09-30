@@ -118,6 +118,15 @@ Use `upgrade = "always"` or `force = TRUE` for an explicit reinstall. Generated
 metapackages provide `<meta>_conflicts()` and honor
 `options(<meta>.quiet = TRUE)` for startup output. Their optional `cli` display
 falls back to a dependency-free ASCII banner.
+`<meta>_conflicts()` retains masking conflicts and stores the installation check
+in its `reexport_verification` component.
+
+## Interrupted updates and recovery
+
+An interrupted `update = TRUE` leaves a durable journal beside the project.
+The next update inspects it before writing, and `dry_run = TRUE` previews the
+pending action. After confirming that no other update is running, use
+`recover = TRUE` to preserve unknown user bytes and complete recovery.
 
 ## Beyond the simple case
 

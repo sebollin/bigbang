@@ -1014,8 +1014,30 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
   if (is.null(parsed)) return(content)
   data <- utils::getParseData(parsed, includeText = TRUE)
   if (is.null(data) || nrow(data) == 0L) return(content)
+  defined_functions <- character()
+  function_ids <- data$id[data$token == "FUNCTION"]
+  function_nodes <- data$parent[data$id %in% function_ids]
+  for (function_node in function_nodes) {
+    root <- data$parent[data$id == function_node]
+    if (length(root) != 1L) next
+    assignment <- data[data$parent == root & data$token %in%
+                          c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2"),
+                        , drop = FALSE]
+    if (nrow(assignment) != 1L) next
+    lhs <- data[data$parent == root & data$token %in%
+                  c("expr", "expr_or_assign_or_help") &
+                  data$col1 < assignment$col1[[1L]], , drop = FALSE]
+    if (nrow(lhs) == 0L) next
+    lhs <- lhs[order(lhs$col1, lhs$id), , drop = FALSE][1L, , drop = FALSE]
+    name <- trimws(lhs$text[[1L]])
+    if (grepl("^`?[A-Za-z.][A-Za-z0-9._]*`?$", name, perl = TRUE)) {
+      defined_functions <- c(defined_functions, sub("^`|`$", "", name))
+    }
+  }
+  defined_functions <- unique(defined_functions)
   calls <- data[data$token == "SYMBOL_FUNCTION_CALL" &
-                  data$text %in% names(owners), , drop = FALSE]
+                  data$text %in% setdiff(names(owners), defined_functions),
+                , drop = FALSE]
   if (nrow(calls) == 0L) return(content)
   lines <- strsplit(content, "\n", fixed = TRUE)[[1L]]
   edits <- lapply(seq_len(nrow(calls)), function(index) {
@@ -1122,92 +1144,26 @@ write_metapackage_files <- function(
     log_debug(paste("extension:", template_data$extension))
   }
 
-  conflicts_function <- if (isTRUE(reexport)) {
-    paste(c(
-      "#' Report resolved re-export origins",
-      "#'",
-      "#' Checks preferred re-export resolutions against installed owners.",
-      "#'",
-      "#' @return A data frame with resolution and installed-identity details.",
-      "#' @export",
-      paste0(name, "_conflicts <- function() {"),
-      "  specs <- Filter(function(spec) spec$resolution %in% c(\"preferred\"), .component_reexport_specs)",
-      "  empty <- data.frame(symbol = character(), package = character(), resolution = character(), diagnosis = character(), candidates = character(), installed = character(), missing = character(), identical = logical(), stringsAsFactors = FALSE)",
-      "  if (length(specs) == 0L) return(empty)",
-      "  rows <- lapply(specs, function(spec) {",
-      "    installed <- vapply(spec$candidates, requireNamespace, logical(1L), quietly = TRUE, lib.loc = .reexport_library_paths())",
-      "    missing <- spec$candidates[!installed]",
-      "    same <- NA",
-      "    if (identical(spec$diagnosis, \"probable_same_object\") && length(missing) == 0L) {",
-      "      values <- tryCatch(lapply(spec$candidates, function(package) getExportedValue(package, spec$symbol)), error = function(e) NULL)",
-      "      if (!is.null(values) && length(values) > 0L) same <- all(vapply(values[-1L], identical, logical(1L), y = values[[1L]]))",
-      "    }",
-      "    data.frame(symbol = spec$symbol, package = spec$package, resolution = spec$resolution, diagnosis = spec$diagnosis, candidates = paste(spec$candidates, collapse = \", \"), installed = paste(spec$candidates[installed], collapse = \", \"), missing = paste(missing, collapse = \", \"), identical = same, stringsAsFactors = FALSE)",
-      "  })",
-      paste0("  structure(do.call(rbind, rows), class = c(\"", name, "_conflicts\", \"data.frame\"))"),
-      "}",
-      "",
-      "#' @export",
-      paste0("print.", name, "_conflicts <- function(x, ...) {"),
-      "  if (nrow(x) == 0L) {",
-      "    cat(.meta_tr(\"No re-export resolutions found.\"), \"\\n\")",
-      "    return(invisible(x))",
-      "  }",
-      "  cat(.meta_tr(\"Re-export resolutions:\"), \"\\n\")",
-      "  for (index in seq_len(nrow(x))) {",
-      "    status <- if (is.na(x$identical[[index]])) .meta_tr(\"not verified\") else as.character(x$identical[[index]])",
-      "    missing <- if (nzchar(x$missing[[index]])) paste0(\"; \", .meta_trf(\"missing: %s\", x$missing[[index]])) else \"\"",
-      "    cat(\"  \", x$symbol[[index]], \": \", x$package[[index]], \" [\", x$resolution[[index]], \"]; identical=\", status, missing, \"\\n\", sep = \"\")",
-      "  }",
-      "  invisible(x)",
-      "}"
-    ), collapse = "\n")
-  } else {
-    paste(c(
-      "#' Report masking conflicts involving metapackage components",
-      "#'",
-      "#' Examines attached package environments and reports names exported by more",
-      "#' than one package when at least one owner is a metapackage component.",
-      "#'",
-      "#' @return A named list of conflicting package search entries.",
-      "#' @export",
-      paste0(name, "_conflicts <- function() {"),
-      "  package_entries <- grep(\"^package:\", search(), value = TRUE)",
-      "  component_entries <- intersect(paste0(\"package:\", .pkgs), package_entries)",
-      "  if (length(component_entries) == 0L) {",
-      paste0("    return(structure(list(), class = c(\"", name, "_conflicts\", \"list\")))"),
-      "  }",
-      "  objects <- lapply(package_entries, function(entry) ls(envir = as.environment(entry), all.names = TRUE))",
-      "  names(objects) <- package_entries",
-      "  candidates <- unique(unlist(objects[component_entries], use.names = FALSE))",
-      "  conflicts <- lapply(candidates, function(object) package_entries[vapply(objects, function(exports) object %in% exports, logical(1))])",
-      "  names(conflicts) <- candidates",
-      "  conflicts <- conflicts[vapply(conflicts, length, integer(1)) > 1L]",
-      paste0("  structure(conflicts, class = c(\"", name, "_conflicts\", \"list\"))"),
-      "}",
-      "",
-      "#' @export",
-      paste0("print.", name, "_conflicts <- function(x, ...) {"),
-      "  if (length(x) == 0L) {",
-      "    cat(.meta_tr(\"No conflicts found.\"), \"\\n\")",
-      "    return(invisible(x))",
-      "  }",
-      "  cat(.meta_tr(\"Conflicts:\"), \"\\n\")",
-      "  for (object in names(x)) {",
-      "    owners <- sub(\"^package:\", \"\", x[[object]])",
-      "    cat(\"  \", object, \": \", paste(owners, collapse = \", \"), \"\\n\", sep = \"\")",
-      "  }",
-      "  invisible(x)",
-      "}"
-    ), collapse = "\n")
-  }
-  template_data$conflicts_function <- conflicts_function
+  masking_conflicts_body <- c(
+    "  package_entries <- grep(\"^package:\", search(), value = TRUE)",
+    "  component_entries <- intersect(paste0(\"package:\", .pkgs), package_entries)",
+    "  if (length(component_entries) == 0L) {",
+    paste0("    return(structure(list(), class = c(\"", name, "_conflicts\", \"list\")))"),
+    "  }",
+    "  objects <- lapply(package_entries, function(entry) ls(envir = as.environment(entry), all.names = TRUE))",
+    "  names(objects) <- package_entries",
+    "  candidates <- unique(unlist(objects[component_entries], use.names = FALSE))",
+    "  conflicts <- lapply(candidates, function(object) package_entries[vapply(objects, function(exports) object %in% exports, logical(1))])",
+    "  names(conflicts) <- candidates",
+    "  conflicts <- conflicts[vapply(conflicts, length, integer(1)) > 1L]",
+    paste0("  structure(conflicts, class = c(\"", name, "_conflicts\", \"list\"))")
+  )
 
   if (isTRUE(reexport)) {
     template_data$conflicts_function <- paste(c(
       "  .reexport_verify <- function(warn = FALSE) {",
       "    specs <- Filter(function(spec) identical(spec$resolution, \"preferred\"), .component_reexport_specs)",
-      "    empty <- base::data.frame(symbol = base::character(), package = base::character(), resolution = base::character(), diagnosis = base::character(), candidates = base::character(), installed = base::character(), missing = base::character(), identical = base::logical(), stringsAsFactors = FALSE)",
+      paste0("    empty <- base::structure(base::data.frame(symbol = base::character(), package = base::character(), resolution = base::character(), diagnosis = base::character(), candidates = base::character(), installed = base::character(), missing = base::character(), identical = base::logical(), stringsAsFactors = FALSE), class = base::c(\"", name, "_reexport_verification\", \"data.frame\"))"),
       "    if (base::length(specs) == 0L) return(empty)",
       "    rows <- base::lapply(specs, function(spec) {",
       "      installed <- base::vapply(spec$candidates, base::requireNamespace, base::logical(1), quietly = TRUE, lib.loc = .reexport_library_paths())",
@@ -1222,8 +1178,8 @@ write_metapackage_files <- function(
       "      missing <- spec$candidates[!available]",
       "      same <- NA",
       "      equivalent <- FALSE",
-      "      if (identical(spec$diagnosis, \"probable_same_object\") && base::all(available)) {",
-      "        objects <- base::lapply(values, base::`[[`, \"value\")",
+      "      if (base::all(available)) {",
+      "        objects <- base::lapply(values, function(value) value[[\"value\"]])",
       "        same <- base::all(base::vapply(objects[-1L], base::identical, base::logical(1), y = objects[[1L]]))",
       "        if (base::length(objects) > 1L && identical(same, FALSE)) {",
       "          equivalent <- base::all(base::vapply(objects[-1L], function(value) {",
@@ -1234,7 +1190,7 @@ write_metapackage_files <- function(
       "        }",
       "      }",
       "      row <- base::data.frame(symbol = spec$symbol, package = spec$package, resolution = spec$resolution, diagnosis = spec$diagnosis, candidates = base::paste(spec$candidates, collapse = \", \"), installed = base::paste(spec$candidates[installed], collapse = \", \"), missing = base::paste(missing, collapse = \", \"), identical = same, stringsAsFactors = FALSE)",
-      "      if (base::isTRUE(warn) && identical(spec$diagnosis, \"probable_same_object\") && (base::length(missing) > 0L || identical(same, FALSE))) {",
+      "      if (base::isTRUE(warn) && (base::length(missing) > 0L || identical(same, FALSE))) {",
       "        message <- if (base::length(missing) > 0L) {",
       "          .meta_trf(\"Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.\", spec$symbol, base::paste(missing, collapse = \", \"))",
       "        } else if (base::isTRUE(equivalent)) {",
@@ -1247,30 +1203,81 @@ write_metapackage_files <- function(
       "      }",
       "      row",
       "    })",
-      paste0("    base::structure(base::do.call(base::rbind, rows), class = c(\"", name, "_reexport_verification\", \"data.frame\"))"),
+      paste0("    base::structure(base::do.call(base::rbind, rows), class = base::c(\"", name, "_reexport_verification\", \"data.frame\"))"),
       "  }",
       "",
-      "#' Report re-export verification",
+      "#' Report masking conflicts and re-export verification",
       "#'",
-      "#' Installation verification is a snapshot of the owners available at the",
-      "#' time of installation. Call this function to verify them again later.",
-      "#' @return A data frame with installed-owner identity checks.",
+      "#' The returned list keeps masking conflicts and includes an installed-owner",
+      "#' verification data frame as a separate component.",
+      "#' @return A named list of masking conflicts with a verification component.",
       "#' @export",
-      paste0(name, "_conflicts <- function() .reexport_verify(warn = TRUE)"),
+      paste0(name, "_conflicts <- function() {"),
+      "  package_entries <- base::grep(\"^package:\", base::search(), value = TRUE)",
+      "  component_entries <- base::intersect(base::paste0(\"package:\", .pkgs), package_entries)",
+      "  conflicts <- if (base::length(component_entries) == 0L) {",
+      "    base::list()",
+      "  } else {",
+      "    objects <- base::lapply(package_entries, function(entry) base::ls(envir = base::as.environment(entry), all.names = TRUE))",
+      "    base::names(objects) <- package_entries",
+      "    candidates <- base::unique(base::unlist(objects[component_entries], use.names = FALSE))",
+      "    conflicts <- base::lapply(candidates, function(object) package_entries[base::vapply(objects, function(exports) base::`%in%`(object, exports), base::logical(1))])",
+      "    base::names(conflicts) <- candidates",
+      "    conflicts[base::vapply(conflicts, base::length, base::integer(1)) > 1L]",
+      "  }",
+      "  conflicts$reexport_verification <- .reexport_verify(warn = TRUE)",
+      paste0("  base::structure(conflicts, class = base::c(\"", name, "_conflicts\", \"list\"))"),
+      "}",
       "",
       "#' @export",
       paste0("print.", name, "_conflicts <- function(x, ...) {"),
-      "  if (base::nrow(x) == 0L) {",
-      "    base::cat(.meta_tr(\"No re-export resolutions found.\"), \"\\n\")",
-      "    return(base::invisible(x))",
+      "  masking_names <- base::setdiff(base::names(x), \"reexport_verification\")",
+      "  if (base::length(masking_names) == 0L) {",
+      "    base::cat(.meta_tr(\"No conflicts found.\"), \"\\n\")",
+      "  } else {",
+      "    base::cat(.meta_tr(\"Conflicts:\"), \"\\n\")",
+      "    for (object in masking_names) {",
+      "      owners <- base::sub(\"^package:\", \"\", x[[object]])",
+      "      base::cat(\"  \", object, \": \", base::paste(owners, collapse = \", \"), \"\\n\", sep = \"\")",
+      "    }",
       "  }",
-      "  base::cat(.meta_tr(\"Re-export resolutions:\"), \"\\n\")",
-      "  for (index in base::seq_len(base::nrow(x))) {",
-      "    status <- if (base::is.na(x$identical[[index]])) .meta_tr(\"not verified\") else base::as.character(x$identical[[index]])",
-      "    missing <- if (base::nzchar(x$missing[[index]])) base::paste0(\"; \", .meta_trf(\"missing: %s\", x$missing[[index]])) else \"\"",
-      "    base::cat(\"  \", x$symbol[[index]], \": \", x$package[[index]], \" [\", x$resolution[[index]], \"; \", x$diagnosis[[index]], \"]; identical=\", status, missing, \"\\n\", sep = \"\")",
+      "  verification <- x$reexport_verification",
+      "  if (base::nrow(verification) > 0L) {",
+      "    base::cat(.meta_tr(\"Re-export resolutions:\"), \"\\n\")",
+      "    for (index in base::seq_len(base::nrow(verification))) {",
+      "      status <- if (base::is.na(verification$identical[[index]])) .meta_tr(\"not verified\") else base::as.character(verification$identical[[index]])",
+      "      missing <- if (base::nzchar(verification$missing[[index]])) base::paste0(\"; \", .meta_trf(\"missing: %s\", verification$missing[[index]])) else \"\"",
+      "      base::cat(\"  \", verification$symbol[[index]], \": \", verification$package[[index]], \" [\", verification$resolution[[index]], \"; \", verification$diagnosis[[index]], \"]; identical=\", status, missing, \"\\n\", sep = \"\")",
+      "    }",
       "  }",
       "  base::invisible(x)",
+      "}"
+    ), collapse = "\n")
+  } else {
+    template_data$conflicts_function <- paste(c(
+      "#' Report masking conflicts involving metapackage components",
+      "#'",
+      "#' Examines attached package environments and reports names exported by more",
+      "#' than one package when at least one owner is a metapackage component.",
+      "#'",
+      "#' @return A named list of conflicting package search entries.",
+      "#' @export",
+      paste0(name, "_conflicts <- function() {"),
+      masking_conflicts_body,
+      "}",
+      "",
+      "#' @export",
+      paste0("print.", name, "_conflicts <- function(x, ...) {"),
+      "  if (length(x) == 0L) {",
+      "    cat(.meta_tr(\"No conflicts found.\"), \"\\n\")",
+      "    return(invisible(x))",
+      "  }",
+      "  cat(.meta_tr(\"Conflicts:\"), \"\\n\")",
+      "  for (object in names(x)) {",
+      "    owners <- sub(\"^package:\", \"\", x[[object]])",
+      "    cat(\"  \", object, \": \", paste(owners, collapse = \", \"), \"\\n\", sep = \"\")",
+      "  }",
+      "  invisible(x)",
       "}"
     ), collapse = "\n")
   }
@@ -1516,7 +1523,7 @@ style_startup_text <- function(x) {
   if (requireNamespace("cli", quietly = TRUE)) cli::style_bold(x) else x
 }
 
-package_version <- function(x) {
+.meta_package_version <- function(x) {
   version <- base::unclass(utils::packageVersion(x))[[1]]
   if (base::length(version) > 3 && base::requireNamespace("cli", quietly = TRUE)) {
     version[4:base::length(version)] <- cli::col_red(base::as.character(version[4:base::length(version)]))
@@ -1588,7 +1595,7 @@ generate_ascii_banner <- function(name, packages = NULL) {
 format_cli_startup <- function(name, packages) {
   if (!requireNamespace("cli", quietly = TRUE)) return(NULL)
 
-  meta_version <- tryCatch(package_version(name), error = function(e) "")
+  meta_version <- tryCatch(.meta_package_version(name), error = function(e) "")
   right <- trimws(paste(name, meta_version))
   heading <- cli::rule(
     left = .meta_tr("Attaching packages"),

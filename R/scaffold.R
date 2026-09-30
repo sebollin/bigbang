@@ -138,7 +138,7 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
     "validate_local_constraints", "classify_package_archive",
     "install_local_archive", "detect_cycles", "build_dependency_graph",
     "topological_order",
-    "style_startup_text", "package_version", "startup_message",
+    "style_startup_text", ".meta_package_version", "startup_message",
     "generate_ascii_banner", "format_cli_startup", "safe_unlink",
     "is_path_inside", ".meta_tr", ".meta_trf", ".onLoad", ".onAttach", ".onUnload")
 }

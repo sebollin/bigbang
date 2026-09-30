@@ -88,6 +88,16 @@ exportados sean el mismo en tiempo de ejecución. El diagnóstico etiqueta las
 colisiones como `probable_same_object`, `distinct_definitions` o `undetermined`;
 una colisión probable elegida se verifica contra los dueños instalados mediante
 `<meta>_install()` y `<meta>_conflicts()`.
+`<meta>_conflicts()` conserva los conflictos de enmascaramiento y guarda la
+verificación de instalación en su componente `reexport_verification`.
+
+## Actualizaciones interrumpidas y recuperación
+
+Una actualización con `update = TRUE` interrumpida deja un diario durable junto
+al proyecto. La actualización siguiente lo revisa antes de escribir y
+`dry_run = TRUE` muestra la acción pendiente. Después de confirmar que no sigue
+corriendo otra actualización, usá `recover = TRUE` para preservar bytes de
+usuario desconocidos y completar la recuperación.
 
 ## Archivos ZIP
 

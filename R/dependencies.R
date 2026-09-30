@@ -285,7 +285,8 @@
       )
       resolved <- tryCatch({
         metadata <- .read_archive_metadata(
-          path_result, ext = actual_ext, include_exports = isTRUE(reexport)
+          path_result, ext = actual_ext, include_exports = isTRUE(reexport),
+          include_reexport_evidence = FALSE
         )
         list(
           path = path_result,
@@ -301,7 +302,9 @@
           imports = .or_null(metadata$imports, list()),
           reexport_evidence = .or_null(
             metadata$reexport_evidence, .reexport_empty_evidence()
-          )
+          ),
+          reexport_evidence_loaded = isTRUE(metadata$reexport_evidence_loaded),
+          reexport_native = isTRUE(metadata$reexport_native)
         )
       }, error = identity)
     } else {
@@ -407,7 +410,8 @@
 }
 
 .read_archive_metadata <- function(package, pkg_dir = NULL, ext = NULL,
-                                   include_exports = FALSE) {
+                                   include_exports = FALSE,
+                                   include_reexport_evidence = include_exports) {
   archive <- if (file.exists(package) && !dir.exists(package)) {
     normalizePath(package, winslash = "/", mustWork = TRUE)
   } else {
@@ -460,6 +464,8 @@
   exports <- character()
   imports <- list()
   reexport_evidence <- .reexport_empty_evidence()
+  reexport_native <- FALSE
+  reexport_evidence_loaded <- FALSE
   if (isTRUE(include_exports)) {
     namespace_path <- file.path(package_root, "NAMESPACE")
     if (!file.exists(namespace_path) || dir.exists(namespace_path)) {
@@ -523,9 +529,15 @@
         archive = archive
       )
     }
-    reexport_evidence <- .reexport_source_evidence(package_root)
-    reexport_evidence$native <- length(.or_null(namespace$dynlibs, list())) > 0L ||
+    reexport_native <- length(.or_null(namespace$dynlibs, list())) > 0L ||
       length(.or_null(namespace$nativeRoutines, list())) > 0L
+    if (isTRUE(include_reexport_evidence)) {
+      reexport_evidence <- .reexport_source_evidence(
+        package_root, package = declared_package
+      )
+      reexport_evidence$native <- reexport_native
+      reexport_evidence_loaded <- TRUE
+    }
   }
 
   list(
@@ -538,8 +550,26 @@
     constraints = parsed_dependencies$constraints,
     exports = exports,
     imports = imports,
-    reexport_evidence = reexport_evidence
+    reexport_evidence = reexport_evidence,
+    reexport_evidence_loaded = reexport_evidence_loaded,
+    reexport_native = reexport_native
   )
+}
+
+.read_reexport_evidence <- function(component) {
+  temp_dir <- tempfile("bigbang-reexport-")
+  if (!dir.create(temp_dir)) {
+    stop(.bb_trf("Could not create temporary directory for %s", component$path),
+         call. = FALSE)
+  }
+  on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
+  .extract_archive_checked(component$path, component$ext, temp_dir)
+  package_root <- .find_archive_root(temp_dir, component$path)
+  evidence <- .reexport_source_evidence(
+    package_root, package = component$package
+  )
+  evidence$native <- isTRUE(component$reexport_native)
+  evidence
 }
 
 # Read only the identity needed to propagate an omitted component through the
@@ -881,7 +911,7 @@
 .reexport_empty_evidence <- function() {
   list(
     assignments = list(), calls = list(), dynamic = list(), mutations = list(),
-    indirect = list(), native = FALSE,
+    indirect = list(), non_simple = list(), native = FALSE,
     parse_errors = list(), sysdata_names = character(),
     sysdata_error = NULL
   )
@@ -1012,143 +1042,245 @@
   arguments$id[[1L]]
 }
 
-.reexport_parse_scope <- function(data) {
-  roots <- data$id[data$parent == 0L & data$token == "expr"]
+.reexport_definition_name <- function(data, root) {
+  assignment <- data[data$parent == root & data$token %in%
+                       c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2"),
+                     , drop = FALSE]
+  if (nrow(assignment) != 1L) return(NULL)
+  lhs <- data[data$parent == root & data$token %in%
+                c("expr", "expr_or_assign_or_help") &
+                data$col1 < assignment$col1[[1L]], , drop = FALSE]
+  if (nrow(lhs) == 0L) return(NULL)
+  lhs <- lhs[order(lhs$col1, lhs$id), , drop = FALSE][1L, , drop = FALSE]
+  .reexport_parse_target(lhs$text[[1L]])
+}
+
+.reexport_parse_definitions <- function(data) {
   function_exprs <- data$id[data$token == "FUNCTION"]
   function_nodes <- data$parent[data$id %in% function_exprs]
   definitions <- list()
-  definition_roots <- integer()
+  roots <- integer()
   for (function_node in function_nodes) {
     root <- data$parent[data$id == function_node]
     if (length(root) != 1L) next
-    assignment <- data[data$parent == root & data$token %in%
-                         c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2"), ,
-                       drop = FALSE]
-    if (nrow(assignment) != 1L) next
-    lhs <- data[data$parent == root & data$token %in%
-                  c("expr", "expr_or_assign_or_help") & data$col1 < assignment$col1[[1L]],
-                , drop = FALSE]
-    if (nrow(lhs) == 0L) next
-    lhs <- lhs[order(lhs$col1, lhs$id), , drop = FALSE][1L, , drop = FALSE]
-    name <- .reexport_parse_target(lhs$text[[1L]])
+    name <- .reexport_definition_name(data, root)
     if (is.null(name)) next
     body <- data$id[data$parent == function_node & data$token == "expr"]
     if (length(body) == 0L) next
-    definitions[[name]] <- list(node = function_node, body = body[[1L]])
-    definition_roots <- c(definition_roots, root)
+    definitions[[name]] <- list(node = function_node, body = body[[1L]], root = root)
+    roots <- c(roots, root)
   }
+  list(definitions = definitions, roots = roots)
+}
 
-  active <- integer()
-  for (root in roots) {
-    if (root %in% definition_roots) {
-      lhs <- data[data$parent == root & data$token %in%
-                    c("expr", "expr_or_assign_or_help"), , drop = FALSE]
-      assignment <- data[data$parent == root & data$token %in%
-                           c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2"), ,
-                         drop = FALSE]
-      name <- if (nrow(lhs) > 0L && nrow(assignment) == 1L) {
-        lhs <- lhs[order(lhs$col1, lhs$id), , drop = FALSE]
-        .reexport_parse_target(lhs$text[[1L]])
-      } else {
-        NULL
-      }
-      if (name %in% c(".onLoad", ".onAttach") && !is.null(definitions[[name]])) {
-        active <- c(active, .reexport_parse_descendants(
-          data, definitions[[name]]$body
-        ))
-      } else {
-        active <- c(active, root)
-      }
-    } else {
-      active <- c(active, .reexport_parse_descendants(data, root))
+.reexport_literal_arg <- function(data, call_id, position) {
+  open <- data[data$parent == call_id & data$token == "'('", , drop = FALSE]
+  if (nrow(open) == 0L) return(NULL)
+  arguments <- data[
+    data$parent == call_id &
+      data$token %in% c("expr", "expr_or_assign_or_help") &
+      data$col1 > open$col1[[1L]], , drop = FALSE
+  ]
+  if (nrow(arguments) == 0L) return(NULL)
+  arguments <- arguments[order(arguments$col1, arguments$id), , drop = FALSE]
+  if (nrow(arguments) < position) return(NULL)
+  parsed <- tryCatch(
+    parse(text = paste0("f(", arguments$text[[position]], ")"))[[1L]][[2L]],
+    error = function(e) NULL
+  )
+  if (is.call(parsed) && identical(as.character(parsed[[1L]]), "=")) {
+    parsed <- parsed[[3L]]
+  }
+  if (is.character(parsed) && length(parsed) == 1L && !is.na(parsed)) {
+    parsed
+  } else {
+    NULL
+  }
+}
+
+.reexport_simple_symbol <- function(text) {
+  grepl("^`?[A-Za-z.][A-Za-z0-9._]*`?$", trimws(text), perl = TRUE)
+}
+
+.reexport_call_target_root <- function(text) {
+  expression <- tryCatch(
+    parse(text = paste0("(", text, ")"))[[1L]][[2L]],
+    error = function(e) NULL
+  )
+  if (is.call(expression)) as.character(expression[[1L]]) else NULL
+}
+
+.reexport_package_scope <- function(parsed, package = NULL) {
+  key <- function(file_index, node) paste(file_index, node, sep = "::")
+  definitions <- list()
+  definition_roots <- vector("list", length(parsed))
+  for (index in seq_along(parsed)) {
+    info <- .reexport_parse_definitions(parsed[[index]]$data)
+    definition_roots[[index]] <- info$roots
+    for (name in names(info$definitions)) {
+      entry <- info$definitions[[name]]
+      entry$file_index <- index
+      definitions[[name]] <- entry
     }
   }
 
-  calls <- data[data$token == "SYMBOL_FUNCTION_CALL", , drop = FALSE]
-  followed <- character()
+  active <- character()
+  for (index in seq_along(parsed)) {
+    data <- parsed[[index]]$data
+    roots <- data$id[data$parent == 0L & data$token == "expr"]
+    for (root in roots) {
+      if (root %in% definition_roots[[index]]) {
+        name <- names(Filter(function(definition) {
+          identical(definition$file_index, index) &&
+            identical(definition$root, root)
+        }, definitions))
+        if (length(name) == 1L && name %in% c(".onLoad", ".onAttach")) {
+          definition <- definitions[[name]]
+          active <- c(active, key(index, .reexport_parse_descendants(
+            data, definition$body
+          )))
+        } else {
+          active <- c(active, key(index, root))
+        }
+      } else {
+        active <- c(active, key(index, .reexport_parse_descendants(data, root)))
+      }
+    }
+  }
+
+  calls <- lapply(seq_along(parsed), function(index) {
+    data <- parsed[[index]]$data
+    rows <- data[data$token == "SYMBOL_FUNCTION_CALL", , drop = FALSE]
+    if (nrow(rows) == 0L) return(data.frame())
+    rows$file_index <- index
+    rows
+  })
+  calls <- Filter(function(rows) nrow(rows) > 0L, calls)
+  calls <- if (length(calls) == 0L) data.frame() else do.call(rbind, calls)
   indirect_names <- c(
     "do.call", "get", "getFromNamespace", "match.fun", "Recall", "mget",
     "setLoadAction"
   )
-  indirect <- list()
-  indirect_seen <- integer()
+  indirect <- vector("list", length(parsed))
+  non_simple <- vector("list", length(parsed))
+  indirect_seen <- character()
+  followed <- character()
   repeat {
     before <- length(active)
-    for (row_index in seq_len(nrow(calls))) {
+    if (nrow(calls) > 0L) for (row_index in seq_len(nrow(calls))) {
       call <- calls[row_index, , drop = FALSE]
-      if (!call$id[[1L]] %in% active) next
+      call_key <- key(call$file_index[[1L]], call$id[[1L]])
+      if (!call_key %in% active) next
       function_name <- call$text[[1L]]
-      if (!function_name %in% names(definitions) || function_name %in% followed) {
-        next
-      }
+      if (!function_name %in% names(definitions) || function_name %in% followed) next
       followed <- c(followed, function_name)
-      active <- c(active, .reexport_parse_descendants(
-        data, definitions[[function_name]]$body
-      ))
+      definition <- definitions[[function_name]]
+      active <- c(active, key(definition$file_index,
+                              .reexport_parse_descendants(
+                                parsed[[definition$file_index]]$data,
+                                definition$body
+                              )))
     }
-    for (row_index in seq_len(nrow(calls))) {
+    if (nrow(calls) > 0L) for (row_index in seq_len(nrow(calls))) {
       call <- calls[row_index, , drop = FALSE]
-      if (!call$id[[1L]] %in% active ||
-            !call$text[[1L]] %in% indirect_names ||
-            call$id[[1L]] %in% indirect_seen) next
-      indirect_seen <- c(indirect_seen, call$id[[1L]])
+      call_key <- key(call$file_index[[1L]], call$id[[1L]])
+      if (!call_key %in% active || !call$text[[1L]] %in% indirect_names) next
+      seen_key <- paste(call$file_index[[1L]], call$id[[1L]], sep = "::")
+      if (seen_key %in% indirect_seen) next
+      indirect_seen <- c(indirect_seen, seen_key)
+      data <- parsed[[call$file_index[[1L]]]]$data
       call_id <- .reexport_call_expression(data, call$id[[1L]])
-      first <- if (is.null(call_id)) {
-        NULL
-      } else {
+      first <- if (is.null(call_id)) NULL else
         .reexport_call_first_argument(data, call_id)
+      namespace <- if (identical(call$text[[1L]], "getFromNamespace") &&
+                         !is.null(call_id)) {
+        .reexport_literal_arg(data, call_id, 2L)
+      } else {
+        NULL
       }
-      package <- .reexport_qualify_function(data, call$id[[1L]])$package
+      foreign_namespace <- identical(call$text[[1L]], "getFromNamespace") &&
+        (!is.null(namespace) &&
+           (is.null(package) || !identical(namespace, package)))
       item <- list(
-        name = if (is.null(package)) call$text[[1L]] else
-          paste0(package, "::", call$text[[1L]]),
-        file = NULL, line = call$line1[[1L]],
+        name = call$text[[1L]], file = parsed[[call$file_index[[1L]]]]$label,
+        line = call$line1[[1L]],
         literal = if (is.null(first)) FALSE else isTRUE(first$literal),
         value = if (is.null(first)) NULL else first$value,
+        namespace = namespace, foreign_namespace = foreign_namespace,
         active = TRUE, followed = FALSE
       )
       if (!is.null(first) && isTRUE(first$literal) &&
-            first$value %in% names(definitions)) {
+            first$value %in% names(definitions) && !foreign_namespace) {
         item$followed <- TRUE
         if (!first$value %in% followed) {
           followed <- c(followed, first$value)
-          active <- c(active, .reexport_parse_descendants(
-            data, definitions[[first$value]]$body
-          ))
+          definition <- definitions[[first$value]]
+          active <- c(active, key(definition$file_index,
+                                  .reexport_parse_descendants(
+                                    parsed[[definition$file_index]]$data,
+                                    definition$body
+                                  )))
         }
       }
-      indirect[[length(indirect) + 1L]] <- item
+      index <- call$file_index[[1L]]
+      indirect[[index]][[length(indirect[[index]]) + 1L]] <- item
     }
     if (length(active) == before) break
   }
-  list(active = unique(active), indirect = indirect)
+
+  for (index in seq_along(parsed)) {
+    data <- parsed[[index]]$data
+    open <- data[data$token == "'('" & data$parent %in% data$id[
+      data$token %in% c("expr", "expr_or_assign_or_help")
+    ], , drop = FALSE]
+    if (nrow(open) == 0L) next
+    for (row_index in seq_len(nrow(open))) {
+      call_id <- open$parent[[row_index]]
+      children <- data[
+        data$parent == call_id &
+          data$token %in% c("expr", "expr_or_assign_or_help") &
+          data$col1 < open$col1[[row_index]], , drop = FALSE
+      ]
+      if (nrow(children) == 0L) next
+      target <- children[order(children$col1, children$id), , drop = FALSE]
+      target <- target[1L, , drop = FALSE]
+      target_text <- trimws(target$text[[1L]])
+      if (.reexport_simple_symbol(target_text)) next
+      root <- .reexport_call_target_root(target_text)
+      if (root %in% indirect_names) next
+      if (key(index, call_id) %in% active) {
+        non_simple[[index]][[length(non_simple[[index]]) + 1L]] <- list(
+          name = target_text, file = parsed[[index]]$label,
+          line = data[data$id == call_id, "line1", drop = TRUE][[1L]],
+          active = TRUE, non_simple = TRUE
+        )
+      }
+    }
+  }
+  list(
+    active = lapply(seq_along(parsed), function(index) {
+      ids <- sub(paste0("^", index, "::"), "", active)
+      as.integer(ids[grepl(paste0("^", index, "::"), active)])
+    }),
+    indirect = indirect, non_simple = non_simple
+  )
 }
 
-.reexport_parse_source <- function(path, package_root) {
+.reexport_parse_source <- function(path, package_root, data,
+                                   active_ids = NULL, scope_indirect = list(),
+                                   scope_non_simple = list()) {
   label <- .reexport_source_label(path, package_root)
   evidence <- list(
     assignments = list(), calls = list(), dynamic = list(), mutations = list(),
-    indirect = list(), parse_errors = list()
+    indirect = list(), non_simple = list(), parse_errors = list()
   )
-  parsed <- tryCatch(
-    parse(file = path, keep.source = TRUE),
-    error = identity
-  )
-  if (inherits(parsed, "error")) {
-    evidence$parse_errors <- list(list(
-      file = label, error = conditionMessage(parsed)
-    ))
-    return(evidence)
-  }
-  data <- utils::getParseData(parsed, includeText = TRUE)
   if (is.null(data) || nrow(data) == 0L) return(evidence)
-  scope <- .reexport_parse_scope(data)
-  active_ids <- scope$active
-  scope_indirect <- lapply(scope$indirect, function(item) {
+  scope_indirect <- lapply(scope_indirect, function(item) {
     item$file <- label
     item
   })
   evidence$indirect <- c(evidence$indirect, scope_indirect)
+  evidence$non_simple <- scope_non_simple
 
   binder_names <- c(
     "assign", "delayedAssign", "makeActiveBinding", "list2env", "sys.source",
@@ -1326,21 +1458,55 @@
   evidence
 }
 
-.reexport_source_evidence <- function(package_root) {
+.reexport_source_evidence <- function(package_root, package = NULL) {
   evidence <- .reexport_empty_evidence()
   r_dir <- file.path(package_root, "R")
   if (dir.exists(r_dir)) {
     files <- sort(list.files(
       r_dir, pattern = "\\.(R|r|S|s|q)$", full.names = TRUE, recursive = TRUE
     ))
-    parsed <- lapply(files, .reexport_parse_source, package_root = package_root)
-    evidence$assignments <- unlist(lapply(parsed, `[[`, "assignments"),
+    empty_data <- data.frame(
+      id = integer(), parent = integer(), token = character(),
+      text = character(), line1 = integer(), col1 = integer()
+    )
+    parsed <- lapply(files, function(path) {
+      label <- .reexport_source_label(path, package_root)
+      source <- tryCatch(parse(file = path, keep.source = TRUE), error = identity)
+      if (inherits(source, "error")) {
+        return(list(
+          path = path, label = label, data = empty_data,
+          parse_error = conditionMessage(source)
+        ))
+      }
+      data <- utils::getParseData(source, includeText = TRUE)
+      if (is.null(data)) data <- empty_data
+      list(path = path, label = label, data = data, parse_error = NULL)
+    })
+    scope <- .reexport_package_scope(parsed, package = package)
+    parsed_evidence <- lapply(seq_along(parsed), function(index) {
+      .reexport_parse_source(
+        parsed[[index]]$path, package_root, data = parsed[[index]]$data,
+        active_ids = scope$active[[index]],
+        scope_indirect = scope$indirect[[index]],
+        scope_non_simple = scope$non_simple[[index]]
+      )
+    })
+    parsed_evidence <- lapply(seq_along(parsed_evidence), function(index) {
+      if (!is.null(parsed[[index]]$parse_error)) {
+        parsed_evidence[[index]]$parse_errors <- list(list(
+          file = parsed[[index]]$label, error = parsed[[index]]$parse_error
+        ))
+      }
+      parsed_evidence[[index]]
+    })
+    evidence$assignments <- unlist(lapply(parsed_evidence, `[[`, "assignments"),
                                    recursive = FALSE)
-    evidence$calls <- unlist(lapply(parsed, `[[`, "calls"), recursive = FALSE)
-    evidence$dynamic <- unlist(lapply(parsed, `[[`, "dynamic"), recursive = FALSE)
-    evidence$mutations <- unlist(lapply(parsed, `[[`, "mutations"), recursive = FALSE)
-    evidence$indirect <- unlist(lapply(parsed, `[[`, "indirect"), recursive = FALSE)
-    evidence$parse_errors <- unlist(lapply(parsed, `[[`, "parse_errors"),
+    evidence$calls <- unlist(lapply(parsed_evidence, `[[`, "calls"), recursive = FALSE)
+    evidence$dynamic <- unlist(lapply(parsed_evidence, `[[`, "dynamic"), recursive = FALSE)
+    evidence$mutations <- unlist(lapply(parsed_evidence, `[[`, "mutations"), recursive = FALSE)
+    evidence$indirect <- unlist(lapply(parsed_evidence, `[[`, "indirect"), recursive = FALSE)
+    evidence$non_simple <- unlist(lapply(parsed_evidence, `[[`, "non_simple"), recursive = FALSE)
+    evidence$parse_errors <- unlist(lapply(parsed_evidence, `[[`, "parse_errors"),
                                     recursive = FALSE)
   }
   sysdata <- file.path(r_dir, "sysdata.rda")
@@ -1826,6 +1992,7 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   calls <- .or_null(evidence$calls, list())
   dynamic <- .or_null(evidence$dynamic, list())
   indirect <- .or_null(evidence$indirect, list())
+  non_simple <- .or_null(evidence$non_simple, list())
   binder_names <- c(
     "assign", "delayedAssign", "makeActiveBinding", "list2env", "sys.source",
     "assignInMyNamespace", "assignInNamespace", "source", "load", "attach",
@@ -1864,7 +2031,10 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
     !isTRUE(item$literal) || is.null(item$value) || identical(item$value, symbol)
   })
   add(dynamic)
-  add(indirect, function(item) !isTRUE(item$followed))
+  add(indirect, function(item) {
+    !isTRUE(item$followed) || isTRUE(item$foreign_namespace)
+  })
+  add(non_simple)
   if (length(relevant) == 0L) return(relevant)
   keys <- vapply(
     relevant,
@@ -2198,6 +2368,49 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   sorted_components <- components[order(component_names)]
   installation_order <- .component_topological_order(sorted_components)
   owner_rank <- match(component_names, installation_order)
+
+  # Export inventory and omitted-component validation are independent from
+  # source proof. Parse only owners that participate in a collision, plus the
+  # import chain needed to establish their roots.
+  collision_symbols <- exported_symbols[vapply(exported_symbols, function(symbol) {
+    sum(vapply(exports_by_component, function(exports) symbol %in% exports,
+               logical(1L))) > 1L
+  }, logical(1L))]
+  needed <- character()
+  if (length(collision_symbols) > 0L) {
+    needed <- unique(unlist(lapply(collision_symbols, function(symbol) {
+      component_names[vapply(
+        exports_by_component, function(exports) symbol %in% exports, logical(1L)
+      )]
+    }), use.names = FALSE))
+    repeat {
+      sources <- unlist(lapply(components[component_names %in% needed], function(component) {
+        unlist(lapply(collision_symbols, function(symbol) {
+          .reexport_import_sources(component, symbol, components)
+        }), recursive = FALSE)
+      }), recursive = FALSE)
+      parents <- if (length(sources) == 0L) character() else vapply(
+        sources, `[[`, character(1L), "package"
+      )
+      new_needed <- setdiff(parents, needed)
+      if (length(new_needed) == 0L) break
+      needed <- c(needed, new_needed)
+    }
+  }
+  if (length(needed) > 0L) {
+    for (index in which(component_names %in% needed)) {
+      evidence_loaded <- components[[index]]$reexport_evidence_loaded
+      if (is.null(evidence_loaded)) {
+        # Test and extension callers may provide an evidence object directly
+        # without the archive metadata fields used by the normal resolver.
+        components[[index]]$reexport_evidence_loaded <- TRUE
+      } else if (!isTRUE(evidence_loaded)) {
+        components[[index]]$reexport_evidence <-
+          .read_reexport_evidence(components[[index]])
+        components[[index]]$reexport_evidence_loaded <- TRUE
+      }
+    }
+  }
   rows <- list()
   specs <- list()
   collisions <- list()
@@ -2208,10 +2421,14 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
     )]
     owners <- owners[order(owner_rank[match(owners, component_names)])]
     if (length(owners) == 1L) {
-      unique_probe <- .reexport_probe(
-        components[[match(owners[[1L]], component_names)]], symbol,
-        components, omitted
-      )
+      unique_probe <- if (nrow(omitted) > 0L) {
+        .reexport_probe(
+          components[[match(owners[[1L]], component_names)]], symbol,
+          components, omitted
+        )
+      } else {
+        list(demonstrated = TRUE, skipped = FALSE)
+      }
       if (isTRUE(unique_probe$skipped)) {
         skipped[[length(skipped) + 1L]] <- data.frame(
           symbol = symbol, components = owners[[1L]],

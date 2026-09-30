@@ -53,8 +53,23 @@
   A skipped component required by a selected binding is an explicit generation
   error, so generated bindings never point at an omitted package.
 
+## New features
+
+- Re-export diagnostics now keep masking conflicts in `<meta>_conflicts()` and
+  attach installed-owner verification as the consistently classed
+  `reexport_verification` component, with both sections shown by its print
+  method.
+- Re-export source analysis follows same-package helpers across `R/` files and
+  treats calculated call destinations and foreign namespace indirection as
+  undetermined instead of guessing their target.
+
 ## Bug fixes
 
+- Fixed the 0.4.0 regression that omitted the generated metapackage version
+  from its startup banner when the helper name collided with a base function.
+  Generated helpers are now protected from qualification by package code.
+- Re-export generation now validates sources only for colliding owners, keeping
+  large collision-free inventories linear in the number of exports.
 - Generated re-export code now qualifies base operators as well as function
   calls, leaves strings and comments unchanged, and protects the generated
   consistency test and evaluated vignette chunks from component name masking.

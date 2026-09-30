@@ -163,6 +163,8 @@ way to re-verify after installation. A `FALSE` identity warning distinguishes
 equivalent function copies (same body and formals) from distinct objects. If `on_component_error = "skip"`
 omits a required owner, generation errors rather than emitting a binding to a
 component that is not included.
+The returned conflicts object keeps masking conflicts and adds the
+`reexport_verification` data frame as a separate component.
 
 The collision analysis is a diagnostic aid. The guarantee is the explicit
 `reexport_prefer` or `reexport_exclude` choice plus `<meta>_install()`'s
@@ -176,6 +178,13 @@ all anyone who receives it has to do. Hand over the built
 and no path to agree on beforehand. If the archives should stay in a shared
 location instead, generate with `include_archives = FALSE`; then
 `teamverse_install()` requires an explicit `pkg_dir`.
+
+### Interrupted updates and recovery
+
+An interrupted `update = TRUE` leaves a durable journal beside the project.
+The next update inspects it before writing; use `dry_run = TRUE` to preview the
+action. After confirming that no other update is running, pass `recover = TRUE`
+to preserve unknown user bytes and complete the rollback or recovery.
 
 `cran_deps = "skip"` is the default and never accesses the network. Use
 `"error"` to fail immediately when a non-local dependency is missing, or

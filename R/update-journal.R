@@ -844,6 +844,16 @@
   )
 }
 
+.journal_directory_chain <- function(path) {
+  out <- character()
+  current <- dirname(path)
+  while (!identical(current, ".") && nzchar(current)) {
+    out <- c(out, current)
+    current <- dirname(current)
+  }
+  out
+}
+
 .acquire_update_lock <- function(project_dir) {
   lock_path <- .update_lock_path(project_dir)
   owner <- .update_owner_record()
@@ -890,17 +900,8 @@
                  logical(1L)))) return(FALSE)
   entry_is_dir <- dir.exists(file.path(journal_path, entries))
   backup_files <- file.path("backup", names(marker$backup_hashes))
-  directory_chain <- function(path) {
-    out <- character()
-    current <- dirname(path)
-    while (!identical(current, ".") && nzchar(current)) {
-      out <- c(out, current)
-      current <- dirname(current)
-    }
-    out
-  }
   allowed_dirs <- unique(c("staging", unlist(lapply(
-    backup_files, directory_chain
+    backup_files, .journal_directory_chain
   ), use.names = FALSE)))
   allowed <- c("marker.rds", backup_files, allowed_dirs)
   expected_temporary <- function(entry) {
@@ -936,17 +937,8 @@
   if (any(vapply(full, .path_is_symlink, logical(1L)))) return(FALSE)
   is_dir <- dir.exists(full)
   backup_files <- file.path("backup", names(marker$backup_hashes))
-  directory_chain <- function(path) {
-    out <- character()
-    current <- dirname(path)
-    while (!identical(current, ".") && nzchar(current)) {
-      out <- c(out, current)
-      current <- dirname(current)
-    }
-    out
-  }
   allowed_dirs <- unique(c("staging", unlist(lapply(
-    backup_files, directory_chain
+    backup_files, .journal_directory_chain
   ), use.names = FALSE)))
   allowed_files <- c("marker.rds", "state.rds", "intent.log", backup_files)
   unexpected_dirs <- entries[is_dir & !entries %in% allowed_dirs]

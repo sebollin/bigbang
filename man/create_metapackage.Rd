@@ -311,6 +311,10 @@ weaken the explicit decision and installation-verification guarantee.
 binding or an import source, generation errors with an actionable skipped
 condition instead of creating a binding to a component that will not travel
 with the metapackage.
+With \code{reexport = TRUE}, \verb{<name>_conflicts()} retains the masking-conflict
+list from earlier releases and adds its installed-owner table in the
+\code{reexport_verification} component. That component keeps the same
+\verb{<name>_reexport_verification} class when it has zero rows.
 }
 
 \section{Interrupted updates}{

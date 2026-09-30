@@ -55,6 +55,32 @@ test_that("generated startup supports cli formatting, fallback, and quiet mode",
   )
   expect_match(paste(cli_output, collapse = "\n"), "Attaching packages")
   expect_match(paste(cli_output, collapse = "\n"), "toycomponent")
+  fallback_runtime <- new.env(parent = baseenv())
+  base_namespace <- asNamespace("base")
+  require_namespace_name <- "requireNamespace"
+  original_require_namespace <- get(require_namespace_name, envir = base_namespace)
+  unlockBinding(require_namespace_name, base_namespace)
+  assign(require_namespace_name, function(package, ...) {
+    if (identical(package, "cli")) FALSE else
+      original_require_namespace(package, ...)
+  }, envir = base_namespace)
+  lockBinding(require_namespace_name, base_namespace)
+  on.exit({
+    unlockBinding(require_namespace_name, base_namespace)
+    assign(require_namespace_name, original_require_namespace, envir = base_namespace)
+    lockBinding(require_namespace_name, base_namespace)
+  }, add = TRUE)
+  sys.source(file.path(result$path, "R", "utils.R"), fallback_runtime)
+  sys.source(file.path(result$path, "R", "attach.R"), fallback_runtime)
+  sys.source(file.path(result$path, "R", "zzz.R"), fallback_runtime)
+  fallback_output <- capture.output(
+    fallback_runtime$.onAttach(NULL, "featureverse"), type = "message"
+  )
+  expect_match(paste(fallback_output, collapse = "\n"), "featureverse")
+  expect_match(paste(fallback_output, collapse = "\n"), "=", fixed = TRUE)
+  unlockBinding(require_namespace_name, base_namespace)
+  assign(require_namespace_name, original_require_namespace, envir = base_namespace)
+  lockBinding(require_namespace_name, base_namespace)
   version_table <- runtime$format_cli_startup("bigbang", c("stats", "utils"))
   expect_match(version_table, as.character(utils::packageVersion("stats")), fixed = TRUE)
   expect_match(version_table, as.character(utils::packageVersion("utils")), fixed = TRUE)

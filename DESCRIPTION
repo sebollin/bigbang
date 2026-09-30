@@ -52,6 +52,7 @@ Suggests:
     knitr,
     pkgbuild,
     rmarkdown,
+    roxygen2,
     testthat (>= 3.0.0),
     withr
 Config/testthat/edition: 3
