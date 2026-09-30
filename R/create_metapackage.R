@@ -513,7 +513,8 @@
 #'   returned `tolerated` table.
 #' @param dry_run Logical. If TRUE, resolves and validates components and
 #'   returns the planned generation without creating dest_dir or writing a
-#'   project.
+#'   project. For an update, sibling journal reconciliation is also planned
+#'   and reported with its paths and actions without changing those folders.
 #' @param on_component_error Character policy for component-level failures:
 #'   "abort" (default) stops generation, while "skip" omits the failed
 #'   component and transitively omits components that depend on it. When a
@@ -534,7 +535,11 @@
 #'   also removes its shipped archive, which may be the last available copy.
 #'   Before changing the project, an update backs up every generated file and
 #'   its manifest. A failed update restores that state so the same update can be
-#'   retried. Documentation files requested by `document = TRUE` can always be
+#'   retried. Updates take an exclusive project lock across preparation,
+#'   reconciliation, generation, rollback, and journal publication. A second
+#'   session preserves a live preparation and reports `recover = TRUE` as the
+#'   next action until the owner is proven to have finished. Documentation files
+#'   requested by `document = TRUE` can always be
 #'   regenerated: they can be restored after documentation was disabled, and an
 #'   update that cannot regenerate them retains the previously tracked Rd files.
 #'   See `document` for the reserved generated-documentation filenames.
@@ -549,12 +554,13 @@
 #' @param reexport_exclude Character vector of symbols that must not be
 #'   re-exported. Symbols are validated against the explicit exports of the
 #'   included components and cannot also appear in `reexport_prefer`.
-#' @param recover Logical. With `update = TRUE`, force recovery when a durable
-#'   update journal exists but the owning process cannot safely be proved dead,
-#'   or when a file has user content that is neither the original nor an
-#'   intended update value. Unknown content is copied byte for byte to a new
-#'   preserved directory beside the project before recovery; that directory is
-#'   reported and is never removed automatically. Defaults to `FALSE`.
+#' @param recover Logical. With `update = TRUE`, request recovery after the
+#'   durable journal owner has been confirmed finished, or when a file has user
+#'   content that is neither the original nor an intended update value. Unknown
+#'   content is copied byte for byte to a new preserved directory beside the
+#'   project before recovery; that directory is reported and is never removed
+#'   automatically. A live or uncertain owner still blocks mutation. Defaults
+#'   to `FALSE`.
 #' @param debug Logical. If `TRUE`, emits detailed debugging messages. Defaults
 #'   to `FALSE`.
 #'
@@ -563,7 +569,7 @@
 #'   files removed by the call, documentation status, the `reexports` table,
 #'   `reexport_excluded` symbols, and whether an interrupted update was
 #'   recovered. Recovery details include any directory used to preserve unknown
-#'   user content.
+#'   user content and the sibling-journal reconciliation plan.
 #'
 #' @details
 #' The function performs the following steps:
@@ -667,9 +673,11 @@
 #'
 #' If a process dies while preparing the journal, an empty unmarked
 #' `armando-*` folder, or one containing only the exact atomic marker temporary
-#' files, is discarded; any other non-empty unmarked folder is never deleted.
-#' A marked preparation is recognized and discarded because it cannot have
-#' touched the project. Journal disposal first writes an atomic tombstone with
+#' files, is planned for discard; any other non-empty unmarked folder is never
+#' deleted. The initial marker records the owner PID, host, process start token,
+#' and start time before the first backup copy. A marked preparation is
+#' discarded only after the owner is proven finished with the platform's
+#' conservative liveness policy. Journal disposal first writes an atomic tombstone with
 #' the exact relative-path and MD5 inventory of the entries bigbang wrote, then
 #' renames the folder to `.<name>.bigbang-update.descartado-*`; cleanup can
 #' therefore resume after another interruption. New or changed entries outside
@@ -699,8 +707,11 @@
 #' `bigbang_error_interrupted_update`; `recover = TRUE` preserves it outside the
 #' project before rollback. Recovery is idempotent, so another interruption can
 #' be recovered by a later call. `dry_run = TRUE` reports the pending action and
-#' leaves both project and journal untouched. A handled error uses this same
-#' journal for immediate rollback and retains it if verification cannot finish.
+#' leaves the project and every sibling journal folder untouched. A handled
+#' error uses this same journal for immediate rollback and retains it if
+#' verification cannot finish. Documentation generation failures in the staging
+#' copy are warnings; a failure while promoting any documentation output aborts
+#' the update and rolls the complete project back through the journal.
 #'
 #' @section Requirements:
 #' - Each component must be an existing archive path or a stem resolvable in
@@ -844,13 +855,21 @@ create_metapackage <- function(
   project_path <- file.path(dest_dir, name)
   if (isTRUE(update)) .validate_project_root_path(project_path)
   project_dir <- normalizePath(project_path, winslash = "/", mustWork = FALSE)
+  update_lock <- NULL
+  if (isTRUE(update) && dir.exists(project_dir)) {
+    update_lock <- .acquire_update_lock(project_dir)
+    on.exit(.release_update_lock(update_lock), add = TRUE)
+  }
   recovery <- list(pending = FALSE, recovered = FALSE, preserved = NULL,
                    restored_absent = character())
   if (isTRUE(update)) {
-    .reconcile_update_siblings(project_dir, name)
+    sibling_reconciliation <- .reconcile_update_siblings(
+      project_dir, name, dry_run = dry_run
+    )
     recovery <- .recover_pending_update(
       project_dir, name, recover = recover, dry_run = dry_run
     )
+    recovery$reconciliation <- sibling_reconciliation
     if (isTRUE(dry_run) && isTRUE(recovery$pending)) {
       message(.bb_trf("Dry run: pending update journal action is %s at %s.",
                       recovery$action, .update_journal_path(project_dir)))
@@ -1506,7 +1525,7 @@ StripTrailingWhitespace: Yes"
 
     # Run roxygen in a staging copy. Only known outputs are promoted through
     # the atomic writer, after their intentions have been recorded.
-    tryCatch({
+    documentation_generated <- tryCatch({
       staging_parent <- tempfile("bigbang-document-staging-")
       dir.create(staging_parent)
       on.exit(unlink(staging_parent, recursive = TRUE, force = TRUE), add = TRUE)
@@ -1529,6 +1548,13 @@ StripTrailingWhitespace: Yes"
       staged_outputs <- staged_outputs[file.exists(file.path(
         staging_project, staged_outputs
       )) & !dir.exists(file.path(staging_project, staged_outputs))]
+      TRUE
+    }, error = function(e) {
+      warning(.bb_trf("Error generating documentation: %s", e$message),
+              call. = FALSE)
+      FALSE
+    })
+    if (isTRUE(documentation_generated)) {
       for (relative in staged_outputs) {
         .atomic_copy(file.path(staging_project, relative),
                      file.path(project_dir, relative))
@@ -1537,10 +1563,7 @@ StripTrailingWhitespace: Yes"
         message(.bb_tr("Documentation generated successfully."))
       }
       doc_ok <- TRUE
-    }, error = function(e) {
-      warning(.bb_trf("Error generating documentation: %s", e$message),
-              call. = FALSE)
-    })
+    }
   } else if (isTRUE(document) && verbose) {
     message(.bb_tr("Install package 'devtools' to generate documentation automatically."))
   }

@@ -280,7 +280,9 @@ plan$findings                                    # every validation finding
 ```
 
 `dry_run = TRUE` does not create `dest_dir` and does not touch the destination at
-all, so it is a safe way to see what a call would do before it does it.
+all, so it is a safe way to see what a call would do before it does it. During
+an update it also plans reconciliation of every sibling journal folder and
+reports each path and action without mutating those folders.
 
 - `on_component_error = "skip"` generates from the components that are valid
   instead of aborting, and reports the ones it left out. The exclusion is
@@ -301,6 +303,10 @@ all, so it is a safe way to see what a call would do before it does it.
   be retried. Both dry runs and real results list removed paths in
   `removed_files`. Removing a component removes its shipped archive, which may
   be the last available copy.
+  Updates hold an exclusive project lock from preparation through rollback and
+  journal publication. The initial marker records the owner PID, host, process
+  start token, and start time before the first backup copy. A live or uncertain
+  owner is preserved and the error reports `recover = TRUE` as the next action.
   Updates also refuse to write through a symbolic project root or symbolic
   links inside the generated project, including links in parent directories of
   generated files.
@@ -325,7 +331,10 @@ all, so it is a safe way to see what a call would do before it does it.
   message. After confirming that no update is still running,
   `recover = TRUE` preserves those unknown bytes in a reported sibling
   directory and then recovers. A dry run reports the pending action without
-  changing the project or journal. On Windows liveness is never tested with
+  changing the project or any sibling journal folder. Documentation generation
+  failures in the staging copy are warnings; a failure while promoting a
+  documentation file aborts and rolls the complete update back. On Windows
+  liveness is never tested with
   `tools::pskill()`, because it would terminate the probed process.
 - `install_upgrade` fixes the default upgrade policy of the installer that gets
   emitted, so you decide when generating whether recipients stay pinned to the

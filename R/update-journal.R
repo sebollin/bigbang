@@ -10,11 +10,12 @@
 }
 
 .update_journal_sibling_paths <- function(project_dir, name, kind) {
-  prefix <- paste0(".", .escape_regex_literal(name), ".bigbang-update.", kind,
-                   "-")
-  pattern <- paste0("^", prefix, "[[:alnum:]-]+$")
-  siblings <- list.files(dirname(project_dir), pattern = pattern,
-                         full.names = TRUE, all.files = TRUE, no.. = TRUE)
+  prefix <- paste0(".", name, ".bigbang-update.", kind, "-")
+  siblings <- list.files(dirname(project_dir), full.names = TRUE,
+                         all.files = TRUE, no.. = TRUE)
+  siblings <- siblings[startsWith(basename(siblings), prefix)]
+  suffix <- substring(basename(siblings), nchar(prefix) + 1L)
+  siblings <- siblings[nzchar(suffix) & grepl("^[[:alnum:]-]+$", suffix)]
   sort(siblings)
 }
 
@@ -36,15 +37,19 @@
   } else {
     .bb_tr("It does not contain a recognized backup.")
   }
-  .bigbang_abort(
-    class,
-    .bb_trf(
-      "Cannot update %s because %s is an %s update-journal folder. %s %s Next step: %s",
-      project_dir, path, .update_journal_kind_label(kind), detail, contents,
-      next_step
-    ),
-    path = project_dir, journal = path, journal_kind = kind
+  message <- .bb_trf(
+    "Cannot update %s because %s is an %s update-journal folder. %s %s Next step: %s",
+    project_dir, path, .update_journal_kind_label(kind), detail, contents,
+    next_step
   )
+  fields <- list(
+    class = class, message = message, path = project_dir,
+    journal = path, journal_kind = kind
+  )
+  if (identical(class, "bigbang_error_update_in_progress")) {
+    fields$recover <- TRUE
+  }
+  do.call(.bigbang_abort, fields)
 }
 
 .update_journal_tombstone_path <- function(path) {
@@ -79,7 +84,8 @@
 .update_journal_tombstone <- function(path, name, marker) {
   manifest_hash <- unname(marker$backup_hashes[[.generation_manifest_name]])
   inventory <- .update_journal_inventory(path)
-  tombstone <- list(
+  owner <- .update_marker_owner(marker)
+  tombstone <- c(list(
     format = .update_journal_format,
     version = .update_journal_version,
     kind = "discarded",
@@ -88,7 +94,7 @@
     inventory = inventory$files,
     inventory_directories = inventory$directories,
     created_utc = format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC")
-  )
+  ), if (is.null(owner)) list() else owner)
   destination <- .update_journal_tombstone_path(path)
   temporary <- tempfile(pattern = ".tombstone-", tmpdir = path)
   on.exit(unlink(temporary, force = TRUE), add = TRUE)
@@ -126,6 +132,12 @@
     all(vapply(tombstone$inventory_directories, .valid_update_relative_path,
                logical(1L)))
   if (isTRUE(valid)) tombstone else NULL
+}
+
+.update_tombstone_owner <- function(tombstone) {
+  fields <- c("pid", "host", "started_utc", "process_start")
+  if (!is.list(tombstone) || !all(fields %in% names(tombstone))) return(NULL)
+  tombstone[fields]
 }
 
 .discard_update_entry <- function(path) {
@@ -282,7 +294,23 @@
   invisible(NULL)
 }
 
-.reconcile_update_siblings <- function(project_dir, name) {
+.reconcile_update_siblings <- function(project_dir, name, dry_run = FALSE) {
+  plan_environment <- new.env(parent = emptyenv())
+  plan_environment$items <- list()
+  add_plan <- function(path, action, marker = NULL, tombstone = NULL) {
+    plan_environment$items <- c(plan_environment$items, list(list(
+      path = path, action = action, marker = marker, tombstone = tombstone
+    )))
+  }
+  block_live_owner <- function(path) {
+    .bigbang_abort(
+      "bigbang_error_update_in_progress",
+      .bb_tr("An update may still be running; no mutation was performed."),
+      path = project_dir, journal = path, journal_kind = "armed",
+      recover = TRUE
+    )
+  }
+
   armando <- .update_journal_sibling_paths(project_dir, name, "armando")
   for (path in armando) {
     if (!dir.exists(path) || .path_is_symlink(path)) {
@@ -298,14 +326,14 @@
                           no.. = TRUE, include.dirs = TRUE)
     if (!file.exists(marker_path)) {
       if (length(entries) == 0L) {
-        unlink(path, recursive = TRUE, force = TRUE)
+        add_plan(path, "discard_empty")
         next
       }
       if (all(
         !dir.exists(file.path(path, entries)) &&
           grepl("^\\.marker\\.rds-[[:alnum:]]+$", entries)
       )) {
-        unlink(path, recursive = TRUE, force = TRUE)
+        add_plan(path, "discard_marker_temporary")
         next
       }
       .update_journal_problem(
@@ -318,8 +346,11 @@
     marker <- tryCatch(.read_update_marker(path, project_dir, name),
                        error = identity)
     if (inherits(marker, "error")) stop(marker)
-    .discard_update_journal(path, project_dir, name)
-    message(.bb_trf("Discarded an orphaned armed-update folder at %s.", path))
+    if (.update_owner_may_be_alive(.update_marker_owner(marker))) {
+      add_plan(path, "blocked_live_owner", marker = marker)
+    } else {
+      add_plan(path, "discard_armed", marker = marker)
+    }
   }
 
   discarded <- .update_journal_sibling_paths(project_dir, name, "descartado")
@@ -336,7 +367,7 @@
     if (is.null(tombstone)) {
       if (length(list.files(path, all.files = TRUE, no.. = TRUE,
                             include.dirs = TRUE)) == 0L) {
-        unlink(path, recursive = TRUE, force = TRUE)
+        add_plan(path, "discard_empty")
         next
       }
       .update_journal_problem(
@@ -346,12 +377,54 @@
         .bb_tr("leave the folder intact, preserve its contents, and inspect it before retrying.")
       )
     }
-    .finish_discarded_journal(
-      path, name, tombstone, project_dir = project_dir,
-      verify_project = TRUE
-    )
+    marker <- tryCatch(.read_update_marker(path, project_dir, name),
+                       error = identity)
+    if (inherits(marker, "error")) {
+      owner <- .update_tombstone_owner(tombstone)
+      if (is.null(owner)) stop(marker)
+      marker <- owner
+    }
+    if (.update_owner_may_be_alive(.update_marker_owner(marker))) {
+      add_plan(path, "blocked_live_owner", marker = marker,
+               tombstone = tombstone)
+    } else {
+      add_plan(path, "finish_discarded", marker = marker,
+               tombstone = tombstone)
+    }
   }
-  invisible(NULL)
+
+  plan <- plan_environment$items
+  if (isTRUE(dry_run)) {
+    for (item in plan) {
+      message(.bb_trf("Dry run: pending update journal action is %s at %s.",
+                      item$action, item$path))
+    }
+    return(invisible(plan))
+  }
+  for (item in plan) {
+    if (identical(item$action, "blocked_live_owner")) {
+      block_live_owner(item$path)
+    } else if (identical(item$action, "discard_empty") ||
+                 identical(item$action, "discard_marker_temporary")) {
+      unlink(item$path, recursive = TRUE, force = TRUE)
+    } else if (identical(item$action, "discard_armed")) {
+      if (.update_owner_may_be_alive(.update_marker_owner(item$marker))) {
+        block_live_owner(item$path)
+      }
+      .discard_update_journal(item$path, project_dir, name)
+      message(.bb_trf("Discarded an orphaned armed-update folder at %s.",
+                      item$path))
+    } else if (identical(item$action, "finish_discarded")) {
+      if (.update_owner_may_be_alive(.update_marker_owner(item$marker))) {
+        block_live_owner(item$path)
+      }
+      .finish_discarded_journal(
+        item$path, name, item$tombstone, project_dir = project_dir,
+        verify_project = TRUE
+      )
+    }
+  }
+  invisible(plan)
 }
 
 .update_process_start <- function(pid = Sys.getpid()) {
@@ -371,6 +444,21 @@
 .update_host <- function() {
   host <- unname(Sys.info()[["nodename"]])
   if (is.null(host) || is.na(host) || !nzchar(host)) NA_character_ else host
+}
+
+.update_owner_record <- function() {
+  list(
+    pid = as.integer(Sys.getpid()),
+    host = .update_host(),
+    started_utc = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    process_start = .update_process_start()
+  )
+}
+
+.update_marker_owner <- function(marker) {
+  fields <- c("pid", "host", "started_utc", "process_start")
+  if (!is.list(marker) || !all(fields %in% names(marker))) return(NULL)
+  marker[fields]
 }
 
 .valid_update_relative_path <- function(path) {
@@ -413,6 +501,20 @@
   if (!file.exists(marker_path) || dir.exists(marker_path) ||
         .path_is_symlink(marker_path)) fail()
   marker <- tryCatch(readRDS(marker_path), error = function(e) NULL)
+  owner_fields <- c("pid", "host", "started_utc", "process_start")
+  owner_names <- intersect(owner_fields, names(marker))
+  owner_valid <- if (!is.list(marker)) {
+    FALSE
+  } else if (length(owner_names) == 0L) {
+    TRUE
+  } else {
+    length(owner_names) == length(owner_fields) &&
+      (is.integer(marker$pid) || is.numeric(marker$pid)) &&
+      length(marker$pid) == 1L && !is.na(marker$pid) && marker$pid > 0 &&
+      is.character(marker$host) && length(marker$host) == 1L &&
+      is.character(marker$started_utc) && length(marker$started_utc) == 1L &&
+      is.character(marker$process_start) && length(marker$process_start) == 1L
+  }
   shape_valid <- is.list(marker) && identical(marker$format, .update_journal_format) &&
     identical(marker$version, .update_journal_version) &&
     is.character(marker$name) && length(marker$name) == 1L && nzchar(marker$name) &&
@@ -421,6 +523,7 @@
     all(grepl("^[0-9a-f]{32}$", marker$backup_hashes)) &&
     is.character(marker$planned_files) &&
     !anyDuplicated(marker$planned_files) &&
+    isTRUE(owner_valid) &&
     all(names(marker$backup_hashes) %in% marker$planned_files) &&
     all(vapply(names(marker$backup_hashes), .valid_update_relative_path,
                logical(1L))) && all(vapply(marker$planned_files,
@@ -521,13 +624,14 @@
          call. = FALSE)
   }
 
-  marker <- list(
+  owner <- .update_owner_record()
+  marker <- c(list(
     format = .update_journal_format,
     version = .update_journal_version,
     name = name,
     backup_hashes = hashes,
     planned_files = planned_files
-  )
+  ), owner)
   .atomic_save_rds(marker, file.path(staging_path, "marker.rds"))
 
   for (relative in files) {
@@ -549,16 +653,12 @@
          call. = FALSE)
   }
 
-  state <- list(
+  state <- c(list(
     armed = TRUE,
-    pid = Sys.getpid(),
-    host = .update_host(),
-    started_utc = format(Sys.time(), tz = "UTC", usetz = TRUE),
-    process_start = .update_process_start(),
     bigbang_version = .bb_generator_version(),
     original_hashes = hashes,
     old_manifest_hash = unname(hashes[[.generation_manifest_name]])
-  )
+  ), owner)
   .atomic_save_rds(state, file.path(staging_path, "state.rds"))
   if (file.exists(journal_path) || dir.exists(journal_path)) {
     stop(.bb_trf("Could not arm the update journal because its final path already exists: %s",
@@ -697,7 +797,10 @@
 }
 
 .update_owner_may_be_alive <- function(state) {
-  if (is.na(state$host) || is.na(.update_host())) return(TRUE)
+  if (!is.list(state) || length(state$pid) != 1L ||
+        is.na(state$pid) || length(state$host) != 1L ||
+        !is.character(state$host) || is.na(state$host) ||
+        length(.update_host()) != 1L || is.na(.update_host())) return(TRUE)
   if (!identical(state$host, .update_host())) return(TRUE)
   if (.Platform$OS.type == "windows") return(TRUE)
   alive <- isTRUE(tryCatch(tools::pskill(as.integer(state$pid), 0L),
@@ -708,6 +811,76 @@
   if (!is.null(recorded) && length(recorded) == 1L && !is.na(recorded) &&
         !is.na(current) && !identical(recorded, current)) return(FALSE)
   TRUE
+}
+
+.update_lock_path <- function(project_dir) {
+  file.path(dirname(project_dir),
+            paste0(".", basename(project_dir), ".bigbang-update.lock"))
+}
+
+.update_lock_owner_path <- function(lock_path) file.path(lock_path, "owner.rds")
+
+.read_update_lock_owner <- function(lock_path) {
+  if (!dir.exists(lock_path) || .path_is_symlink(lock_path)) return(NULL)
+  owner_path <- .update_lock_owner_path(lock_path)
+  if (!file.exists(owner_path) || dir.exists(owner_path) ||
+        .path_is_symlink(owner_path)) return(NULL)
+  owner <- tryCatch(readRDS(owner_path), error = function(e) NULL)
+  if (!is.list(owner) || length(owner$pid) != 1L ||
+        length(owner$host) != 1L || length(owner$started_utc) != 1L ||
+        length(owner$process_start) != 1L) return(NULL)
+  owner
+}
+
+.update_lock_problem <- function(project_dir, lock_path) {
+  .bigbang_abort(
+    "bigbang_error_update_in_progress",
+    paste(
+      .bb_tr("An update may still be running; no mutation was performed."),
+      .bb_tr("after confirming that no other update is running, call again with recover = TRUE."),
+      sep = " "
+    ),
+    path = project_dir, lock = lock_path, recover = TRUE
+  )
+}
+
+.acquire_update_lock <- function(project_dir) {
+  lock_path <- .update_lock_path(project_dir)
+  owner <- .update_owner_record()
+  for (attempt in seq_len(4L)) {
+    if (file.exists(lock_path) && !dir.exists(lock_path)) {
+      .update_lock_problem(project_dir, lock_path)
+    }
+    if (dir.create(lock_path, showWarnings = FALSE)) {
+      saved <- tryCatch({
+        saveRDS(owner, .update_lock_owner_path(lock_path))
+        TRUE
+      }, error = function(e) FALSE)
+      if (isTRUE(saved)) return(list(path = lock_path, owner = owner))
+      unlink(lock_path, recursive = TRUE, force = TRUE)
+      stop(.bb_trf("Could not create temporary directory for %s", lock_path),
+           call. = FALSE)
+    }
+    if (.path_is_symlink(lock_path)) .update_lock_problem(project_dir, lock_path)
+    previous <- .read_update_lock_owner(lock_path)
+    if (is.null(previous) || .update_owner_may_be_alive(previous)) {
+      .update_lock_problem(project_dir, lock_path)
+    }
+    unlink(lock_path, recursive = TRUE, force = TRUE)
+    if (file.exists(lock_path) || dir.exists(lock_path)) {
+      .update_lock_problem(project_dir, lock_path)
+    }
+  }
+  .update_lock_problem(project_dir, lock_path)
+}
+
+.release_update_lock <- function(lock) {
+  if (is.null(lock) || !dir.exists(lock$path)) return(invisible(NULL))
+  owner <- .read_update_lock_owner(lock$path)
+  if (isTRUE(identical(owner, lock$owner))) {
+    unlink(lock$path, recursive = TRUE, force = TRUE)
+  }
+  invisible(NULL)
 }
 
 .unarmed_journal_is_expected <- function(journal_path, marker) {
@@ -924,7 +1097,7 @@
   if (!file.exists(journal_path) && !dir.exists(journal_path)) {
     if (!dir.exists(project_dir)) {
       .bigbang_abort(
-        "bigbang_error_missing_project",
+        c("bigbang_error_missing_project", "bigbang_error_missing_manifest"),
         .bb_trf(
           paste0(
             "Cannot update %s because the project directory is missing. It may",
@@ -997,13 +1170,14 @@
     return(list(pending = FALSE, recovered = FALSE, preserved = NULL,
                 action = "discarded_unarmed", restored_absent = character()))
   }
-  required <- c("pid", "host", "started_utc", "bigbang_version",
+  required <- c("pid", "host", "started_utc", "process_start", "bigbang_version",
                 "original_hashes", "old_manifest_hash")
   valid_state <- all(required %in% names(state)) &&
     (is.integer(state$pid) || is.numeric(state$pid)) &&
     length(state$pid) == 1L && !is.na(state$pid) && state$pid > 0 &&
     is.character(state$host) && length(state$host) == 1L &&
     is.character(state$started_utc) && length(state$started_utc) == 1L &&
+    is.character(state$process_start) && length(state$process_start) == 1L &&
     is.character(state$bigbang_version) &&
     length(state$bigbang_version) == 1L &&
     is.character(state$original_hashes) &&

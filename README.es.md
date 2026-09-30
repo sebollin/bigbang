@@ -254,7 +254,9 @@ plan$findings                                    # todos los hallazgos
 ```
 
 `dry_run = TRUE` no crea `dest_dir` ni toca el destino, así que es una forma
-segura de ver qué haría una llamada antes de que la haga.
+segura de ver qué haría una llamada antes de que la haga. Durante un update
+también planifica la reconciliación de cada diario hermano e informa su ruta y
+acción sin modificar esas carpetas.
 
 - `on_component_error = "skip"` genera con los componentes válidos en lugar de
   abortar, e informa los que dejó afuera. El descarte es transitivo: un
@@ -275,6 +277,11 @@ segura de ver qué haría una llamada antes de que la haga.
   eliminadas en `removed_files`.
   Quitar un componente elimina su archivo embarcado, que puede ser la última
   copia.
+  Los updates mantienen una exclusión mutua desde el armado hasta el rollback y
+  la publicación del diario. El marcador inicial registra PID, host, token de
+  inicio del proceso y hora antes de la primera copia de respaldo. Si el dueño
+  sigue vivo o no se puede determinar, se conserva y el error informa
+  `recover = TRUE` como siguiente acción.
   También se niega a escribir a través de una raíz de proyecto simbólica o de
   enlaces simbólicos dentro del proyecto generado, incluidos los enlaces en
   directorios padre de los archivos generados.
@@ -301,7 +308,10 @@ segura de ver qué haría una llamada antes de que la haga.
   y en el mensaje de recuperación. Después de confirmar que no sigue corriendo otro update,
   `recover = TRUE` preserva esos bytes desconocidos en un directorio hermano
   informado y recién entonces recupera. Un dry run informa la acción pendiente
-  sin cambiar el proyecto ni el diario. En Windows nunca se prueba la vida con
+  sin cambiar el proyecto ni ninguna carpeta de diario hermana. Los fallos al
+  generar documentación en el área de preparación son warnings; un fallo al
+  promover una documentación aborta y revierte el update completo. En Windows
+  nunca se prueba la vida con
   `tools::pskill()`, porque esa llamada terminaría el proceso sondeado.
 - `install_upgrade` fija la política de actualización por defecto del instalador
   emitido, así que decidís al generar si los destinatarios quedan clavados en las

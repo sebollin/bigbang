@@ -238,9 +238,15 @@ test_that("a failed journal arm leaves an explicit unarmed journal", {
   expect_length(journal, 1L)
   expect_true(dir.exists(journal[[1L]]))
   expect_false(file.exists(file.path(journal[[1L]], "state.rds")))
-  expect_message(
-    .reconcile_update_siblings(fixture$project, "roundnineverse"),
-    "Discarded an orphaned armed-update folder"
-  )
+  local({
+    testthat::local_mocked_bindings(
+      .update_owner_may_be_alive = function(...) FALSE,
+      .package = "bigbang"
+    )
+    expect_message(
+      .reconcile_update_siblings(fixture$project, "roundnineverse"),
+      "Discarded an orphaned armed-update folder"
+    )
+  })
   expect_false(dir.exists(journal[[1L]]))
 })

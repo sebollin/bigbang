@@ -147,7 +147,8 @@ returned \code{tolerated} table.}
 
 \item{dry_run}{Logical. If TRUE, resolves and validates components and
 returns the planned generation without creating dest_dir or writing a
-project.}
+project. For an update, sibling journal reconciliation is also planned
+and reported with its paths and actions without changing those folders.}
 
 \item{on_component_error}{Character policy for component-level failures:
 "abort" (default) stops generation, while "skip" omits the failed
@@ -170,7 +171,11 @@ no longer in the plan are reported in \code{removed_files}. Removing a component
 also removes its shipped archive, which may be the last available copy.
 Before changing the project, an update backs up every generated file and
 its manifest. A failed update restores that state so the same update can be
-retried. Documentation files requested by \code{document = TRUE} can always be
+retried. Updates take an exclusive project lock across preparation,
+reconciliation, generation, rollback, and journal publication. A second
+session preserves a live preparation and reports \code{recover = TRUE} as the
+next action until the owner is proven to have finished. Documentation files
+requested by \code{document = TRUE} can always be
 regenerated: they can be restored after documentation was disabled, and an
 update that cannot regenerate them retains the previously tracked Rd files.
 See \code{document} for the reserved generated-documentation filenames.}
@@ -189,20 +194,21 @@ named component must be included and export the mapped symbol.}
 re-exported. Symbols are validated against the explicit exports of the
 included components and cannot also appear in \code{reexport_prefer}.}
 
-\item{recover}{Logical. With \code{update = TRUE}, force recovery when a durable
-update journal exists but the owning process cannot safely be proved dead,
-or when a file has user content that is neither the original nor an
-intended update value. Unknown content is copied byte for byte to a new
-preserved directory beside the project before recovery; that directory is
-reported and is never removed automatically. Defaults to \code{FALSE}.}
+\item{recover}{Logical. With \code{update = TRUE}, request recovery after the
+durable journal owner has been confirmed finished, or when a file has user
+content that is neither the original nor an intended update value. Unknown
+content is copied byte for byte to a new preserved directory beside the
+project before recovery; that directory is reported and is never removed
+automatically. A live or uncertain owner still blocks mutation. Defaults
+to \code{FALSE}.}
 }
 \value{
 Invisibly, a \code{bigbang_result} containing the generated path,
 component archives, dependency classification, applied tolerations,
 files removed by the call, documentation status, the \code{reexports} table,
 \code{reexport_excluded} symbols, and whether an interrupted update was
-recovered. Recovery details include any directory used to preserve unknown user
-content and the original files restored while absent.
+recovered. Recovery details include any directory used to preserve unknown
+user content and the sibling-journal reconciliation plan.
 }
 \description{
 Creates the full structure and files of a meta-package that installs, manages
@@ -286,36 +292,33 @@ method until the component has been loaded.
 
 When more than one component exports a symbol, \code{reexport_prefer} chooses its
 provider explicitly and \code{reexport_exclude} removes it from the generated
-namespace. Every collision requires one of those options because static source
-analysis cannot prove that two exported objects are the same at runtime. The
-analysis remains a diagnostic with \code{probable_same_object},
-\code{distinct_definitions}, or \code{undetermined}, including ordered file,
-line, import, and parse reasons. For a preferred
-\code{probable_same_object}, \verb{<name>_install()} verifies the installed
-owners with \code{identical()} without installing anything extra; this is a
-snapshot of the installation moment. Missing exports produce the same
-verification warning, and the returned result retains the missing owners.
-\verb{<name>_conflicts()} repeats the check and warning on request. A
-\code{FALSE} identity warning distinguishes equivalent function copies (same
-body and formals) from distinct objects. If
+namespace. Every collision requires one of those options because static
+source analysis cannot prove that two exported objects are the same at
+runtime. The analysis remains as a diagnostic with
+\code{probable_same_object}, \code{distinct_definitions}, or \code{undetermined}, including
+ordered file, line, import, and parse reasons. For a preferred
+\code{probable_same_object}, \verb{<name>_install()} verifies the installed owners with
+\code{identical()} without installing anything extra; missing owners remain
+unverified and the verification is retained in the returned result. The
+diagnostic is a help, not the guarantee: the guarantee is the explicit
+\code{reexport_prefer} or \code{reexport_exclude} decision plus that verification.
+Calling \verb{library(<meta>)} alone does not verify installed owners. The scanner
+is deliberately conservative and can count a never-forced \code{delayedAssign},
+an \verb{if (FALSE)} branch, or a \code{reg.finalizer()} body; this overcount does not
+weaken the explicit decision and installation-verification guarantee.
+\verb{<name>_conflicts()} repeats that check on request. If
 \code{on_component_error = "skip"} omits a component required by a preferred
 binding or an import source, generation errors with an actionable skipped
 condition instead of creating a binding to a component that will not travel
 with the metapackage.
-The analysis is a diagnostic aid: the guarantee is the explicit
-\code{reexport_prefer} or \code{reexport_exclude} decision plus the
-\verb{<name>_install()} verification. \code{library(<meta>)} alone does not
-verify installed owners. The scanner is conservative and can count a
-never-forced \code{delayedAssign}, an \code{if (FALSE)} branch, or a
-\code{reg.finalizer()} body.
 }
 
 \section{Interrupted updates}{
 
 Before an in-place update mutates the project, bigbang assembles a durable
 journal beside it in a private \verb{.<name>.bigbang-update.armando-*} folder.
-The marker is written before the backup, and the complete folder is renamed to
-\verb{.<name>.bigbang-update} only after every hash has been verified.
+The marker is written before the backup, and the complete folder is renamed
+to \verb{.<name>.bigbang-update} only after every hash has been verified.
 Every later file write or removal records its intention first. Generated
 files, shipped component archives, catalogs, \code{.Rbuildignore}, and the final
 manifest are replaced atomically. On Windows the guarantee is that a file is
@@ -323,27 +326,29 @@ old, new, or temporarily absent with a journal backup. Roxygen runs in a staging
 known outputs are promoted atomically to the project.
 
 If a process dies while preparing the journal, an empty unmarked
-\verb{armando-*} folder, or one containing only the exact atomic marker
-temporary files, is discarded; any other non-empty unmarked folder is never
-deleted. A marked preparation is recognized and discarded because it cannot
-have touched the project. Journal disposal first writes an atomic tombstone
-with the exact relative-path and MD5 inventory of the entries bigbang wrote,
-then renames the folder to \verb{.<name>.bigbang-update.descartado-*}; cleanup
-can therefore resume after another interruption. New or changed entries outside
-that inventory are preserved and reported. A discarded folder without a valid
-tombstone is left intact and reported as unknown; an empty one is removed as
-an interrupted cleanup shell.
+\verb{armando-*} folder, or one containing only the exact atomic marker temporary
+files, is planned for discard; any other non-empty unmarked folder is never
+deleted. The initial marker records the owner PID, host, process start token,
+and start time before the first backup copy. A marked preparation is
+discarded only after the owner is proven finished with the platform's
+conservative liveness policy. Journal disposal first writes an atomic tombstone with
+the exact relative-path and MD5 inventory of the entries bigbang wrote, then
+renames the folder to \verb{.<name>.bigbang-update.descartado-*}; cleanup can
+therefore resume after another interruption. New or changed entries outside
+that inventory are preserved and reported. A discarded folder without a
+valid tombstone is left intact and reported as unknown; an empty one is
+removed as an interrupted cleanup shell.
 
 The journal survives process termination, terminal closure, and system
 shutdown, including SIGKILL, SIGTERM, and SIGHUP on POSIX systems. The next
 \code{create_metapackage(update = TRUE)} call examines it before validating the
 generation manifest. The marker identifies the metapackage and old-manifest
 hash rather than an absolute path, so moving the project together with its
-journal remains recoverable. A renamed project is recognized when its sibling
-journal's backed-up manifest hash matches the current project; an unrecognized
-journal reports the recorded project name and how to rename it back. A discarded
-sibling is finished only when its metapackage name and recorded manifest hash
-match this project's current manifest. An unarmed journal is discarded because the project was
+journal remains recoverable. A renamed project is also recognized when its
+sibling journal's backed-up manifest hash matches the current project; an
+unrecognized journal reports the recorded project name and how to rename it
+back. A discarded sibling is finished only when its metapackage name and
+recorded manifest hash match this project's current manifest. An unarmed journal is discarded because the project was
 not touched; an already completed update is recognized by its new manifest;
 otherwise a dead owner's changes are rolled back and the requested update
 continues. On POSIX systems liveness uses the PID and, where Linux \verb{/proc}
@@ -352,15 +357,15 @@ probed with \code{tools::pskill()} because that operation terminates a process;
 use \code{recover = TRUE} only after confirming that no update is running.
 
 Automatic recovery proceeds only when every affected path contains its
-original bytes, intended bytes, or an expected absence. An absent destination
-with a write intent is expected only while the matching temporary file remains
-in the journal staging area. Other content raises
+original bytes, intended bytes, or an expected absence. Other content raises
 \code{bigbang_error_interrupted_update}; \code{recover = TRUE} preserves it outside the
-project before rollback. Every original file restored while absent is listed in
-the recovery result and message. Recovery is idempotent, so another interruption
-can be recovered by a later call. \code{dry_run = TRUE} reports the pending action
-and leaves both project and journal untouched. A handled error uses this same
-journal for immediate rollback and retains it if verification cannot finish.
+project before rollback. Recovery is idempotent, so another interruption can
+be recovered by a later call. \code{dry_run = TRUE} reports the pending action and
+leaves the project and every sibling journal folder untouched. A handled
+error uses this same journal for immediate rollback and retains it if
+verification cannot finish. Documentation generation failures in the staging
+copy are warnings; a failure while promoting any documentation output aborts
+the update and rolls the complete project back through the journal.
 }
 
 \section{Requirements}{

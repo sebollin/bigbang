@@ -46,6 +46,14 @@ round056_update <- function(fixture, ...) {
   )
 }
 
+round056_update_dead_owner <- function(fixture, ...) {
+  testthat::local_mocked_bindings(
+    .update_owner_may_be_alive = function(state) FALSE,
+    .package = "bigbang"
+  )
+  round056_update(fixture, ...)
+}
+
 round056_snapshot <- function(path) {
   entries <- list.files(path, all.files = TRUE, recursive = TRUE, no.. = TRUE,
                         include.dirs = TRUE)
@@ -57,12 +65,31 @@ round056_snapshot <- function(path) {
              stringsAsFactors = FALSE)
 }
 
+round056_collect_child <- function(child, timeout = 1) {
+  deadline <- Sys.time() + timeout
+  repeat {
+    collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
+    if (!is.null(collected)) return(invisible(TRUE))
+    if (Sys.time() >= deadline) return(invisible(FALSE))
+    Sys.sleep(0.01)
+  }
+}
+
+round056_cleanup_child <- function(child) {
+  collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
+  if (is.null(collected)) {
+    try(tools::pskill(child$pid, tools::SIGKILL), silent = TRUE)
+    round056_collect_child(child, timeout = 1)
+  }
+  invisible(NULL)
+}
+
 round056_kill <- function(child, mark) {
+  on.exit(round056_cleanup_child(child), add = TRUE)
   deadline <- Sys.time() + 30
   while (!file.exists(mark) && Sys.time() < deadline) Sys.sleep(0.05)
   hit <- file.exists(mark)
-  if (hit) tools::pskill(child$pid, tools::SIGKILL)
-  suppressWarnings(parallel::mccollect(child, wait = TRUE))
+  round056_cleanup_child(child)
   hit
 }
 
@@ -97,6 +124,7 @@ round056_interrupt_discard <- function(fixture, mark) {
           }), print = FALSE)
     bigbang:::.discard_update_journal(journal, fixture$project, fixture$name)
   }, silent = TRUE, mc.set.seed = FALSE)
+  on.exit(round056_cleanup_child(child), add = TRUE)
   hit <- round056_kill(child, mark)
   Sys.unsetenv("BB056_MARK")
   expect_true(hit)
@@ -106,6 +134,7 @@ round056_interrupt_discard <- function(fixture, mark) {
 }
 
 test_that("J1 SIGKILL cleans only an atomic marker temporary", {
+  skip_on_cran()
   skip_on_os("windows")
   fixture <- round056_fixture("bigbang-round056-j1-")
   before <- round056_snapshot(fixture$project)
@@ -123,6 +152,7 @@ test_that("J1 SIGKILL cleans only an atomic marker temporary", {
           }), print = FALSE)
     round056_update(fixture)
   }, silent = TRUE, mc.set.seed = FALSE)
+  on.exit(round056_cleanup_child(child), add = TRUE)
   expect_true(round056_kill(child, mark))
   Sys.unsetenv("BB056_MARK")
   armando <- round056_armando(fixture)
@@ -139,6 +169,7 @@ test_that("J1 SIGKILL cleans only an atomic marker temporary", {
 })
 
 test_that("J2 SIGKILL after the tombstone resumes the rename and discard", {
+  skip_on_cran()
   skip_on_os("windows")
   fixture <- round056_fixture("bigbang-round056-j2-")
   before <- round056_snapshot(fixture$project)
@@ -157,6 +188,7 @@ test_that("J2 SIGKILL after the tombstone resumes the rename and discard", {
           }), print = FALSE)
     bigbang:::.discard_update_journal(journal, fixture$project, fixture$name)
   }, silent = TRUE, mc.set.seed = FALSE)
+  on.exit(round056_cleanup_child(child), add = TRUE)
   expect_true(round056_kill(child, mark))
   Sys.unsetenv("BB056_MARK")
   expect_true(file.exists(file.path(
@@ -172,6 +204,7 @@ test_that("J2 SIGKILL after the tombstone resumes the rename and discard", {
 })
 
 test_that("J3 SIGKILL after the tombstone unlink removes the empty shell", {
+  skip_on_cran()
   skip_on_os("windows")
   fixture <- round056_fixture("bigbang-round056-j3-")
   manifest <- .read_generation_manifest(fixture$project)
@@ -191,6 +224,7 @@ test_that("J3 SIGKILL after the tombstone unlink removes the empty shell", {
           }), print = FALSE)
     bigbang:::.discard_update_journal(journal, fixture$project, fixture$name)
   }, silent = TRUE, mc.set.seed = FALSE)
+  on.exit(round056_cleanup_child(child), add = TRUE)
   expect_true(round056_kill(child, mark))
   Sys.unsetenv("BB056_MARK")
   discarded <- round056_discarded(fixture)
@@ -204,6 +238,7 @@ test_that("J3 SIGKILL after the tombstone unlink removes the empty shell", {
 })
 
 test_that("J4 preserves user bytes outside the tombstone inventory", {
+  skip_on_cran()
   fixture <- round056_fixture("bigbang-round056-j4-")
   discarded <- round056_interrupt_discard(
     fixture, file.path(fixture$root, "J4_MARK")
@@ -212,7 +247,7 @@ test_that("J4 preserves user bytes outside the tombstone inventory", {
   writeLines("do not delete", user_file, useBytes = TRUE)
   before <- readBin(user_file, "raw", 1000L)
   error <- expect_error(
-    round056_update(fixture),
+    round056_update_dead_owner(fixture),
     class = "bigbang_error_unrecognized_update_journal"
   )
   expect_match(conditionMessage(error), "inventory|user-owned|retry",
@@ -224,6 +259,7 @@ test_that("J4 preserves user bytes outside the tombstone inventory", {
 })
 
 test_that("J5 preserves a discarded journal from another project generation", {
+  skip_on_cran()
   first <- round056_fixture("bigbang-round056-j5-first-")
   second <- round056_fixture(
     "bigbang-round056-j5-second-", version = "0.1.1"
@@ -239,7 +275,7 @@ test_that("J5 preserves a discarded journal from another project generation", {
   saveRDS(tombstone, tombstone_path)
   before <- readBin(first$sentinel, "raw", 1000L)
   error <- expect_error(
-    round056_update(first),
+    round056_update_dead_owner(first),
     class = "bigbang_error_unrecognized_update_journal"
   )
   expect_match(conditionMessage(error), "round056foreign|manifest|retry",

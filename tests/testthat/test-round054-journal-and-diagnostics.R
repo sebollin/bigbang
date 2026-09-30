@@ -42,12 +42,40 @@ round054_update <- function(fixture, destination = fixture$destination, ...) {
   )
 }
 
+round054_update_dead_owner <- function(fixture, destination = fixture$destination,
+                                       ...) {
+  testthat::local_mocked_bindings(
+    .update_owner_may_be_alive = function(state) FALSE,
+    .package = "bigbang"
+  )
+  round054_update(fixture, destination = destination, ...)
+}
+
+round054_collect_child <- function(child, timeout = 1) {
+  deadline <- Sys.time() + timeout
+  repeat {
+    collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
+    if (!is.null(collected)) return(invisible(TRUE))
+    if (Sys.time() >= deadline) return(invisible(FALSE))
+    Sys.sleep(0.01)
+  }
+}
+
+round054_cleanup_child <- function(child) {
+  collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
+  if (is.null(collected)) {
+    try(tools::pskill(child$pid, tools::SIGKILL), silent = TRUE)
+    round054_collect_child(child, timeout = 1)
+  }
+  invisible(NULL)
+}
+
 round054_kill_child <- function(child, mark, timeout = 30) {
+  on.exit(round054_cleanup_child(child), add = TRUE)
   deadline <- Sys.time() + timeout
   while (!file.exists(mark) && Sys.time() < deadline) Sys.sleep(0.05)
   hit <- file.exists(mark)
-  if (hit) tools::pskill(child$pid, tools::SIGKILL)
-  suppressWarnings(parallel::mccollect(child, wait = TRUE))
+  round054_cleanup_child(child)
   hit
 }
 
@@ -62,7 +90,74 @@ round054_snapshot <- function(path) {
              stringsAsFactors = FALSE)
 }
 
+test_that("the process cleanup helper enforces its timeout", {
+  skip_on_cran()
+  skip_on_os("windows")
+  child <- parallel::mcparallel(Sys.sleep(10), silent = TRUE,
+                                mc.set.seed = FALSE)
+  on.exit(round054_cleanup_child(child), add = TRUE)
+  started <- Sys.time()
+  hit <- round054_kill_child(child, tempfile("round054-missing-mark-"),
+                             timeout = 0.05)
+  elapsed <- as.numeric(difftime(Sys.time(), started, units = "secs"))
+  expect_false(hit)
+  expect_lt(elapsed, 2)
+})
+
+test_that("dry run reconciles sibling journals without mutating any sibling", {
+  fixture <- round054_fixture("bigbang-round057-sibling-plan-")
+  empty <- file.path(
+    fixture$destination,
+    paste0(".", fixture$name, ".bigbang-update.armando-empty")
+  )
+  dir.create(empty)
+  journal <- .create_update_journal(
+    fixture$project, fixture$name,
+    .read_generation_manifest(fixture$project)
+  )
+  armed <- paste0(journal$path, ".armando-marked")
+  expect_true(file.rename(journal$path, armed))
+  journal <- .create_update_journal(
+    fixture$project, fixture$name,
+    .read_generation_manifest(fixture$project)
+  )
+  .update_journal_tombstone(journal$path, fixture$name, journal$marker)
+  discarded <- paste0(journal$path, ".descartado-marked")
+  expect_true(file.rename(journal$path, discarded))
+  before <- round054_snapshot(fixture$destination)
+
+  result <- round054_update(fixture, dry_run = TRUE)
+
+  expect_true(result$dry_run)
+  expect_identical(round054_snapshot(fixture$destination), before)
+  expect_length(result$recovery$reconciliation, 3L)
+  expect_true(all(vapply(
+    result$recovery$reconciliation,
+    function(item) item$action %in% c("discard_empty", "blocked_live_owner"),
+    logical(1L)
+  )))
+})
+
+test_that("sibling matching escapes the name literally", {
+  root <- tempfile("bigbang-round057-pattern-")
+  dir.create(root)
+  project <- file.path(root, "x.y")
+  controls <- file.path(
+    root,
+    c(".x-y.bigbang-update.armando-user",
+      ".x_y.bigbang-update.armando-user",
+      ".xletters.bigbang-update.armando-user")
+  )
+  valid <- file.path(root, ".x.y.bigbang-update.armando-user")
+  for (path in c(controls, valid)) dir.create(path)
+  expect_identical(
+    .update_journal_sibling_paths(project, "x.y", "armando"),
+    valid
+  )
+})
+
 test_that("H1 real SIGKILL leaves no final unmarked journal", {
+  skip_on_cran()
   skip_on_os("windows")
   fixture <- round054_fixture("bigbang-round054-h1-marker-")
   mark <- file.path(fixture$root, "H1_MARK")
@@ -79,6 +174,7 @@ test_that("H1 real SIGKILL leaves no final unmarked journal", {
           }), print = FALSE)
     round054_update(fixture)
   }, silent = TRUE, mc.set.seed = FALSE)
+  on.exit(round054_cleanup_child(child), add = TRUE)
   expect_true(round054_kill_child(child, mark))
 
   armando <- list.files(fixture$destination,
@@ -94,6 +190,7 @@ test_that("H1 real SIGKILL leaves no final unmarked journal", {
 })
 
 test_that("H1 empty unmarked staging is discarded but non-empty is never touched", {
+  skip_on_cran()
   skip_on_os("windows")
   fixture <- round054_fixture("bigbang-round054-h1-empty-")
   mark <- file.path(fixture$root, "H1_EMPTY_MARK")
@@ -110,6 +207,7 @@ test_that("H1 empty unmarked staging is discarded but non-empty is never touched
           }), print = FALSE)
     round054_update(fixture)
   }, silent = TRUE, mc.set.seed = FALSE)
+  on.exit(round054_cleanup_child(child), add = TRUE)
   expect_true(round054_kill_child(child, mark))
   armando <- list.files(fixture$destination,
                         pattern = paste0("^\\.", fixture$name,
@@ -129,6 +227,7 @@ test_that("H1 empty unmarked staging is discarded but non-empty is never touched
 })
 
 test_that("H2 SIGKILL after rename and during deletion resumes from tombstone", {
+  skip_on_cran()
   skip_on_os("windows")
   for (phase in c("after_rename", "during_delete")) {
     fixture <- round054_fixture(paste0("bigbang-round054-h2-", phase, "-"))
@@ -160,6 +259,7 @@ test_that("H2 SIGKILL after rename and during deletion resumes from tombstone", 
       }
       .discard_update_journal(journal, fixture$project, fixture$name)
     }, silent = TRUE, mc.set.seed = FALSE)
+    on.exit(round054_cleanup_child(child), add = TRUE)
     expect_true(round054_kill_child(child, mark))
     Sys.unsetenv("BB054_H2_PHASE")
     discarded <- list.files(fixture$destination,
@@ -169,13 +269,14 @@ test_that("H2 SIGKILL after rename and during deletion resumes from tombstone", 
     expect_length(discarded, 1L)
     expect_true(file.exists(file.path(discarded, "tombstone.rds")))
     expect_false(dir.exists(.update_journal_path(fixture$project)))
-    result <- round054_update(fixture)
+    result <- round054_update_dead_owner(fixture)
     expect_true(result$updated)
     expect_false(dir.exists(discarded))
   }
 })
 
 test_that("H3 moved projects recognize the journal by name and manifest hash", {
+  skip_on_cran()
   skip_on_os("windows")
   fixture <- round054_fixture("bigbang-round054-h3-")
   reference_destination <- file.path(fixture$root, "reference-destination")
@@ -207,6 +308,7 @@ test_that("H3 moved projects recognize the journal by name and manifest hash", {
     }), print = FALSE)
     round054_update(fixture, version = "0.2.0")
   }, silent = TRUE, mc.set.seed = FALSE)
+  on.exit(round054_cleanup_child(child), add = TRUE)
   expect_true(round054_kill_child(child, mark))
   moved_parent <- file.path(fixture$root, "moved")
   expect_true(file.rename(fixture$destination, moved_parent))
@@ -305,6 +407,7 @@ test_that("missing projects and unarmed dry runs explain the next action", {
     .recover_pending_update(missing, "round054verse"),
     class = "bigbang_error_missing_project"
   )
+  expect_true(inherits(error, "bigbang_error_missing_manifest"))
   expect_match(conditionMessage(error), "moved|dest_dir|Next step",
                ignore.case = TRUE)
 

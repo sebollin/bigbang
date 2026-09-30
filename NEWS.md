@@ -1,5 +1,18 @@
 # bigbang (development version)
 
+## Breaking changes
+
+- `bigbang_error_missing_project` now inherits from
+  `bigbang_error_missing_manifest`, preserving the 0.4.0 condition contract
+  while identifying a missing project more precisely.
+- Update `dry_run` now reports a read-only reconciliation plan for sibling
+  journal folders. Updates use an exclusive project lock, and a live or
+  uncertain journal owner is never reconciled; callers must confirm that the
+  owner finished before using `recover = TRUE`.
+- A failure while promoting generated documentation now aborts the update and
+  rolls the project back through its journal. Only failures in the staging
+  generation remain warnings.
+
 - Round 056 hardens interrupted-update cleanup: marker-only atomic remnants and
   empty discarded shells converge automatically, tombstones carry exact MD5
   inventories, foreign generations are preserved, and renamed sibling journals

@@ -276,6 +276,72 @@ test_that("failed documentation is reported and restores the caller session", {
   }
 })
 
+test_that("a promotion failure rolls the project back completely", {
+  skip_if_not_installed("devtools")
+  sandbox <- tempfile("bigbang-document-promotion-rollback-")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "output")
+  dir.create(destination, recursive = TRUE)
+  copy_toy_archive(archives)
+  initial <- generate_toy_metapackage(
+    "promotionverse", archives, destination, document = FALSE
+  )
+  documentation <- .planned_documentation_files("promotionverse")
+  for (relative in documentation) {
+    writeLines(paste("old", relative), file.path(initial$path, relative),
+               useBytes = TRUE)
+  }
+  manifest <- .read_generation_manifest(initial$path)
+  .atomic_save_rds(
+    .manifest_records(initial$path, unique(c(manifest$files, documentation))),
+    file.path(initial$path, .generation_manifest_name)
+  )
+  promotion_snapshot <- function(path) {
+    relative <- list.files(path, all.files = TRUE, recursive = TRUE,
+                           no.. = TRUE, include.dirs = TRUE)
+    full <- file.path(path, relative)
+    info <- file.info(full)
+    hashes <- rep(NA_character_, length(full))
+    hashes[!info$isdir] <- unname(as.character(tools::md5sum(full[!info$isdir])))
+    data.frame(path = relative, directory = info$isdir, hash = hashes,
+               stringsAsFactors = FALSE)
+  }
+  before <- promotion_snapshot(initial$path)
+  original_copy <- .atomic_copy
+  calls <- 0L
+  testthat::local_mocked_bindings(
+    document = function(pkg, ...) {
+      for (relative in documentation) {
+        writeLines(paste("new", relative), file.path(pkg, relative),
+                   useBytes = TRUE)
+      }
+      invisible(TRUE)
+    },
+    .package = "devtools"
+  )
+  failed <- NULL
+  expect_error(failed <- testthat::with_mocked_bindings(
+    create_metapackage(
+      "promotionverse", "toycomponent_0.1.0", pkg_dir = archives,
+      dest_dir = destination, document = TRUE, update = TRUE,
+      verbose = FALSE, import_deps = character(), force_deps = character()
+    ),
+    .atomic_copy = function(source, destination) {
+      if (grepl("bigbang-document-staging-", source, fixed = TRUE) &&
+            startsWith(destination, initial$path) &&
+            grepl("/man/", destination, fixed = TRUE)) {
+        calls <<- calls + 1L
+        if (calls == 2L) stop("forced documentation promotion failure")
+      }
+      original_copy(source, destination)
+    },
+    .package = "bigbang"
+  ), "forced documentation promotion failure", fixed = TRUE)
+  expect_identical(promotion_snapshot(initial$path), before)
+  expect_true(.manifest_matches_project(initial$path))
+  expect_false(dir.exists(.update_journal_path(initial$path)))
+})
+
 test_that("illegal package names are rejected before anything is written", {
   sandbox <- tempfile("bigbang-name-validation-")
   dir.create(sandbox)

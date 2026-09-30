@@ -59,6 +59,14 @@ round052_arm <- function(fixture, extra_files = character()) {
   journal
 }
 
+round052_recover_dead_owner <- function(...) {
+  testthat::local_mocked_bindings(
+    .update_owner_may_be_alive = function(state) FALSE,
+    .package = "bigbang"
+  )
+  .recover_pending_update(...)
+}
+
 round052_intended_write <- function(fixture, journal, relative, text) {
   source <- tempfile("round052-intended-")
   writeLines(text, source, useBytes = TRUE)
@@ -78,6 +86,14 @@ round052_update <- function(fixture, ..., document = FALSE,
   )
 }
 
+round052_update_dead_owner <- function(fixture, ...) {
+  testthat::local_mocked_bindings(
+    .update_owner_may_be_alive = function(state) FALSE,
+    .package = "bigbang"
+  )
+  round052_update(fixture, ...)
+}
+
 test_that("unknown user edits are refused and preserved with forced recovery", {
   fixture <- round052_fixture()
   relative <- "README.md"
@@ -89,7 +105,7 @@ test_that("unknown user edits are refused and preserved with forced recovery", {
   writeBin(user_bytes, file.path(fixture$project, relative))
 
   error <- expect_error(
-    round052_update(fixture),
+    round052_update_dead_owner(fixture),
     class = "bigbang_error_interrupted_update"
   )
   expect_true(relative %in% error$files)
@@ -98,7 +114,7 @@ test_that("unknown user edits are refused and preserved with forced recovery", {
 
   result <- NULL
   expect_message(
-    result <- round052_update(fixture, recover = TRUE),
+    result <- round052_update_dead_owner(fixture, recover = TRUE),
     "Preserved unknown files"
   )
   expect_true(result$recovered)
@@ -117,14 +133,14 @@ test_that("an absent file with intent but no matching staging bytes is unknown",
   unlink(list.files(file.path(journal$path, "staging"), all.files = TRUE,
                     full.names = TRUE, no.. = TRUE), recursive = TRUE)
 
-  plan <- .recover_pending_update(
+  plan <- round052_recover_dead_owner(
     fixture$project, "journalverse", recover = TRUE, dry_run = TRUE
   )
   expect_identical(plan$action, "preserve_and_recover")
   expect_identical(plan$unknown, relative)
 
   expect_message(
-    recovered <- .recover_pending_update(
+    recovered <- round052_recover_dead_owner(
       fixture$project, "journalverse", recover = TRUE
     ),
     "absent when recovery started"
@@ -147,7 +163,7 @@ test_that("a user file appearing at an intended new path is never guessed away",
   writeBin(user_bytes, file.path(fixture$project, relative))
 
   expect_error(
-    round052_update(fixture, document = TRUE),
+    round052_update_dead_owner(fixture, document = TRUE),
     class = "bigbang_error_interrupted_update"
   )
   expect_identical(readBin(file.path(fixture$project, relative), "raw", 1000L),
@@ -156,7 +172,7 @@ test_that("a user file appearing at an intended new path is never guessed away",
   unlink(file.path(fixture$project, relative))
   .atomic_copy(intended, file.path(fixture$project, relative))
   expect_message(
-    .recover_pending_update(fixture$project, "journalverse"),
+    round052_recover_dead_owner(fixture$project, "journalverse"),
     "Recovered an interrupted update"
   )
   expect_false(file.exists(file.path(fixture$project, relative)))
@@ -175,7 +191,7 @@ test_that("unrecognized journal names are actionable and never touched", {
       before <- readBin(file.path(journal, "owned.txt"), "raw", 1000L)
     }
     expect_error(
-      round052_update(fixture),
+      round052_update_dead_owner(fixture),
       class = "bigbang_error_unrecognized_update_journal"
     )
     target <- if (identical(kind, "file")) journal else file.path(journal, "owned.txt")
@@ -193,7 +209,7 @@ test_that("unrecognized journal names are actionable and never touched", {
   saveRDS(marker, file.path(journal, "marker.rds"))
   before <- .file_digest(file.path(journal, "marker.rds"))
   expect_error(
-    round052_update(fixture),
+    round052_update_dead_owner(fixture),
     class = "bigbang_error_unrecognized_update_journal"
   )
   expect_identical(.file_digest(file.path(journal, "marker.rds")), before)
@@ -215,7 +231,7 @@ test_that("recognized journals reject unexpected user entries", {
   writeLines("do not delete", user_file, useBytes = TRUE)
   before <- .file_digest(user_file)
   expect_error(
-    .recover_pending_update(fixture$project, "journalverse", recover = TRUE),
+    round052_recover_dead_owner(fixture$project, "journalverse", recover = TRUE),
     class = "bigbang_error_unrecognized_update_journal"
   )
   expect_identical(.file_digest(user_file), before)
@@ -293,7 +309,7 @@ test_that("journal defensive formats and partial arm states are explicit", {
              useBytes = TRUE)
   expect_true(.unarmed_journal_is_expected(partial_path, marker))
   expect_message(
-    dry <- .recover_pending_update(
+    dry <- round052_recover_dead_owner(
       partial$project, "journalverse", dry_run = TRUE
     ),
     NA
@@ -301,7 +317,7 @@ test_that("journal defensive formats and partial arm states are explicit", {
   expect_identical(dry$action, "discard_unarmed")
   expect_true(dir.exists(partial_path))
   expect_message(
-    .recover_pending_update(partial$project, "journalverse"),
+    round052_recover_dead_owner(partial$project, "journalverse"),
     "Discarded an unarmed update journal"
   )
   expect_false(dir.exists(partial_path))
@@ -354,7 +370,7 @@ test_that("journal checksum, state, host, and manifest guards reject ambiguity",
   invalid_state$pid <- NA_integer_
   .atomic_save_rds(invalid_state, invalid_state_path)
   expect_error(
-    .recover_pending_update(invalid$project, "journalverse", recover = TRUE),
+    round052_recover_dead_owner(invalid$project, "journalverse", recover = TRUE),
     class = "bigbang_error_unrecognized_update_journal"
   )
 })
@@ -368,16 +384,16 @@ test_that("forced recovery handles an unknown directory and missing parents", {
   writeLines("user child", file.path(fixture$project, relative, "child"),
              useBytes = TRUE)
 
-  blocked <- .recover_pending_update(
+  blocked <- round052_recover_dead_owner(
     fixture$project, "journalverse", dry_run = TRUE
   )
   expect_identical(blocked$action, "blocked_unknown")
-  forced_plan <- .recover_pending_update(
+  forced_plan <- round052_recover_dead_owner(
     fixture$project, "journalverse", recover = TRUE, dry_run = TRUE
   )
   expect_identical(forced_plan$action, "preserve_and_recover")
   expect_message(
-    recovered <- .recover_pending_update(
+    recovered <- round052_recover_dead_owner(
       fixture$project, "journalverse", recover = TRUE
     ),
     "Preserved unknown files"
@@ -398,7 +414,7 @@ test_that("forced recovery handles an unknown directory and missing parents", {
   .deactivate_update_journal()
   unlink(file.path(missing_parent$project, "R"), recursive = TRUE)
   expect_message(
-    restored <- .recover_pending_update(
+    restored <- round052_recover_dead_owner(
       missing_parent$project, "journalverse", recover = TRUE
     ),
     "Recovered an interrupted update"
@@ -408,6 +424,7 @@ test_that("forced recovery handles an unknown directory and missing parents", {
 })
 
 test_that("owner liveness distinguishes a live process from PID reuse", {
+  skip_on_cran()
   skip_on_os("windows")
   fixture <- round052_fixture()
   journal <- round052_arm(fixture)
@@ -420,20 +437,32 @@ test_that("owner liveness distinguishes a live process from PID reuse", {
   state <- readRDS(state_path)
   state$pid <- sleeper$pid
   state$host <- .update_host()
-  state$process_start <- .update_process_start(sleeper$pid)
+  observed_start <- .update_process_start(sleeper$pid)
+  state$process_start <- observed_start
   .atomic_save_rds(state, state_path)
 
   expect_error(
     .recover_pending_update(fixture$project, "journalverse"),
     class = "bigbang_error_update_in_progress"
   )
-  state$process_start <- paste0(state$process_start, "-reused")
+  state$process_start <- if (is.na(observed_start)) {
+    NA_character_
+  } else {
+    paste0(observed_start, "-reused")
+  }
   .atomic_save_rds(state, state_path)
-  expect_message(
-    reused <- .recover_pending_update(fixture$project, "journalverse"),
-    "Recovered an interrupted update"
-  )
-  expect_true(reused$recovered)
+  if (is.na(observed_start)) {
+    expect_error(
+      .recover_pending_update(fixture$project, "journalverse"),
+      class = "bigbang_error_update_in_progress"
+    )
+  } else {
+    expect_message(
+      reused <- .recover_pending_update(fixture$project, "journalverse"),
+      "Recovered an interrupted update"
+    )
+    expect_true(reused$recovered)
+  }
 
   second <- round052_fixture("bigbang-round052-force-live-")
   second_journal <- round052_arm(second)
@@ -450,6 +479,104 @@ test_that("owner liveness distinguishes a live process from PID reuse", {
     "Recovered an interrupted update"
   )
   expect_true(forced$recovered)
+})
+
+test_that("unknown process identity uses the conservative liveness policy", {
+  fixture <- round052_fixture("bigbang-round052-no-proc-")
+  journal <- round052_arm(fixture)
+  state <- journal$state
+  state$pid <- Sys.getpid()
+  state$host <- .update_host()
+  testthat::local_mocked_bindings(
+    .update_process_start = function(pid = Sys.getpid()) NA_character_,
+    .package = "bigbang"
+  )
+  expect_true(.update_owner_may_be_alive(state))
+})
+
+test_that("the update lock preserves a live owner and replaces a dead one", {
+  fixture <- round052_fixture("bigbang-round057-lock-")
+  lock <- .acquire_update_lock(fixture$project)
+  on.exit(.release_update_lock(lock), add = TRUE)
+  expect_error(
+    .acquire_update_lock(fixture$project),
+    class = "bigbang_error_update_in_progress"
+  )
+  expect_true(dir.exists(lock$path))
+  .release_update_lock(lock)
+
+  lock_path <- .update_lock_path(fixture$project)
+  dir.create(lock_path)
+  dead_owner <- .update_owner_record()
+  dead_owner$pid <- 99999999L
+  saveRDS(dead_owner, .update_lock_owner_path(lock_path))
+  local({
+    testthat::local_mocked_bindings(
+      .update_owner_may_be_alive = function(...) FALSE,
+      .package = "bigbang"
+    )
+    replacement <- .acquire_update_lock(fixture$project)
+    expect_true(dir.exists(replacement$path))
+    .release_update_lock(replacement)
+  })
+  expect_false(dir.exists(lock_path))
+  expect_null(.read_update_lock_owner(file.path(fixture$root, "absent-lock")))
+  empty_lock <- file.path(fixture$root, "empty-lock")
+  dir.create(empty_lock)
+  expect_null(.read_update_lock_owner(empty_lock))
+  saveRDS(list(pid = 1L), .update_lock_owner_path(empty_lock))
+  expect_null(.read_update_lock_owner(empty_lock))
+  expect_null(.update_tombstone_owner(list()))
+  if (.Platform$OS.type != "windows") {
+    dead <- list(pid = 99999999L, host = .update_host(),
+                 started_utc = "now", process_start = NA_character_)
+    expect_false(.update_owner_may_be_alive(dead))
+  }
+  .release_update_lock(NULL)
+})
+
+test_that("a live preparation is protected from a concurrent dry run", {
+  skip_on_cran()
+  skip_on_os("windows")
+  fixture <- round052_fixture("bigbang-round057-live-preparation-")
+  marker <- file.path(fixture$root, "READY")
+  release <- file.path(fixture$root, "RELEASE")
+  Sys.setenv(BB057_READY = marker, BB057_RELEASE = release)
+  on.exit(Sys.unsetenv(c("BB057_READY", "BB057_RELEASE")), add = TRUE)
+  child <- parallel::mcparallel({
+    trace(".journal_backup_copy", where = asNamespace("bigbang"),
+          tracer = quote({
+            if (!file.exists(Sys.getenv("BB057_READY"))) {
+              writeLines("ready", Sys.getenv("BB057_READY"), useBytes = TRUE)
+              deadline <- Sys.time() + 10
+              while (!file.exists(Sys.getenv("BB057_RELEASE")) &&
+                       Sys.time() < deadline) Sys.sleep(0.02)
+            }
+          }), print = FALSE)
+    round052_update(fixture, version = "0.2.0")
+  }, silent = TRUE, mc.set.seed = FALSE)
+  on.exit({
+    try(tools::pskill(child$pid, tools::SIGKILL), silent = TRUE)
+    suppressWarnings(parallel::mccollect(child, wait = FALSE))
+  }, add = TRUE)
+  deadline <- Sys.time() + 10
+  while (!file.exists(marker) && Sys.time() < deadline) Sys.sleep(0.02)
+  expect_true(file.exists(marker))
+  armando <- .update_journal_sibling_paths(
+    fixture$project, "journalverse", "armando"
+  )
+  expect_length(armando, 1L)
+  expect_error(
+    round052_update(fixture, dry_run = TRUE),
+    class = "bigbang_error_update_in_progress"
+  )
+  expect_true(dir.exists(armando))
+  writeLines("release", release, useBytes = TRUE)
+  result <- suppressMessages(parallel::mccollect(child, wait = TRUE)[[1L]])
+  expect_true(is.list(result) || is.character(result))
+  retry <- round052_update(fixture, version = "0.2.0")
+  expect_true(retry$updated)
+  expect_false(dir.exists(armando))
 })
 
 test_that("recovery is idempotent after interruption halfway through", {
@@ -474,13 +601,13 @@ test_that("recovery is idempotent after interruption halfway through", {
       .package = "bigbang"
     )
     expect_error(
-      .recover_pending_update(fixture$project, "journalverse"),
+      round052_recover_dead_owner(fixture$project, "journalverse"),
       "forced recovery interruption"
     )
   })
   expect_true(dir.exists(journal$path))
   expect_message(
-    result <- .recover_pending_update(fixture$project, "journalverse"),
+    result <- round052_recover_dead_owner(fixture$project, "journalverse"),
     "Recovered an interrupted update"
   )
   expect_true(result$recovered)
@@ -524,7 +651,7 @@ test_that("real process death halfway through recovery converges", {
   suppressWarnings(parallel::mccollect(child, wait = TRUE))
   expect_true(dir.exists(journal$path))
   expect_message(
-    result <- .recover_pending_update(fixture$project, "journalverse"),
+    result <- round052_recover_dead_owner(fixture$project, "journalverse"),
     "Recovered an interrupted update"
   )
   expect_true(result$recovered)
@@ -544,7 +671,7 @@ test_that("dry run reports recovery without changing project or journal", {
   before_journal <- round052_snapshot(journal$path)
 
   expect_message(
-    result <- round052_update(fixture, dry_run = TRUE),
+    result <- round052_update_dead_owner(fixture, dry_run = TRUE),
     "Dry run: pending update journal action"
   )
   expect_true(result$dry_run)
@@ -588,7 +715,7 @@ test_that("a Windows replacement window restores an absent old file from backup"
   unknown <- .unknown_update_paths(fixture$project, journal$state, intents)
   expect_identical(length(unknown), 0L)
   expect_message(
-    recovered <- .recover_pending_update(
+    recovered <- round052_recover_dead_owner(
       fixture$project, "journalverse", recover = TRUE
     ),
     "Recovered an interrupted update"
@@ -616,14 +743,14 @@ test_that("completed manifest wins over a stale journal", {
   completed <- round052_snapshot(fixture$project)
   expect_false(identical(completed, old))
 
-  plan <- .recover_pending_update(
+  plan <- round052_recover_dead_owner(
     fixture$project, "journalverse", dry_run = TRUE
   )
   expect_identical(plan$action, "discard_completed")
   expect_true(dir.exists(journal$path))
 
   expect_message(
-    result <- .recover_pending_update(fixture$project, "journalverse"),
+    result <- round052_recover_dead_owner(fixture$project, "journalverse"),
     "previous update had completed"
   )
   expect_identical(round052_snapshot(fixture$project), completed)
@@ -640,7 +767,7 @@ test_that("an unrecorded self-consistent manifest is not treated as completed", 
   manifest$hashes[["README.md"]] <- .file_digest(readme)
   saveRDS(manifest, manifest_path)
 
-  plan <- .recover_pending_update(
+  plan <- round052_recover_dead_owner(
     fixture$project, "journalverse", recover = TRUE, dry_run = TRUE
   )
   expect_identical(plan$action, "preserve_and_recover")
@@ -652,7 +779,7 @@ test_that("journal is external to artifacts and result file lists", {
   journal <- round052_arm(fixture)
   result <- NULL
   expect_message(
-    result <- round052_update(fixture),
+    result <- round052_update_dead_owner(fixture),
     "Recovered an interrupted update"
   )
   expect_false(any(grepl("bigbang-update", result$removed_files, fixed = TRUE)))
@@ -778,7 +905,7 @@ round052_signal_case <- function(signal, phase) {
         }), print = FALSE)
   on.exit(untrace(".validate_update_manifest", where = asNamespace("bigbang")),
           add = TRUE)
-  result <- round052_update(
+  result <- round052_update_dead_owner(
     fixture, document = identical(phase, "during_roxygen"),
     include_archives = identical(phase, "during_archive_copy")
   )
