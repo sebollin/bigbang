@@ -313,9 +313,21 @@ reports each path and action without mutating those folders.
   `removed_files`. Removing a component removes its shipped archive, which may
   be the last available copy.
   Updates hold an exclusive project lock from preparation through rollback and
-  journal publication. The initial marker records the owner PID, host, process
-  start token, and start time before the first backup copy. A live or uncertain
-  owner is preserved and the error reports `recover = TRUE` as the next action.
+  journal publication. The lock is published only by renaming a sibling
+  temporary folder that already contains `owner.rds`, so every published lock
+  has an owner. An orphan is first renamed to a unique discarded name; the
+  winner rechecks that owner before publishing its replacement. A regular file
+  or other user entry at the lock name is set aside as
+  `.<name>.bigbang-apartado-*`, without deleting its bytes. `recover = TRUE`
+  resolves uncertainty (Windows, missing `/proc`, another host, or an
+  unreadable owner), but never overrides a proven live owner: same host, live
+  PID, and the same process-start token. That case errors and reports the PID.
+  The sibling names `.<name>.bigbang-update`,
+  `.<name>.bigbang-update.armando-*`, `.<name>.bigbang-update.lock`,
+  `.<name>.bigbang-update.lock.armando-*`,
+  `.<name>.bigbang-update.lock.descartado-*`,
+  `.<name>.bigbang-update.descartado-*`, and `.<name>.bigbang-apartado-*`
+  are reserved for these operations.
   Updates also refuse to write through a symbolic project root or symbolic
   links inside the generated project, including links in parent directories of
   generated files.
@@ -332,12 +344,14 @@ reports each path and action without mutating those folders.
   inventory, and only empty inventory directories. Any other file, directory,
   or symbolic link sets the whole folder aside and the update continues. A
   missing or changed tombstone digest has the same outcome. The next
-  `update = TRUE` call also recognizes a moved or renamed project when its
-  sibling journal's backed-up manifest hash identifies the project and the
-  marker's old project no longer exists beside it. If it does exist, the
-  journal is a copy: it is not adopted or changed, and the update reports the
-  conflict while using a separate journal. A discarded sibling from another
-  generation or project is set aside with an actionable message. A user file
+  `update = TRUE` call can recover a project moved together with its journal.
+  Renaming a project is not supported because generated file names contain the
+  metapackage name: rename the project and its journal back to `<name>`. A
+  byte-for-byte copy placed at the same path and name as the moved original is
+  indistinguishable from that original, so the journal treats it as the
+  project. If the original still exists beside a copied journal, that journal
+  is not adopted or changed. A discarded sibling from another generation or
+  project is set aside with an actionable message. A user file
   with the same path and MD5 as an inventory entry is an unavoidable boundary:
   the bytes are identical, so deleting it loses no content, but ownership is
   not provable. It records every intended write and removal and
@@ -349,7 +363,8 @@ reports each path and action without mutating those folders.
   message. After confirming that no update is still running,
   `recover = TRUE` preserves those unknown bytes in a reported sibling
   directory and then recovers. A dry run reports the pending action without
-  changing the project or any sibling journal folder. Documentation generation
+  changing the project, lock, or any sibling journal folder. The lock is only
+  evaluated and reported as free, live, orphaned, or uncertain. Documentation generation
   failures in the staging copy are warnings; a failure while promoting a
   documentation file aborts and rolls the complete update back. On Windows
   liveness is never tested with

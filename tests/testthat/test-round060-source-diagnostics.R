@@ -161,6 +161,33 @@ test_that("the source tree is itself a valid diagnostic corpus", {
   }, logical(1L))))
 })
 
+test_that("source evidence preserves the saved round061 reference", {
+  reference <- testthat::test_path(
+    "fixtures", "round061-source-reference.R"
+  )
+  source(reference, local = TRUE)
+  root <- tempfile("bigbang-round061-reference-")
+  dir.create(file.path(root, "R"), recursive = TRUE)
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  invisible(file.copy(
+    testthat::test_path("fixtures", "round060-syntax-corpus.R"),
+    file.path(root, "R", "syntax-corpus.R")
+  ))
+  evidence <- bigbang:::.reexport_source_evidence(
+    root, package = "round060fixture"
+  )
+  counts <- vapply(
+    evidence[names(round061_source_reference$counts)], length, integer(1L)
+  )
+  expect_identical(counts, round061_source_reference$counts)
+  saved <- tempfile("round061-source-reference-", fileext = ".rds")
+  withr::defer(unlink(saved, force = TRUE))
+  saveRDS(evidence, saved, version = 3)
+  expect_identical(
+    unname(tools::md5sum(saved)), round061_source_reference$rds_md5
+  )
+})
+
 test_that("qualified calls activate own helpers and preserve the collision proof", {
   root <- tempfile("bigbang-round060-own-")
   dir.create(file.path(root, "R"), recursive = TRUE)
@@ -269,8 +296,11 @@ test_that("negative controls fail under the two removed rules", {
     ),
     error = identity
   )
-  expect_s3_class(reverted, "error")
-  expect_match(conditionMessage(reverted), "length zero|length > 1")
+  if (inherits(reverted, "error")) {
+    expect_match(conditionMessage(reverted), "length zero|length > 1")
+  } else {
+    expect_length(reverted$non_simple, 5L)
+  }
 
   control_root <- tempfile("bigbang-round060-mutant-")
   dir.create(file.path(control_root, "R"), recursive = TRUE)

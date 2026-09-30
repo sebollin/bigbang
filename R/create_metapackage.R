@@ -675,13 +675,31 @@
 #' old, new, or temporarily absent with a journal backup. Roxygen runs in a staging copy and only its
 #' known outputs are promoted atomically to the project.
 #'
+#' Updates also publish `.<name>.bigbang-update.lock` atomically from a sibling
+#' temporary folder that already contains a complete `owner.rds`. A published
+#' lock therefore always has an owner. Reclaiming an orphan first atomically
+#' renames it to a unique discarded name; only the process that wins that
+#' rename may publish a replacement, and it rechecks the owner before doing so.
+#' A regular file or other user entry at the lock name is atomically set aside
+#' as `.<name>.bigbang-apartado-*`. Lock preparations left by an interruption
+#' are recognized on the next call and set aside without deleting their bytes.
+#' These names are reserved bigbang siblings: `.<name>.bigbang-update`,
+#' `.<name>.bigbang-update.armando-*`, `.<name>.bigbang-update.lock`,
+#' `.<name>.bigbang-update.lock.armando-*`,
+#' `.<name>.bigbang-update.lock.descartado-*`,
+#' `.<name>.bigbang-update.descartado-*`, and `.<name>.bigbang-apartado-*`.
+#'
 #' If a process dies while preparing the journal, an empty unmarked
 #' `armando-*` folder is removed; any non-empty unmarked folder is atomically
 #' set aside as `.<name>.bigbang-apartado-*` without copying or deleting bytes.
 #' The initial marker records the owner PID, host, process start token,
 #' and start time before the first backup copy. A marked preparation is
 #' discarded only after the owner is proven finished with the platform's
-#' conservative liveness policy. Journal disposal first writes an atomic tombstone with
+#' conservative liveness policy. `recover = TRUE` resolves uncertainty, such
+#' as Windows, missing `/proc`, another host, or an unreadable owner, but never
+#' overrides a proven live owner. A proven live owner means the same host, a
+#' live PID, and the same process-start token; that case always errors and
+#' includes the PID. Journal disposal first writes an atomic tombstone with
 #' the exact relative-path and MD5 inventory of the entries bigbang wrote, then
 #' renames the folder to `.<name>.bigbang-update.descartado-*`; cleanup can
 #' therefore resume after another interruption. Cleanup checks every file
@@ -707,19 +725,21 @@
 #' `create_metapackage(update = TRUE)` call examines it before validating the
 #' generation manifest. The marker identifies the metapackage and old-manifest
 #' hash rather than an absolute path, so moving the project together with its
-#' journal remains recoverable. A renamed project is also recognized when its
-#' sibling journal's backed-up manifest hash matches the current project and
-#' the project named by the marker no longer exists beside it. If that source
-#' project still exists, the journal is treated as a copy: it is not adopted or
-#' changed, and the update reports the conflict while using a separate journal.
+#' journal remains recoverable. Renaming a project is not supported: generated
+#' file names contain the metapackage name. Rename the project and its journal
+#' back to `<name>` before updating. A byte-for-byte copy placed at the same
+#' path and name as the moved original is indistinguishable from that original;
+#' the journal consequently treats it as the project. If the original project
+#' still exists beside a copied journal, the journal is not adopted or changed.
 #' A partial tombstone temporary is set aside after the owner is confirmed dead,
 #' and recovery continues. An already completed update is recognized by its new
 #' manifest;
 #' otherwise a dead owner's changes are rolled back and the requested update
 #' continues. On POSIX systems liveness uses the PID and, where Linux `/proc`
-#' exposes it, the process start time to reject PID reuse. Windows is never
-#' probed with `tools::pskill()` because that operation terminates a process;
-#' use `recover = TRUE` only after confirming that no update is running.
+#' exposes it, the process start time. Windows is never probed with
+#' `tools::pskill()` because that operation terminates a process. A dry run
+#' evaluates and reports the lock as free, live, orphaned, or uncertain without
+#' acquiring, reclaiming, renaming, or deleting any lock entry.
 #'
 #' Automatic recovery proceeds only when every affected path contains its
 #' original bytes, intended bytes, or an expected absence. Other content raises
@@ -876,14 +896,18 @@ create_metapackage <- function(
   project_dir <- normalizePath(project_path, winslash = "/", mustWork = FALSE)
   update_lock <- NULL
   if (isTRUE(update) && dir.exists(project_dir)) {
-    update_lock <- .acquire_update_lock(project_dir)
-    on.exit(.release_update_lock(update_lock), add = TRUE)
+    update_lock <- .acquire_update_lock(
+      project_dir, recover = recover, dry_run = dry_run
+    )
+    if (!isTRUE(dry_run)) {
+      on.exit(.release_update_lock(update_lock), add = TRUE)
+    }
   }
   recovery <- list(pending = FALSE, recovered = FALSE, preserved = NULL,
-                   restored_absent = character())
+                   restored_absent = character(), lock = update_lock)
   if (isTRUE(update)) {
     sibling_reconciliation <- .reconcile_update_siblings(
-      project_dir, name, dry_run = dry_run
+      project_dir, name, dry_run = dry_run, recover = recover
     )
     recovery <- .recover_pending_update(
       project_dir, name, recover = recover, dry_run = dry_run

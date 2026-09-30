@@ -103,7 +103,37 @@
          call. = FALSE)
   }
   message(.bb_trf(
-    "Set aside unverified update-journal content at %s; no bytes were deleted and the update continues.",
+    paste0(
+      "Set aside unverified update-journal content at %s; no bytes from ",
+      "the set-aside entry were deleted and the update continues."
+    ),
+    destination
+  ))
+  destination
+}
+
+.update_lock_apart_path <- function(path, name) {
+  parent <- dirname(path)
+  stamp <- paste0(format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC"), "-",
+                  Sys.getpid())
+  base <- file.path(parent, paste0(".", name, ".bigbang-apartado-", stamp))
+  destination <- base
+  suffix <- 0L
+  while (file.exists(destination) || dir.exists(destination)) {
+    suffix <- suffix + 1L
+    destination <- paste0(base, "-", suffix)
+  }
+  destination
+}
+
+.apart_update_lock <- function(path, name) {
+  destination <- .update_lock_apart_path(path, name)
+  if (!file.rename(path, destination)) {
+    stop(.bb_trf("Could not set aside the update-lock entry: %s", path),
+         call. = FALSE)
+  }
+  message(.bb_trf(
+    "Set aside update-lock entry at %s; no bytes from the set-aside entry were deleted and the update continues.",
     destination
   ))
   destination
@@ -282,12 +312,19 @@
     )
     matching_files <- verified_files
   }
+  verified_count <- length(matching_files)
   unexpected_dirs <- setdiff(entries[is_dir & !vapply(
     full, .path_is_symlink, logical(1L)
   )], expected_dirs)
   unexpected <- unique(c(unexpected_files, unexpected_dirs, symlinks))
   for (entry in matching_files) {
     .discard_update_entry(file.path(path, entry))
+  }
+  if (verified_count > 0L) {
+    message(.bb_trf(
+      "Deleted %d verified files from the update-journal inventory.",
+      verified_count
+    ))
   }
   directories <- sort(setdiff(expected_dirs, .update_journal_tombstone_name),
                       decreasing = TRUE)
@@ -372,7 +409,8 @@
   invisible(NULL)
 }
 
-.reconcile_update_siblings <- function(project_dir, name, dry_run = FALSE) {
+.reconcile_update_siblings <- function(project_dir, name, dry_run = FALSE,
+                                       recover = FALSE) {
   plan_environment <- new.env(parent = emptyenv())
   plan_environment$items <- list()
   add_plan <- function(path, action, marker = NULL, tombstone = NULL) {
@@ -380,10 +418,19 @@
       path = path, action = action, marker = marker, tombstone = tombstone
     )))
   }
-  block_live_owner <- function(path) {
+  block_live_owner <- function(path, marker = NULL) {
+    owner <- .update_marker_owner(marker)
+    status <- .update_owner_status(owner)
+    detail <- if (status %in% c("alive", "live_token_conflict") &&
+                    is.list(owner) && length(owner$pid) == 1L) {
+      .bb_trf("An update is still running under pid %s; no mutation was performed.",
+              owner$pid)
+    } else {
+      .bb_tr("An update may still be running; no mutation was performed.")
+    }
     .bigbang_abort(
       "bigbang_error_update_in_progress",
-      .bb_tr("An update may still be running; no mutation was performed."),
+      detail,
       path = project_dir, journal = path, journal_kind = "armed",
       recover = TRUE
     )
@@ -416,8 +463,12 @@
       add_plan(path, "apart_unarmed_copy", marker = marker)
       next
     }
-    if (.update_owner_may_be_alive(.update_marker_owner(marker))) {
+    owner_status <- .update_owner_status(.update_marker_owner(marker))
+    if (owner_status %in% c("alive", "live_token_conflict") ||
+          (identical(owner_status, "uncertain") && !isTRUE(recover))) {
       add_plan(path, "blocked_live_owner", marker = marker)
+    } else if (identical(owner_status, "uncertain")) {
+      add_plan(path, "apart_uncertain_owner", marker = marker)
     } else {
       add_plan(path, "discard_armed", marker = marker)
     }
@@ -458,8 +509,13 @@
                tombstone = tombstone)
       next
     }
-    if (.update_owner_may_be_alive(.update_marker_owner(marker))) {
+    owner_status <- .update_owner_status(.update_marker_owner(marker))
+    if (owner_status %in% c("alive", "live_token_conflict") ||
+          (identical(owner_status, "uncertain") && !isTRUE(recover))) {
       add_plan(path, "blocked_live_owner", marker = marker,
+               tombstone = tombstone)
+    } else if (identical(owner_status, "uncertain")) {
+      add_plan(path, "apart_uncertain_owner", marker = marker,
                tombstone = tombstone)
     } else {
       add_plan(path, "finish_discarded", marker = marker,
@@ -478,23 +534,28 @@
   for (i in seq_along(plan)) {
     item <- plan[[i]]
     if (identical(item$action, "blocked_live_owner")) {
-      block_live_owner(item$path)
+      block_live_owner(item$path, item$marker)
     } else if (identical(item$action, "discard_empty")) {
       unlink(item$path, recursive = TRUE, force = TRUE)
     } else if (identical(item$action, "apart_unarmed") ||
                  identical(item$action, "apart_unarmed_copy") ||
-                 identical(item$action, "apart_discarded")) {
+                 identical(item$action, "apart_discarded") ||
+                 identical(item$action, "apart_uncertain_owner")) {
       plan[[i]]$apart_path <- .apart_update_journal(item$path, name)
     } else if (identical(item$action, "discard_armed")) {
-      if (.update_owner_may_be_alive(.update_marker_owner(item$marker))) {
-        block_live_owner(item$path)
+      owner_status <- .update_owner_status(.update_marker_owner(item$marker))
+      if (owner_status %in% c("alive", "live_token_conflict") ||
+            (identical(owner_status, "uncertain") && !isTRUE(recover))) {
+        block_live_owner(item$path, item$marker)
       }
       .discard_update_journal(item$path, project_dir, name)
       message(.bb_trf("Discarded an orphaned armed-update folder at %s.",
                       item$path))
     } else if (identical(item$action, "finish_discarded")) {
-      if (.update_owner_may_be_alive(.update_marker_owner(item$marker))) {
-        block_live_owner(item$path)
+      owner_status <- .update_owner_status(.update_marker_owner(item$marker))
+      if (owner_status %in% c("alive", "live_token_conflict") ||
+            (identical(owner_status, "uncertain") && !isTRUE(recover))) {
+        block_live_owner(item$path, item$marker)
       }
       finished <- .finish_discarded_journal(
         item$path, name, item$tombstone, project_dir = project_dir,
@@ -568,10 +629,9 @@
       .bb_trf(
         paste0(
           "Cannot update %s because journal %s belongs to project '%s', not ",
-          "project '%s'. Rename the project and journal back, or rename the ",
-          "journal to match the project."
+          "project '%s'. Rename the project and its journal back to '%s'."
         ),
-        project_dir, journal_path, marker_name, name
+        project_dir, journal_path, marker_name, name, name
       ),
       path = project_dir, journal = journal_path,
       journal_project = marker_name
@@ -891,21 +951,38 @@
   ))
 }
 
-.update_owner_may_be_alive <- function(state) {
+.update_owner_liveness <- function(state) {
   if (!is.list(state) || length(state$pid) != 1L ||
         is.na(state$pid) || length(state$host) != 1L ||
         !is.character(state$host) || is.na(state$host) ||
-        length(.update_host()) != 1L || is.na(.update_host())) return(TRUE)
-  if (!identical(state$host, .update_host())) return(TRUE)
-  if (.Platform$OS.type == "windows") return(TRUE)
+        length(.update_host()) != 1L || is.na(.update_host())) {
+    return("uncertain")
+  }
+  if (!identical(state$host, .update_host())) return("uncertain")
+  if (.Platform$OS.type == "windows") return("uncertain")
   alive <- isTRUE(tryCatch(tools::pskill(as.integer(state$pid), 0L),
                            error = function(e) FALSE))
-  if (!alive) return(FALSE)
+  if (!alive) return("dead")
   recorded <- state$process_start
   current <- .update_process_start(state$pid)
-  if (!is.null(recorded) && length(recorded) == 1L && !is.na(recorded) &&
-        !is.na(current) && !identical(recorded, current)) return(FALSE)
-  TRUE
+  if (length(recorded) != 1L || is.na(recorded) ||
+        length(current) != 1L || is.na(current)) return("uncertain")
+  if (!identical(recorded, current)) return("live_token_conflict")
+  "alive"
+}
+
+.update_owner_may_be_alive <- function(state) {
+  !identical(.update_owner_liveness(state), "dead")
+}
+
+.update_owner_status <- function(state) {
+  raw <- .update_owner_liveness(state)
+  # Keep the older helper as the testable compatibility seam: callers that
+  # replace it to model a dead or uncertain owner still get that model here.
+  observed <- .update_owner_may_be_alive(state)
+  if (!isTRUE(observed)) return("dead")
+  if (identical(raw, "dead")) return("uncertain")
+  raw
 }
 
 .update_lock_path <- function(project_dir) {
@@ -923,20 +1000,229 @@
   owner <- tryCatch(readRDS(owner_path), error = function(e) NULL)
   if (!is.list(owner) || length(owner$pid) != 1L ||
         length(owner$host) != 1L || length(owner$started_utc) != 1L ||
-        length(owner$process_start) != 1L) return(NULL)
+        length(owner$process_start) != 1L ||
+        is.na(owner$pid) || is.na(owner$host) || is.na(owner$started_utc)) {
+    return(NULL)
+  }
   owner
 }
 
-.update_lock_problem <- function(project_dir, lock_path) {
-  .bigbang_abort(
-    "bigbang_error_update_in_progress",
+.update_lock_problem <- function(project_dir, lock_path, owner = NULL,
+                                 status = "uncertain") {
+  message_text <- if (status %in% c("alive", "live_token_conflict") &&
+                        is.list(owner) && length(owner$pid) == 1L) {
+    .bb_trf("An update is still running under pid %s; no mutation was performed.",
+            owner$pid)
+  } else {
     paste(
       .bb_tr("An update may still be running; no mutation was performed."),
       .bb_tr("after confirming that no other update is running, call again with recover = TRUE."),
       sep = " "
-    ),
+    )
+  }
+  .bigbang_abort(
+    "bigbang_error_update_in_progress",
+    message_text,
     path = project_dir, lock = lock_path, recover = TRUE
   )
+}
+
+.update_lock_temporary_paths <- function(project_dir) {
+  prefix <- paste0(".", basename(project_dir),
+                   ".bigbang-update.lock.armando-")
+  entries <- list.files(dirname(project_dir), full.names = TRUE,
+                        all.files = TRUE, no.. = TRUE)
+  entries <- entries[startsWith(basename(entries), prefix)]
+  suffix <- substring(basename(entries), nchar(prefix) + 1L)
+  entries[nzchar(suffix) & grepl("^[[:alnum:]-]+$", suffix)]
+}
+
+.update_lock_temporary_path <- function(project_dir) {
+  tempfile(
+    pattern = paste0(".", basename(project_dir),
+                     ".bigbang-update.lock.armando-"),
+    tmpdir = dirname(project_dir)
+  )
+}
+
+.update_lock_discard_path <- function(path, name) {
+  stamp <- paste0(format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC"), "-",
+                  Sys.getpid())
+  base <- file.path(dirname(path), paste0(".", name,
+                                          ".bigbang-update.lock.descartado-",
+                                          stamp))
+  destination <- base
+  suffix <- 0L
+  while (file.exists(destination) || dir.exists(destination)) {
+    suffix <- suffix + 1L
+    destination <- paste0(base, "-", suffix)
+  }
+  destination
+}
+
+.update_lock_discarded_paths <- function(project_dir) {
+  prefix <- paste0(".", basename(project_dir),
+                   ".bigbang-update.lock.descartado-")
+  entries <- list.files(dirname(project_dir), full.names = TRUE,
+                        all.files = TRUE, no.. = TRUE)
+  entries <- entries[startsWith(basename(entries), prefix)]
+  suffix <- substring(basename(entries), nchar(prefix) + 1L)
+  entries[
+    nzchar(suffix) & grepl("^[[:alnum:]-]+$", suffix) &
+      dir.exists(entries)
+  ]
+}
+
+.update_lock_claim_path <- function(path) file.path(path, "claim.rds")
+
+.read_update_lock_claim <- function(path) {
+  claim_path <- .update_lock_claim_path(path)
+  if (!file.exists(claim_path) || dir.exists(claim_path)) return(NULL)
+  claim <- tryCatch(readRDS(claim_path), error = function(e) NULL)
+  if (!is.list(claim) || length(claim$pid) != 1L ||
+        length(claim$host) != 1L || length(claim$started_utc) != 1L ||
+        length(claim$process_start) != 1L || is.na(claim$pid) ||
+        is.na(claim$host) || is.na(claim$started_utc)) return(NULL)
+  claim
+}
+
+.update_lock_inventory_discard <- function(path, owner, name) {
+  owner_path <- .update_lock_owner_path(path)
+  removable <- c(owner_path, .update_lock_claim_path(path))
+  if (is.list(owner)) {
+    removable <- removable[!is.na(vapply(
+      removable, .file_digest, character(1L)
+    ))]
+    if (length(removable) > 0L) unlink(removable, force = TRUE)
+  }
+  remaining <- list.files(path, all.files = TRUE, recursive = TRUE,
+                          no.. = TRUE, include.dirs = TRUE)
+  if (length(remaining) == 0L) {
+    unlink(path, recursive = TRUE, force = TRUE)
+    return(invisible(NULL))
+  }
+  destination <- .update_lock_apart_path(path, name)
+  if (!file.rename(path, destination)) {
+    stop(.bb_trf("Could not set aside the update-lock entry: %s", path),
+         call. = FALSE)
+  }
+  message(.bb_trf(
+    "Set aside old update-lock content at %s; no bytes from the set-aside entry were deleted.",
+    destination
+  ))
+  invisible(destination)
+}
+
+.update_lock_state <- function(project_dir, recover = FALSE) {
+  lock_path <- .update_lock_path(project_dir)
+  entry_exists <- file.exists(lock_path) || dir.exists(lock_path) ||
+    .path_is_symlink(lock_path)
+  if (file.exists(lock_path) && !dir.exists(lock_path)) {
+    return(list(status = "user_entry", path = lock_path, owner = NULL,
+                action = "apart_user_lock"))
+  }
+  if (.path_is_symlink(lock_path)) {
+    return(list(status = "uncertain", path = lock_path, owner = NULL,
+                action = "blocked_lock"))
+  }
+  if (!entry_exists) {
+    discarded <- .update_lock_discarded_paths(project_dir)
+    if (length(discarded) > 0L) {
+      claim <- .read_update_lock_claim(discarded[[1L]])
+      old_owner <- .read_update_lock_owner(discarded[[1L]])
+      status <- if (is.null(claim)) {
+        "uncertain"
+      } else {
+        .update_owner_status(claim)
+      }
+      action <- if (status %in% c("alive", "live_token_conflict")) {
+        "blocked_live_claim"
+      } else if (identical(status, "uncertain") && !isTRUE(recover)) {
+        "blocked_claim"
+      } else {
+        "claim_orphan_discard"
+      }
+      return(list(status = status, path = lock_path, owner = claim,
+                  old_owner = old_owner, claim_path = discarded[[1L]],
+                  action = action))
+    }
+    return(list(status = "free", path = lock_path, owner = NULL,
+                action = "free"))
+  }
+  owner <- .read_update_lock_owner(lock_path)
+  if (is.null(owner)) {
+    return(list(status = "uncertain", path = lock_path, owner = NULL,
+                action = if (isTRUE(recover)) "claim_uncertain_lock" else
+                  "blocked_uncertain_lock"))
+  }
+  status <- .update_owner_status(owner)
+  action <- if (status %in% c("alive", "live_token_conflict")) {
+    "blocked_live_lock"
+  } else if (identical(status, "uncertain")) {
+    if (isTRUE(recover)) "claim_uncertain_lock" else "blocked_uncertain_lock"
+  } else {
+    "claim_orphan_lock"
+  }
+  list(status = status, path = lock_path, owner = owner, action = action)
+}
+
+.report_update_lock_dry_run <- function(state) {
+  action <- switch(state$action,
+    free = "free",
+    blocked_live_lock = "live",
+    blocked_uncertain_lock = "uncertain",
+    claim_orphan_lock = "orphan reclaimable",
+    claim_uncertain_lock = "uncertain and reclaimable with recover = TRUE",
+    apart_user_lock = "user entry to set aside",
+    blocked_lock = "symbolic link or unreadable entry",
+    blocked_live_claim = "live orphan-recovery claim",
+    blocked_claim = "uncertain orphan-recovery claim",
+    claim_orphan_discard = "orphan-recovery claim to discard",
+    state$action
+  )
+  message(.bb_trf(
+    "Dry run: update lock at %s is %s; no lock was acquired or changed.",
+    state$path, action
+  ))
+  invisible(state)
+}
+
+.reconcile_lock_temps <- function(project_dir, recover = FALSE,
+                                  dry_run = FALSE) {
+  paths <- .update_lock_temporary_paths(project_dir)
+  if (length(paths) == 0L) return(list())
+  plans <- lapply(paths, function(path) {
+    owner <- .read_update_lock_owner(path)
+    status <- if (is.null(owner)) "uncertain" else .update_owner_status(owner)
+    action <- if (is.null(owner)) {
+      "apart_lock_preparation"
+    } else if (status %in% c("alive", "live_token_conflict")) {
+      "live_lock_preparation"
+    } else if (identical(status, "uncertain") && !isTRUE(recover)) {
+      "uncertain_lock_preparation"
+    } else {
+      "apart_lock_preparation"
+    }
+    list(path = path, owner = owner, status = status, action = action)
+  })
+  for (item in plans) {
+    if (isTRUE(dry_run)) {
+      message(.bb_trf(
+        "Dry run: update-lock preparation at %s would be %s; no entry was changed.",
+        item$path, item$action
+      ))
+      next
+    }
+    if (!identical(item$action, "apart_lock_preparation")) next
+    destination <- .update_lock_apart_path(item$path, basename(project_dir))
+    if (file.rename(item$path, destination)) {
+      message(.bb_trf(
+        "Set aside incomplete update-lock preparation at %s; no bytes from the set-aside entry were deleted.",
+        destination
+      ))
+    }
+  }
+  invisible(plans)
 }
 
 .journal_directory_chain <- function(path) {
@@ -949,34 +1235,122 @@
   out
 }
 
-.acquire_update_lock <- function(project_dir) {
+.acquire_update_lock <- function(project_dir, recover = FALSE,
+                                 dry_run = FALSE) {
   lock_path <- .update_lock_path(project_dir)
   owner <- .update_owner_record()
-  for (attempt in seq_len(4L)) {
-    if (file.exists(lock_path) && !dir.exists(lock_path)) {
-      .update_lock_problem(project_dir, lock_path)
+  temporary_plan <- .reconcile_lock_temps(
+    project_dir, recover = recover, dry_run = dry_run
+  )
+  if (isTRUE(dry_run)) {
+    state <- .update_lock_state(project_dir, recover = recover)
+    .report_update_lock_dry_run(state)
+    return(c(state, list(owner = owner, temporary = temporary_plan,
+                         acquired = FALSE)))
+  }
+  uncertain_temporary <- vapply(
+    temporary_plan,
+    function(item) identical(item$action, "uncertain_lock_preparation"),
+    logical(1L)
+  )
+  if (any(uncertain_temporary)) {
+    .update_lock_problem(project_dir, lock_path, status = "uncertain")
+  }
+  for (attempt in seq_len(8L)) {
+    state <- .update_lock_state(project_dir, recover = recover)
+    if (identical(state$status, "user_entry")) {
+      .apart_update_lock(lock_path, basename(project_dir))
+      next
     }
-    if (dir.create(lock_path, showWarnings = FALSE)) {
+    if (identical(state$status, "uncertain") &&
+          identical(state$action, "blocked_lock")) {
+      .update_lock_problem(project_dir, lock_path, status = "uncertain")
+    }
+    if (identical(state$action, "claim_orphan_discard")) {
+      .update_lock_inventory_discard(
+        state$claim_path, state$old_owner, basename(project_dir)
+      )
+      next
+    }
+    if (state$status %in% c("alive", "live_token_conflict") ||
+          identical(state$action, "blocked_uncertain_lock") ||
+          identical(state$action, "blocked_claim")) {
+      .update_lock_problem(project_dir, lock_path, state$owner, state$status)
+    }
+    if (identical(state$status, "free")) {
+      temporary <- .update_lock_temporary_path(project_dir)
+      if (!dir.create(temporary, showWarnings = FALSE)) next
       saved <- tryCatch({
-        saveRDS(owner, .update_lock_owner_path(lock_path))
+        .atomic_save_rds(owner, .update_lock_owner_path(temporary))
         TRUE
       }, error = function(e) FALSE)
-      if (isTRUE(saved)) return(list(path = lock_path, owner = owner))
-      unlink(lock_path, recursive = TRUE, force = TRUE)
-      stop(.bb_trf("Could not create temporary directory for %s", lock_path),
-           call. = FALSE)
+      if (!isTRUE(saved)) {
+        unlink(temporary, recursive = TRUE, force = TRUE)
+        stop(.bb_trf("Could not create temporary directory for %s", lock_path),
+             call. = FALSE)
+      }
+      if (file.rename(temporary, lock_path)) {
+        return(list(path = lock_path, owner = owner, acquired = TRUE))
+      }
+      unlink(temporary, recursive = TRUE, force = TRUE)
+      next
     }
-    if (.path_is_symlink(lock_path)) .update_lock_problem(project_dir, lock_path)
-    previous <- .read_update_lock_owner(lock_path)
-    if (is.null(previous) || .update_owner_may_be_alive(previous)) {
-      .update_lock_problem(project_dir, lock_path)
+    previous <- state$owner
+    discard <- .update_lock_discard_path(lock_path, basename(project_dir))
+    claim_prepared <- tryCatch({
+      .atomic_save_rds(owner, .update_lock_claim_path(lock_path))
+      TRUE
+    }, error = function(e) FALSE)
+    if (!isTRUE(claim_prepared)) next
+    if (!file.rename(lock_path, discard)) next
+    observed <- .read_update_lock_owner(discard)
+    if (!isTRUE(identical(previous, observed))) {
+      restored <- if (!file.exists(lock_path) && !dir.exists(lock_path)) {
+        file.rename(discard, lock_path)
+      } else {
+        FALSE
+      }
+      if (!isTRUE(restored)) {
+        .update_lock_problem(project_dir, lock_path, observed, "uncertain")
+      }
+      observed_status <- if (is.null(observed)) {
+        "uncertain"
+      } else {
+        .update_owner_status(observed)
+      }
+      if (observed_status %in% c("alive", "live_token_conflict")) {
+        .update_lock_problem(
+          project_dir, lock_path, observed, observed_status
+        )
+      }
+      next
     }
-    unlink(lock_path, recursive = TRUE, force = TRUE)
-    if (file.exists(lock_path) || dir.exists(lock_path)) {
-      .update_lock_problem(project_dir, lock_path)
+    claimed <- tryCatch({
+      .atomic_save_rds(owner, .update_lock_claim_path(discard))
+      TRUE
+    }, error = function(e) FALSE)
+    if (!isTRUE(claimed)) {
+      .apart_update_lock(discard, basename(project_dir))
+      next
     }
+    temporary <- .update_lock_temporary_path(project_dir)
+    if (!dir.create(temporary, showWarnings = FALSE)) {
+      .update_lock_inventory_discard(discard, previous, basename(project_dir))
+      next
+    }
+    saved <- tryCatch({
+      .atomic_save_rds(owner, .update_lock_owner_path(temporary))
+      TRUE
+    }, error = function(e) FALSE)
+    if (!isTRUE(saved) || !file.rename(temporary, lock_path)) {
+      unlink(temporary, recursive = TRUE, force = TRUE)
+      .update_lock_inventory_discard(discard, previous, basename(project_dir))
+      next
+    }
+    .update_lock_inventory_discard(discard, previous, basename(project_dir))
+    return(list(path = lock_path, owner = owner, acquired = TRUE))
   }
-  .update_lock_problem(project_dir, lock_path)
+  .update_lock_problem(project_dir, lock_path, status = "uncertain")
 }
 
 .release_update_lock <- function(lock) {
@@ -1188,6 +1562,24 @@
        restored_absent = absent_original)
 }
 
+.update_journal_owner_problem <- function(project_dir, journal_path, kind,
+                                          owner, status) {
+  detail <- if (status %in% c("alive", "live_token_conflict") &&
+                  is.list(owner) && length(owner$pid) == 1L) {
+    .bb_trf("An update is still running under pid %s; no mutation was performed.",
+            owner$pid)
+  } else {
+    .bb_tr("An update may still be running; no mutation was performed.")
+  }
+  .update_journal_problem(
+    "bigbang_error_update_in_progress", project_dir, journal_path, kind,
+    detail, has_backup = TRUE,
+    next_step = .bb_tr(
+      "after confirming that no other update is running, call again with recover = TRUE."
+    )
+  )
+}
+
 .recover_pending_update <- function(project_dir, name, recover = FALSE,
                                     dry_run = FALSE, handled = FALSE) {
   journal_path <- .update_journal_path(project_dir)
@@ -1211,6 +1603,7 @@
                 restored_absent = character()))
   }
   marker <- .read_update_marker(journal_path, project_dir, name)
+  moved_journal <- !identical(marker$name, name)
   if (!dir.exists(project_dir)) {
     .update_journal_problem(
       "bigbang_error_moved_update_journal", project_dir, journal_path,
@@ -1238,14 +1631,12 @@
   apart <- character()
   tombstone_temporary <- .update_journal_temps(journal_path)
   if (length(tombstone_temporary) > 0L) {
-    if (!recover && .update_owner_may_be_alive(.update_marker_owner(marker))) {
-      .update_journal_problem(
-        "bigbang_error_update_in_progress", project_dir, journal_path, "armed",
-        .bb_tr("An update may still be running; no mutation was performed."),
-        has_backup = TRUE,
-        next_step = .bb_tr(
-          "after confirming that no other update is running, call again with recover = TRUE."
-        )
+    owner <- .update_marker_owner(marker)
+    owner_status <- .update_owner_status(owner)
+    if (owner_status %in% c("alive", "live_token_conflict") ||
+          (identical(owner_status, "uncertain") && !isTRUE(recover))) {
+      .update_journal_owner_problem(
+        project_dir, journal_path, "armed", owner, owner_status
       )
     }
     if (dry_run) {
@@ -1390,12 +1781,12 @@
     return(list(pending = FALSE, recovered = TRUE, preserved = NULL,
                 action = "recognized_completed", restored_absent = character()))
   }
-  if (!handled && !recover && .update_owner_may_be_alive(state)) {
-    .update_journal_problem(
-      "bigbang_error_update_in_progress", project_dir, journal_path, "armed",
-      .bb_tr("An update may still be running; no mutation was performed."),
-      has_backup = TRUE,
-      next_step = .bb_tr("after confirming that no other update is running, call again with recover = TRUE.")
+  owner_status <- .update_owner_status(state)
+  if (!handled && !moved_journal &&
+        (owner_status %in% c("alive", "live_token_conflict") ||
+           (identical(owner_status, "uncertain") && !isTRUE(recover)))) {
+    .update_journal_owner_problem(
+      project_dir, journal_path, "armed", state, owner_status
     )
   }
   .validate_project_write_paths(

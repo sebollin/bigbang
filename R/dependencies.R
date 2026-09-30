@@ -923,6 +923,61 @@
   substring(path, nchar(root) + 2L)
 }
 
+.reexport_parse_index <- function(data) {
+  rows <- seq_len(nrow(data))
+  open_rows <- split(rows, data$token)[["'('"]]
+  open_parents <- if (is.null(open_rows)) integer() else data$parent[open_rows]
+  max_id <- if (length(data$id) == 0L) 0L else max(data$id)
+  row_by_id <- integer(max_id)
+  parent_by_id <- integer(max_id)
+  token_by_id <- character(max_id)
+  text_by_id <- character(max_id)
+  call_open_parent <- logical(max_id)
+  if (max_id > 0L) {
+    row_by_id[data$id] <- rows
+    parent_by_id[data$id] <- data$parent
+    token_by_id[data$id] <- data$token
+    text_by_id[data$id] <- data$text
+    if (length(open_parents) > 0L) call_open_parent[open_parents] <- TRUE
+  }
+  list(
+    row_by_id = row_by_id,
+    id_by_row = data$id,
+    children_by_parent = split(rows, as.character(data$parent)),
+    rows_by_token = split(rows, data$token),
+    token_by_row = data$token,
+    token_by_id = token_by_id,
+    parent_by_id = parent_by_id,
+    text_by_id = text_by_id,
+    call_open_parent = call_open_parent,
+    call_expression_cache = new.env(hash = TRUE, parent = emptyenv()),
+    qualification_cache = new.env(hash = TRUE, parent = emptyenv())
+  )
+}
+
+.reexport_index_rows <- function(data, index, ids) {
+  ids <- as.integer(ids)
+  rows <- if (length(ids) == 0L) integer() else
+    index$row_by_id[ids[ids > 0L & ids <= length(index$row_by_id)]]
+  rows <- rows[!is.na(rows) & rows > 0L]
+  if (length(rows) == 0L) data[0, , drop = FALSE] else data[rows, , drop = FALSE]
+}
+
+.reexport_index_child_rows <- function(data, index, parent, tokens = NULL) {
+  rows <- index$children_by_parent[[as.character(parent)]]
+  if (is.null(rows)) rows <- integer()
+  rows <- rows[!is.na(rows)]
+  if (!is.null(tokens) && length(rows) > 0L) {
+    rows <- rows[index$token_by_row[rows] %in% tokens]
+  }
+  rows
+}
+
+.reexport_index_children <- function(data, index, parent, tokens = NULL) {
+  rows <- .reexport_index_child_rows(data, index, parent, tokens)
+  if (length(rows) == 0L) data[0, , drop = FALSE] else data[rows, , drop = FALSE]
+}
+
 .reexport_parse_target <- function(text) {
   expression <- tryCatch(
     parse(text = paste0("function() ", text))[[1L]][[3L]],
@@ -936,20 +991,34 @@
   NULL
 }
 
-.reexport_call_expression <- function(data, function_id) {
+.reexport_call_expr_raw <- function(data, function_id, index) {
   if (length(function_id) != 1L || is.na(function_id)) return(NULL)
-  current <- function_id
+  if (is.null(index)) index <- .reexport_parse_index(data)
+  current <- as.integer(function_id)
   repeat {
-    row <- data[data$id == current, , drop = FALSE]
-    if (nrow(row) != 1L) return(NULL)
-    if (row$token[[1L]] %in% c("expr", "expr_or_assign_or_help") &&
-          any(data$parent == current & data$token == "'('")) {
-      return(row[["id"]][[1L]])
+    if (current < 1L || current > length(index$row_by_id)) return(NULL)
+    row <- index$row_by_id[[current]]
+    if (row == 0L) return(NULL)
+    if (index$token_by_id[[current]] %in% c("expr", "expr_or_assign_or_help") &&
+          isTRUE(index$call_open_parent[[current]])) {
+      return(index$id_by_row[[row]])
     }
-    parent <- row$parent[[1L]]
+    parent <- index$parent_by_id[[current]]
     if (identical(parent, 0L)) return(NULL)
     current <- parent
   }
+}
+
+.reexport_call_expression <- function(data, function_id, index = NULL) {
+  if (length(function_id) != 1L || is.na(function_id)) return(NULL)
+  if (is.null(index)) index <- .reexport_parse_index(data)
+  key <- as.character(function_id)
+  if (exists(key, envir = index$call_expression_cache, inherits = FALSE)) {
+    return(get(key, envir = index$call_expression_cache, inherits = FALSE))
+  }
+  value <- .reexport_call_expr_raw(data, function_id, index)
+  assign(key, value, envir = index$call_expression_cache)
+  value
 }
 
 .reexport_position_before <- function(left, right) {
@@ -959,22 +1028,22 @@
        left$col1[[1L]] < right$col1[[1L]])
 }
 
-.reexport_call_children <- function(data, call_id, open = NULL) {
+.reexport_call_children <- function(data, call_id, open = NULL, index = NULL) {
   if (length(call_id) != 1L || is.na(call_id)) return(data[0, , drop = FALSE])
+  if (is.null(index)) index <- .reexport_parse_index(data)
   if (is.null(open)) {
-    open <- data[data$parent == call_id & data$token == "'('", , drop = FALSE]
+    open <- .reexport_index_children(data, index, call_id, "'('")
   }
   if (nrow(open) != 1L) return(data[0, , drop = FALSE])
-  children <- data[
-    data$parent == call_id &
-      data$token %in% c("expr", "expr_or_assign_or_help"),
-    , drop = FALSE
-  ]
+  children <- .reexport_index_children(
+    data, index, call_id, c("expr", "expr_or_assign_or_help")
+  )
   if (nrow(children) == 0L) return(children)
-  after_open <- vapply(seq_len(nrow(children)), function(index) {
-    .reexport_position_before(children[index, , drop = FALSE], open)
-  }, logical(1L))
-  after_open <- !after_open & (
+  after_open <- !(
+    children$line1 < open$line1[[1L]] |
+      (children$line1 == open$line1[[1L]] &
+         children$col1 <= open$col1[[1L]])
+  ) & (
     children$line1 > open$line1[[1L]] |
       (children$line1 == open$line1[[1L]] &
          children$col1 > open$col1[[1L]])
@@ -985,18 +1054,17 @@
   ), , drop = FALSE]
 }
 
-.reexport_call_target <- function(data, open) {
+.reexport_call_target <- function(data, open, index = NULL) {
   if (nrow(open) != 1L) return(NULL)
+  if (is.null(index)) index <- .reexport_parse_index(data)
   call_id <- open$parent[[1L]]
-  children <- data[
-    data$parent == call_id &
-      data$token %in% c("expr", "expr_or_assign_or_help"),
-    , drop = FALSE
-  ]
+  children <- .reexport_index_children(
+    data, index, call_id, c("expr", "expr_or_assign_or_help")
+  )
   if (nrow(children) == 0L) return(NULL)
-  before_open <- vapply(seq_len(nrow(children)), function(index) {
-    .reexport_position_before(children[index, , drop = FALSE], open)
-  }, logical(1L))
+  before_open <- children$line1 < open$line1[[1L]] |
+    (children$line1 == open$line1[[1L]] &
+       children$col1 < open$col1[[1L]])
   children <- children[before_open, , drop = FALSE]
   if (nrow(children) == 0L) return(NULL)
   children <- children[order(
@@ -1005,10 +1073,11 @@
   children[nrow(children), , drop = FALSE]
 }
 
-.reexport_call_first_argument <- function(data, call_id) {
-  open <- data[data$parent == call_id & data$token == "'('", , drop = FALSE]
+.reexport_call_first_argument <- function(data, call_id, index = NULL) {
+  if (is.null(index)) index <- .reexport_parse_index(data)
+  open <- .reexport_index_children(data, index, call_id, "'('")
   if (nrow(open) != 1L) return(NULL)
-  arguments <- .reexport_call_children(data, call_id, open)
+  arguments <- .reexport_call_children(data, call_id, open, index)
   if (nrow(arguments) == 0L) return(NULL)
   first <- arguments[1L, , drop = FALSE]
   parsed <- tryCatch(
@@ -1024,103 +1093,148 @@
   list(literal = FALSE, value = NULL)
 }
 
-.reexport_qualify_function <- function(data, function_id) {
+.reexport_qualify_fn_raw <- function(data, function_id, index) {
   if (length(function_id) != 1L || is.na(function_id)) {
     return(list(package = NULL, function_name = NULL))
   }
-  row <- data[data$id == function_id, , drop = FALSE]
-  if (nrow(row) == 0L) return(list(package = NULL, function_name = NULL))
-  parent <- row$parent[[1L]]
-  parent_row <- data[data$id == parent, , drop = FALSE]
-  if (nrow(parent_row) == 1L && parent_row$token[[1L]] == "NS_GET") {
-    package <- data[
-      data$parent == parent & data$token == "SYMBOL_PACKAGE",
-      "text", drop = TRUE
-    ]
+  if (is.null(index)) index <- .reexport_parse_index(data)
+  function_id <- as.integer(function_id)
+  if (function_id < 1L || function_id > length(index$row_by_id)) {
+    return(list(package = NULL, function_name = NULL))
+  }
+  row <- index$row_by_id[[function_id]]
+  if (row == 0L) return(list(package = NULL, function_name = NULL))
+  parent <- index$parent_by_id[[function_id]]
+  parent_row <- if (parent > 0L && parent <= length(index$row_by_id)) {
+    index$row_by_id[[parent]]
+  } else {
+    0L
+  }
+  if (parent_row > 0L && parent_row <= length(index$token_by_row) &&
+        index$token_by_row[[parent_row]] == "NS_GET") {
+    child_rows <- .reexport_index_child_rows(
+      data, index, parent, "SYMBOL_PACKAGE"
+    )
+    package <- index$text_by_id[index$id_by_row[child_rows]]
     return(list(
       package = if (length(package) == 1L) package else NULL,
-      function_name = row$text[[1L]]
+      function_name = index$text_by_id[[function_id]]
     ))
   }
-  if (nrow(parent_row) == 1L &&
-        parent_row$token[[1L]] %in% c("expr", "expr_or_assign_or_help")) {
-    ns_get <- data[data$parent == parent & data$token == "NS_GET", , drop = FALSE]
-    if (nrow(ns_get) == 1L) {
-      package <- data[
-        data$parent == parent & data$token == "SYMBOL_PACKAGE",
-        "text", drop = TRUE
-      ]
+  if (parent_row > 0L && parent_row <= length(index$token_by_row) &&
+        data$token[[parent_row]] %in% c("expr", "expr_or_assign_or_help")) {
+    ns_get <- .reexport_index_child_rows(data, index, parent, "NS_GET")
+    if (length(ns_get) == 1L) {
+      package_rows <- .reexport_index_child_rows(
+        data, index, parent, "SYMBOL_PACKAGE"
+      )
+      package <- index$text_by_id[index$id_by_row[package_rows]]
       return(list(
         package = if (length(package) == 1L) package else NULL,
-        function_name = row$text[[1L]]
+        function_name = index$text_by_id[[function_id]]
       ))
     }
   }
-  list(package = NULL, function_name = row$text[[1L]])
+  list(package = NULL,
+       function_name = index$text_by_id[[function_id]])
 }
 
-.reexport_parse_descendants <- function(data, roots) {
+.reexport_qualify_function <- function(data, function_id, index = NULL) {
+  if (length(function_id) != 1L || is.na(function_id)) {
+    return(list(package = NULL, function_name = NULL))
+  }
+  if (is.null(index)) index <- .reexport_parse_index(data)
+  key <- as.character(function_id)
+  if (exists(key, envir = index$qualification_cache, inherits = FALSE)) {
+    return(get(key, envir = index$qualification_cache, inherits = FALSE))
+  }
+  value <- .reexport_qualify_fn_raw(data, function_id, index)
+  assign(key, value, envir = index$qualification_cache)
+  value
+}
+
+.reexport_parse_descendants <- function(data, roots, index = NULL) {
+  if (is.null(index)) index <- .reexport_parse_index(data)
   roots <- unique(as.integer(roots))
   found <- roots
+  seen <- new.env(hash = TRUE, parent = emptyenv())
+  for (root in roots) assign(as.character(root), TRUE, envir = seen)
   repeat {
-    children <- data$id[data$parent %in% found & !data$id %in% found]
+    rows <- unlist(lapply(found, function(parent) {
+      index$children_by_parent[[as.character(parent)]]
+    }), use.names = FALSE)
+    children <- unique(data$id[rows])
+    children <- children[!vapply(
+      children, function(child) {
+        exists(as.character(child), envir = seen, inherits = FALSE)
+      }, logical(1L)
+    )]
     if (length(children) == 0L) break
+    for (child in children) assign(as.character(child), TRUE, envir = seen)
     found <- c(found, children)
   }
   found
 }
 
-.reexport_is_descendant <- function(data, node, ancestor) {
+.reexport_is_descendant <- function(data, node, ancestor, index = NULL) {
   current <- as.integer(node)
   ancestor <- as.integer(ancestor)
   if (length(current) != 1L || length(ancestor) != 1L ||
         is.na(current) || is.na(ancestor)) return(FALSE)
+  if (is.null(index)) index <- .reexport_parse_index(data)
   seen <- integer()
   repeat {
     if (identical(current, ancestor)) return(TRUE)
     if (current %in% seen) return(FALSE)
     seen <- c(seen, current)
-    row <- data[data$id == current, , drop = FALSE]
+    row <- .reexport_index_rows(data, index, current)
     if (nrow(row) == 0L || identical(row$parent[[1L]], 0L)) return(FALSE)
     current <- row$parent[[1L]]
   }
 }
 
-.reexport_call_arg_id <- function(data, call_id) {
-  open <- data[data$parent == call_id & data$token == "'('", , drop = FALSE]
+.reexport_call_arg_id <- function(data, call_id, index = NULL) {
+  if (is.null(index)) index <- .reexport_parse_index(data)
+  open <- .reexport_index_children(data, index, call_id, "'('")
   if (nrow(open) != 1L) return(NULL)
-  arguments <- .reexport_call_children(data, call_id, open)
+  arguments <- .reexport_call_children(data, call_id, open, index)
   if (nrow(arguments) == 0L) return(NULL)
   arguments$id[[1L]]
 }
 
-.reexport_definition_name <- function(data, root) {
-  assignment <- data[data$parent == root & data$token %in%
-                       c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2"),
-                     , drop = FALSE]
+.reexport_definition_name <- function(data, root, index = NULL) {
+  if (is.null(index)) index <- .reexport_parse_index(data)
+  assignment <- .reexport_index_children(
+    data, index, root,
+    c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2")
+  )
   if (nrow(assignment) != 1L) return(NULL)
-  lhs <- data[data$parent == root & data$token %in%
-                c("expr", "expr_or_assign_or_help"), , drop = FALSE]
-  lhs <- lhs[vapply(seq_len(nrow(lhs)), function(index) {
-    .reexport_position_before(lhs[index, , drop = FALSE], assignment)
-  }, logical(1L)), , drop = FALSE]
+  lhs <- .reexport_index_children(
+    data, index, root, c("expr", "expr_or_assign_or_help")
+  )
+  lhs <- lhs[lhs$line1 < assignment$line1[[1L]] |
+               (lhs$line1 == assignment$line1[[1L]] &
+                  lhs$col1 < assignment$col1[[1L]]), , drop = FALSE]
   if (nrow(lhs) == 0L) return(NULL)
   lhs <- lhs[order(lhs$line1, lhs$col1, lhs$id), , drop = FALSE]
   lhs <- lhs[nrow(lhs), , drop = FALSE]
   .reexport_parse_target(lhs$text[[1L]])
 }
 
-.reexport_parse_definitions <- function(data) {
-  function_exprs <- data$id[data$token == "FUNCTION"]
-  function_nodes <- data$parent[data$id %in% function_exprs]
+.reexport_parse_definitions <- function(data, index = NULL) {
+  if (is.null(index)) index <- .reexport_parse_index(data)
+  function_rows <- index$rows_by_token[["FUNCTION"]]
+  function_exprs <- if (is.null(function_rows)) integer() else data$id[function_rows]
+  function_nodes <- data$parent[match(function_exprs, data$id)]
   definitions <- list()
   roots <- integer()
   for (function_node in function_nodes) {
-    root <- data$parent[data$id == function_node]
+    node <- .reexport_index_rows(data, index, function_node)
+    root <- if (nrow(node) == 1L) node$parent[[1L]] else integer()
     if (length(root) != 1L) next
-    name <- .reexport_definition_name(data, root)
+    name <- .reexport_definition_name(data, root, index)
     if (is.null(name)) next
-    body <- data$id[data$parent == function_node & data$token == "expr"]
+    body <- .reexport_index_children(data, index, function_node, "expr")$id
     if (length(body) == 0L) next
     definitions[[name]] <- list(node = function_node, body = body[[1L]], root = root)
     roots <- c(roots, root)
@@ -1128,10 +1242,11 @@
   list(definitions = definitions, roots = roots)
 }
 
-.reexport_literal_arg <- function(data, call_id, position) {
-  open <- data[data$parent == call_id & data$token == "'('", , drop = FALSE]
+.reexport_literal_arg <- function(data, call_id, position, index = NULL) {
+  if (is.null(index)) index <- .reexport_parse_index(data)
+  open <- .reexport_index_children(data, index, call_id, "'('")
   if (nrow(open) != 1L) return(NULL)
-  arguments <- .reexport_call_children(data, call_id, open)
+  arguments <- .reexport_call_children(data, call_id, open, index)
   if (nrow(arguments) == 0L) return(NULL)
   if (length(position) != 1L || is.na(position) || nrow(arguments) < position) {
     return(NULL)
@@ -1227,10 +1342,15 @@
 
 .reexport_package_scope <- function(parsed, package = NULL) {
   key <- function(file_index, node) paste(file_index, node, sep = "::")
+  indices <- lapply(parsed, function(item) {
+    if (is.null(item$index)) .reexport_parse_index(item$data) else item$index
+  })
   definitions <- list()
   definition_roots <- vector("list", length(parsed))
   for (index in seq_along(parsed)) {
-    info <- .reexport_parse_definitions(parsed[[index]]$data)
+    info <- .reexport_parse_definitions(
+      parsed[[index]]$data, indices[[index]]
+    )
     definition_roots[[index]] <- info$roots
     for (name in names(info$definitions)) {
       entry <- info$definitions[[name]]
@@ -1239,82 +1359,117 @@
     }
   }
 
-  active <- character()
+  definition_names <- new.env(hash = TRUE, parent = emptyenv())
+  definition_by_name <- new.env(hash = TRUE, parent = emptyenv())
+  definition_root_sets <- lapply(definition_roots, function(roots) {
+    stats::setNames(rep(TRUE, length(roots)), as.character(roots))
+  })
+  for (name in names(definitions)) {
+    definition <- definitions[[name]]
+    assign(key(definition$file_index, definition$root), name,
+           envir = definition_names)
+    assign(name, TRUE, envir = definition_by_name)
+  }
+
+  active_state <- new.env(parent = emptyenv())
+  active_state$parts <- list()
+  active_state$count <- 0L
+  active_keys <- new.env(hash = TRUE, parent = emptyenv())
+  activate <- function(keys) {
+    if (length(keys) == 0L) return(invisible(NULL))
+    active_state$parts[[length(active_state$parts) + 1L]] <- keys
+    active_state$count <- active_state$count + length(keys)
+    for (item in keys) assign(item, TRUE, envir = active_keys)
+    invisible(NULL)
+  }
   for (index in seq_along(parsed)) {
     data <- parsed[[index]]$data
     roots <- data$id[data$parent == 0L & data$token == "expr"]
     for (root in roots) {
-      if (root %in% definition_roots[[index]]) {
-        name <- names(Filter(function(definition) {
-          identical(definition$file_index, index) &&
-            identical(definition$root, root)
-        }, definitions))
+      if (isTRUE(definition_root_sets[[index]][as.character(root)])) {
+        root_key <- key(index, root)
+        name <- if (exists(root_key, envir = definition_names,
+                           inherits = FALSE)) {
+          get(root_key, envir = definition_names, inherits = FALSE)
+        } else {
+          character()
+        }
         if (length(name) == 1L && name %in% c(".onLoad", ".onAttach")) {
           definition <- definitions[[name]]
-          active <- c(active, key(index, .reexport_parse_descendants(
-            data, definition$body
+          activate(key(index, .reexport_parse_descendants(
+            data, definition$body, indices[[index]]
           )))
         } else {
-          active <- c(active, key(index, root))
+          activate(key(index, root))
         }
       } else {
-        active <- c(active, key(index, .reexport_parse_descendants(data, root)))
+        activate(key(index, .reexport_parse_descendants(
+          data, root, indices[[index]]
+        )))
       }
     }
   }
 
+  indirect_names <- c(
+    "do.call", "get", "getFromNamespace", "match.fun", "Recall", "mget",
+    "setLoadAction"
+  )
   calls <- lapply(seq_along(parsed), function(index) {
     data <- parsed[[index]]$data
-    rows <- data[data$token == "SYMBOL_FUNCTION_CALL", , drop = FALSE]
+    rows <- indices[[index]]$rows_by_token[["SYMBOL_FUNCTION_CALL"]]
+    if (is.null(rows)) return(data.frame())
+    rows <- rows[data$text[rows] %in% c(names(definitions), indirect_names)]
+    rows <- data[rows, , drop = FALSE]
     if (nrow(rows) == 0L) return(data.frame())
     rows$file_index <- index
     rows
   })
   calls <- Filter(function(rows) nrow(rows) > 0L, calls)
   calls <- if (length(calls) == 0L) data.frame() else do.call(rbind, calls)
-  indirect_names <- c(
-    "do.call", "get", "getFromNamespace", "match.fun", "Recall", "mget",
-    "setLoadAction"
-  )
   indirect <- vector("list", length(parsed))
   non_simple <- vector("list", length(parsed))
-  indirect_seen <- character()
-  followed <- character()
+  indirect_seen <- new.env(hash = TRUE, parent = emptyenv())
+  followed <- new.env(hash = TRUE, parent = emptyenv())
   repeat {
-    before <- length(active)
+    before <- active_state$count
     if (nrow(calls) > 0L) for (row_index in seq_len(nrow(calls))) {
       call <- calls[row_index, , drop = FALSE]
       call_key <- key(call$file_index[[1L]], call$id[[1L]])
-      if (!call_key %in% active) next
+      if (!exists(call_key, envir = active_keys, inherits = FALSE)) next
       function_name <- call$text[[1L]]
-      if (!function_name %in% names(definitions) || function_name %in% followed) next
+      if (!exists(function_name, envir = definition_by_name,
+                  inherits = FALSE) ||
+            exists(function_name, envir = followed, inherits = FALSE)) next
       qualification <- .reexport_qualify_function(
-        parsed[[call$file_index[[1L]]]]$data, call$id[[1L]]
+        parsed[[call$file_index[[1L]]]]$data, call$id[[1L]],
+        indices[[call$file_index[[1L]]]]
       )
       if (!is.null(qualification$package) && !is.null(package) &&
             !identical(qualification$package, package)) next
-      followed <- c(followed, function_name)
+      assign(function_name, TRUE, envir = followed)
       definition <- definitions[[function_name]]
-      active <- c(active, key(definition$file_index,
-                              .reexport_parse_descendants(
-                                parsed[[definition$file_index]]$data,
-                                definition$body
-                              )))
+      activate(key(definition$file_index, .reexport_parse_descendants(
+        parsed[[definition$file_index]]$data,
+        definition$body,
+        indices[[definition$file_index]]
+      )))
     }
     if (nrow(calls) > 0L) for (row_index in seq_len(nrow(calls))) {
       call <- calls[row_index, , drop = FALSE]
       call_key <- key(call$file_index[[1L]], call$id[[1L]])
-      if (!call_key %in% active || !call$text[[1L]] %in% indirect_names) next
+      if (!exists(call_key, envir = active_keys, inherits = FALSE) ||
+            !call$text[[1L]] %in% indirect_names) next
       seen_key <- paste(call$file_index[[1L]], call$id[[1L]], sep = "::")
-      if (seen_key %in% indirect_seen) next
-      indirect_seen <- c(indirect_seen, seen_key)
+      if (exists(seen_key, envir = indirect_seen, inherits = FALSE)) next
+      assign(seen_key, TRUE, envir = indirect_seen)
       data <- parsed[[call$file_index[[1L]]]]$data
-      call_id <- .reexport_call_expression(data, call$id[[1L]])
+      index_data <- indices[[call$file_index[[1L]]]]
+      call_id <- .reexport_call_expression(data, call$id[[1L]], index_data)
       first <- if (is.null(call_id)) NULL else
-        .reexport_call_first_argument(data, call_id)
+        .reexport_call_first_argument(data, call_id, index_data)
       namespace <- if (identical(call$text[[1L]], "getFromNamespace") &&
                          !is.null(call_id)) {
-        .reexport_literal_arg(data, call_id, 2L)
+        .reexport_literal_arg(data, call_id, 2L, index_data)
       } else {
         NULL
       }
@@ -1330,50 +1485,75 @@
         active = TRUE, followed = FALSE
       )
       if (!is.null(first) && isTRUE(first$literal) &&
-            first$value %in% names(definitions) && !foreign_namespace) {
+            exists(first$value, envir = definition_by_name,
+                   inherits = FALSE) && !foreign_namespace) {
         item$followed <- TRUE
-        if (!first$value %in% followed) {
-          followed <- c(followed, first$value)
+        if (!exists(first$value, envir = followed, inherits = FALSE)) {
+          assign(first$value, TRUE, envir = followed)
           definition <- definitions[[first$value]]
-          active <- c(active, key(definition$file_index,
-                                  .reexport_parse_descendants(
-                                    parsed[[definition$file_index]]$data,
-                                    definition$body
-                                  )))
+          activate(key(definition$file_index, .reexport_parse_descendants(
+            parsed[[definition$file_index]]$data,
+            definition$body,
+            indices[[definition$file_index]]
+          )))
         }
       }
       index <- call$file_index[[1L]]
       indirect[[index]][[length(indirect[[index]]) + 1L]] <- item
     }
-    if (length(active) == before) break
+    if (active_state$count == before) break
+  }
+
+  active <- if (length(active_state$parts) == 0L) {
+    character()
+  } else {
+    unlist(active_state$parts, use.names = FALSE)
   }
 
   for (index in seq_along(parsed)) {
     data <- parsed[[index]]$data
-    open <- data[data$token == "'('" & data$parent %in% data$id[
-      data$token %in% c("expr", "expr_or_assign_or_help")
-    ], , drop = FALSE]
-    if (nrow(open) == 0L) next
-    for (row_index in seq_len(nrow(open))) {
-      call_id <- open$parent[[row_index]]
-      target <- .reexport_call_target(
-        data, open[row_index, , drop = FALSE]
+    parse_index <- indices[[index]]
+    open_rows <- parse_index$rows_by_token[["'('"]]
+    open_rows <- open_rows[data$parent[open_rows] %in% data$id[
+      unlist(parse_index$rows_by_token[
+        c("expr", "expr_or_assign_or_help")
+      ], use.names = FALSE)
+    ]]
+    if (length(open_rows) == 0L) next
+    active_keys <- stats::setNames(rep(TRUE, length(active)), active)
+    for (open_row in open_rows) {
+      call_id <- data$parent[[open_row]]
+      call_key <- key(index, call_id)
+      if (!isTRUE(active_keys[call_key])) next
+      child_rows <- .reexport_index_child_rows(
+        data, parse_index, call_id, c("expr", "expr_or_assign_or_help")
       )
-      if (is.null(target)) next
-      target_text <- trimws(target$text[[1L]])
+      if (length(child_rows) == 0L) next
+      before <- data$line1[child_rows] < data$line1[[open_row]] |
+        (data$line1[child_rows] == data$line1[[open_row]] &
+           data$col1[child_rows] < data$col1[[open_row]])
+      child_rows <- child_rows[before]
+      if (length(child_rows) == 0L) next
+      child_rows <- child_rows[order(
+        data$line1[child_rows], data$col1[child_rows], data$id[child_rows]
+      )]
+      target_text <- trimws(data$text[[child_rows[[length(child_rows)]]]])
       target_kind <- .reexport_call_target_kind(target_text)
       if (target_kind$kind %in% c("simple", "qualified")) next
       root <- .reexport_call_target_root(target_text)
       if (length(root) == 1L && root %in% indirect_names) next
-      if (key(index, call_id) %in% active) {
-        call_row <- data[data$id == call_id, , drop = FALSE]
-        line <- if (nrow(call_row) == 1L) call_row$line1[[1L]] else NA_integer_
-        non_simple[[index]][[length(non_simple[[index]]) + 1L]] <- list(
-          name = target_text, file = parsed[[index]]$label,
-          line = line, active = TRUE, non_simple = TRUE,
-          reason = target_kind$reason
-        )
+      call_id <- as.integer(call_id)
+      call_row <- if (call_id > 0L && call_id <= length(parse_index$row_by_id)) {
+        parse_index$row_by_id[[call_id]]
+      } else {
+        0L
       }
+      line <- if (call_row > 0L) data$line1[[call_row]] else NA_integer_
+      non_simple[[index]][[length(non_simple[[index]]) + 1L]] <- list(
+        name = target_text, file = parsed[[index]]$label,
+        line = line, active = TRUE, non_simple = TRUE,
+        reason = target_kind$reason
+      )
     }
   }
   list(
@@ -1387,13 +1567,15 @@
 
 .reexport_parse_source <- function(path, package_root, data,
                                    active_ids = NULL, scope_indirect = list(),
-                                   scope_non_simple = list(), package = NULL) {
+                                   scope_non_simple = list(), package = NULL,
+                                   index = NULL) {
   label <- .reexport_source_label(path, package_root)
   evidence <- list(
     assignments = list(), calls = list(), dynamic = list(), mutations = list(),
     indirect = list(), non_simple = list(), parse_errors = list()
   )
   if (is.null(data) || nrow(data) == 0L) return(evidence)
+  parse_index <- if (is.null(index)) .reexport_parse_index(data) else index
   scope_indirect <- lapply(scope_indirect, function(item) {
     item$file <- label
     item
@@ -1411,37 +1593,38 @@
   assignment_tokens <- c(
     "LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2"
   )
-  assignment_rows <- which(data$token %in% assignment_tokens)
+  assignment_rows <- sort(unlist(
+    parse_index$rows_by_token[assignment_tokens], use.names = FALSE
+  ))
   for (row_index in assignment_rows) {
-    assignment <- data[row_index, , drop = FALSE]
-    candidates <- data[
-      data$parent == assignment$parent[[1L]] &
-        data$token %in% c("expr", "expr_or_assign_or_help"),
-      , drop = FALSE
-    ]
-    if (nrow(candidates) == 0L) next
-    candidates <- candidates[order(
-      candidates$line1, candidates$col1, candidates$id
-    ), , drop = FALSE]
-    before <- vapply(seq_len(nrow(candidates)), function(index) {
-      .reexport_position_before(
-        candidates[index, , drop = FALSE], assignment
-      )
-    }, logical(1L))
-    index <- if (assignment$token %in% c("RIGHT_ASSIGN", "RIGHT_ASSIGN2")) {
+    parent <- data$parent[[row_index]]
+    candidate_rows <- .reexport_index_child_rows(
+      data, parse_index, parent, c("expr", "expr_or_assign_or_help")
+    )
+    if (length(candidate_rows) == 0L) next
+    candidate_rows <- candidate_rows[order(
+      data$line1[candidate_rows], data$col1[candidate_rows],
+      data$id[candidate_rows]
+    )]
+    before <- data$line1[candidate_rows] < data$line1[[row_index]] |
+      (data$line1[candidate_rows] == data$line1[[row_index]] &
+         data$col1[candidate_rows] < data$col1[[row_index]])
+    candidate_index <- if (data$token[[row_index]] %in%
+                             c("RIGHT_ASSIGN", "RIGHT_ASSIGN2")) {
       which(!before)[1L]
     } else {
       which(before)[sum(before)]
     }
-    if (length(index) == 0L || is.na(index)) next
-    target <- .reexport_parse_target(candidates$text[[index]])
+    if (length(candidate_index) == 0L || is.na(candidate_index)) next
+    target_text <- data$text[[candidate_rows[[candidate_index]]]]
+    target <- .reexport_parse_target(target_text)
     if (!is.null(target)) {
       evidence$assignments[[length(evidence$assignments) + 1L]] <- list(
-        symbol = target, file = label, line = assignment$line1[[1L]]
+        symbol = target, file = label, line = data$line1[[row_index]]
       )
     } else {
       target_expression <- tryCatch(
-        parse(text = paste0("function() ", candidates$text[[index]]))[[1L]][[3L]],
+        parse(text = paste0("function() ", target_text))[[1L]][[3L]],
         error = function(e) NULL
       )
       if (is.call(target_expression) &&
@@ -1461,39 +1644,53 @@
         }
         evidence$mutations[[length(evidence$mutations) + 1L]] <- list(
           symbol = literal, name = as.character(target_expression[[1L]])[[1L]],
-          file = label, line = assignment$line1[[1L]],
-          active = assignment$id[[1L]] %in% active_ids
+          file = label, line = data$line1[[row_index]],
+          active = data$id[[row_index]] %in% active_ids
         )
       }
     }
   }
 
   target_calls <- binder_names
-  function_rows <- which(data$token == "SYMBOL_FUNCTION_CALL")
+  function_rows <- parse_index$rows_by_token[["SYMBOL_FUNCTION_CALL"]]
+  function_rows <- if (is.null(function_rows)) integer() else function_rows
+  has_load_hook <- any(data$text %in% c(".onLoad", ".onAttach"))
+  if (!has_load_hook) {
+    function_rows <- function_rows[data$text[function_rows] %in% c(
+      binder_names, "eval", "evalq", "env_bind"
+    )]
+  }
   for (row_index in function_rows) {
-    function_row <- data[row_index, , drop = FALSE]
-    call_id <- .reexport_call_expression(data, function_row$id)
+    function_id <- data$id[[row_index]]
+    call_id <- .reexport_call_expression(data, function_id, parse_index)
     if (is.null(call_id)) next
-    qualification <- .reexport_qualify_function(data, function_row$id)
+    qualification <- .reexport_qualify_function(
+      data, function_id, parse_index
+    )
     if (length(qualification$function_name) != 1L ||
           is.na(qualification$function_name)) next
-    first <- .reexport_call_first_argument(data, call_id)
+    first <- .reexport_call_first_argument(data, call_id, parse_index)
     record <- list(
       name = qualification$function_name,
       package = qualification$package,
       file = label,
-      line = function_row$line1[[1L]],
+      line = data$line1[[row_index]],
       literal = if (is.null(first)) FALSE else isTRUE(first$literal),
       value = if (is.null(first)) NULL else first$value,
-      active = function_row$id[[1L]] %in% active_ids
+      active = function_id %in% active_ids
     )
     function_name <- qualification$function_name
     is_env_bind <- identical(qualification$package, "rlang") &&
       startsWith(function_name, "env_bind")
     is_namespace_assign <- identical(qualification$package, "utils") &&
       function_name %in% c("assignInMyNamespace", "assignInNamespace")
-    call_row <- data[data$id == call_id, , drop = FALSE]
-    call_text <- if (nrow(call_row) == 1L) call_row$text[[1L]] else ""
+    call_id <- as.integer(call_id)
+    call_row <- if (call_id > 0L && call_id <= length(parse_index$row_by_id)) {
+      parse_index$row_by_id[[call_id]]
+    } else {
+      0L
+    }
+    call_text <- if (call_row > 0L) data$text[[call_row]] else ""
     is_dynamic <- function_name %in% c(
       "list2env", "sys.source", "source", "load", "attach"
     ) ||
@@ -1513,21 +1710,21 @@
           !identical(qualification$package, "utils") &&
           !identical(function_name, ".") &&
           (is.null(package) || !identical(qualification$package, package)) &&
-          any(data$text %in% c(".onLoad", ".onAttach"))) {
+          has_load_hook) {
       evidence$indirect[[length(evidence$indirect) + 1L]] <- list(
         name = paste0(qualification$package, "::", function_name),
-        file = label, line = function_row$line1[[1L]],
-        active = function_row$id[[1L]] %in% active_ids
+        file = label, line = data$line1[[row_index]],
+        active = function_id %in% active_ids
       )
     }
   }
 
   # A binder can be passed as a value or by name (for example to lapply(),
   # do.call(), get(), or match.fun()). Parse data retains both forms.
-  binder_rows <- data[
-    data$token %in% c("SYMBOL", "SYMBOL_FUNCTION_CALL", "STR_CONST"),
-    , drop = FALSE
-  ]
+  binder_row_indices <- sort(unlist(parse_index$rows_by_token[
+    c("SYMBOL", "SYMBOL_FUNCTION_CALL", "STR_CONST")
+  ], use.names = FALSE))
+  binder_rows <- data[binder_row_indices, , drop = FALSE]
   if (nrow(binder_rows) > 0L) {
     string_rows <- binder_rows$token == "STR_CONST"
     if (any(string_rows)) {
@@ -1545,16 +1742,21 @@
       "do.call", "get", "getFromNamespace", "match.fun", "Recall", "mget",
       "setLoadAction"
     )
-    function_rows <- which(data$token == "SYMBOL_FUNCTION_CALL")
-    children_by_parent <- split(data$id, data$parent)
+    function_rows <- parse_index$rows_by_token[["SYMBOL_FUNCTION_CALL"]]
+    function_rows <- if (is.null(function_rows)) integer() else function_rows
+    function_rows <- function_rows[data$text[function_rows] %in%
+                                     c(binder_names, indirect_names)]
+    children_by_parent <- parse_index$children_by_parent
     call_contexts <- lapply(function_rows, function(function_index) {
-      function_row <- data[function_index, , drop = FALSE]
-      call_id <- .reexport_call_expression(data, function_row$id[[1L]])
+      function_id <- data$id[[function_index]]
+      call_id <- .reexport_call_expression(
+        data, function_id, parse_index
+      )
       if (is.null(call_id)) return(NULL)
-      first_id <- .reexport_call_arg_id(data, call_id)
+      first_id <- .reexport_call_arg_id(data, call_id, parse_index)
       if (is.null(first_id)) return(NULL)
       qualification <- .reexport_qualify_function(
-        data, function_row$id[[1L]]
+        data, function_id, parse_index
       )
       list(
         first_id = first_id, name = qualification$function_name,
@@ -1571,7 +1773,7 @@
           children_by_parent[as.character(pending)],
           use.names = FALSE
         )
-        children <- unique(as.integer(children))
+        children <- unique(as.integer(data$id[children]))
         children <- children[!is.na(children) & !children %in% found]
         if (length(children) == 0L) break
         found <- c(found, children)
@@ -1647,7 +1849,8 @@
         ))
       }
       if (is.null(data)) data <- empty_data
-      list(path = path, label = label, data = data, parse_error = NULL)
+      list(path = path, label = label, data = data,
+           index = .reexport_parse_index(data), parse_error = NULL)
     })
     scope <- .reexport_package_scope(parsed, package = package)
     parsed_evidence <- lapply(seq_along(parsed), function(index) {
@@ -1655,7 +1858,8 @@
         parsed[[index]]$path, package_root, data = parsed[[index]]$data,
         active_ids = scope$active[[index]],
         scope_indirect = scope$indirect[[index]],
-        scope_non_simple = scope$non_simple[[index]], package = package
+        scope_non_simple = scope$non_simple[[index]], package = package,
+        index = parsed[[index]]$index
       )
     })
     parsed_evidence <- lapply(seq_along(parsed_evidence), function(index) {

@@ -177,6 +177,10 @@ test_that("an incomplete restoration preserves its durable journal", {
   journal <- .create_update_journal(
     fixture$project, "roundnineverse", manifest
   )
+  state_path <- file.path(journal$path, "state.rds")
+  state <- readRDS(state_path)
+  state$pid <- 99999999L
+  .atomic_save_rds(state, state_path)
   removed <- file.path(fixture$project, manifest$files[[1L]])
   .activate_update_journal(journal, fixture$project, "roundnineverse")
   .record_update_delete(removed)

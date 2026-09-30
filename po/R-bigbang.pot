@@ -499,7 +499,7 @@ msgstr ""
 msgid "Cannot update %s because %s is not a recognized bigbang update journal. It has no recognized backup. Next step: leave it intact, preserve its contents, and inspect or move it aside before retrying."
 msgstr ""
 
-msgid "Cannot update %s because journal %s belongs to project '%s', not project '%s'. Rename the project and journal back, or rename the journal to match the project."
+msgid "Cannot update %s because journal %s belongs to project '%s', not project '%s'. Rename the project and its journal back to '%s'."
 msgstr ""
 
 msgid "Could not arm the update journal because its final path already exists: %s"
@@ -527,6 +527,24 @@ msgid "Could not set aside the update-journal entry: %s"
 msgstr ""
 
 msgid "Set aside unverified update-journal content at %s; no bytes were deleted and the update continues."
+msgstr ""
+
+msgid "Set aside unverified update-journal content at %s; no bytes from the set-aside entry were deleted and the update continues."
+msgstr ""
+
+msgid "Set aside update-lock entry at %s; no bytes from the set-aside entry were deleted and the update continues."
+msgstr ""
+
+msgid "Set aside old update-lock content at %s; no bytes from the set-aside entry were deleted."
+msgstr ""
+
+msgid "Set aside incomplete update-lock preparation at %s; no bytes from the set-aside entry were deleted."
+msgstr ""
+
+msgid "Deleted %d verified files from the update-journal inventory."
+msgstr ""
+
+msgid "Could not set aside the update-lock entry: %s"
 msgstr ""
 
 msgid "Did not adopt update journal %s because project %s still exists beside it; it is a copy, so the journal was left untouched."
@@ -613,6 +631,9 @@ msgstr ""
 msgid "An update may still be running; no mutation was performed."
 msgstr ""
 
+msgid "An update is still running under pid %s; no mutation was performed."
+msgstr ""
+
 msgid "after confirming that no other update is running, call again with recover = TRUE."
 msgstr ""
 
@@ -659,6 +680,12 @@ msgid "Recovered an interrupted update using %s."
 msgstr ""
 
 msgid "Dry run: pending update journal action is %s at %s."
+msgstr ""
+
+msgid "Dry run: update lock at %s is %s; no lock was acquired or changed."
+msgstr ""
+
+msgid "Dry run: update-lock preparation at %s would be %s; no entry was changed."
 msgstr ""
 
 msgid "The update journal was retained for recovery at: %s"

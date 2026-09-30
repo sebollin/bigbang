@@ -11,15 +11,24 @@
   recorded owner is proven dead, with `recover = TRUE` documented for uncertain
   owners.
 
+- Update locks are published atomically with a complete owner record, orphan
+  reclamation has one rename winner, regular user entries are set aside, and
+  dry runs inspect locks without changing them. `recover = TRUE` never defeats
+  a proven live owner, and interrupted-update documentation now states the
+  project-name and byte-for-byte-copy limits.
+- Re-export source evidence now reuses per-file parse indexes instead of
+  scanning the complete parse table for every token; results remain unchanged
+  while large source families scale close to linearly.
+
 ## Breaking changes
 
 - `bigbang_error_missing_project` now inherits from
   `bigbang_error_missing_manifest`, preserving the 0.4.0 condition contract
   while identifying a missing project more precisely.
 - Update `dry_run` now reports a read-only reconciliation plan for sibling
-  journal folders. Updates use an exclusive project lock, and a live or
-  uncertain journal owner is never reconciled; callers must confirm that the
-  owner finished before using `recover = TRUE`.
+  journal folders and the update lock. Updates use an exclusive project lock,
+  and a proven live owner is never reconciled; uncertain owners are only
+  resolved with `recover = TRUE`.
 - A failure while promoting generated documentation now aborts the update and
   rolls the project back through its journal. Only failures in the staging
   generation remain warnings.

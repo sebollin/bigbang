@@ -457,11 +457,11 @@ test_that("owner liveness distinguishes a live process from PID reuse", {
       class = "bigbang_error_update_in_progress"
     )
   } else {
-    expect_message(
-      reused <- .recover_pending_update(fixture$project, "journalverse"),
-      "Recovered an interrupted update"
+    expect_error(
+      .recover_pending_update(fixture$project, "journalverse"),
+      class = "bigbang_error_update_in_progress",
+      regexp = paste0("pid ", sleeper$pid)
     )
-    expect_true(reused$recovered)
   }
 
   second <- round052_fixture("bigbang-round052-force-live-")
@@ -472,13 +472,13 @@ test_that("owner liveness distinguishes a live process from PID reuse", {
   second_state$host <- .update_host()
   second_state$process_start <- .update_process_start(sleeper$pid)
   .atomic_save_rds(second_state, second_state_path)
-  expect_message(
-    forced <- .recover_pending_update(
+  expect_error(
+    .recover_pending_update(
       second$project, "journalverse", recover = TRUE
     ),
-    "Recovered an interrupted update"
+    class = "bigbang_error_update_in_progress",
+    regexp = paste0("pid ", sleeper$pid)
   )
-  expect_true(forced$recovered)
 })
 
 test_that("unknown process identity uses the conservative liveness policy", {
@@ -566,10 +566,8 @@ test_that("a live preparation is protected from a concurrent dry run", {
     fixture$project, "journalverse", "armando"
   )
   expect_length(armando, 1L)
-  expect_error(
-    round052_update(fixture, dry_run = TRUE),
-    class = "bigbang_error_update_in_progress"
-  )
+  plan <- round052_update(fixture, dry_run = TRUE)
+  expect_true(plan$dry_run)
   expect_true(dir.exists(armando))
   writeLines("release", release, useBytes = TRUE)
   result <- suppressMessages(parallel::mccollect(child, wait = TRUE)[[1L]])

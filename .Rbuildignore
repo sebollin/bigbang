@@ -1,5 +1,8 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^\.git$
+^\.Rhistory$
+^\.\.Rcheck$
 ^\.gitignore$
 ^\.utiles-historial$
 ^\.github$

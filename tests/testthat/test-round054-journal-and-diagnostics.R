@@ -199,7 +199,8 @@ test_that("H1 empty unmarked staging is discarded and non-empty is set aside", {
   child <- parallel::mcparallel({
     trace(".atomic_save_rds", where = asNamespace("bigbang"),
           tracer = quote({
-            if (!file.exists(Sys.getenv("BB054_H1_EMPTY_MARK"))) {
+            if (grepl("marker\\.rds$", path) &&
+                  !file.exists(Sys.getenv("BB054_H1_EMPTY_MARK"))) {
               writeLines("staging-created", Sys.getenv("BB054_H1_EMPTY_MARK"),
                          useBytes = TRUE)
               Sys.sleep(600)

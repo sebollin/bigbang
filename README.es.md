@@ -288,10 +288,22 @@ acción sin modificar esas carpetas.
   Quitar un componente elimina su archivo embarcado, que puede ser la última
   copia.
   Los updates mantienen una exclusión mutua desde el armado hasta el rollback y
-  la publicación del diario. El marcador inicial registra PID, host, token de
-  inicio del proceso y hora antes de la primera copia de respaldo. Si el dueño
-  sigue vivo o no se puede determinar, se conserva y el error informa
-  `recover = TRUE` como siguiente acción.
+  la publicación del diario. El lock solo se publica renombrando una carpeta
+  temporal hermana que ya contiene `owner.rds`, por lo que todo lock publicado
+  tiene dueño. Un huérfano se renombra primero a un descarte único; el ganador
+  vuelve a verificar ese dueño antes de publicar el reemplazo. Un archivo
+  regular u otra entrada del usuario en el nombre del lock se aparta como
+  `.<nombre>.bigbang-apartado-*`, sin borrar sus bytes. `recover = TRUE`
+  resuelve la incertidumbre (Windows, falta de `/proc`, otro host o dueño
+  ilegible), pero nunca fuerza a pasar por encima de un dueño probado vivo:
+  mismo host, PID vivo y el mismo token de inicio del proceso. En ese caso da
+  error e informa el PID.
+  Los nombres hermanos `.<nombre>.bigbang-update`,
+  `.<nombre>.bigbang-update.armando-*`, `.<nombre>.bigbang-update.lock`,
+  `.<nombre>.bigbang-update.lock.armando-*`,
+  `.<nombre>.bigbang-update.lock.descartado-*`,
+  `.<nombre>.bigbang-update.descartado-*` y `.<nombre>.bigbang-apartado-*`
+  están reservados para estas operaciones.
   También se niega a escribir a través de una raíz de proyecto simbólica o de
   enlaces simbólicos dentro del proyecto generado, incluidos los enlaces en
   directorios padre de los archivos generados.
@@ -309,11 +321,14 @@ acción sin modificar esas carpetas.
   coinciden con el inventario, y directorios del inventario solo cuando están
   vacíos. Cualquier otro archivo, directorio o enlace simbólico aparta toda la
   carpeta y el update continúa. Una lápida sin digest o con digest cambiado
-  tiene el mismo tratamiento. La llamada siguiente con `update = TRUE` también
-  reconoce un proyecto movido o renombrado cuando el diario hermano coincide
-  por el hash del manifiesto y el proyecto viejo del marcador ya no existe a
-  su lado. Si existe, es una copia: el diario no se adopta ni se toca, y el
-  update informa el conflicto usando otro diario. Un descartado de otra
+  tiene el mismo tratamiento. La llamada siguiente con `update = TRUE` puede
+  recuperar un proyecto movido junto con su diario. Renombrar un proyecto no
+  está soportado porque los nombres de los archivos generados contienen el
+  nombre del metapaquete: renombre el proyecto y su diario de vuelta a
+  `<nombre>`. Una copia byte a byte puesta en el mismo lugar y con el mismo
+  nombre que el original movido es indistinguible del original, así que el
+  diario la trata como el proyecto. Si el original todavía existe junto al
+  diario copiado, ese diario no se adopta ni se cambia. Un descartado de otra
   generación o proyecto se aparta con un mensaje accionable. Un archivo del
   usuario con la misma ruta y md5 que una entrada del inventario es un límite
   inevitable: los bytes son idénticos, de modo que borrarlo no pierde contenido,
@@ -327,7 +342,8 @@ acción sin modificar esas carpetas.
   y en el mensaje de recuperación. Después de confirmar que no sigue corriendo otro update,
   `recover = TRUE` preserva esos bytes desconocidos en un directorio hermano
   informado y recién entonces recupera. Un dry run informa la acción pendiente
-  sin cambiar el proyecto ni ninguna carpeta de diario hermana. Los fallos al
+  sin cambiar el proyecto, el lock ni ninguna carpeta de diario hermana. El
+  lock solo se evalúa e informa como libre, vivo, huérfano o incierto. Los fallos al
   generar documentación en el área de preparación son warnings; un fallo al
   promover una documentación aborta y revierte el update completo. En Windows
   nunca se prueba la vida con

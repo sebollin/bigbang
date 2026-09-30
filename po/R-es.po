@@ -499,8 +499,8 @@ msgstr "No se puede actualizar %s porque %s es una carpeta de diario de actualiz
 msgid "Cannot update %s because %s is not a recognized bigbang update journal. It has no recognized backup. Next step: leave it intact, preserve its contents, and inspect or move it aside before retrying."
 msgstr "No se puede actualizar %s porque %s no es un diario de actualización de bigbang reconocido. No tiene un respaldo reconocido. Siguiente paso: déjelo intacto, preserve su contenido e inspecciónelo o muévalo a otro lugar antes de volver a intentar."
 
-msgid "Cannot update %s because journal %s belongs to project '%s', not project '%s'. Rename the project and journal back, or rename the journal to match the project."
-msgstr "No se puede actualizar %s porque el diario %s pertenece al proyecto '%s', no al proyecto '%s'. Renombre el proyecto y el diario de vuelta, o renombre el diario para que coincida con el proyecto."
+msgid "Cannot update %s because journal %s belongs to project '%s', not project '%s'. Rename the project and its journal back to '%s'."
+msgstr "No se puede actualizar %s porque el diario %s pertenece al proyecto '%s', no al proyecto '%s'. Renombre el proyecto y su diario de vuelta a '%s'."
 
 msgid "Could not arm the update journal because its final path already exists: %s"
 msgstr "No se pudo armar el diario de actualización porque su ruta final ya existe: %s"
@@ -528,6 +528,24 @@ msgstr "No se pudo apartar la entrada del diario de actualización: %s"
 
 msgid "Set aside unverified update-journal content at %s; no bytes were deleted and the update continues."
 msgstr "Se apartó contenido no verificable del diario de actualización en %s; no se eliminó ningún byte y el update continúa."
+
+msgid "Set aside unverified update-journal content at %s; no bytes from the set-aside entry were deleted and the update continues."
+msgstr "Se apartó contenido no verificable del diario de actualización en %s; no se eliminaron bytes de lo apartado y el update continúa."
+
+msgid "Set aside update-lock entry at %s; no bytes from the set-aside entry were deleted and the update continues."
+msgstr "Se apartó la entrada del lock de actualización en %s; no se eliminaron bytes de lo apartado y el update continúa."
+
+msgid "Set aside old update-lock content at %s; no bytes from the set-aside entry were deleted."
+msgstr "Se apartó contenido viejo del lock de actualización en %s; no se eliminaron bytes de lo apartado."
+
+msgid "Set aside incomplete update-lock preparation at %s; no bytes from the set-aside entry were deleted."
+msgstr "Se apartó una preparación incompleta del lock de actualización en %s; no se eliminaron bytes de lo apartado."
+
+msgid "Deleted %d verified files from the update-journal inventory."
+msgstr "Se eliminaron %d archivos verificados del inventario del diario de actualización."
+
+msgid "Could not set aside the update-lock entry: %s"
+msgstr "No se pudo apartar la entrada del lock de actualización: %s"
 
 msgid "Did not adopt update journal %s because project %s still exists beside it; it is a copy, so the journal was left untouched."
 msgstr "No se adoptó el diario de actualización %s porque el proyecto %s todavía existe a su lado; es una copia y el diario quedó intacto."
@@ -613,6 +631,9 @@ msgstr "busque el proyecto movido, coloque este diario a su lado sin cambiar su 
 msgid "An update may still be running; no mutation was performed."
 msgstr "Puede haber un update todavía en ejecución; no se hizo ninguna mutación."
 
+msgid "An update is still running under pid %s; no mutation was performed."
+msgstr "Todavía hay un update en ejecución bajo el pid %s; no se hizo ninguna mutación."
+
 msgid "after confirming that no other update is running, call again with recover = TRUE."
 msgstr "después de confirmar que no hay otro update en ejecución, vuelva a llamar con recover = TRUE."
 
@@ -660,6 +681,12 @@ msgstr "Se recuperó un update interrumpido usando %s."
 
 msgid "Dry run: pending update journal action is %s at %s."
 msgstr "Dry run: la acción pendiente del diario de actualización es %s en %s."
+
+msgid "Dry run: update lock at %s is %s; no lock was acquired or changed."
+msgstr "Dry run: el lock de actualización en %s está %s; no se adquirió ni cambió ningún lock."
+
+msgid "Dry run: update-lock preparation at %s would be %s; no entry was changed."
+msgstr "Dry run: la preparación del lock de actualización en %s quedaría %s; no se cambió ninguna entrada."
 
 msgid "The update journal was retained for recovery at: %s"
 msgstr "El diario de actualización se conservó para recuperación en: %s"
