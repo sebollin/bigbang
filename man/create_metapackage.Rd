@@ -330,18 +330,31 @@ old, new, or temporarily absent with a journal backup. Roxygen runs in a staging
 known outputs are promoted atomically to the project.
 
 If a process dies while preparing the journal, an empty unmarked
-\verb{armando-*} folder, or one containing only the exact atomic marker temporary
-files, is planned for discard; any other non-empty unmarked folder is never
-deleted. The initial marker records the owner PID, host, process start token,
+\verb{armando-*} folder is removed; any non-empty unmarked folder is atomically
+set aside as \verb{.<name>.bigbang-apartado-*} without copying or deleting bytes.
+The initial marker records the owner PID, host, process start token,
 and start time before the first backup copy. A marked preparation is
 discarded only after the owner is proven finished with the platform's
 conservative liveness policy. Journal disposal first writes an atomic tombstone with
 the exact relative-path and MD5 inventory of the entries bigbang wrote, then
 renames the folder to \verb{.<name>.bigbang-update.descartado-*}; cleanup can
-therefore resume after another interruption. New or changed entries outside
-that inventory are preserved and reported. A discarded folder without a
-valid tombstone is left intact and reported as unknown; an empty one is
-removed as an interrupted cleanup shell.
+therefore resume after another interruption. Cleanup checks every file
+recursively and removes it only when its relative path and MD5 match the
+inventory; it removes an inventory directory only after it is empty. Any
+file, directory, or symbolic link that cannot be proved to be in the
+inventory causes the whole discarded folder to be set aside atomically and
+reported, so the update continues without deleting user bytes. The tombstone
+has a digest recorded beside it before the rename; a missing or changed
+digest is set aside rather than trusted. A discarded folder without a valid
+tombstone is set aside when non-empty; an empty one is removed as an
+interrupted cleanup shell. A matching name and manifest are required before
+a discarded folder is cleaned. A stale generation or another project is
+therefore set aside beside the current project and never blocks a later
+update. A file with the same path and MD5 as the inventory is an unavoidable
+limit: its bytes are identical, so deleting it loses no content, but the
+journal cannot prove who created it. The tombstone and its digest are local
+journal state, not a cryptographic signature; treat the journal as bigbang's
+private territory.
 
 The journal survives process termination, terminal closure, and system
 shutdown, including SIGKILL, SIGTERM, and SIGHUP on POSIX systems. The next
@@ -349,11 +362,13 @@ shutdown, including SIGKILL, SIGTERM, and SIGHUP on POSIX systems. The next
 generation manifest. The marker identifies the metapackage and old-manifest
 hash rather than an absolute path, so moving the project together with its
 journal remains recoverable. A renamed project is also recognized when its
-sibling journal's backed-up manifest hash matches the current project; an
-unrecognized journal reports the recorded project name and how to rename it
-back. A discarded sibling is finished only when its metapackage name and
-recorded manifest hash match this project's current manifest. An unarmed journal is discarded because the project was
-not touched; an already completed update is recognized by its new manifest;
+sibling journal's backed-up manifest hash matches the current project and
+the project named by the marker no longer exists beside it. If that source
+project still exists, the journal is treated as a copy: it is not adopted or
+changed, and the update reports the conflict while using a separate journal.
+A partial tombstone temporary is set aside after the owner is confirmed dead,
+and recovery continues. An already completed update is recognized by its new
+manifest;
 otherwise a dead owner's changes are rolled back and the requested update
 continues. On POSIX systems liveness uses the PID and, where Linux \verb{/proc}
 exposes it, the process start time to reject PID reuse. Windows is never

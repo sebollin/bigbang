@@ -523,6 +523,15 @@ msgstr ""
 msgid "Could not write the update-journal tombstone: %s"
 msgstr ""
 
+msgid "Could not set aside the update-journal entry: %s"
+msgstr ""
+
+msgid "Set aside unverified update-journal content at %s; no bytes were deleted and the update continues."
+msgstr ""
+
+msgid "Did not adopt update journal %s because project %s still exists beside it; it is a copy, so the journal was left untouched."
+msgstr ""
+
 msgid "Its tombstone belongs to project '%s' with manifest hash %s, not project '%s' with manifest hash %s; nothing was deleted."
 msgstr ""
 

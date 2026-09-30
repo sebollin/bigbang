@@ -523,6 +523,15 @@ msgstr "desconocido"
 msgid "Could not write the update-journal tombstone: %s"
 msgstr "No se pudo escribir la lápida del diario de actualización: %s"
 
+msgid "Could not set aside the update-journal entry: %s"
+msgstr "No se pudo apartar la entrada del diario de actualización: %s"
+
+msgid "Set aside unverified update-journal content at %s; no bytes were deleted and the update continues."
+msgstr "Se apartó contenido no verificable del diario de actualización en %s; no se eliminó ningún byte y el update continúa."
+
+msgid "Did not adopt update journal %s because project %s still exists beside it; it is a copy, so the journal was left untouched."
+msgstr "No se adoptó el diario de actualización %s porque el proyecto %s todavía existe a su lado; es una copia y el diario quedó intacto."
+
 msgid "Its tombstone belongs to project '%s' with manifest hash %s, not project '%s' with manifest hash %s; nothing was deleted."
 msgstr "Su lápida pertenece al proyecto '%s' con hash de manifiesto %s, no al proyecto '%s' con hash de manifiesto %s; no se eliminó nada."
 

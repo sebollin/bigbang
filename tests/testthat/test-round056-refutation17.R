@@ -133,7 +133,7 @@ round056_interrupt_discard <- function(fixture, mark) {
   paths[[1L]]
 }
 
-test_that("J1 SIGKILL cleans only an atomic marker temporary", {
+test_that("J1 SIGKILL sets aside an unverified marker temporary", {
   skip_on_cran()
   skip_on_os("windows")
   fixture <- round056_fixture("bigbang-round056-j1-")
@@ -164,6 +164,13 @@ test_that("J1 SIGKILL cleans only an atomic marker temporary", {
   result <- round056_update(fixture)
   expect_true(result$updated)
   expect_false(dir.exists(armando))
+  apart <- list.files(
+    fixture$destination,
+    pattern = paste0("^\\.", fixture$name, "\\.bigbang-apartado-"),
+    full.names = TRUE, all.files = TRUE, no.. = TRUE
+  )
+  expect_length(apart, 1L)
+  expect_true(file.exists(file.path(apart, entries[[1L]])))
   expect_identical(readBin(fixture$sentinel, "raw", 1000L),
                    charToRaw("user-owned bytes\n"))
 })
@@ -246,14 +253,17 @@ test_that("J4 preserves user bytes outside the tombstone inventory", {
   user_file <- file.path(discarded, "user-owned.txt")
   writeLines("do not delete", user_file, useBytes = TRUE)
   before <- readBin(user_file, "raw", 1000L)
-  error <- expect_error(
-    round056_update_dead_owner(fixture),
-    class = "bigbang_error_unrecognized_update_journal"
+  result <- round056_update_dead_owner(fixture)
+  expect_true(result$updated)
+  apart <- list.files(
+    fixture$destination,
+    pattern = paste0("^\\.", fixture$name, "\\.bigbang-apartado-"),
+    full.names = TRUE, all.files = TRUE, no.. = TRUE
   )
-  expect_match(conditionMessage(error), "inventory|user-owned|retry",
-               ignore.case = TRUE)
-  expect_true(dir.exists(discarded))
-  expect_identical(readBin(user_file, "raw", 1000L), before)
+  expect_length(apart, 1L)
+  apart_file <- file.path(apart, "user-owned.txt")
+  expect_true(file.exists(apart_file))
+  expect_identical(readBin(apart_file, "raw", 1000L), before)
   expect_identical(readBin(fixture$sentinel, "raw", 1000L),
                    charToRaw("user-owned bytes\n"))
 })
@@ -274,13 +284,15 @@ test_that("J5 preserves a discarded journal from another project generation", {
   tombstone$name <- "round056foreign"
   saveRDS(tombstone, tombstone_path)
   before <- readBin(first$sentinel, "raw", 1000L)
-  error <- expect_error(
-    round056_update_dead_owner(first),
-    class = "bigbang_error_unrecognized_update_journal"
+  result <- round056_update_dead_owner(first)
+  expect_true(result$updated)
+  expect_false(dir.exists(target))
+  apart <- list.files(
+    first$destination,
+    pattern = paste0("^\\.", first$name, "\\.bigbang-apartado-"),
+    full.names = TRUE, all.files = TRUE, no.. = TRUE
   )
-  expect_match(conditionMessage(error), "round056foreign|manifest|retry",
-               ignore.case = TRUE)
-  expect_true(dir.exists(target))
+  expect_length(apart, 1L)
   expect_identical(readBin(first$sentinel, "raw", 1000L), before)
   expect_true(dir.exists(second$project))
 })

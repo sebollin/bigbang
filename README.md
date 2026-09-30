@@ -322,16 +322,25 @@ reports each path and action without mutating those folders.
 - Interrupted updates are assembled in a durable sibling
   `.<name>.bigbang-update.armando-*` folder and renamed to
   `.<name>.bigbang-update` only after the marker and backup have been verified.
-  An empty unmarked preparation, or one containing only the exact atomic marker
-  temporary files, is safe to discard; any other non-empty unmarked preparation
-  is reported and never deleted. Discarding a journal first writes an atomic
-  tombstone with the exact relative-path and MD5 inventory of entries bigbang
-  wrote, then renames it to `.<name>.bigbang-update.descartado-*`, so cleanup
-  resumes after another interruption. New or changed entries outside that
-  inventory are preserved and reported. The next `update = TRUE` call also
-  recognizes a moved or renamed project when its sibling journal's backed-up
-  manifest hash identifies the project; a discarded sibling from another
-  generation is preserved with an actionable message. It records every intended write and removal and
+  An empty unmarked preparation is removed; any non-empty unmarked preparation
+  is atomically set aside as `.<name>.bigbang-apartado-*`, without copying or
+  deleting bytes. Discarding a journal first writes an atomic tombstone with
+  the exact recursive relative-path and MD5 inventory of entries bigbang wrote,
+  records a digest beside the tombstone, and then renames it to
+  `.<name>.bigbang-update.descartado-*`, so cleanup resumes after another
+  interruption. Cleanup removes only files whose path and MD5 match that
+  inventory, and only empty inventory directories. Any other file, directory,
+  or symbolic link sets the whole folder aside and the update continues. A
+  missing or changed tombstone digest has the same outcome. The next
+  `update = TRUE` call also recognizes a moved or renamed project when its
+  sibling journal's backed-up manifest hash identifies the project and the
+  marker's old project no longer exists beside it. If it does exist, the
+  journal is a copy: it is not adopted or changed, and the update reports the
+  conflict while using a separate journal. A discarded sibling from another
+  generation or project is set aside with an actionable message. A user file
+  with the same path and MD5 as an inventory entry is an unavoidable boundary:
+  the bytes are identical, so deleting it loses no content, but ownership is
+  not provable. It records every intended write and removal and
   survives SIGKILL, SIGTERM, SIGHUP, terminal closure, and a system restart.
   If a path contains neither its original nor an intended value, recovery stops
   instead of overwriting it. On Windows, an absent destination is known only

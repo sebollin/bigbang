@@ -189,7 +189,7 @@ test_that("H1 real SIGKILL leaves no final unmarked journal", {
   expect_false(dir.exists(armando))
 })
 
-test_that("H1 empty unmarked staging is discarded but non-empty is never touched", {
+test_that("H1 empty unmarked staging is discarded and non-empty is set aside", {
   skip_on_cran()
   skip_on_os("windows")
   fixture <- round054_fixture("bigbang-round054-h1-empty-")
@@ -216,14 +216,15 @@ test_that("H1 empty unmarked staging is discarded but non-empty is never touched
   expect_length(armando, 1L)
   writeLines("user-owned", file.path(armando, "user-owned.txt"), useBytes = TRUE)
   before <- readBin(file.path(armando, "user-owned.txt"), "raw", 1000L)
-  error <- expect_error(round054_update(fixture),
-                        class = "bigbang_error_unrecognized_update_journal")
-  expect_match(conditionMessage(error), "unarmed|Next step", ignore.case = TRUE)
-  expect_identical(readBin(file.path(armando, "user-owned.txt"), "raw", 1000L),
-                   before)
-  unlink(file.path(armando, "user-owned.txt"))
   result <- round054_update(fixture)
   expect_true(result$updated)
+  apart <- list.files(fixture$destination,
+                      pattern = paste0("^\\.", fixture$name,
+                                       "\\.bigbang-apartado-"),
+                      full.names = TRUE, all.files = TRUE)
+  expect_length(apart, 1L)
+  expect_identical(readBin(file.path(apart, "user-owned.txt"), "raw", 1000L),
+                   before)
 })
 
 test_that("H2 SIGKILL after rename and during deletion resumes from tombstone", {
@@ -333,7 +334,7 @@ test_that("a journal left behind by a move reports where to look", {
   expect_true(dir.exists(journal$path))
 })
 
-test_that("user folders with journal-looking names remain byte-for-byte intact", {
+test_that("user folders with journal-looking names are set aside byte-for-byte", {
   fixture <- round054_fixture("bigbang-round054-control-")
   armando <- file.path(
     fixture$destination, paste0(".", fixture$name, ".bigbang-update.armando-user")
@@ -347,18 +348,21 @@ test_that("user folders with journal-looking names remain byte-for-byte intact",
   writeLines("keep descartado", file.path(discarded, "owned.txt"), useBytes = TRUE)
   before_armando <- readBin(file.path(armando, "owned.txt"), "raw", 1000L)
   before_discarded <- readBin(file.path(discarded, "owned.txt"), "raw", 1000L)
-  expect_error(round054_update(fixture),
-               class = "bigbang_error_unrecognized_update_journal")
-  expect_identical(readBin(file.path(armando, "owned.txt"), "raw", 1000L),
-                   before_armando)
-  unlink(armando, recursive = TRUE)
-  expect_error(round054_update(fixture),
-               class = "bigbang_error_unrecognized_update_journal")
-  expect_identical(readBin(file.path(discarded, "owned.txt"), "raw", 1000L),
-                   before_discarded)
+  result <- round054_update(fixture)
+  expect_true(result$updated)
+  apart <- list.files(fixture$destination,
+                      pattern = paste0("^\\.", fixture$name,
+                                       "\\.bigbang-apartado-"),
+                      full.names = TRUE, all.files = TRUE)
+  expect_length(apart, 2L)
+  contents <- lapply(apart, function(path) {
+    readBin(file.path(path, "owned.txt"), "raw", 1000L)
+  })
+  expect_true(any(vapply(contents, identical, logical(1), before_armando)))
+  expect_true(any(vapply(contents, identical, logical(1), before_discarded)))
 })
 
-test_that("a discarded folder with an invalid tombstone stays actionable", {
+test_that("a discarded folder with an invalid tombstone is set aside", {
   fixture <- round054_fixture("bigbang-round054-bad-tombstone-")
   discarded <- file.path(
     fixture$destination,
@@ -371,14 +375,15 @@ test_that("a discarded folder with an invalid tombstone stays actionable", {
              useBytes = TRUE)
   before <- readBin(payload, "raw", 1000L)
 
-  error <- expect_error(
-    round054_update(fixture),
-    class = "bigbang_error_unrecognized_update_journal"
-  )
-  expect_match(conditionMessage(error), "unknown|tombstone|backup|Next step",
-               ignore.case = TRUE)
-  expect_identical(readBin(payload, "raw", 1000L), before)
-  expect_true(dir.exists(discarded))
+  result <- round054_update(fixture)
+  expect_true(result$updated)
+  apart <- list.files(fixture$destination,
+                      pattern = paste0("^\\.", fixture$name,
+                                       "\\.bigbang-apartado-"),
+                      full.names = TRUE, all.files = TRUE)
+  expect_length(apart, 1L)
+  expect_identical(readBin(file.path(apart, "payload.bin"), "raw", 1000L),
+                   before)
 })
 
 test_that("a moved journal rejects a state hash that does not match its backup", {

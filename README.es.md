@@ -298,17 +298,26 @@ acción sin modificar esas carpetas.
 - Los updates interrumpidos se arman en una carpeta hermana durable
   `.<nombre>.bigbang-update.armando-*` y se renombran a
   `.<nombre>.bigbang-update` solo después de verificar el marcador y el
-  respaldo. Una preparación sin marcador se descarta solo si está vacía o si
-  contiene únicamente los temporales atómicos exactos del marcador; cualquier
-  otro contenido se informa y nunca se elimina. Para descartar un diario se
-  escribe primero una lápida atómica con el inventario exacto de rutas relativas
-  y md5 de lo que escribió bigbang, y se lo renombra a
+  respaldo. Una preparación sin marcador vacía se elimina; cualquier
+  preparación sin marcador que no esté vacía se aparta atómicamente como
+  `.<nombre>.bigbang-apartado-*`, sin copiar ni borrar bytes. Para descartar un
+  diario se escribe primero una lápida atómica con el inventario recursivo
+  exacto de rutas relativas y md5 de lo que escribió bigbang, se registra un
+  digest junto a la lápida y se lo renombra a
   `.<nombre>.bigbang-update.descartado-*`, de modo que la limpieza se reanuda
-  después de otra interrupción. Las entradas nuevas o con otro hash se
-  preservan y se informan. La llamada siguiente con `update = TRUE` también
+  después de otra interrupción. Solo se eliminan archivos cuya ruta y md5
+  coinciden con el inventario, y directorios del inventario solo cuando están
+  vacíos. Cualquier otro archivo, directorio o enlace simbólico aparta toda la
+  carpeta y el update continúa. Una lápida sin digest o con digest cambiado
+  tiene el mismo tratamiento. La llamada siguiente con `update = TRUE` también
   reconoce un proyecto movido o renombrado cuando el diario hermano coincide
-  por el hash del manifiesto; un descartado de otra generación queda intacto
-  con un mensaje accionable. Registra cada
+  por el hash del manifiesto y el proyecto viejo del marcador ya no existe a
+  su lado. Si existe, es una copia: el diario no se adopta ni se toca, y el
+  update informa el conflicto usando otro diario. Un descartado de otra
+  generación o proyecto se aparta con un mensaje accionable. Un archivo del
+  usuario con la misma ruta y md5 que una entrada del inventario es un límite
+  inevitable: los bytes son idénticos, de modo que borrarlo no pierde contenido,
+  pero no se puede probar la autoría. Registra cada
   escritura y borrado pretendidos y sobrevive a SIGKILL, SIGTERM, SIGHUP, el
   cierre de la terminal y un reinicio del equipo. Si una ruta no contiene ni
   su valor original ni uno pretendido, la recuperación se detiene en vez de

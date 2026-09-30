@@ -1,5 +1,16 @@
 # bigbang (development version)
 
+## Bug fixes
+
+- Interrupted journal state that cannot be proven to belong to bigbang is now
+  atomically set aside as `.<name>.bigbang-apartado-*`; updates continue and no
+  unverified bytes are deleted. Discard cleanup checks recursive paths and MD5
+  values, authenticates its tombstone with a sidecar digest, and keeps stale
+  generations, foreign journals, partial tombstones, and copied journals out of
+  the destructive path. Orphaned update locks are reclaimed only after their
+  recorded owner is proven dead, with `recover = TRUE` documented for uncertain
+  owners.
+
 ## Breaking changes
 
 - `bigbang_error_missing_project` now inherits from
