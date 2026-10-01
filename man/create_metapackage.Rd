@@ -72,12 +72,16 @@ positional-call compatibility. The default \code{FALSE} attaches installed
 components as usual. With \code{TRUE}, explicit exports read from each
 component's NAMESPACE are exposed through read-only active bindings.
 Components are never added to \code{Imports} or \code{Depends}, so the generated
-package still installs offline without them. Before installation, reading
-a binding returns a placeholder function whose clear missing-component
-error appears only when that function is called. For non-function exports,
-access therefore returns the placeholder instead of the object until the
-component is installed. The same binding then works without reloading the
-metapackage. Only explicit \code{export()} directives become bindings. S4
+package still installs offline without them. Evaluating a binding never
+throws: if a component is absent, cannot be loaded, or is an older
+installation that no longer exports the symbol, it returns a callable
+placeholder. Calling it reports the component, installed version, missing
+export, and the \verb{<name>_install()} call that repairs the installation.
+Namespace inspection is safe for the same reason. For non-function
+exports, access therefore returns the placeholder instead of the object
+until the component is installed. The same binding then works without
+reloading the metapackage. Only explicit \code{export()} directives become
+bindings. S4
 classes and methods remain available by loading their component package.
 Non-syntactic explicit export names are quoted in the generated NAMESPACE.
 An object restored with \code{readRDS()} does not load a
@@ -281,8 +285,13 @@ exported functions can be called directly or through \verb{component::function()
 With \code{reexport = TRUE}, explicit component exports are instead exposed through
 read-only active bindings in the meta-package namespace. This does not add
 components to \code{Imports} or \code{Depends}: loading remains possible without them,
-and a binding resolves the component on every access. Only explicit
-\code{export()} directives are rebound; S4 classes and methods are used through
+and a binding resolves the component on every access. Evaluating a binding
+never throws: if a component is absent, cannot be loaded, or is an older
+installation that no longer exports the symbol, it returns a callable
+placeholder. Calling it reports the component, installed version, missing
+export, and the \verb{<name>_install()} call that repairs the installation. This
+also keeps namespace inspection safe. Only explicit \code{export()} directives
+are rebound; S4 classes and methods are used through
 the loaded component namespace. An object restored with \code{readRDS()} cannot
 load a component by itself, so base R cannot dispatch that component's S3
 method until the component has been loaded.
@@ -391,7 +400,10 @@ the exact relative-path and MD5 inventory of the entries bigbang wrote, then
 renames the folder to \verb{.<name>.bigbang-update.descartado-*}; cleanup can
 therefore resume after another interruption. Cleanup checks every file
 recursively and removes it only when its relative path and MD5 match the
-inventory; it removes an inventory directory only after it is empty. Any
+inventory; it removes an inventory directory only after it is empty. Before
+destructive cleanup the journal is renamed to an unpredictable private
+sibling after verifying it is not a link, and each deletion revalidates its
+ancestors and MD5 immediately before \code{unlink()}. Any
 file, directory, or symbolic link that cannot be proved to be in the
 inventory causes the whole discarded folder to be set aside atomically and
 reported, so the update continues without deleting user bytes. The tombstone
@@ -407,7 +419,10 @@ journal cannot prove who created it. The tombstone and its digest are local
 journal state, not a cryptographic signature; treat the journal as bigbang's
 private territory. A process of the same user with write permission can forge
 \code{owner.rds}, \code{marker.rds}, or \code{state.rds}; that is outside this integrity
-model. As a cheap consistency check, an armed journal is recoverable only when
+model. R has no \code{unlinkat()}/\code{O_NOFOLLOW}, so a same-user process that actively
+replaces journal directories during discard remains an integrity boundary;
+the remaining race is the interval between the last revalidation and
+\code{unlink()}. As a cheap consistency check, an armed journal is recoverable only when
 the owner fields in \code{state.rds} match those in \code{marker.rds}; otherwise the
 journal is set aside and is never used for rollback.
 
@@ -428,7 +443,7 @@ manifest;
 otherwise a dead owner's changes are rolled back and the requested update
 continues. On POSIX systems liveness uses the PID and, where Linux \verb{/proc}
 exposes it, the process start time. Windows is never probed with
-\code{tools::pskill()} because that operation terminates a process. A dry run
+the process-termination helper because that operation terminates a process. A dry run
 evaluates and reports the lock as free, live, orphaned, or uncertain without
 acquiring, reclaiming, renaming, or deleting any lock entry.
 

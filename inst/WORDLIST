@@ -42,11 +42,13 @@ rhelpi18n
 rmarkdown
 roxygen
 runtime
+revalidation
 Sebastián
 SIGHUP
 SIGKILL
 SIGTERM
 symlink
+unlink
 tarball
 tarballs
 tempdir

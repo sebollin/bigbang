@@ -412,6 +412,9 @@ msgstr ""
 msgid "Could not create installation library: %s"
 msgstr ""
 
+msgid "Could not unload component namespace: %s. Restart R before retrying; another package imports it."
+msgstr ""
+
 msgid "'only' must contain component package names."
 msgstr ""
 
@@ -541,6 +544,9 @@ msgstr ""
 msgid "Set aside incomplete update-lock preparation at %s; no bytes from the set-aside entry were deleted."
 msgstr ""
 
+msgid "The update-lock path %s is a symbolic link or unreadable entry; no mutation was performed. Remove or rename that link, then retry."
+msgstr ""
+
 msgid "Deleted %d verified files from the update-journal inventory."
 msgstr ""
 
@@ -634,6 +640,18 @@ msgstr ""
 msgid "An update is still running under pid %s; no mutation was performed."
 msgstr ""
 
+msgid "Cannot continue the %s because the published update lock no longer belongs to this process; no further mutation was performed."
+msgstr ""
+
+msgid "Could not prepare the update lock at %s: %s. Check that its parent is writable and has free space; no mutation was performed."
+msgstr ""
+
+msgid "the lock parent is not writable"
+msgstr ""
+
+msgid "the lock parent rejected creation or has no available space"
+msgstr ""
+
 msgid "after confirming that no other update is running, call again with recover = TRUE."
 msgstr ""
 
@@ -698,6 +716,12 @@ msgid "Component archive %s could not be read; skip propagation uses filename-de
 msgstr ""
 
 msgid "Component package '%s' is not installed."
+msgstr ""
+
+msgid "Skipped because local dependency %s was skipped: %s"
+msgstr ""
+
+msgid "Set aside remaining update-journal content at %s; only verified inventory files were deleted before unverified content was preserved and the update continues."
 msgstr ""
 
 msgid "Runtime re-export bindings are read-only."

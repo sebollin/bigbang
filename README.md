@@ -136,11 +136,14 @@ the metapackage namespace, so `teamverse::report()` is not supported.
 To expose explicit component exports through read-only runtime bindings, use
 `reexport = TRUE` when generating. Components remain outside `Imports` and
 `Depends`, so the metapackage can be installed and loaded offline before they
-exist. Before installation, reading a binding returns a placeholder function;
-its clear missing-component error appears only when that function is called.
-For non-function exports, access returns the placeholder instead of the object
-until installation. The binding then resolves the real function or object
-without reloading the metapackage. Only explicit
+exist. Evaluating a binding never throws: when a component is absent, cannot be
+loaded, or is an older installation that no longer exports the symbol, it
+returns a callable placeholder. Calling it reports the component, installed
+version, missing export, and the `<meta>_install()` call that repairs the
+installation. This also keeps namespace inspection (`as.list()`, `mget()`, and
+IDE environment panels) safe. For non-function exports, access returns the
+placeholder instead of the object until installation. The binding then resolves
+the real function or object without reloading the metapackage. Only explicit
 `export()` directives become bindings, including non-syntactic names, which are
 quoted safely in NAMESPACE. S4 classes and methods remain available by loading
 the component. An object restored with `readRDS()` does not load a
@@ -202,7 +205,13 @@ the claimant state decide whether the entry is blocked, needs `recover = TRUE`,
 or can be discarded. Lock and journal mutations revalidate ownership before
 continuing; if the published owner changed, the update aborts before its next
 mutation. A symlink at the lock name is reported as a symlink, and
-`recover = TRUE` moves the link itself without following its target.
+`recover = TRUE` moves the link itself without following its target. During
+discard, the journal is first renamed to an unpredictable private sibling after
+its inventory is checked, and every deletion rechecks ancestors and MD5 just
+before `unlink()`. R has no `unlinkat()`/`O_NOFOLLOW`, so a same-user process
+that actively replaces journal directories during discard remains an integrity
+boundary, like forged records; the remaining race window is measured by the
+last recheck-to-unlink interval.
 
 On Linux, liveness uses `/proc/<pid>` and treats zombie (`Z`) and dead (`X`)
 states as dead. Without `/proc`, a failed `kill(pid, 0)` is uncertain unless

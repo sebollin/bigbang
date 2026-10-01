@@ -899,6 +899,11 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
   }}
   adjacency <- build_dependency_graph(packages, pkg_dir, ext)
   install_order <- topological_order(adjacency)
+  package_names <- base::vapply(
+    packages,
+    function(package) resolve_component_spec(package, ext)$package,
+    character(1L)
+  )
 
   installed_packages <- list()
   unchanged_packages <- list()
@@ -917,13 +922,40 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     idx <- install_order[i]
     package <- packages[idx]
 
-    result <- tryCatch(
-      install_local_archive(
-        package, pkg_dir, ext, repos = repos, cran_deps = cran_deps,
-        upgrade = upgrade, lib = lib, verbose = verbose
-      ),
-      error = function(e) list(success = FALSE, message = conditionMessage(e))
+    dependencies <- tryCatch(
+      read_archive_dependencies(package, pkg_dir, ext),
+      error = function(e) character()
     )
+    local_dependencies <- intersect(dependencies, package_names)
+    skipped_dependencies <- local_dependencies[vapply(
+      local_dependencies,
+      function(dependency) {{
+        dependency_index <- which(package_names == dependency)
+        length(dependency_index) == 1L &&
+          !is.null(skipped_packages[[packages[[dependency_index]]]])
+      }},
+      logical(1L)
+    )]
+    result <- if (length(skipped_dependencies) > 0L) {{
+      dependency <- skipped_dependencies[[1L]]
+      dependency_index <- which(package_names == dependency)[[1L]]
+      list(
+        success = FALSE,
+        skipped = TRUE,
+        message = .meta_trf(
+          "Skipped because local dependency %s was skipped: %s",
+          dependency, skipped_packages[[packages[[dependency_index]]]]
+        )
+      )
+    }} else {{
+      tryCatch(
+        install_local_archive(
+          package, pkg_dir, ext, repos = repos, cran_deps = cran_deps,
+          upgrade = upgrade, lib = lib, verbose = verbose
+        ),
+        error = function(e) list(success = FALSE, message = conditionMessage(e))
+      )
+    }}
 
     if (isTRUE(result$success) && isTRUE(result$unchanged)) {{
       unchanged_packages[[package]] <- result$message
@@ -1162,17 +1194,19 @@ write_metapackage_files <- function(
   if (isTRUE(reexport)) {
     template_data$conflicts_function <- paste(c(
       "  .reexport_verify_subprocess <- function(specs, library) {",
-      "    input <- base::tempfile(\"bigbang-reexport-verify-input-\")",
-      "    output <- base::tempfile(\"bigbang-reexport-verify-output-\")",
-      "    script <- base::tempfile(\"bigbang-reexport-verify-script-\", fileext = \".R\")",
-      "    stdout <- base::tempfile(\"bigbang-reexport-verify-stdout-\")",
-      "    stderr <- base::tempfile(\"bigbang-reexport-verify-stderr-\")",
-      "    base::on.exit(base::unlink(c(input, output, script, stdout, stderr), force = TRUE), add = TRUE)",
-      "    base::saveRDS(base::list(specs = specs, library = library, paths = base::.libPaths()), input)",
-      "    input_literal <- base::deparse(input)",
-      "    output_literal <- base::deparse(output)",
-      "    script_lines <- base::c(",
-      "      base::paste0(\"payload <- base::readRDS(\", input_literal, \")\"),",
+      "    input <- output <- script <- stdout <- stderr <- NA_character_",
+      "    base::on.exit(base::unlink(base::Filter(function(path) !base::is.na(path), base::c(input, output, script, stdout, stderr)), force = TRUE), add = TRUE)",
+      "    prepared <- base::tryCatch({",
+      "      input <- base::tempfile(\"bigbang-reexport-verify-input-\")",
+      "      output <- base::tempfile(\"bigbang-reexport-verify-output-\")",
+      "      script <- base::tempfile(\"bigbang-reexport-verify-script-\", fileext = \".R\")",
+      "      stdout <- base::tempfile(\"bigbang-reexport-verify-stdout-\")",
+      "      stderr <- base::tempfile(\"bigbang-reexport-verify-stderr-\")",
+      "      base::saveRDS(base::list(specs = specs, library = library, paths = base::.libPaths()), input)",
+      "      input_literal <- base::deparse(input)",
+      "      output_literal <- base::deparse(output)",
+      "      script_lines <- base::c(",
+      "        base::paste0(\"payload <- base::readRDS(\", input_literal, \")\"),",
       "      \"ordered_paths <- base::unique(base::c(payload$library[base::dir.exists(payload$library)], payload$paths[base::dir.exists(payload$paths)]))\",",
       "      \"base::.libPaths(base::unique(base::c(ordered_paths, base::.libPaths())))\",",
       "      \"target <- function(package) {\",",
@@ -1198,31 +1232,34 @@ write_metapackage_files <- function(
       "          \"base::tryCatch(base::list(ok = TRUE, value = base::getExportedValue(spec$candidates[[index]], spec$symbol)), error = function(e) base::list(ok = FALSE))\",",
       "        \"})\",",
       "        \"available <- base::vapply(values, function(value) base::isTRUE(value$ok), base::logical(1))\",",
-      "        \"not_installed <- spec$candidates[base::vapply(loaded, function(item) identical(item$status, 'not_installed'), base::logical(1))]\",",
-      "        \"not_loadable <- spec$candidates[base::vapply(loaded, function(item) identical(item$status, 'not_loadable'), base::logical(1))]\",",
+      "        \"not_installed <- spec$candidates[base::vapply(loaded, function(item) base::identical(item$status, 'not_installed'), base::logical(1))]\",",
+      "        \"not_loadable <- spec$candidates[base::vapply(loaded, function(item) base::identical(item$status, 'not_loadable'), base::logical(1))]\",",
       "        \"not_exported <- spec$candidates[installed & !available]\",",
-      "        \"foreign <- spec$candidates[base::vapply(loaded, function(item) identical(item$status, 'foreign'), base::logical(1))]\",",
+      "        \"foreign <- spec$candidates[base::vapply(loaded, function(item) base::identical(item$status, 'foreign'), base::logical(1))]\",",
       "        \"missing <- spec$candidates[!available]\",",
       "        \"same <- NA\",",
       "        \"equivalent <- FALSE\",",
       "        \"if (base::all(available)) {\",",
       "          \"objects <- base::lapply(values, function(value) value[['value']])\",",
       "          \"same <- base::all(base::vapply(objects[-1L], base::identical, base::logical(1), y = objects[[1L]]))\",",
-      "          \"if (base::length(objects) > 1L && identical(same, FALSE)) equivalent <- base::all(base::vapply(objects[-1L], function(value) base::is.function(value) && base::is.function(objects[[1L]]) && base::identical(base::body(value), base::body(objects[[1L]])) && base::identical(base::formals(value), base::formals(objects[[1L]])), base::logical(1)))\",",
+      "          \"if (base::length(objects) > 1L && base::identical(same, FALSE)) equivalent <- base::all(base::vapply(objects[-1L], function(value) base::is.function(value) && base::is.function(objects[[1L]]) && base::identical(base::body(value), base::body(objects[[1L]])) && base::identical(base::formals(value), base::formals(objects[[1L]])), base::logical(1)))\",",
       "        \"}\",",
       "        \"base::data.frame(symbol = spec$symbol, package = spec$package, resolution = spec$resolution, diagnosis = spec$diagnosis, candidates = base::paste(spec$candidates, collapse = ', '), installed = base::paste(spec$candidates[installed], collapse = ', '), missing = base::paste(missing, collapse = ', '), not_installed = base::paste(not_installed, collapse = ', '), not_loadable = base::paste(not_loadable, collapse = ', '), not_exported = base::paste(not_exported, collapse = ', '), loaded_from_other_library = base::paste(foreign, collapse = ', '), identical = same, equivalent = equivalent, stringsAsFactors = FALSE)\",",
       "      \"})\",",
       "      base::paste0(\"base::saveRDS(rows, \", output_literal, \")\")",
       "    )",
-      "    base::writeLines(script_lines, script, useBytes = TRUE)",
+      "      base::writeLines(script_lines, script, useBytes = TRUE)",
+      "      TRUE",
+      "    }, error = function(e) FALSE)",
+      "    if (!base::isTRUE(prepared)) return(NULL)",
       "    r_binary <- base::file.path(base::R.home(\"bin\"), if (base::.Platform$OS.type == \"windows\") \"R.exe\" else \"R\")",
-      "    status <- base::tryCatch(base::system2(r_binary, c(\"--vanilla\", \"-f\", base::shQuote(script)), stdout = stdout, stderr = stderr), error = identity)",
+      "    status <- base::tryCatch(base::system2(r_binary, base::c(\"--vanilla\", \"-f\", base::shQuote(script)), stdout = stdout, stderr = stderr), error = base::identity)",
       "    if (base::inherits(status, \"error\") || !base::identical(status, 0L) || !base::file.exists(output)) return(NULL)",
       "    base::tryCatch(base::readRDS(output), error = function(e) NULL)",
       "  }",
       "",
       "  .reexport_verify <- function(warn = FALSE) {",
-      "    specs <- Filter(function(spec) identical(spec$resolution, \"preferred\"), .component_reexport_specs)",
+      "    specs <- base::Filter(function(spec) base::identical(spec$resolution, \"preferred\"), .component_reexport_specs)",
       paste0("    empty <- base::structure(base::data.frame(symbol = base::character(), package = base::character(), resolution = base::character(), diagnosis = base::character(), candidates = base::character(), installed = base::character(), missing = base::character(), not_installed = base::character(), not_loadable = base::character(), not_exported = base::character(), loaded_from_other_library = base::character(), identical = base::logical(), stringsAsFactors = FALSE), class = base::c(\"", name, "_reexport_verification\", \"data.frame\"))"),
       "    if (base::length(specs) == 0L) return(empty)",
       "    foreign <- unique(unlist(base::lapply(specs, function(spec) spec$candidates[base::vapply(spec$candidates, function(package) {",
@@ -1240,7 +1277,7 @@ write_metapackage_files <- function(
       "      same <- row$identical[[1L]]",
       "      equivalent <- base::isTRUE(row$equivalent[[1L]])",
       "      row$equivalent <- NULL",
-      "      if (base::isTRUE(warn) && (base::nzchar(row$missing[[1L]]) || base::nzchar(row$loaded_from_other_library[[1L]]) || identical(same, FALSE) || base::is.na(same))) {",
+      "      if (base::isTRUE(warn) && (base::nzchar(row$missing[[1L]]) || base::nzchar(row$loaded_from_other_library[[1L]]) || base::identical(same, FALSE) || base::is.na(same))) {",
       "        message <- if (base::nzchar(row$not_exported[[1L]]) && base::nzchar(row$not_installed[[1L]])) {",
       "          .meta_trf(\"Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s; %s is not installed in the library search path. Install it before verifying.\", row$symbol[[1L]], row$not_exported[[1L]], row$not_installed[[1L]])",
       "        } else if (base::nzchar(row$not_installed[[1L]])) {",
@@ -1279,6 +1316,7 @@ write_metapackage_files <- function(
       "      base::`%in%`(\"reexport_verification\", base::names(x))) {",
       "    value <- x[[\"reexport_verification\"]]",
       "  }",
+      paste0("  if (!base::inherits(value, \"", name, "_reexport_verification\")) return(NULL)"),
       "  value",
       "}",
       "",
@@ -1317,7 +1355,9 @@ write_metapackage_files <- function(
       "    }",
       "  }",
       "  verification <- base::attr(x, \"reexport_verification\", exact = TRUE)",
-      "  if (!base::is.null(verification) && base::nrow(verification) > 0L) {",
+      paste0("  if (!base::inherits(verification, \"", name, "_reexport_verification\")) {"),
+      "    base::cat(.meta_tr(\"Re-export verification is not available.\"), \"\\n\")",
+      "  } else if (base::nrow(verification) > 0L) {",
       "    base::cat(.meta_tr(\"Re-export resolutions:\"), \"\\n\")",
       "    for (index in base::seq_len(base::nrow(verification))) {",
       "      status <- if (base::is.na(verification$identical[[index]])) .meta_tr(\"not verified\") else base::as.character(verification$identical[[index]])",
@@ -1462,6 +1502,12 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
     repos = repos, cran_deps = cran_deps, upgrade = upgrade,
     only = only, lib = lib
   )
+  if (base::length(result$skipped) > 0L) {
+    base::warning(base::gettextf(
+      "Some components were skipped because non-local dependencies are missing: %s. Install those dependencies, or call {{{ install_call_repo }}} to obtain them from a repository.",
+      base::paste(base::names(result$skipped), collapse = ", "), domain = "R-{{ name }}"
+    ), call. = FALSE)
+  }
   if (base::length(result$failed) > 0) {
     details <- base::paste0(
       base::names(result$failed), ": ", base::unlist(result$failed, use.names = FALSE)
@@ -1478,12 +1524,6 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
       class = c("bigbang_error_install", "bigbang_error", "error", "condition")
     )
     base::stop(condition)
-  }
-  if (base::length(result$skipped) > 0L) {
-    base::warning(base::gettextf(
-      "Some components were skipped because non-local dependencies are missing: %s. Install those dependencies, or call {{{ install_call_repo }}} to obtain them from a repository.",
-      base::paste(base::names(result$skipped), collapse = ", "), domain = "R-{{ name }}"
-    ), call. = FALSE)
   }
   result$reexport_verification <- {{{ reexport_verification_call }}}
   if (base::isTRUE(verbose) && base::length(result$pulled_in) > 0L) {
@@ -1953,6 +1993,55 @@ zzz = '
     }
 '
   )
+
+  if (isTRUE(reexport)) {
+    templates$reexports <- paste0(
+      templates$reexports,
+      paste(c(
+        "",
+        ".reexport_component_value <- function(package, symbol) {",
+        "  libraries <- .reexport_library_paths()",
+        "  installed_version <- base::tryCatch(",
+        "    base::as.character(utils::packageVersion(package, lib.loc = libraries)),",
+        "    error = function(e) .meta_tr(\"component is not installed\")",
+        "  )",
+        "  loaded <- base::tryCatch(",
+        "    base::requireNamespace(package, quietly = TRUE, lib.loc = libraries),",
+        "    error = base::identity",
+        "  )",
+        "  if (!base::isTRUE(loaded)) {",
+        "    reason <- if (base::inherits(loaded, \"error\")) {",
+        "      .meta_trf(\"component could not be loaded: %s\", base::conditionMessage(loaded))",
+        "    } else {",
+        "      .meta_trf(\"Component package '%s' is not installed.\", package)",
+        "    }",
+        "    message <- .meta_trf(",
+        "      \"Re-exported symbol '%s' from component package '%s' (installed version: %s) is unavailable: %s. Run %s to install the required component version.\",",
+        "      symbol, package, installed_version, reason, \"{{ name }}_install()\"",
+        "    )",
+        "    return(function(...) base::stop(message, call. = FALSE))",
+        "  }",
+        "  value <- base::tryCatch(",
+        "    base::getExportedValue(package, symbol),",
+        "    error = base::identity",
+        "  )",
+        "  if (base::inherits(value, \"error\")) {",
+        "    reason <- .meta_trf(",
+        "      \"component does not export '%s': %s\", symbol,",
+        "      base::conditionMessage(value)",
+        "    )",
+        "    message <- .meta_trf(",
+        "      \"Re-exported symbol '%s' from component package '%s' (installed version: %s) is unavailable: %s. Run %s to install the required component version.\",",
+        "      symbol, package, installed_version, reason, \"{{ name }}_install()\"",
+        "    )",
+        "    return(function(...) base::stop(message, call. = FALSE))",
+        "  }",
+        "  value",
+        "}",
+        ""
+      ), collapse = "\n")
+    )
+  }
 
   if (!isTRUE(reexport)) templates$reexports <- NULL
 

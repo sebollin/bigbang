@@ -27,6 +27,20 @@
 
 ## Bug fixes
 
+- Fixed a 0.4.0 defect where an installed older component that no longer
+  exported a re-exported symbol made `R CMD INSTALL` fail while loading the
+  metapackage. Re-export bindings now always evaluate safely and provide an
+  actionable `<meta>_install()` placeholder error when called.
+- Components skipped because a local dependency was skipped are now reported as
+  skipped with the chained reason, and the skipped summary is shown even when
+  another component fails.
+- Discarded-journal cleanup now sets aside unreadable content, revalidates
+  paths and MD5 values immediately before deletion, checks every discard unlink,
+  and moves unreadable armed journals aside during recovery. Verification now
+  reports unavailable checks, preserves its accessor class, uses the runtime
+  library when no destination library exists, qualifies subprocess helpers, and
+  reports namespace unload failures with their importing package and restart
+  guidance. Windows liveness never probes a process with a terminating signal.
 - Update locks now decide discarded entries from the recorded owner before the
   claimant, preserve live owners byte-for-byte, revalidate ownership before
   journal mutations, and process discarded entries until no progress remains.

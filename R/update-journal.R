@@ -96,19 +96,31 @@
   destination
 }
 
-.apart_update_journal <- function(path, name, project_dir = NULL) {
+.apart_update_journal <- function(path, name, project_dir = NULL,
+                                  deleted_count = 0L) {
   destination <- .update_journal_apart_path(path, name, project_dir)
   if (!file.rename(path, destination)) {
     stop(.bb_trf("Could not set aside the update-journal entry: %s", path),
          call. = FALSE)
   }
-  message(.bb_trf(
-    paste0(
-      "Set aside unverified update-journal content at %s; no bytes from ",
-      "the set-aside entry were deleted and the update continues."
-    ),
-    destination
-  ))
+  if (identical(as.integer(deleted_count), 0L)) {
+    message(.bb_trf(
+      paste0(
+        "Set aside unverified update-journal content at %s; no bytes from ",
+        "the set-aside entry were deleted and the update continues."
+      ),
+      destination
+    ))
+  } else {
+    message(.bb_trf(
+      paste0(
+        "Set aside remaining update-journal content at %s; only verified ",
+        "inventory files were deleted before unverified content was preserved ",
+        "and the update continues."
+      ),
+      destination
+    ))
+  }
   destination
 }
 
@@ -163,16 +175,32 @@
 }
 
 .update_journal_entries <- function(path) {
-  if (!dir.exists(path) || .path_is_symlink(path)) return(character())
+  if (!dir.exists(path) || .path_is_symlink(path)) {
+    return(structure(character(), bigbang_unreadable = FALSE))
+  }
   pending <- list(list(path = path, relative = ""))
   entries <- character()
+  unreadable <- FALSE
   while (length(pending) > 0L) {
     current <- pending[[1L]]
     pending <- pending[-1L]
+    if (file.access(current$path, 4L) != 0L) {
+      unreadable <- TRUE
+      next
+    }
     children <- tryCatch(
-      list.files(current$path, all.files = TRUE, no.. = TRUE,
-                 include.dirs = TRUE, full.names = TRUE),
-      error = function(e) character()
+      withCallingHandlers(
+        list.files(current$path, all.files = TRUE, no.. = TRUE,
+                   include.dirs = TRUE, full.names = TRUE),
+        warning = function(e) {
+          unreadable <<- TRUE
+          invokeRestart("muffleWarning")
+        }
+      ),
+      error = function(e) {
+        unreadable <<- TRUE
+        character()
+      }
     )
     if (length(children) == 0L) next
     for (child in children) {
@@ -190,7 +218,13 @@
       }
     }
   }
-  sort(unique(entries))
+  answer <- sort(unique(entries))
+  attr(answer, "bigbang_unreadable") <- unreadable
+  answer
+}
+
+.journal_entries_unreadable <- function(entries) {
+  isTRUE(attr(entries, "bigbang_unreadable", exact = TRUE))
 }
 
 .journal_has_link_ancestor <- function(path, relative) {
@@ -200,6 +234,17 @@
   for (part in utils::head(parts, -1L)) {
     current <- file.path(current, part)
     if (.path_is_symlink(current)) return(TRUE)
+  }
+  FALSE
+}
+
+.journal_unreadable_ancestor <- function(path, relative) {
+  parts <- strsplit(gsub("\\\\", "/", relative), "/", fixed = TRUE)[[1L]]
+  if (length(parts) < 2L) return(FALSE)
+  current <- path
+  for (part in utils::head(parts, -1L)) {
+    current <- file.path(current, part)
+    if (file.access(current, 4L) != 0L) return(TRUE)
   }
   FALSE
 }
@@ -296,8 +341,28 @@
   tombstone[fields]
 }
 
-.discard_update_entry <- function(path) {
-  unlink(path, recursive = TRUE, force = TRUE)
+.discard_update_entry <- function(path, root = NULL, relative = NULL,
+                                  expected_digest = NULL) {
+  if (!is.null(root)) {
+    if (.path_is_symlink(root) || .journal_has_link_ancestor(root, relative) ||
+          .journal_unreadable_ancestor(root, relative) ||
+          .path_is_symlink(path)) {
+      return(FALSE)
+    }
+    if (!is.null(expected_digest)) {
+      actual <- .file_digest(path)
+      if (is.na(actual) || !identical(actual, expected_digest)) {
+        return(FALSE)
+      }
+      if (.path_is_symlink(root) || .journal_has_link_ancestor(root, relative) ||
+            .journal_unreadable_ancestor(root, relative) ||
+            .path_is_symlink(path)) {
+        return(FALSE)
+      }
+    }
+  }
+  status <- unlink(path, recursive = TRUE, force = TRUE)
+  !isTRUE(status) && !file.exists(path) && !dir.exists(path)
 }
 
 .remove_journal_tombstones <- function(path) {
@@ -308,6 +373,28 @@
 
 .update_journal_after_rename <- function(path) {
   invisible(path)
+}
+
+.rename_discarded_private <- function(path, name) {
+  if (!dir.exists(path) || .path_is_symlink(path)) {
+    stop(.bb_trf("Could not set aside the update-journal entry: %s", path),
+         call. = FALSE)
+  }
+  token <- basename(tempfile(
+    pattern = paste0(".", name, ".bigbang-update.descartado-en-proceso-"),
+    tmpdir = dirname(path)
+  ))
+  destination <- file.path(dirname(path), token)
+  if (!file.rename(path, destination)) {
+    stop(.bb_trf("Could not set aside the update-journal entry: %s", path),
+         call. = FALSE)
+  }
+  if (.path_is_symlink(destination) || !dir.exists(destination)) {
+    stop(.bb_trf("Could not set aside the update-journal entry: %s", path),
+         call. = FALSE)
+  }
+  .update_journal_after_rename(destination)
+  destination
 }
 
 .finish_discarded_journal <- function(path, name, tombstone = NULL,
@@ -332,6 +419,11 @@
     }
   }
   entries <- .update_journal_entries(path)
+  if (.journal_entries_unreadable(entries)) {
+    return(invisible(list(
+      apart = .apart_update_journal(path, name, deleted_count = 0L)
+    )))
+  }
   full <- file.path(path, entries)
   symlinks <- vapply(full, .path_is_symlink, logical(1L))
   is_dir <- dir.exists(full) & !symlinks
@@ -350,6 +442,11 @@
     function(entry) .journal_has_link_ancestor(path, entry),
     logical(1L)
   )]
+  matching_files <- matching_files[!vapply(
+    matching_files,
+    function(entry) .journal_unreadable_ancestor(path, entry),
+    logical(1L)
+  )]
   if (length(matching_files) > 0L) {
     actual <- vapply(file.path(path, matching_files), .file_digest, character(1L))
     verified_files <- matching_files[
@@ -361,29 +458,43 @@
     )
     matching_files <- verified_files
   }
-  verified_count <- length(matching_files)
   unexpected_dirs <- setdiff(entries[is_dir], expected_dirs)
   unexpected <- unique(c(unexpected_files, unexpected_dirs, symlink_entries))
+  path <- .rename_discarded_private(path, name)
+  deleted_count <- 0L
   for (entry in matching_files) {
-    .discard_update_entry(file.path(path, entry))
+    removed <- .discard_update_entry(
+      file.path(path, entry), root = path, relative = entry,
+      expected_digest = unname(expected_files[[entry]])
+    )
+    if (isTRUE(removed)) {
+      deleted_count <- deleted_count + 1L
+    } else {
+      unexpected <- c(unexpected, entry)
+    }
   }
-  if (verified_count > 0L) {
+  if (deleted_count > 0L) {
     message(.bb_trf(
       "Deleted %d verified files from the update-journal inventory.",
-      verified_count
+      deleted_count
     ))
   }
+  directory_failure <- FALSE
   directories <- sort(setdiff(expected_dirs, .update_journal_tombstone_name),
                       decreasing = TRUE)
   directories <- directories[order(nchar(directories), decreasing = TRUE)]
   for (entry in directories) {
     target <- file.path(path, entry)
+    target_entries <- .update_journal_entries(target)
     if (dir.exists(target) && !.path_is_symlink(target) &&
           !.journal_has_link_ancestor(path, entry) &&
-          length(.update_journal_entries(target)) == 0L) {
-      .discard_update_entry(target)
-      if (dir.exists(target)) {
-        stop(.bb_trf("Could not remove completely: %s", path), call. = FALSE)
+          !.journal_unreadable_ancestor(path, entry) &&
+          !.journal_entries_unreadable(target_entries) &&
+          length(target_entries) == 0L) {
+      if (!isTRUE(.discard_update_entry(
+        target, root = path, relative = entry
+      ))) {
+        directory_failure <- TRUE
       }
     }
   }
@@ -391,9 +502,19 @@
     .update_journal_entries(path),
     c(.update_journal_tombstone_name, .update_journal_digest_name)
   )
-  if (length(remaining) > 0L) {
+  remaining_entries <- .update_journal_entries(path)
+  if (directory_failure && !.journal_entries_unreadable(remaining_entries)) {
+    stop(.bb_trf("Could not remove completely: %s", path), call. = FALSE)
+  }
+  if (.journal_entries_unreadable(remaining_entries) ||
+    length(setdiff(
+      remaining_entries,
+      c(.update_journal_tombstone_name, .update_journal_digest_name)
+    )) > 0L) {
     return(invisible(list(
-      apart = .apart_update_journal(path, name),
+      apart = .apart_update_journal(
+        path, name, deleted_count = deleted_count
+      ),
       preserved = sort(unique(c(unexpected, remaining)))
     )))
   }
@@ -490,7 +611,8 @@
     marker_path <- file.path(path, "marker.rds")
     entries <- .update_journal_entries(path)
     if (!file.exists(marker_path)) {
-      if (length(entries) == 0L) {
+      if (length(entries) == 0L &&
+            !.journal_entries_unreadable(entries)) {
         add_plan(path, "discard_empty")
         next
       }
@@ -526,7 +648,9 @@
     }
     tombstone <- .read_update_tombstone(path)
     if (is.null(tombstone)) {
-      if (length(.update_journal_entries(path)) == 0L) {
+      entries <- .update_journal_entries(path)
+      if (length(entries) == 0L &&
+            !.journal_entries_unreadable(entries)) {
         add_plan(path, "discard_empty")
         next
       }
@@ -579,7 +703,11 @@
     if (identical(item$action, "blocked_live_owner")) {
       block_live_owner(item$path, item$marker)
     } else if (identical(item$action, "discard_empty")) {
-      unlink(item$path, recursive = TRUE, force = TRUE)
+      unlink_status <- unlink(item$path, recursive = TRUE, force = TRUE)
+      if (!identical(unlink_status, 0L) ||
+            file.exists(item$path) || dir.exists(item$path)) {
+        plan[[i]]$apart_path <- .apart_update_journal(item$path, name)
+      }
     } else if (identical(item$action, "apart_unarmed") ||
                  identical(item$action, "apart_unarmed_copy") ||
                  identical(item$action, "apart_discarded") ||
@@ -612,7 +740,7 @@
   invisible(plan)
 }
 
-# On Windows tools::pskill() always calls TerminateProcess(), whatever the
+# On Windows the process-termination helper always calls TerminateProcess(), whatever the
 # signal, so a liveness probe there would kill the owner (or whatever process
 # reused its pid). Windows owners are never probed; they are "uncertain".
 .update_is_windows <- function() identical(.Platform$OS.type, "windows")
@@ -2029,6 +2157,38 @@
     tryCatch(readRDS(state_path), error = function(e) NULL)
   } else {
     NULL
+  }
+  armed_entries <- if (is.list(state) && isTRUE(state$armed)) {
+    .update_journal_entries(journal_path)
+  } else {
+    character()
+  }
+  armed_expected <- if (is.list(state) && isTRUE(state$armed)) {
+    isTRUE(tryCatch(
+      .armed_journal_is_expected(journal_path, marker),
+      error = function(e) FALSE
+    ))
+  } else {
+    TRUE
+  }
+  armed_unverifiable <- is.list(state) && isTRUE(state$armed) &&
+    !armed_expected &&
+    (.journal_entries_unreadable(armed_entries) ||
+       any(!vapply(armed_entries, .valid_update_relative_path, logical(1L))))
+  if (armed_unverifiable &&
+        isTRUE(recover) && identical(.update_owner_status(state), "dead")) {
+    if (dry_run) {
+      return(list(pending = TRUE, recovered = FALSE, preserved = NULL,
+                  action = "apart_unrecognized_armed",
+                  apart = .update_journal_apart_path(
+                    journal_path, name, project_dir
+                  ),
+                  restored_absent = character()))
+    }
+    apart <- c(apart, .apart_update_journal(journal_path, name, project_dir))
+    return(list(pending = FALSE, recovered = FALSE, preserved = NULL,
+                action = "apart_unrecognized_armed", apart = apart,
+                restored_absent = character()))
   }
   if (is.null(state) || !isTRUE(state$armed)) {
     if (!.unarmed_journal_is_expected(journal_path, marker)) {

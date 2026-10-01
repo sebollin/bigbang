@@ -141,9 +141,13 @@ workflow = c("Importación" = "datos", "Informe" = "reportes")
 Para exponer las exportaciones explícitas mediante bindings activos de solo
 lectura, usá `reexport = TRUE` al generar. Los componentes quedan fuera de
 `Imports` y `Depends`, así que el metapaquete se puede instalar y cargar sin
-conexión antes de que existan. Antes de instalarlo, leer un binding devuelve una
-función provisoria; el error claro de componente faltante aparece solo al
-llamarla. Para exports que no son funciones, el acceso devuelve esa función en
+conexión antes de que existan. Evaluar un binding nunca lanza un error: si falta
+el componente, no puede cargarse o es una instalación vieja que ya no exporta
+el símbolo, devuelve una función provisoria. Al llamarla informa el componente,
+la versión instalada, la exportación faltante y la llamada a
+`<meta>_install()` que repara la instalación. Así también son seguros la
+inspección del namespace (`as.list()`, `mget()`) y los paneles de entorno del
+IDE. Para exports que no son funciones, el acceso devuelve esa función en
 lugar del objeto hasta la instalación. Después el binding resuelve la función u
 objeto real sin recargar el metapaquete. Solo las directivas `export()`
 explícitas se convierten en bindings, incluidos los nombres no sintácticos, que
@@ -189,7 +193,13 @@ reclamante si hay que bloquear, exigir `recover = TRUE` o descartar la entrada.
 Antes de continuar, el update vuelve a validar que el lock publicado siga
 siendo suyo; si cambió, aborta antes de mutar. Un enlace simbólico en el nombre
 del lock se informa como enlace y `recover = TRUE` aparta el enlace sin seguir
-su destino.
+su destino. Al descartar, el diario primero se renombra a un hermano privado
+impredecible después de verificar su inventario, y cada borrado vuelve a
+verificar ancestros y MD5 justo antes de `unlink()`. R no ofrece
+`unlinkat()`/`O_NOFOLLOW`, así que un proceso del mismo usuario que reemplace
+activamente carpetas del diario durante el descarte sigue siendo una frontera
+de integridad, igual que los registros falsificados; se mide la ventana
+restante entre la última verificación y `unlink()`.
 
 En Linux, la vida usa `/proc/<pid>` y considera muertos los estados zombie (`Z`)
 y terminado (`X`). Sin `/proc`, un fallo de `kill(pid, 0)` es incierto salvo

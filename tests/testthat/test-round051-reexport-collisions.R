@@ -1185,7 +1185,11 @@ test_that("round 053 poison component cannot mask generated runtime calls", {
   function_names <- sort(unique(function_names))
   special_names <- sort(unique(special_names))
   own_symbols <- bigbang:::.generated_metapackage_symbols("poisonverse")
-  poison_exports <- sort(unique(c(function_names, special_names, own_symbols)))
+  poison_exports <- sort(unique(c(
+    function_names, special_names, own_symbols,
+    "identical", "requireNamespace", "getExportedValue", "readRDS",
+    "saveRDS"
+  )))
   excluded <- intersect(poison_exports, own_symbols)
   poison_body <- vapply(
     poison_exports,

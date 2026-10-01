@@ -68,3 +68,29 @@ test_that("tests never mutate standard-package namespaces", {
     }
   }
 })
+
+test_that("the process signal primitive has one guarded implementation seam", {
+  r_root <- file.path(testthat::test_path(), "..", "..", "R")
+  if (!dir.exists(r_root)) {
+    probe <- paste(deparse(bigbang:::.update_signal_probe), collapse = " ")
+    expect_match(probe, "tools::pskill[[:space:]]*\\(", perl = TRUE)
+    return(invisible(NULL))
+  }
+  r_files <- list.files(
+    r_root,
+    pattern = "\\.R$", recursive = TRUE, full.names = TRUE
+  )
+  if (length(r_files) == 0L) {
+    probe <- paste(deparse(bigbang:::.update_signal_probe), collapse = " ")
+    expect_match(probe, "tools::pskill[[:space:]]*\\(", perl = TRUE)
+    return(invisible(NULL))
+  }
+  hits <- unlist(lapply(r_files, function(file) {
+    grep("tools::pskill[[:space:]]*\\(", readLines(file, warn = FALSE),
+         value = TRUE, perl = TRUE)
+  }), use.names = FALSE)
+  expect_length(hits, 1L)
+  expect_match(hits[[1L]],
+               "\\.update_signal_probe[[:space:]]*<-[[:space:]]*function",
+               perl = TRUE)
+})

@@ -412,6 +412,9 @@ msgstr "La biblioteca de instalación debe ser una ruta no vacía."
 msgid "Could not create installation library: %s"
 msgstr "No se pudo crear la biblioteca de instalación: %s"
 
+msgid "Could not unload component namespace: %s. Restart R before retrying; another package imports it."
+msgstr "No se pudo descargar el namespace del componente: %s. Reinicie R antes de volver a intentarlo; otro paquete lo importa."
+
 msgid "'only' must contain component package names."
 msgstr "'only' debe contener nombres de paquetes componentes."
 
@@ -541,6 +544,9 @@ msgstr "Se apartó contenido viejo del lock de actualización en %s; no se elimi
 msgid "Set aside incomplete update-lock preparation at %s; no bytes from the set-aside entry were deleted."
 msgstr "Se apartó una preparación incompleta del lock de actualización en %s; no se eliminaron bytes de lo apartado."
 
+msgid "The update-lock path %s is a symbolic link or unreadable entry; no mutation was performed. Remove or rename that link, then retry."
+msgstr "La ruta del lock de actualización %s es un enlace simbólico o una entrada ilegible; no se hizo ninguna mutación. Quite o renombre ese enlace y vuelva a intentar."
+
 msgid "Deleted %d verified files from the update-journal inventory."
 msgstr "Se eliminaron %d archivos verificados del inventario del diario de actualización."
 
@@ -634,6 +640,18 @@ msgstr "Puede haber un update todavía en ejecución; no se hizo ninguna mutaci�
 msgid "An update is still running under pid %s; no mutation was performed."
 msgstr "Todavía hay un update en ejecución bajo el pid %s; no se hizo ninguna mutación."
 
+msgid "Cannot continue the %s because the published update lock no longer belongs to this process; no further mutation was performed."
+msgstr "No se puede continuar con %s porque el lock de actualización publicado ya no pertenece a este proceso; no se hizo ninguna mutación adicional."
+
+msgid "Could not prepare the update lock at %s: %s. Check that its parent is writable and has free space; no mutation was performed."
+msgstr "No se pudo preparar el lock de actualización en %s: %s. Compruebe que su directorio padre permita escribir y tenga espacio libre; no se hizo ninguna mutación."
+
+msgid "the lock parent is not writable"
+msgstr "el directorio padre del lock no permite escribir"
+
+msgid "the lock parent rejected creation or has no available space"
+msgstr "el directorio padre del lock rechazó la creación o no tiene espacio disponible"
+
 msgid "after confirming that no other update is running, call again with recover = TRUE."
 msgstr "después de confirmar que no hay otro update en ejecución, vuelva a llamar con recover = TRUE."
 
@@ -699,6 +717,12 @@ msgstr "No se pudo leer el archivo del componente %s; el arrastre del descarte u
 
 msgid "Component package '%s' is not installed."
 msgstr "El componente '%s' no está instalado."
+
+msgid "Skipped because local dependency %s was skipped: %s"
+msgstr "Omitido porque la dependencia local %s fue omitida: %s"
+
+msgid "Set aside remaining update-journal content at %s; only verified inventory files were deleted before unverified content was preserved and the update continues."
+msgstr "Se apartó el contenido restante del diario de actualización en %s; solo se eliminaron archivos verificados del inventario antes de preservar el contenido no verificable y continuar el update."
 
 msgid "Runtime re-export bindings are read-only."
 msgstr "Los bindings de reexportación son de solo lectura."
