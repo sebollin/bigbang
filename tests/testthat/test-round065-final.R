@@ -133,3 +133,26 @@ test_that("a retry loop reports a no-progress lock state", {
     regexp = "made no progress"
   )
 })
+
+test_that("the ps fallback stays quiet in every language", {
+  # Without /proc a missing pid makes ps exit with status 1. The warning text
+  # of system2() is translated, so it cannot be filtered by its wording.
+  skip_on_os("windows")
+  ps <- Sys.which("ps")[[1L]]
+  skip_if_not(nzchar(ps), "ps is not available")
+  testthat::local_mocked_bindings(
+    .update_is_windows = function() FALSE,
+    .update_process_stat = function(pid) NULL,
+    .update_signal_probe = function(pid) FALSE,
+    .package = "bigbang"
+  )
+  missing_pid <- 2147483646L
+  owner <- list(pid = missing_pid, host = .update_host(),
+                process_start = "1")
+  for (language in c("en", "es", "fr")) {
+    withr::with_envvar(c(LANGUAGE = language), {
+      expect_no_warning(status <- .update_owner_liveness(owner))
+      expect_identical(status, "dead")
+    })
+  }
+})

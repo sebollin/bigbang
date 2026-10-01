@@ -1178,15 +1178,12 @@
     } else {
       ps <- Sys.which("ps")[[1L]]
       if (!nzchar(ps)) return("uncertain")
+      # ps reports a missing pid with exit status 1, which system2() turns
+      # into a translated warning; the status attribute is read below.
       listed <- tryCatch(
-        withCallingHandlers(
+        suppressWarnings(
           system2(ps, c("-p", as.character(as.integer(state$pid)), "-o", "pid="),
-                  stdout = TRUE, stderr = FALSE),
-          warning = function(condition) {
-            if (grepl("had status 1$", conditionMessage(condition))) {
-              invokeRestart("muffleWarning")
-            }
-          }
+                  stdout = TRUE, stderr = FALSE)
         ),
         error = function(e) character()
       )
