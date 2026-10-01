@@ -163,18 +163,12 @@ test_that("a killed lock preparation is set aside before the next lock", {
     writeLines("ready", ready, useBytes = TRUE)
     Sys.sleep(600)
   }, silent = TRUE)
-  on.exit({
-    if (isTRUE(tryCatch(tools::pskill(child$pid, 0L),
-                        error = function(e) FALSE))) {
-      tools::pskill(child$pid, tools::SIGKILL)
-    }
-    suppressWarnings(parallel::mccollect(child, wait = TRUE))
-  }, add = TRUE)
+  on.exit(bb_cleanup_child(child), add = TRUE)
   deadline <- Sys.time() + 30
   while (!file.exists(ready) && Sys.time() < deadline) Sys.sleep(0.01)
   expect_true(file.exists(ready))
   expect_true(tools::pskill(child$pid, tools::SIGKILL))
-  suppressWarnings(parallel::mccollect(child, wait = TRUE))
+  expect_true(!is.null(bb_collect_child(child, timeout = 1)))
 
   acquired <- .acquire_update_lock(fixture$project)
   expect_true(acquired$acquired)
@@ -223,15 +217,7 @@ test_that("two real processes have one orphan-recovery winner", {
         TRUE
       }, silent = TRUE, mc.set.seed = FALSE)
     })
-    on.exit({
-      for (child in children) {
-        if (isTRUE(tryCatch(tools::pskill(child$pid, 0L),
-                            error = function(e) FALSE))) {
-          tools::pskill(child$pid, tools::SIGKILL)
-        }
-      }
-      suppressWarnings(parallel::mccollect(children, wait = TRUE))
-    }, add = TRUE)
+    on.exit(lapply(children, bb_cleanup_child), add = TRUE)
     deadline <- Sys.time() + 10
     while (length(list.files(fixture$root, pattern = "^ready-",
                              all.files = TRUE)) < 2L &&
@@ -256,7 +242,7 @@ test_that("two real processes have one orphan-recovery winner", {
     writeLines("release", file.path(fixture$root, "release"), useBytes = TRUE)
     expect_length(outcomes, 2L)
     expect_identical(sum(outcomes == "acquired"), 1L)
-    results <- parallel::mccollect(children, wait = TRUE)
+    results <- bb_collect_children(children, timeout = 10)
     results <- lapply(results, function(result) {
       if (inherits(result, "try-error")) FALSE else result
     })

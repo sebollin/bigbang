@@ -2,7 +2,7 @@
 corpus_top_001 <- base::identity("text (not a call)")
 corpus_top_002 <- utils::head(c(1L, 2L), 1L)
 corpus_top_003 <- data.table::.(value = 1L)
-corpus_top_004 <- 1:3 %>% identity() |> identity() # nolint: pipe_consistency_linter
+corpus_top_004 <- 1:3 %>% identity() %>% identity() # nolint: pipe_consistency_linter
 corpus_top_005 <- `+`(1L, 2L)
 corpus_top_006 <- identity(function(value) value)
 corpus_top_007 <- identity(~ value + 1)
@@ -48,7 +48,7 @@ corpus_top_030 <- identity(
     nested = list(
       call = base::identity,
       formula = ~ value,
-      lambda = \(value) value
+      lambda = function(value) value
     )
   )
 )
@@ -61,7 +61,7 @@ corpus_common <- function(value) {
   common_002 <- utils::head(value)
   common_003 <- dplyr::filter(value, TRUE)
   common_004 <- round060fixture::corpus_plain_helper(value)
-  common_005 <- value %>% identity() |> identity() # nolint: pipe_consistency_linter
+  common_005 <- value %>% identity() %>% identity() # nolint: pipe_consistency_linter
   common_006 <- identity(function(argument) argument)
   common_007 <- identity(~ argument + 1)
   common_008 <- if (length(value)) identity(value) else identity(NULL)
@@ -95,7 +95,7 @@ corpus_common <- function(value) {
   common_022 <- identity("common string (parentheses)")
   common_023 <- identity(
     list(
-      lambda = \(argument) argument,
+      lambda = function(argument) argument,
       function_value = function(argument) argument,
       formula = ~ argument
     )
@@ -127,7 +127,7 @@ corpus_common <- function(value) {
   common_029 <- identity("quotes: 'single' and \"double\"")
   common_030 <- identity(list(namespace = round060fixture::corpus_plain_helper))
   common_031 <- identity(value %>% identity()) # nolint: pipe_consistency_linter
-  common_032 <- identity(value |> identity())
+  common_032 <- identity(identity(value))
   common_033 <- identity(data.table::.(value = value))
   common_034 <- identity(.Call("corpus_call", value))
   common_035 <- identity(.External("corpus_external", value))
@@ -137,7 +137,7 @@ corpus_common <- function(value) {
   common_039 <- identity(Recall())
   common_040 <- identity(on.exit(invisible(NULL)))
   common_041 <- identity(function(argument) argument)
-  common_042 <- identity(\(argument) argument)
+  common_042 <- identity(function(argument) argument)
   common_043 <- identity(~ value + 1)
   common_044 <- identity(base::identity(value))
   common_045 <- identity(utils::head(value))
@@ -157,7 +157,7 @@ corpus_common_002 <- function(value) {
   second_001 <- base::identity(value)
   second_002 <- utils::head(value)
   second_003 <- dplyr::filter(value, TRUE)
-  second_004 <- value %>% identity() |> identity() # nolint: pipe_consistency_linter
+  second_004 <- value %>% identity() %>% identity() # nolint: pipe_consistency_linter
   second_005 <- identity(function(argument) argument)
   second_006 <- identity(~ value)
   second_007 <- tryCatch(value, error = function(error) error)
@@ -178,7 +178,7 @@ corpus_common_002 <- function(value) {
   second_019 <- identity("second string (parentheses)")
   second_020 <- identity(
     list(
-      lambda = \(argument) argument,
+      lambda = function(argument) argument,
       function_value = function(argument) argument,
       formula = ~ value
     )
@@ -196,7 +196,7 @@ corpus_common_002 <- function(value) {
   load_002 <- utils::head(NULL)
   load_003 <- data.table::.(value = 1L)
   load_004 <- identity(function(argument) argument)
-  load_005 <- identity(\(argument) argument)
+  load_005 <- identity(function(argument) argument)
   load_006 <- identity(~ argument + 1)
   load_007 <- tryCatch(
     identity(NULL),
@@ -224,7 +224,7 @@ corpus_common_002 <- function(value) {
   )
   load_021 <- identity(
     list(
-      lambda = \(argument) argument,
+      lambda = function(argument) argument,
       function_value = function(argument) argument,
       formula = ~ argument
     )

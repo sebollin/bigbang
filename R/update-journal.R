@@ -162,19 +162,58 @@
   )]
 }
 
+.update_journal_entries <- function(path) {
+  if (!dir.exists(path) || .path_is_symlink(path)) return(character())
+  pending <- list(list(path = path, relative = ""))
+  entries <- character()
+  while (length(pending) > 0L) {
+    current <- pending[[1L]]
+    pending <- pending[-1L]
+    children <- tryCatch(
+      list.files(current$path, all.files = TRUE, no.. = TRUE,
+                 include.dirs = TRUE, full.names = TRUE),
+      error = function(e) character()
+    )
+    if (length(children) == 0L) next
+    for (child in children) {
+      relative <- if (nzchar(current$relative)) {
+        paste(current$relative, basename(child), sep = "/")
+      } else {
+        basename(child)
+      }
+      relative <- gsub("\\\\", "/", relative)
+      entries <- c(entries, relative)
+      if (dir.exists(child) && !.path_is_symlink(child)) {
+        pending[[length(pending) + 1L]] <- list(
+          path = child, relative = relative
+        )
+      }
+    }
+  }
+  sort(unique(entries))
+}
+
+.journal_has_link_ancestor <- function(path, relative) {
+  parts <- strsplit(gsub("\\\\", "/", relative), "/", fixed = TRUE)[[1L]]
+  if (length(parts) < 2L) return(FALSE)
+  current <- path
+  for (part in utils::head(parts, -1L)) {
+    current <- file.path(current, part)
+    if (.path_is_symlink(current)) return(TRUE)
+  }
+  FALSE
+}
+
 .update_journal_inventory <- function(path) {
-  entries <- list.files(path, all.files = TRUE, recursive = TRUE,
-                        no.. = TRUE, include.dirs = TRUE)
-  entries <- gsub("\\\\", "/", entries)
+  entries <- .update_journal_entries(path)
   full <- file.path(path, entries)
-  is_dir <- dir.exists(full)
+  symlinks <- vapply(full, .path_is_symlink, logical(1L))
+  is_dir <- dir.exists(full) & !symlinks
   files <- setdiff(
     entries[!is_dir],
     c(.update_journal_tombstone_name, .update_journal_digest_name)
   )
-  if (length(files) > 0L && any(vapply(
-    file.path(path, files), .path_is_symlink, logical(1L)
-  ))) {
+  if (any(symlinks)) {
     stop(.bb_trf("Could not write the update-journal tombstone: %s", path),
          call. = FALSE)
   }
@@ -261,6 +300,12 @@
   unlink(path, recursive = TRUE, force = TRUE)
 }
 
+.remove_journal_tombstones <- function(path) {
+  unlink(.update_journal_digest_path(path), force = TRUE)
+  unlink(.update_journal_tombstone_path(path), force = TRUE)
+  invisible(NULL)
+}
+
 .update_journal_after_rename <- function(path) {
   invisible(path)
 }
@@ -286,12 +331,11 @@
       return(invisible(list(apart = .apart_update_journal(path, name))))
     }
   }
-  entries <- list.files(path, all.files = TRUE, recursive = TRUE,
-                        no.. = TRUE, include.dirs = TRUE)
-  entries <- gsub("\\\\", "/", entries)
+  entries <- .update_journal_entries(path)
   full <- file.path(path, entries)
-  is_dir <- dir.exists(full)
-  symlinks <- entries[vapply(full, .path_is_symlink, logical(1L))]
+  symlinks <- vapply(full, .path_is_symlink, logical(1L))
+  is_dir <- dir.exists(full) & !symlinks
+  symlink_entries <- entries[symlinks]
   files <- setdiff(
     entries[!is_dir],
     c(.update_journal_tombstone_name, .update_journal_digest_name)
@@ -300,7 +344,12 @@
   expected_dirs <- tombstone$inventory_directories
   unexpected_files <- files[!files %in% names(expected_files)]
   matching_files <- intersect(files, names(expected_files))
-  matching_files <- setdiff(matching_files, symlinks)
+  matching_files <- setdiff(matching_files, symlink_entries)
+  matching_files <- matching_files[!vapply(
+    matching_files,
+    function(entry) .journal_has_link_ancestor(path, entry),
+    logical(1L)
+  )]
   if (length(matching_files) > 0L) {
     actual <- vapply(file.path(path, matching_files), .file_digest, character(1L))
     verified_files <- matching_files[
@@ -313,10 +362,8 @@
     matching_files <- verified_files
   }
   verified_count <- length(matching_files)
-  unexpected_dirs <- setdiff(entries[is_dir & !vapply(
-    full, .path_is_symlink, logical(1L)
-  )], expected_dirs)
-  unexpected <- unique(c(unexpected_files, unexpected_dirs, symlinks))
+  unexpected_dirs <- setdiff(entries[is_dir], expected_dirs)
+  unexpected <- unique(c(unexpected_files, unexpected_dirs, symlink_entries))
   for (entry in matching_files) {
     .discard_update_entry(file.path(path, entry))
   }
@@ -331,9 +378,9 @@
   directories <- directories[order(nchar(directories), decreasing = TRUE)]
   for (entry in directories) {
     target <- file.path(path, entry)
-    if (dir.exists(target) && length(list.files(
-      target, all.files = TRUE, no.. = TRUE, include.dirs = TRUE
-    )) == 0L) {
+    if (dir.exists(target) && !.path_is_symlink(target) &&
+          !.journal_has_link_ancestor(path, entry) &&
+          length(.update_journal_entries(target)) == 0L) {
       .discard_update_entry(target)
       if (dir.exists(target)) {
         stop(.bb_trf("Could not remove completely: %s", path), call. = FALSE)
@@ -341,8 +388,7 @@
     }
   }
   remaining <- setdiff(
-    list.files(path, all.files = TRUE, recursive = TRUE, no.. = TRUE,
-               include.dirs = TRUE),
+    .update_journal_entries(path),
     c(.update_journal_tombstone_name, .update_journal_digest_name)
   )
   if (length(remaining) > 0L) {
@@ -351,8 +397,7 @@
       preserved = sort(unique(c(unexpected, remaining)))
     )))
   }
-  unlink(.update_journal_digest_path(path), force = TRUE)
-  unlink(.update_journal_tombstone_path(path), force = TRUE)
+  .remove_journal_tombstones(path)
   unlink(path, recursive = TRUE, force = TRUE)
   if (dir.exists(path) || file.exists(path)) {
     stop(.bb_trf("Could not remove completely: %s", path), call. = FALSE)
@@ -443,8 +488,7 @@
       next
     }
     marker_path <- file.path(path, "marker.rds")
-    entries <- list.files(path, all.files = TRUE, recursive = TRUE,
-                          no.. = TRUE, include.dirs = TRUE)
+    entries <- .update_journal_entries(path)
     if (!file.exists(marker_path)) {
       if (length(entries) == 0L) {
         add_plan(path, "discard_empty")
@@ -482,8 +526,7 @@
     }
     tombstone <- .read_update_tombstone(path)
     if (is.null(tombstone)) {
-      if (length(list.files(path, all.files = TRUE, no.. = TRUE,
-                            include.dirs = TRUE)) == 0L) {
+      if (length(.update_journal_entries(path)) == 0L) {
         add_plan(path, "discard_empty")
         next
       }
@@ -1095,8 +1138,7 @@
     ))]
     if (length(removable) > 0L) unlink(removable, force = TRUE)
   }
-  remaining <- list.files(path, all.files = TRUE, recursive = TRUE,
-                          no.. = TRUE, include.dirs = TRUE)
+  remaining <- .update_journal_entries(path)
   if (length(remaining) == 0L) {
     unlink(path, recursive = TRUE, force = TRUE)
     return(invisible(NULL))
@@ -1363,8 +1405,7 @@
 }
 
 .unarmed_journal_is_expected <- function(journal_path, marker) {
-  entries <- list.files(journal_path, all.files = TRUE, recursive = TRUE,
-                        no.. = TRUE, include.dirs = TRUE)
+  entries <- .update_journal_entries(journal_path)
   if (any(vapply(file.path(journal_path, entries), .path_is_symlink,
                  logical(1L)))) return(FALSE)
   entry_is_dir <- dir.exists(file.path(journal_path, entries))
@@ -1403,8 +1444,7 @@
 }
 
 .armed_journal_is_expected <- function(journal_path, marker) {
-  entries <- list.files(journal_path, all.files = TRUE, recursive = TRUE,
-                        no.. = TRUE, include.dirs = TRUE)
+  entries <- .update_journal_entries(journal_path)
   full <- file.path(journal_path, entries)
   if (any(vapply(full, .path_is_symlink, logical(1L)))) return(FALSE)
   is_dir <- dir.exists(full)

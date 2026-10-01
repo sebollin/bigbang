@@ -429,10 +429,7 @@ test_that("owner liveness distinguishes a live process from PID reuse", {
   fixture <- round052_fixture()
   journal <- round052_arm(fixture)
   sleeper <- parallel::mcparallel(Sys.sleep(120), silent = TRUE)
-  on.exit({
-    try(tools::pskill(sleeper$pid, tools::SIGKILL), silent = TRUE)
-    parallel::mccollect(sleeper, wait = FALSE)
-  }, add = TRUE)
+  on.exit(bb_cleanup_child(sleeper), add = TRUE)
   state_path <- file.path(journal$path, "state.rds")
   state <- readRDS(state_path)
   state$pid <- sleeper$pid
@@ -556,8 +553,7 @@ test_that("a live preparation is protected from a concurrent dry run", {
     round052_update(fixture, version = "0.2.0")
   }, silent = TRUE, mc.set.seed = FALSE)
   on.exit({
-    try(tools::pskill(child$pid, tools::SIGKILL), silent = TRUE)
-    suppressWarnings(parallel::mccollect(child, wait = FALSE))
+    bb_cleanup_child(child)
   }, add = TRUE)
   deadline <- Sys.time() + 10
   while (!file.exists(marker) && Sys.time() < deadline) Sys.sleep(0.02)
@@ -570,7 +566,7 @@ test_that("a live preparation is protected from a concurrent dry run", {
   expect_true(plan$dry_run)
   expect_true(dir.exists(armando))
   writeLines("release", release, useBytes = TRUE)
-  result <- suppressMessages(parallel::mccollect(child, wait = TRUE)[[1L]])
+  result <- suppressMessages(bb_collect_child(child, timeout = 10)[[1L]])
   expect_true(is.list(result) || is.character(result))
   retry <- round052_update(fixture, version = "0.2.0")
   expect_true(retry$updated)
@@ -646,7 +642,7 @@ test_that("real process death halfway through recovery converges", {
   while (!file.exists(marker) && Sys.time() < deadline) Sys.sleep(0.05)
   expect_true(file.exists(marker))
   expect_true(tools::pskill(child$pid, tools::SIGKILL))
-  suppressWarnings(parallel::mccollect(child, wait = TRUE))
+  expect_true(!is.null(bb_collect_child(child, timeout = 1)))
   expect_true(dir.exists(journal$path))
   expect_message(
     result <- round052_recover_dead_owner(fixture$project, "journalverse"),
@@ -860,7 +856,7 @@ round052_signal_case <- function(signal, phase) {
   while (!file.exists(marker) && Sys.time() < deadline) Sys.sleep(0.05)
   expect_true(file.exists(marker), info = phase)
   expect_true(tools::pskill(child$pid, signal), info = phase)
-  suppressWarnings(parallel::mccollect(child, wait = TRUE))
+  expect_true(!is.null(bb_collect_child(child, timeout = 1)))
   after_kill <- round052_snapshot(fixture$project)
   if (identical(phase, "during_backup")) expect_identical(after_kill, before)
   if (identical(phase, "after_manifest_before_discard")) {

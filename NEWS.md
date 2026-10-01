@@ -1,114 +1,43 @@
 # bigbang (development version)
 
-## Bug fixes
-
-- Interrupted journal state that cannot be proven to belong to bigbang is now
-  atomically set aside as `.<name>.bigbang-apartado-*`; updates continue and no
-  unverified bytes are deleted. Discard cleanup checks recursive paths and MD5
-  values, authenticates its tombstone with a sidecar digest, and keeps stale
-  generations, foreign journals, partial tombstones, and copied journals out of
-  the destructive path. Orphaned update locks are reclaimed only after their
-  recorded owner is proven dead, with `recover = TRUE` documented for uncertain
-  owners.
-
-- Update locks are published atomically with a complete owner record, orphan
-  reclamation has one rename winner, regular user entries are set aside, and
-  dry runs inspect locks without changing them. `recover = TRUE` never defeats
-  a proven live owner, and interrupted-update documentation now states the
-  project-name and byte-for-byte-copy limits.
-- Re-export source evidence now reuses per-file parse indexes instead of
-  scanning the complete parse table for every token; results remain unchanged
-  while large source families scale close to linearly.
-
 ## Breaking changes
 
 - `bigbang_error_missing_project` now inherits from
-  `bigbang_error_missing_manifest`, preserving the 0.4.0 condition contract
-  while identifying a missing project more precisely.
-- Update `dry_run` now reports a read-only reconciliation plan for sibling
-  journal folders and the update lock. Updates use an exclusive project lock,
-  and a proven live owner is never reconciled; uncertain owners are only
-  resolved with `recover = TRUE`.
+  `bigbang_error_missing_manifest` while identifying a missing project more
+  precisely.
+- `dry_run` now reports a read-only reconciliation plan for sibling journals
+  and the project lock; uncertain owners require `recover = TRUE`.
 - A failure while promoting generated documentation now aborts the update and
   rolls the project back through its journal. Only failures in the staging
   generation remain warnings.
-
-- Round 056 hardens interrupted-update cleanup: marker-only atomic remnants and
-  empty discarded shells converge automatically, tombstones carry exact MD5
-  inventories, foreign generations are preserved, and renamed sibling journals
-  are recognized by manifest identity. Re-export diagnostics now follow active
-  string indirection, record `lockBinding()` and `unlockBinding()`, and ignore
-  binder names used only as data. Spanish catalog coverage now includes every
-  package translation call.
-
-- Interrupted-update journals are assembled in private sibling staging folders,
-  use resumable tombstones while being discarded, and recognize a project
-  moved together with its journal by metapackage name and old-manifest hash.
-  Unmarked user folders with journal-looking names are preserved and reported.
-
-- Re-export diagnostics now evaluate only installation and load-time code for
-  re-exporters, follow calls into functions owned by the same package, and
-  leave common-function mutations out of the proof. A package root is judged
-  by its exports, parse result, native declarations, and `sysdata.rda` only.
-
-- `create_metapackage(update = TRUE)` now journals updates durably beside the
-  project before the first mutation. A later call automatically recovers after
-  SIGKILL, SIGTERM, SIGHUP, terminal closure, or shutdown, recognizes a fully
-  written new manifest, and refuses to overwrite post-interruption user edits.
-  `recover = TRUE` preserves unknown bytes outside the project before forcing
-  recovery; dry runs report the pending action without modifying it.
-
-- Every update output is promoted atomically after its intention is recorded,
-  including shipped archives, catalogs, `.Rbuildignore`, and the generation
-  manifest. Roxygen now runs in a staging copy so its unknown intermediate
-  writes never reach the project.
-
 - `create_metapackage()` now accepts `reexport_prefer` and `reexport_exclude`.
   Every collision requires one of them because static analysis cannot prove
-  object identity. Diagnostics classify collisions as `probable_same_object`,
-  `distinct_definitions`, or `undetermined`; the selected resolution is shown
-  in `reexports.Rd`, `dry_run`, and `<meta>_conflicts()`.
-
-- Re-export analysis uses the extracted NAMESPACE and parsed component source.
-  A skipped component required by a selected binding is an explicit generation
-  error, so generated bindings never point at an omitted package.
+  object identity, and diagnostics classify the selected resolution.
 
 ## New features
 
-- Re-export diagnostics now keep masking conflicts in `<meta>_conflicts()` and
-  attach installed-owner verification as the consistently classed
-  `reexport_verification` component, with both sections shown by its print
-  method.
-- Re-export source analysis follows same-package helpers across `R/` files and
-  treats calculated call destinations and foreign namespace indirection as
-  undetermined instead of guessing their target.
+- Interrupted updates now use a durable journal, resumable tombstones, and an
+  exclusive project lock; recovery preserves unverified user bytes and supports
+  read-only planning.
+- Re-export diagnostics follow same-package helpers and classify calculated
+  destinations and foreign namespace indirection conservatively.
+- Installed-owner verification runs in a clean R subprocess with the destination
+  library first, and the conflicts accessor keeps verification outside symbol
+  names.
 
 ## Bug fixes
 
-- Fixed the 0.4.0 regression that omitted the generated metapackage version
-  from its startup banner when the helper name collided with a base function.
-  Generated helpers are now protected from qualification by package code.
-- Re-export generation now validates sources only for colliding owners, keeping
-  large collision-free inventories linear in the number of exports.
-- Generated re-export code now qualifies base operators as well as function
-  calls, leaves strings and comments unchanged, and protects the generated
-  consistency test and evaluated vignette chunks from component name masking.
-  Re-export suggestions now round-trip control-byte symbols as `\\uXXXX`
-  literals.
-- Installation verification now reports installed owners that no longer export
-  a selected symbol, warns from `<meta>_conflicts()`, distinguishes equivalent
-  function copies from distinct objects, and documents its installation snapshot.
-- Interrupted-update recovery recognizes an absent destination only when the
-  matching staged temporary is still present, reports every absent file it
-  restores, and preserves an external deletion as an unknown state until
-  `recover = TRUE` is requested.
-- Skip diagnostics retain the real omission reason and identify the owner of
-  each multi-owner reason.
-
-- Qualified every call emitted by the re-export templates to `base`, `utils`,
-  `tools`, or `methods`, fixing `reexport = TRUE` metapackages generated since
-  0.4.0 when a component exported one of those helper names. Added a poison
-  regression test and a control that reproduces the failure without qualification.
+- Fixed the 0.4.0 regression where generated metapackage machinery could be
+  hidden by an export with the same name.
+- Journal inventory and discard cleanup no longer follow directory symlinks;
+  linked entries and their descendants are set aside byte-for-byte.
+- Installation verification no longer reuses a namespace loaded from another
+  library and never reports identity when a clean verification is unavailable.
+- Generated re-export calls now qualify base, utils, tools, and methods helpers;
+  source validation and generated diagnostics remain safe when components export
+  those names.
+- Re-export source evidence reuses per-file parse indexes, and update recovery
+  preserves staged files and unknown external deletions conservatively.
 
 # bigbang 0.4.0
 

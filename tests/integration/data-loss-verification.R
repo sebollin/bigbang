@@ -3,21 +3,18 @@
 #
 # Run from the bigbang project root:
 #   Rscript tests/integration/data-loss-verification.R
-# Requires whisker, withr, and brio.
+# Requires pkgload, whisker, withr, and brio.
 options(warn = 1)
-gen_src <- if (dir.exists("R")) "R" else "../../R"
+package_root <- if (file.exists("DESCRIPTION")) {
+  normalizePath(".", winslash = "/", mustWork = TRUE)
+} else {
+  normalizePath("../..", winslash = "/", mustWork = TRUE)
+}
+pkgload::load_all(package_root, quiet = TRUE)
+create_metapackage <- getExportedValue("bigbang", "create_metapackage")
 sandbox <- tempfile("verify-data-loss-fix-")
 dir.create(sandbox)
 cat("SANDBOX:", sandbox, "\n")
-
-# Source the generator directly without installing bigbang.
-for (f in c(
-  "fs-utils.R", "i18n-tools.R", "translations.R", "dependencies.R",
-  "scaffold.R", "templates-engine.R", "results.R", "create_metapackage.R",
-  "install_local_pkg.R"
-)) {
-  sys.source(file.path(gen_src, f), envir = globalenv())
-}
 
 # --- 1. Build and archive dummy component packages ---
 sources <- file.path(sandbox, "sources")

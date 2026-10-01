@@ -69,7 +69,9 @@ round056_collect_child <- function(child, timeout = 1) {
   deadline <- Sys.time() + timeout
   repeat {
     collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
-    if (!is.null(collected)) return(invisible(TRUE))
+    if (!is.null(collected)) {
+      return(invisible(TRUE))
+    }
     if (Sys.time() >= deadline) return(invisible(FALSE))
     Sys.sleep(0.01)
   }
@@ -79,7 +81,10 @@ round056_cleanup_child <- function(child) {
   collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
   if (is.null(collected)) {
     try(tools::pskill(child$pid, tools::SIGKILL), silent = TRUE)
-    round056_collect_child(child, timeout = 1)
+    collected <- round056_collect_child(child, timeout = 1)
+  }
+  if (isTRUE(collected) && length(parallel:::children()) <= 1L) {
+    try(parallel:::cleanup(kill = FALSE, detach = TRUE), silent = TRUE)
   }
   invisible(NULL)
 }
@@ -219,10 +224,9 @@ test_that("J3 SIGKILL after the tombstone unlink removes the empty shell", {
   mark <- file.path(fixture$root, "J3_MARK")
   Sys.setenv(BB056_MARK = mark)
   child <- parallel::mcparallel({
-    trace("unlink", where = asNamespace("base"),
+    trace(".remove_journal_tombstones", where = asNamespace("bigbang"),
           exit = quote({
-            value <- tryCatch(as.character(x)[[1L]], error = function(e) "")
-            if (grepl("tombstone\\.rds$", value) &&
+            if (!file.exists(.update_journal_tombstone_path(path)) &&
                   !file.exists(Sys.getenv("BB056_MARK"))) {
               writeLines("tombstone-unlinked", Sys.getenv("BB056_MARK"),
                          useBytes = TRUE)

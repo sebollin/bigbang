@@ -124,12 +124,14 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
 #' @noRd
 .generated_metapackage_symbols <- function(name) {
   public <- paste0(name, c("_attach", "_detach", "_packages", "_attach_all",
-                           "_install", "_load_all", "_deps", "_conflicts"))
+                           "_install", "_load_all", "_deps", "_conflicts",
+                           "_reexport_verification"))
   c(public, paste0("print.", name, "_conflicts"),
     ".pkgs", ".component_names", ".component_specs",
     ".component_reexport_specs", ".reexport_state", ".reexport_library_paths",
     ".set_reexport_library", ".reexport_component_value",
     ".make_reexport_binding", ".install_reexport_bindings", ".reexport_verify",
+    ".reexport_verify_subprocess",
     "attach_installed_packages", ".bigbang_abort",
     "install_packages_in_order", "resolve_upgrade_policy",
     "with_install_library_path", "install_source_component",
@@ -172,7 +174,8 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
 write_namespace_file <- function(name, namespace_path,
                                  implicit_deps = NULL, import_deps = NULL,
                                  verbose = FALSE,
-                                 reexport_symbols = character()) {
+                                 reexport_symbols = character(),
+                                 reexport = FALSE) {
   # Export the complete generated API without requiring roxygen at generation time.
   export <- paste0(
     "export(", name, "_attach)\n",
@@ -183,7 +186,12 @@ write_namespace_file <- function(name, namespace_path,
     "export(", name, "_load_all)\n",
     "export(", name, "_deps)\n",
     "export(", name, "_conflicts)\n",
-    "S3method(print,", name, "_conflicts)\n"
+    "S3method(print,", name, "_conflicts)\n",
+    if (isTRUE(reexport)) {
+      paste0("export(", name, "_reexport_verification)\n")
+    } else {
+      ""
+    }
   )
   reexports <- if (length(reexport_symbols) > 0L) {
     paste(vapply(

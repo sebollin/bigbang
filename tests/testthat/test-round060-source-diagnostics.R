@@ -73,6 +73,14 @@ test_that("the syntax corpus classifies parsed R without falling", {
   }, logical(1L))))
 })
 
+test_that("the modern syntax fixture is checked only on supported R", {
+  skip_if(getRversion() < "4.1.0")
+  fixture_path <- testthat::test_path(
+    "fixtures", "round060-modern-syntax-corpus.R"
+  )
+  expect_length(parse(file = fixture_path, keep.source = TRUE), 2L)
+})
+
 test_that("the source classifier fails closed on empty and unusual nodes", {
   empty <- data.frame(
     id = integer(), parent = integer(), token = character(),
@@ -270,19 +278,11 @@ round060_mutant_environment <- function() {
 }
 
 test_that("negative controls fail under the two removed rules", {
-  source_root <- normalizePath(testthat::test_path("..", ".."),
-                               winslash = "/", mustWork = TRUE)
-  old_source <- file.path(source_root, "R", "dependencies.R")
-  if (!file.exists(old_source) || !nzchar(Sys.which("git"))) {
-    testthat::skip("The source tree and Git history are required for mutation checks.")
-  }
-
-  old_code <- system2(
-    Sys.which("git"), c("show", "HEAD:R/dependencies.R"),
-    stdout = TRUE, stderr = FALSE
+  mutant_path <- testthat::test_path(
+    "fixtures", "round060-source-mutant.R"
   )
-  old_environment <- new.env(parent = asNamespace("bigbang"))
-  eval(parse(text = old_code, keep.source = FALSE), old_environment)
+  mutant_environment <- new.env(parent = baseenv())
+  source(mutant_path, local = mutant_environment)
   corpus_root <- tempfile("bigbang-round060-reverted-")
   dir.create(file.path(corpus_root, "R"), recursive = TRUE)
   withr::defer(unlink(corpus_root, recursive = TRUE, force = TRUE))
@@ -291,7 +291,7 @@ test_that("negative controls fail under the two removed rules", {
     file.path(corpus_root, "R", "syntax-corpus.R")
   ))
   reverted <- tryCatch(
-    old_environment$.reexport_source_evidence(
+    mutant_environment$.round060_source_mutant(
       corpus_root, package = "round060fixture"
     ),
     error = identity

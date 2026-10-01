@@ -266,8 +266,8 @@ test_that("update rejects a symbolic project root before writing", {
 })
 
 test_that("installer transcripts follow verbose and failures retain ERROR", {
-  run_checks <- function(install_function, environment) {
-    environment$system2 <- function(command, args, stdout, stderr, ...) {
+  run_checks <- function(install_function, environment, binding = "system2") {
+    environment[[binding]] <- function(command, args, stdout, stderr, ...) {
       writeLines(c("* installing fixture", "* DONE (fixture)"), stdout)
       0L
     }
@@ -280,7 +280,7 @@ test_that("installer transcripts follow verbose and failures retain ERROR", {
       "installing fixture",
       fixed = TRUE
     )
-    environment$system2 <- function(command, args, stdout, stderr, ...) {
+    environment[[binding]] <- function(command, args, stdout, stderr, ...) {
       writeLines("ERROR: deterministic install failure", stdout)
       1L
     }
@@ -289,7 +289,7 @@ test_that("installer transcripts follow verbose and failures retain ERROR", {
       "ERROR: deterministic install failure",
       fixed = TRUE
     )
-    environment$system2 <- function(command, args, stdout, stderr, ...) {
+    environment[[binding]] <- function(command, args, stdout, stderr, ...) {
       unlink(stdout, force = TRUE)
       7L
     }
@@ -313,75 +313,17 @@ test_that("installer transcripts follow verbose and failures retain ERROR", {
     system.file("extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"),
     destination
   )
-  runtime <- new.env(parent = baseenv())
   install_source <- file.path(generated$path, "R", "install_packages.R")
-  sys.source(install_source, runtime)
   generated_install <- paste(readLines(install_source, warn = FALSE),
                              collapse = "\n")
   expect_match(generated_install, "base::system2", fixed = TRUE)
-
-  # The emitted function qualifies system2 through base, so a parent-frame
-  # mock cannot exercise it. Run it in a clean R process and replace only the
-  # base binding there; this keeps the source search above as a separate guard.
-  child_script <- tempfile("bigbang-generated-installer-check-", fileext = ".R")
-  on.exit(unlink(child_script, force = TRUE), add = TRUE)
-  source_literal <- encodeString(normalizePath(
-    install_source, winslash = "/", mustWork = TRUE
-  ), quote = "\"")
-  writeLines(c(
-    paste0("install_source <- ", source_literal),
-    "runtime <- new.env(parent = base::baseenv())",
-    "base::sys.source(install_source, runtime)",
-    "base_namespace <- base::asNamespace('base')",
-    "original_system2 <- base::get('system2', envir = base_namespace)",
-    "mode <- 'success'",
-    "fake_system2 <- function(command, args, stdout, stderr, ...) {",
-    "  if (identical(mode, 'success')) {",
-    "    base::writeLines(c('* installing fixture', '* DONE (fixture)'), stdout)",
-    "    return(0L)",
-    "  }",
-    "  if (identical(mode, 'error')) {",
-    "    base::writeLines('ERROR: deterministic install failure', stdout)",
-    "    return(1L)",
-    "  }",
-    "  base::unlink(stdout, force = TRUE)",
-    "  7L",
-    "}",
-    "base::unlockBinding('system2', base_namespace)",
-    "base::assign('system2', fake_system2, envir = base_namespace)",
-    "base::lockBinding('system2', base_namespace)",
-    "restore_system2 <- function() {",
-    "  base::unlockBinding('system2', base_namespace)",
-    "  base::assign('system2', original_system2, envir = base_namespace)",
-    "  base::lockBinding('system2', base_namespace)",
-    "}",
-    "success_output <- utils::capture.output(runtime$install_source_component(",
-    "  'fixture.tar.gz', base::tempdir(), verbose = TRUE))",
-    "base::stopifnot(any(base::grepl('installing fixture', success_output, fixed = TRUE)))",
-    "mode <- 'error'",
-    "error <- tryCatch(runtime$install_source_component(",
-    "  'fixture.tar.gz', base::tempdir(), verbose = FALSE), error = identity)",
-    "base::stopifnot(inherits(error, 'error'))",
-    "base::stopifnot(base::grepl('ERROR: deterministic install failure',",
-    "  base::conditionMessage(error), fixed = TRUE))",
-    "mode <- 'status'",
-    "error <- tryCatch(runtime$install_source_component(",
-    "  'fixture.tar.gz', base::tempdir(), verbose = FALSE), error = identity)",
-    "base::stopifnot(inherits(error, 'error'))",
-    "base::stopifnot(base::grepl('status 7', base::conditionMessage(error), fixed = TRUE))",
-    "restore_system2()"
-  ), child_script, useBytes = TRUE)
-  r_binary <- file.path(
-    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
-  )
-  child_output <- system2(
-    r_binary, c("--vanilla", "-f", shQuote(child_script)),
-    stdout = TRUE, stderr = TRUE
-  )
-  child_status <- attr(child_output, "status")
-  if (is.null(child_status)) child_status <- 0L
-  expect_identical(child_status, 0L,
-                   info = paste(child_output, collapse = "\n"))
+  generated_runtime <- new.env(parent = baseenv())
+  generated_install <- sub("base::system2", ".test_system2",
+                           generated_install, fixed = TRUE)
+  eval(parse(text = generated_install, keep.source = FALSE),
+       envir = generated_runtime)
+  run_checks(generated_runtime$install_source_component, generated_runtime,
+             binding = ".test_system2")
 })
 
 test_that("public and generated installers pass verbose to source installs", {

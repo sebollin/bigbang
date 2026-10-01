@@ -55,7 +55,9 @@ round054_collect_child <- function(child, timeout = 1) {
   deadline <- Sys.time() + timeout
   repeat {
     collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
-    if (!is.null(collected)) return(invisible(TRUE))
+    if (!is.null(collected)) {
+      return(invisible(TRUE))
+    }
     if (Sys.time() >= deadline) return(invisible(FALSE))
     Sys.sleep(0.01)
   }
@@ -65,7 +67,10 @@ round054_cleanup_child <- function(child) {
   collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
   if (is.null(collected)) {
     try(tools::pskill(child$pid, tools::SIGKILL), silent = TRUE)
-    round054_collect_child(child, timeout = 1)
+    collected <- round054_collect_child(child, timeout = 1)
+  }
+  if (isTRUE(collected) && length(parallel:::children()) <= 1L) {
+    try(parallel:::cleanup(kill = FALSE, detach = TRUE), silent = TRUE)
   }
   invisible(NULL)
 }

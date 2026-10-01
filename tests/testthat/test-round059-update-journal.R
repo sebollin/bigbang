@@ -193,17 +193,52 @@ test_that("F2 recursively deletes only exact inventory entries and sets aside th
                    charToRaw("round059 user bytes\n"))
 })
 
+test_that("discarding a directory symlink never reaches its external target", {
+  skip_on_os("windows")
+  fixture <- round059_fixture("bigbang-round059-directory-link-")
+  discarded <- round059_make_discarded(fixture)
+  backup <- file.path(discarded, "backup")
+  original_backup <- file.path(fixture$root, "original-backup")
+  external <- file.path(fixture$root, "external-user-directory")
+  expect_true(file.rename(backup, original_backup))
+  expect_true(dir.create(external))
+  external_files <- file.path(external, sprintf("private-%02d.bin", 1:20))
+  for (index in seq_along(external_files)) {
+    writeBin(charToRaw(sprintf("external bytes %02d\n", index)),
+             external_files[[index]])
+  }
+  before <- round059_digest_snapshot(external)
+  expect_true(file.symlink(external, backup))
+
+  result <- round059_dead_update(fixture)
+  apart <- round059_apart(fixture)
+  expect_true(result$updated)
+  expect_length(apart, 1L)
+  expect_true(.path_is_symlink(file.path(apart[[1L]], "backup")))
+  expect_identical(round059_digest_snapshot(external), before)
+  expect_true(all(file.exists(file.path(external, basename(external_files)))))
+})
+
 test_that("F3 keeps the exact-path and exact-MD5 boundary explicit", {
   fixture <- round059_fixture("bigbang-round059-f3-")
   discarded <- round059_make_discarded(fixture)
   tombstone <- readRDS(file.path(discarded, "tombstone.rds"))
   relative <- names(tombstone$inventory)[[1L]]
+  different_relative <- names(tombstone$inventory)[[2L]]
   bytes <- readBin(file.path(discarded, relative), "raw", 100000L)
   expect_true(file.remove(file.path(discarded, relative)))
   writeBin(bytes, file.path(discarded, relative))
+  different_path <- file.path(discarded, different_relative)
+  writeBin(charToRaw("different md5 bytes\n"), different_path)
+  different_md5 <- unname(tools::md5sum(different_path))
   result <- round059_dead_update(fixture)
   expect_true(result$updated)
-  expect_length(round059_apart(fixture), 0L)
+  apart <- round059_apart(fixture)
+  expect_length(apart, 1L)
+  expect_false(file.exists(file.path(apart[[1L]], relative)))
+  expect_identical(unname(tools::md5sum(
+    file.path(apart[[1L]], different_relative)
+  )), different_md5)
 })
 
 test_that("F4 stale generations are set aside and the next update runs", {
@@ -281,6 +316,7 @@ test_that("a changed tombstone digest is set aside instead of trusted", {
 })
 
 test_that("a real SIGKILL leaves a lock that a later update reclaims", {
+  skip_on_cran()
   skip_on_os("windows")
   fixture <- round059_fixture("bigbang-round059-lock-")
   mark <- file.path(fixture$root, "lock-ready")
@@ -290,18 +326,12 @@ test_that("a real SIGKILL leaves a lock that a later update reclaims", {
     Sys.sleep(600)
     bigbang:::.release_update_lock(lock)
   }, silent = TRUE, mc.set.seed = FALSE)
-  on.exit({
-    if (isTRUE(tryCatch(tools::pskill(child$pid, 0L),
-                        error = function(e) FALSE))) {
-      tools::pskill(child$pid, tools::SIGKILL)
-    }
-    suppressWarnings(parallel::mccollect(child, wait = TRUE))
-  }, add = TRUE)
+  on.exit(bb_cleanup_child(child), add = TRUE)
   deadline <- Sys.time() + 30
   while (!file.exists(mark) && Sys.time() < deadline) Sys.sleep(0.01)
   expect_true(file.exists(mark))
   expect_true(tools::pskill(child$pid, tools::SIGKILL))
-  suppressWarnings(parallel::mccollect(child, wait = TRUE))
+  expect_true(!is.null(bb_collect_child(child, timeout = 1)))
   result <- round059_update(fixture)
   expect_true(result$updated)
   expect_false(dir.exists(.update_lock_path(fixture$project)))

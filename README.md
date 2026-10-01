@@ -156,15 +156,19 @@ choices because static analysis cannot prove that two exported objects are the
 same at runtime. The diagnostic labels collisions as `probable_same_object`,
 `distinct_definitions`, or `undetermined`, and reports ordered source reasons.
 For a preferred `probable_same_object`, `<meta>_install()` verifies installed
-owners with `identical()` and keeps a snapshot of that check; an installed owner
-that no longer exports the symbol is reported with the same verification warning.
+owners in a clean R subprocess with the destination library first; an installed
+owner that no longer exports the symbol is reported with the same verification warning.
+If the subprocess cannot run, the result is explicitly unverified. A namespace
+already loaded from another library is reported before verification.
 `<meta>_conflicts()` repeats the check and emits the warning again, so it is the
 way to re-verify after installation. A `FALSE` identity warning distinguishes
 equivalent function copies (same body and formals) from distinct objects. If `on_component_error = "skip"`
 omits a required owner, generation errors rather than emitting a binding to a
 component that is not included.
-The returned conflicts object keeps masking conflicts and adds the
-`reexport_verification` data frame as a separate component.
+The returned conflicts object keeps masking conflicts and stores the verification
+data frame as an attribute. Use `<meta>_reexport_verification(conflicts)` to
+read it, so a component exported under that name remains visible in the conflict
+list.
 
 The collision analysis is a diagnostic aid. The guarantee is the explicit
 `reexport_prefer` or `reexport_exclude` choice plus `<meta>_install()`'s

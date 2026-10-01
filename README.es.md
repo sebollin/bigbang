@@ -161,16 +161,20 @@ esas decisiones porque el análisis estático no puede probar que dos objetos
 exportados sean el mismo en tiempo de ejecución. El diagnóstico etiqueta cada
 colisión como `probable_same_object`, `distinct_definitions` o `undetermined`,
 y ordena las razones de sus fuentes. Para un `probable_same_object` elegido,
-`<meta>_install()` verifica con `identical()` los dueños instalados y conserva
-una foto del resultado; si un dueño instalado ya no exporta el símbolo, lo informa
-con el mismo aviso de verificación. `<meta>_conflicts()` repite la comprobación y
+`<meta>_install()` verifica los dueños instalados en un subproceso limpio de R,
+con la biblioteca destino primero; si un dueño instalado ya no exporta el símbolo,
+lo informa con el mismo aviso de verificación. Si el subproceso no se puede
+ejecutar, el resultado queda explícitamente sin verificar. Un espacio de nombres
+ya cargado desde otra biblioteca se informa antes de verificar. `<meta>_conflicts()` repite la comprobación y
 emite de nuevo el aviso, por lo que es la forma de verificar otra vez después de
 instalar. Un aviso de identidad `FALSE` distingue copias equivalentes de funciones
 (mismo cuerpo y formales) de objetos distintos.
 Si `on_component_error = "skip"` omite un dueño necesario, la generación falla
 en vez de crear un binding hacia un componente que no viaja.
-El objeto que devuelve conserva los conflictos de enmascaramiento y suma el
-data frame `reexport_verification` como componente separado.
+El objeto que devuelve conserva los conflictos de enmascaramiento y guarda el
+data frame de verificación como atributo. Leelo con
+`<meta>_reexport_verification(conflicts)`, de modo que un componente que exporte
+ese nombre siga visible en la lista de conflictos.
 
 El análisis de colisiones es una ayuda de diagnóstico. La garantía es la decisión
 explícita `reexport_prefer` o `reexport_exclude` más la verificación de

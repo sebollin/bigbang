@@ -141,6 +141,66 @@ test_that("round 051 requires an explicit choice for every collision", {
   ))
 })
 
+test_that("re-export verification does not occupy a conflict symbol slot", {
+  skip_on_cran()
+  sandbox <- tempfile("bigbang-round062-conflict-slot-")
+  source_root <- file.path(sandbox, "sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  component_library <- file.path(sandbox, "component-library")
+  meta_library <- file.path(sandbox, "meta-library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archive_dir)
+  dir.create(destination)
+  dir.create(component_library)
+  dir.create(meta_library)
+  left <- round051_make_archive(
+    source_root, archive_dir, "h6left", "reexport_verification",
+    body = "reexport_verification <- function() 'left'"
+  )
+  right <- round051_make_archive(
+    source_root, archive_dir, "h6right", "reexport_verification",
+    body = "reexport_verification <- function() 'right'"
+  )
+  generated <- round051_create(
+    "h6verse", c(left, right), destination, reexport = TRUE,
+    reexport_prefer = c(reexport_verification = "h6left")
+  )
+  round051_install(left, component_library)
+  round051_install(right, component_library)
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  build_output <- withr::with_dir(sandbox, system2(
+    r_binary, c("CMD", "build", shQuote(generated$path)),
+    stdout = TRUE, stderr = TRUE
+  ))
+  build_status <- attr(build_output, "status")
+  if (is.null(build_status)) build_status <- 0L
+  expect_identical(build_status, 0L,
+                   info = paste(build_output, collapse = "\n"))
+  meta_archive <- file.path(sandbox, "h6verse_0.1.0.tar.gz")
+  round051_install(meta_archive, meta_library)
+  withr::with_libpaths(c(meta_library, component_library), {
+    loadNamespace("h6verse")
+    getExportedValue("h6verse", "h6verse_attach")()
+    on.exit(getExportedValue("h6verse", "h6verse_detach")(), add = TRUE)
+    conflicts <- suppressWarnings(
+      getExportedValue("h6verse", "h6verse_conflicts")()
+    )
+    expect_named(conflicts, "reexport_verification")
+    expect_setequal(
+      conflicts[["reexport_verification"]],
+      c("package:h6left", "package:h6right")
+    )
+    verification <- getExportedValue(
+      "h6verse", "h6verse_reexport_verification"
+    )(conflicts)
+    expect_s3_class(verification, "h6verse_reexport_verification")
+    expect_identical(verification$symbol, "reexport_verification")
+  })
+})
+
 test_that("round 051 reports genuine collisions and every selected proof blocker", {
   testthat::skip_on_cran()
   sandbox <- tempfile("bigbang-round051-blockers-")
@@ -675,9 +735,15 @@ test_that("round 051 prefers a non-syntactic export and installs its binding", {
     "differ as distinct objects"
   )
   expect_s3_class(conflicts, "preferverse_conflicts")
-  expect_s3_class(conflicts$reexport_verification,
-                  "preferverse_reexport_verification")
-  expect_identical(conflicts$reexport_verification$resolution, "preferred")
+  expect_s3_class(
+    getExportedValue("preferverse", "preferverse_reexport_verification")(
+      conflicts
+    ),
+    "preferverse_reexport_verification"
+  )
+  expect_identical(getExportedValue(
+    "preferverse", "preferverse_reexport_verification"
+  )(conflicts)$resolution, "preferred")
 })
 
 test_that("round 053 verifies probable choices after install and keeps the binding", {
@@ -748,9 +814,15 @@ test_that("round 053 verifies probable choices after install and keeps the bindi
       }
     )
     expect_s3_class(before_warning, "bigbang_warning_reexport_verification")
-    expect_identical(before_install$reexport_verification$missing,
-                     "verifyparent, verifychild")
-    expect_true(is.na(before_install$reexport_verification$identical))
+    expect_identical(
+      getExportedValue("verifyverse", "verifyverse_reexport_verification")(
+        before_install
+      )$missing,
+      "verifyparent, verifychild"
+    )
+    expect_true(is.na(getExportedValue(
+      "verifyverse", "verifyverse_reexport_verification"
+    )(before_install)$identical))
   })
 
   withr::local_libpaths(c(meta_library, component_library, .libPaths()))
@@ -769,7 +841,9 @@ test_that("round 053 verifies probable choices after install and keeps the bindi
   expect_s3_class(warning_condition, "bigbang_warning_reexport_verification")
   expect_match(conditionMessage(warning_condition), "s", fixed = TRUE)
   expect_match(conditionMessage(warning_condition), "distinct objects", fixed = TRUE)
-  expect_identical(result$reexport_verification$identical, FALSE)
+  expect_identical(getExportedValue(
+    "verifyverse", "verifyverse_reexport_verification"
+  )(result)$identical, FALSE)
   expect_identical(getExportedValue("verifyverse", "s")(), "parent")
 
   conflicts_warning <- NULL
@@ -782,8 +856,12 @@ test_that("round 053 verifies probable choices after install and keeps the bindi
   )
   expect_s3_class(conflicts_warning, "bigbang_warning_reexport_verification")
   expect_s3_class(conflicts, "verifyverse_conflicts")
-  expect_identical(conflicts$reexport_verification$identical, FALSE)
-  expect_identical(conflicts$reexport_verification$missing, "")
+  expect_identical(getExportedValue(
+    "verifyverse", "verifyverse_reexport_verification"
+  )(conflicts)$identical, FALSE)
+  expect_identical(getExportedValue(
+    "verifyverse", "verifyverse_reexport_verification"
+  )(conflicts)$missing, "")
 })
 
 test_that("round 055 verification warns when an installed owner lost its export", {
@@ -849,10 +927,21 @@ test_that("round 055 verification warns when an installed owner lost its export"
     )
     expect_s3_class(warning_condition, "bigbang_warning_reexport_verification")
     expect_match(conditionMessage(warning_condition), "missingparent", fixed = TRUE)
-    expect_identical(result$reexport_verification$missing,
-                     "missingparent, missingchild")
-    expect_identical(result$reexport_verification$installed, "missingparent")
-    expect_true(is.na(result$reexport_verification$identical))
+    expect_identical(
+      getExportedValue("missingverse", "missingverse_reexport_verification")(
+        result
+      )$missing,
+      "missingparent, missingchild"
+    )
+    expect_identical(
+      getExportedValue("missingverse", "missingverse_reexport_verification")(
+        result
+      )$installed,
+      "missingparent"
+    )
+    expect_true(is.na(getExportedValue(
+      "missingverse", "missingverse_reexport_verification"
+    )(result)$identical))
   })
 })
 
@@ -925,7 +1014,9 @@ test_that("round 055 names equivalent copies separately from distinct objects", 
     )
     expect_s3_class(warning_condition, "bigbang_warning_reexport_verification")
     expect_match(conditionMessage(warning_condition), "equivalent copies", fixed = TRUE)
-    expect_identical(result$reexport_verification$identical, FALSE)
+    expect_identical(getExportedValue(
+      "equivverse", "equivverse_reexport_verification"
+    )(result)$identical, FALSE)
   })
 })
 
@@ -1118,8 +1209,12 @@ test_that("round 053 poison component cannot mask generated runtime calls", {
   expect_true(is.data.frame(result$reexport_verification))
   conflicts <- base::getExportedValue("poisonverse", "poisonverse_conflicts")()
   expect_s3_class(conflicts, "poisonverse_conflicts")
-  expect_s3_class(conflicts$reexport_verification,
-                  "poisonverse_reexport_verification")
+  expect_s3_class(
+    getExportedValue("poisonverse", "poisonverse_reexport_verification")(
+      conflicts
+    ),
+    "poisonverse_reexport_verification"
+  )
 
   unqualified <- base::tempfile("bigbang-round053-unqualified-")
   base::writeLines(

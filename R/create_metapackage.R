@@ -37,7 +37,7 @@
 .allowed_tolerations <- c("filename_mismatch", "unincluded_local_dep")
 .generation_manifest_name <- ".bigbang-manifest.rds"
 
-.planned_documentation_files <- function(name) {
+.planned_documentation_files <- function(name, reexport = FALSE) {
   static <- c(
     "build_dependency_graph", "classify_package_archive", "detect_cycles",
     "format_cli_startup", "generate_ascii_banner", "install_local_archive",
@@ -48,6 +48,11 @@
     "_attach_all", "_attach", "_conflicts", "_deps", "_detach", "_install",
     "_load_all", "_packages"
   ))
+  public <- if (isTRUE(reexport)) {
+    c(public, paste0(name, "_reexport_verification"))
+  } else {
+    public
+  }
   file.path("man", paste0(c(static, public), ".Rd"))
 }
 
@@ -79,7 +84,7 @@
     files <- c(files, file.path("vignettes", paste0("workflow-", name, ".Rmd")))
   }
   if (isTRUE(document)) {
-    files <- c(files, .planned_documentation_files(name))
+    files <- c(files, .planned_documentation_files(name, reexport = reexport))
     if (isTRUE(reexport)) {
       exports <- if (is.null(reexport_symbols)) {
         unique(unlist(lapply(components, function(component) {
@@ -645,8 +650,11 @@
 #' runtime. The analysis remains as a diagnostic with
 #' `probable_same_object`, `distinct_definitions`, or `undetermined`, including
 #' ordered file, line, import, and parse reasons. For a preferred
-#' `probable_same_object`, `<name>_install()` verifies the installed owners with
-#' `identical()` without installing anything extra; missing owners remain
+#' `probable_same_object`, `<name>_install()` verifies the installed owners in
+#' a clean R subprocess whose destination library is first in `.libPaths()`.
+#' If that subprocess cannot run, the result is explicitly unverified and never
+#' reports a false identity. A namespace already loaded from another library is
+#' reported before the clean verification starts. Missing owners remain
 #' unverified and the verification is retained in the returned result. The
 #' diagnostic is a help, not the guarantee: the guarantee is the explicit
 #' `reexport_prefer` or `reexport_exclude` decision plus that verification.
@@ -654,15 +662,17 @@
 #' is deliberately conservative and can count a never-forced `delayedAssign`,
 #' an `if (FALSE)` branch, or a `reg.finalizer()` body; this overcount does not
 #' weaken the explicit decision and installation-verification guarantee.
-#' `<name>_conflicts()` repeats that check on request. If
-#' `on_component_error = "skip"` omits a component required by a preferred
+#' `<name>_conflicts()` repeats that check on request. Its masking-conflict
+#' names remain ordinary symbols; use
+#' `<name>_reexport_verification(conflicts)` to access the verification
+#' attribute without a name collision. If `on_component_error = "skip"` omits a component required by a preferred
 #' binding or an import source, generation errors with an actionable skipped
 #' condition instead of creating a binding to a component that will not travel
 #' with the metapackage.
 #' With `reexport = TRUE`, `<name>_conflicts()` retains the masking-conflict
-#' list from earlier releases and adds its installed-owner table in the
-#' `reexport_verification` component. That component keeps the same
-#' `<name>_reexport_verification` class when it has zero rows.
+#' list from earlier releases and stores its installed-owner table as an
+#' attribute. The accessor keeps the same `<name>_reexport_verification` class
+#' when it has zero rows.
 #'
 #' @section Interrupted updates:
 #' Before an in-place update mutates the project, bigbang assembles a durable
@@ -1056,7 +1066,7 @@ create_metapackage <- function(
       project_dir, requested_files
     )
     regenerable <- if (isTRUE(document)) {
-      .planned_documentation_files(name)
+      .planned_documentation_files(name, reexport = reexport)
     } else {
       character()
     }
@@ -1150,7 +1160,7 @@ create_metapackage <- function(
   documentation_namespaces <- NULL
   documentation_files <- if (isTRUE(document)) {
     c(
-      .planned_documentation_files(name),
+      .planned_documentation_files(name, reexport = reexport),
       if (isTRUE(reexport) && nrow(reexport_plan$table) > 0L) {
         file.path("man", "reexports.Rd")
       } else {
@@ -1369,6 +1379,7 @@ create_metapackage <- function(
     implicit_deps = hard_implicit_deps,
     import_deps = import_deps,
     verbose = debug,
+    reexport = isTRUE(reexport),
     reexport_symbols = if (isTRUE(reexport)) {
       reexport_plan$table$symbol
     } else {

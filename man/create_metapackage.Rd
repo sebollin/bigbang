@@ -297,8 +297,11 @@ source analysis cannot prove that two exported objects are the same at
 runtime. The analysis remains as a diagnostic with
 \code{probable_same_object}, \code{distinct_definitions}, or \code{undetermined}, including
 ordered file, line, import, and parse reasons. For a preferred
-\code{probable_same_object}, \verb{<name>_install()} verifies the installed owners with
-\code{identical()} without installing anything extra; missing owners remain
+\code{probable_same_object}, \verb{<name>_install()} verifies the installed owners in
+a clean R subprocess whose destination library is first in \code{.libPaths()}.
+If that subprocess cannot run, the result is explicitly unverified and never
+reports a false identity. A namespace already loaded from another library is
+reported before the clean verification starts. Missing owners remain
 unverified and the verification is retained in the returned result. The
 diagnostic is a help, not the guarantee: the guarantee is the explicit
 \code{reexport_prefer} or \code{reexport_exclude} decision plus that verification.
@@ -306,15 +309,17 @@ Calling \verb{library(<meta>)} alone does not verify installed owners. The scann
 is deliberately conservative and can count a never-forced \code{delayedAssign},
 an \verb{if (FALSE)} branch, or a \code{reg.finalizer()} body; this overcount does not
 weaken the explicit decision and installation-verification guarantee.
-\verb{<name>_conflicts()} repeats that check on request. If
-\code{on_component_error = "skip"} omits a component required by a preferred
+\verb{<name>_conflicts()} repeats that check on request. Its masking-conflict
+names remain ordinary symbols; use
+\verb{<name>_reexport_verification(conflicts)} to access the verification
+attribute without a name collision. If \code{on_component_error = "skip"} omits a component required by a preferred
 binding or an import source, generation errors with an actionable skipped
 condition instead of creating a binding to a component that will not travel
 with the metapackage.
 With \code{reexport = TRUE}, \verb{<name>_conflicts()} retains the masking-conflict
-list from earlier releases and adds its installed-owner table in the
-\code{reexport_verification} component. That component keeps the same
-\verb{<name>_reexport_verification} class when it has zero rows.
+list from earlier releases and stores its installed-owner table as an
+attribute. The accessor keeps the same \verb{<name>_reexport_verification} class
+when it has zero rows.
 }
 
 \section{Interrupted updates}{
