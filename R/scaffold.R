@@ -130,6 +130,7 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
     ".pkgs", ".component_names", ".component_specs",
     ".component_reexport_specs", ".reexport_state", ".reexport_library_paths",
     ".set_reexport_library", ".reexport_component_value",
+    ".reexport_installed_version",
     ".make_reexport_binding", ".install_reexport_bindings", ".reexport_verify",
     ".reexport_verify_subprocess",
     "attach_installed_packages", ".bigbang_abort",

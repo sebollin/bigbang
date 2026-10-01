@@ -787,3 +787,42 @@ test_that("generated installers create a new lib in both startup modes", {
     unloadNamespace(name)
   }
 })
+
+test_that("re-export bindings read package metadata only to explain a failure", {
+  # Each access to a re-exported symbol goes through the binding; reading the
+  # installed version there made every use about fifty times slower.
+  sandbox <- withr::local_tempdir("bigbang-reexport-getter-")
+  source_root <- file.path(sandbox, "sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  dir.create(source_root)
+  dir.create(archive_dir)
+  dir.create(destination)
+  archive <- reexport_make_archive(
+    source_root, archive_dir, "toyg",
+    exports = "toyg_value",
+    body = "toyg_value <- function(x = 1) x + 1"
+  )
+  result <- bigbang::create_metapackage(
+    "toygverse", archive, dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character(), reexport = TRUE
+  )
+  expressions <- as.list(parse(
+    file.path(result$path, "R", "reexports.R"), keep.source = FALSE
+  ))
+  getters <- Filter(function(expression) {
+    is.call(expression) &&
+      as.character(expression[[1L]]) %in% c("<-", "=") &&
+      identical(as.character(expression[[2L]]), ".reexport_component_value")
+  }, expressions)
+  expect_length(getters, 1L)
+  statements <- as.list(getters[[1L]][[3L]][[3L]])[-1L]
+  unconditional <- Filter(function(statement) {
+    !(is.call(statement) && identical(statement[[1L]], as.name("if")))
+  }, statements)
+  touched <- unique(unlist(lapply(unconditional, all.names)))
+  expect_false(any(
+    c("packageVersion", ".reexport_installed_version") %in% touched
+  ))
+})

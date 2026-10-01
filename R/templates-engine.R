@@ -1400,7 +1400,7 @@ write_metapackage_files <- function(
 
   # Templates for the generated runtime files.
   templates <- list(
-    reexports = '\n.component_reexport_specs <- {{{ reexport_specs }}}\n.reexport_state <- base::new.env(parent = base::emptyenv())\n.reexport_state$library <- base::character()\n.reexport_library_paths <- function() {\n  base::unique(base::c(.reexport_state$library[base::dir.exists(.reexport_state$library)], base::.libPaths()))\n}\n.set_reexport_library <- function(lib) {\n  .reexport_state$library <- base::normalizePath(lib, winslash = "/", mustWork = FALSE)\n  base::invisible(NULL)\n}\n\n.reexport_component_value <- function(package, symbol) {\n  if (!base::requireNamespace(package, quietly = TRUE,\n                        lib.loc = .reexport_library_paths())) {\n    return(function(...) {\n      base::stop(.meta_trf("Component package \'%s\' is not installed.", package), call. = FALSE)\n    })\n  }\n  base::getExportedValue(package, symbol)\n}\n\n.make_reexport_binding <- function(package, symbol) {\n  base::force(package)\n  base::force(symbol)\n  function(value) {\n    if (!base::missing(value)) {\n      base::stop(.meta_tr("Runtime re-export bindings are read-only."), call. = FALSE)\n    }\n    .reexport_component_value(package, symbol)\n  }\n}\n\n.install_reexport_bindings <- function(pkgname) {\n  namespace <- base::asNamespace(pkgname)\n  for (spec in .component_reexport_specs) {\n    base::makeActiveBinding(\n      spec$symbol,\n      .make_reexport_binding(spec$package, spec$symbol),\n      namespace\n    )\n  }\n  base::invisible(NULL)\n}\n',
+    reexports = '\n.component_reexport_specs <- {{{ reexport_specs }}}\n.reexport_state <- base::new.env(parent = base::emptyenv())\n.reexport_state$library <- base::character()\n.reexport_library_paths <- function() {\n  base::unique(base::c(.reexport_state$library[base::dir.exists(.reexport_state$library)], base::.libPaths()))\n}\n.set_reexport_library <- function(lib) {\n  .reexport_state$library <- base::normalizePath(lib, winslash = "/", mustWork = FALSE)\n  base::invisible(NULL)\n}\n\n.make_reexport_binding <- function(package, symbol) {\n  base::force(package)\n  base::force(symbol)\n  function(value) {\n    if (!base::missing(value)) {\n      base::stop(.meta_tr("Runtime re-export bindings are read-only."), call. = FALSE)\n    }\n    .reexport_component_value(package, symbol)\n  }\n}\n\n.install_reexport_bindings <- function(pkgname) {\n  namespace <- base::asNamespace(pkgname)\n  for (spec in .component_reexport_specs) {\n    base::makeActiveBinding(\n      spec$symbol,\n      .make_reexport_binding(spec$package, spec$symbol),\n      namespace\n    )\n  }\n  base::invisible(NULL)\n}\n',
     attach = '
 utils::globalVariables(".pkgs")
 .pkgs <- {{{ package_list }}}
@@ -1999,12 +1999,28 @@ zzz = '
       templates$reexports,
       paste(c(
         "",
-        ".reexport_component_value <- function(package, symbol) {",
-        "  libraries <- .reexport_library_paths()",
-        "  installed_version <- base::tryCatch(",
+        "# The installed version is read only to explain a failure: reading it",
+        "# on every access made each use of a re-exported symbol ~50 times slower.",
+        ".reexport_installed_version <- function(package, libraries) {",
+        "  base::tryCatch(",
         "    base::as.character(utils::packageVersion(package, lib.loc = libraries)),",
         "    error = function(e) .meta_tr(\"component is not installed\")",
         "  )",
+        "}",
+        "",
+        ".reexport_component_value <- function(package, symbol) {",
+        "  # Fast path for the common case: the component is loaded and exports it.",
+        "  if (base::isNamespaceLoaded(package) && base::exists(",
+        "    symbol, envir = base::getNamespaceInfo(package, \"exports\"),",
+        "    inherits = FALSE",
+        "  )) {",
+        "    value <- base::tryCatch(",
+        "      base::getExportedValue(package, symbol),",
+        "      error = base::identity",
+        "    )",
+        "    if (!base::inherits(value, \"error\")) return(value)",
+        "  }",
+        "  libraries <- .reexport_library_paths()",
         "  loaded <- base::tryCatch(",
         "    base::requireNamespace(package, quietly = TRUE, lib.loc = libraries),",
         "    error = base::identity",
@@ -2017,7 +2033,7 @@ zzz = '
         "    }",
         "    message <- .meta_trf(",
         "      \"Re-exported symbol '%s' from component package '%s' (installed version: %s) is unavailable: %s. Run %s to install the required component version.\",",
-        "      symbol, package, installed_version, reason, \"{{ name }}_install()\"",
+        "      symbol, package, .reexport_installed_version(package, libraries), reason, \"{{ name }}_install()\"",
         "    )",
         "    return(function(...) base::stop(message, call. = FALSE))",
         "  }",
@@ -2032,7 +2048,7 @@ zzz = '
         "    )",
         "    message <- .meta_trf(",
         "      \"Re-exported symbol '%s' from component package '%s' (installed version: %s) is unavailable: %s. Run %s to install the required component version.\",",
-        "      symbol, package, installed_version, reason, \"{{ name }}_install()\"",
+        "      symbol, package, .reexport_installed_version(package, libraries), reason, \"{{ name }}_install()\"",
         "    )",
         "    return(function(...) base::stop(message, call. = FALSE))",
         "  }",
