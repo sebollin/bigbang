@@ -156,8 +156,12 @@ choices because static analysis cannot prove that two exported objects are the
 same at runtime. The diagnostic labels collisions as `probable_same_object`,
 `distinct_definitions`, or `undetermined`, and reports ordered source reasons.
 For a preferred `probable_same_object`, `<meta>_install()` verifies installed
-owners in a clean R subprocess with the destination library first; an installed
-owner that no longer exports the symbol is reported with the same verification warning.
+owners in a clean R subprocess using the same ordered libraries as runtime:
+the destination library first, followed by `.libPaths()`. An owner installed
+only in a later library is therefore resolved and compared to the object the
+user will obtain. The result distinguishes not installed, not exported, and
+loaded from another library; an installed owner that no longer exports the
+symbol is reported with the same verification warning.
 If the subprocess cannot run, the result is explicitly unverified. A namespace
 already loaded from another library is reported before verification.
 `<meta>_conflicts()` repeats the check and emits the warning again, so it is the
@@ -189,6 +193,24 @@ An interrupted `update = TRUE` leaves a durable journal beside the project.
 The next update inspects it before writing; use `dry_run = TRUE` to preview the
 action. After confirming that no other update is running, pass `recover = TRUE`
 to preserve unknown user bytes and complete the rollback or recovery.
+
+The lock is decided by the owner before the claimant. A live published owner
+always blocks. An uncertain owner blocks unless `recover = TRUE`; a dead owner
+can be reclaimed. A discarded lock with a live `owner.rds` is restored or
+blocks on its PID and is never deleted. Only when that owner is proven dead does
+the claimant state decide whether the entry is blocked, needs `recover = TRUE`,
+or can be discarded. Lock and journal mutations revalidate ownership before
+continuing; if the published owner changed, the update aborts before its next
+mutation. A symlink at the lock name is reported as a symlink, and
+`recover = TRUE` moves the link itself without following its target.
+
+On Linux, liveness uses `/proc/<pid>` and treats zombie (`Z`) and dead (`X`)
+states as dead. Without `/proc`, a failed `kill(pid, 0)` is uncertain unless
+`ps -p` proves that the PID is absent; permission errors and another user's
+process are never treated as dead. A same-user process with write permission
+can forge these records; that is outside the integrity model. Recovery also
+requires the owner fields of `state.rds` and `marker.rds` to match, otherwise
+the journal is set aside rather than used for rollback.
 
 `cran_deps = "skip"` is the default and never accesses the network. Use
 `"error"` to fail immediately when a non-local dependency is missing, or

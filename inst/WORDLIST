@@ -35,6 +35,8 @@ PID
 pre
 repos
 README
+revalidate
+revalidates
 reinstalls
 rhelpi18n
 rmarkdown
@@ -44,6 +46,7 @@ Sebastián
 SIGHUP
 SIGKILL
 SIGTERM
+symlink
 tarball
 tarballs
 tempdir

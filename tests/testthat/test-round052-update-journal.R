@@ -56,6 +56,11 @@ round052_arm <- function(fixture, extra_files = character()) {
   state$pid <- 99999999L
   state$process_start <- NA_character_
   .atomic_save_rds(state, state_path)
+  marker_path <- file.path(journal$path, "marker.rds")
+  marker <- readRDS(marker_path)
+  marker[c("pid", "host", "started_utc", "process_start")] <-
+    state[c("pid", "host", "started_utc", "process_start")]
+  .atomic_save_rds(marker, marker_path)
   journal
 }
 
@@ -437,6 +442,11 @@ test_that("owner liveness distinguishes a live process from PID reuse", {
   observed_start <- .update_process_start(sleeper$pid)
   state$process_start <- observed_start
   .atomic_save_rds(state, state_path)
+  marker_path <- file.path(journal$path, "marker.rds")
+  marker <- readRDS(marker_path)
+  marker[c("pid", "host", "process_start")] <-
+    state[c("pid", "host", "process_start")]
+  .atomic_save_rds(marker, marker_path)
 
   expect_error(
     .recover_pending_update(fixture$project, "journalverse"),
@@ -448,6 +458,8 @@ test_that("owner liveness distinguishes a live process from PID reuse", {
     paste0(observed_start, "-reused")
   }
   .atomic_save_rds(state, state_path)
+  marker[c("pid", "process_start")] <- state[c("pid", "process_start")]
+  .atomic_save_rds(marker, marker_path)
   if (is.na(observed_start)) {
     expect_error(
       .recover_pending_update(fixture$project, "journalverse"),
@@ -469,6 +481,11 @@ test_that("owner liveness distinguishes a live process from PID reuse", {
   second_state$host <- .update_host()
   second_state$process_start <- .update_process_start(sleeper$pid)
   .atomic_save_rds(second_state, second_state_path)
+  second_marker_path <- file.path(second_journal$path, "marker.rds")
+  second_marker <- readRDS(second_marker_path)
+  second_marker[c("pid", "host", "process_start")] <-
+    second_state[c("pid", "host", "process_start")]
+  .atomic_save_rds(second_marker, second_marker_path)
   expect_error(
     .recover_pending_update(
       second$project, "journalverse", recover = TRUE

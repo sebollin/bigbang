@@ -339,6 +339,28 @@ temporary folder that already contains a complete \code{owner.rds}. A published
 lock therefore always has an owner. Reclaiming an orphan first atomically
 renames it to a unique discarded name; only the process that wins that
 rename may publish a replacement, and it rechecks the owner before doing so.
+Lock disposition is owner-first. For the published lock, a proven live owner
+blocks every caller; an uncertain owner blocks without \code{recover = TRUE} and
+is reclaimable only with \code{recover = TRUE}; a proven dead owner is reclaimable.
+For a discarded lock, a proven live \code{owner.rds} is restored when the lock
+name is free or blocks on its PID when it is occupied. It is never deleted.
+An uncertain discarded owner follows the uncertain-lock rule. Only after the
+discarded owner is proven dead does the claimant decide the outcome: a live
+claimant blocks, an uncertain claimant needs \code{recover = TRUE}, and a dead
+claimant may be discarded. \code{owner.rds} and \code{claim.rds} are removed only when
+their bytes still have the digest observed for that decision; mismatches are
+preserved by setting the entry aside. No claim is written before the owner
+has been re-read immediately before publication. The update also revalidates
+its published owner before creating the journal, recording each intent, and
+completing an irreversible step. If the owner changed, it aborts before the
+next mutation. A discarded entry can therefore contain a claimant record,
+but that record is never allowed to override a live owner.
+For a \verb{.lock.armando-*} entry, a live owner stays in place and blocks;
+an uncertain owner stays in place without \code{recover = TRUE} and is set aside
+with \code{recover = TRUE}; a dead or missing owner is set aside. A symbolic link
+at the published lock name is reported as a link without an update-running
+claim; with \code{recover = TRUE} the link itself is renamed aside and its target
+is not followed.
 A regular file or other user entry at the lock name is atomically set aside
 as \verb{.<name>.bigbang-apartado-*}. Lock preparations left by an interruption
 are recognized on the next call and set aside without deleting their bytes.
@@ -352,13 +374,19 @@ If a process dies while preparing the journal, an empty unmarked
 \verb{armando-*} folder is removed; any non-empty unmarked folder is atomically
 set aside as \verb{.<name>.bigbang-apartado-*} without copying or deleting bytes.
 The initial marker records the owner PID, host, process start token,
-and start time before the first backup copy. A marked preparation is
-discarded only after the owner is proven finished with the platform's
-conservative liveness policy. \code{recover = TRUE} resolves uncertainty, such
-as Windows, missing \verb{/proc}, another host, or an unreadable owner, but never
-overrides a proven live owner. A proven live owner means the same host, a
-live PID, and the same process-start token; that case always errors and
-includes the PID. Journal disposal first writes an atomic tombstone with
+and start time before the first backup copy. On Linux, liveness reads
+\verb{/proc/<pid>} and treats a missing process as dead, \code{Z} or \code{X} in
+\verb{/proc/<pid>/stat} as dead, and any other readable state as existing; the
+process-start token still decides identity. Without \verb{/proc}, \code{kill(pid, 0)}
+proves existence only when it succeeds. A failure is dead only when \code{ps -p}
+also proves that the PID is absent; permission errors, an existing PID, an
+unavailable \code{ps}, and an unreadable token are uncertain. The exact policy is:
+dead means the process does not exist or is \code{Z}/\code{X}; alive means it exists,
+is not terminal, and its start token matches; live-token-conflict means it
+exists but the token differs; uncertain means existence or identity cannot be
+proved. \code{recover = TRUE} may claim or set aside uncertain entries, but never
+overrides a proven live owner. A process of another user is therefore never
+inferred dead from \code{EPERM}. Journal disposal first writes an atomic tombstone with
 the exact relative-path and MD5 inventory of the entries bigbang wrote, then
 renames the folder to \verb{.<name>.bigbang-update.descartado-*}; cleanup can
 therefore resume after another interruption. Cleanup checks every file
@@ -377,7 +405,11 @@ update. A file with the same path and MD5 as the inventory is an unavoidable
 limit: its bytes are identical, so deleting it loses no content, but the
 journal cannot prove who created it. The tombstone and its digest are local
 journal state, not a cryptographic signature; treat the journal as bigbang's
-private territory.
+private territory. A process of the same user with write permission can forge
+\code{owner.rds}, \code{marker.rds}, or \code{state.rds}; that is outside this integrity
+model. As a cheap consistency check, an armed journal is recoverable only when
+the owner fields in \code{state.rds} match those in \code{marker.rds}; otherwise the
+journal is set aside and is never used for rollback.
 
 The journal survives process termination, terminal closure, and system
 shutdown, including SIGKILL, SIGTERM, and SIGHUP on POSIX systems. The next

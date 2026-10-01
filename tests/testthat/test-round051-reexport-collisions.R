@@ -864,6 +864,74 @@ test_that("round 053 verifies probable choices after install and keeps the bindi
   )(conflicts)$missing, "")
 })
 
+test_that("clean re-export verification follows the runtime library order", {
+  testthat::skip_on_cran()
+  sandbox <- tempfile("bigbang-round063-second-library-")
+  source_root <- file.path(sandbox, "sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  meta_library <- file.path(sandbox, "meta-library")
+  second_library <- file.path(sandbox, "second-library")
+  target_library <- file.path(sandbox, "target-library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archive_dir)
+  dir.create(destination)
+  dir.create(meta_library)
+  dir.create(second_library)
+  dir.create(target_library)
+  parent <- round051_make_archive(
+    source_root, archive_dir, "secondparent", "s",
+    body = "s <- function() 'second'"
+  )
+  child <- round051_make_archive(
+    source_root, archive_dir, "secondchild", "s",
+    body = "# imported only",
+    namespace_extra = "importFrom(secondparent, s)",
+    imports = "secondparent"
+  )
+  generated <- round051_create(
+    "secondverse", c(parent, child), destination, reexport = TRUE,
+    reexport_prefer = c(s = "secondparent")
+  )
+  round051_install(parent, second_library)
+  round051_install(child, second_library)
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  build_output <- withr::with_dir(sandbox, system2(
+    r_binary, c("CMD", "build", shQuote(generated$path)),
+    stdout = TRUE, stderr = TRUE
+  ))
+  build_status <- attr(build_output, "status")
+  if (is.null(build_status)) build_status <- 0L
+  expect_identical(build_status, 0L,
+                   info = paste(build_output, collapse = "\n"))
+  meta_archive <- file.path(sandbox, "secondverse_0.1.0.tar.gz")
+  round051_install(meta_archive, meta_library)
+
+  withr::with_libpaths(c(meta_library, second_library), {
+    base::loadNamespace("secondverse")
+    namespace <- base::getNamespace("secondverse")
+    base::get(".set_reexport_library", envir = namespace)(target_library)
+    warning_condition <- NULL
+    verification <- withCallingHandlers(
+      base::get(".reexport_verify", envir = namespace)(warn = TRUE),
+      warning = function(condition) {
+        if (inherits(condition, "bigbang_warning_reexport_verification")) {
+          warning_condition <<- condition
+          invokeRestart("muffleWarning")
+        }
+      }
+    )
+    expect_null(warning_condition)
+    expect_identical(verification$missing, "")
+    expect_identical(verification$not_installed, "")
+    expect_identical(verification$not_exported, "")
+    expect_identical(verification$loaded_from_other_library, "")
+    expect_identical(verification$installed, "secondparent, secondchild")
+  })
+})
+
 test_that("round 055 verification warns when an installed owner lost its export", {
   sandbox <- tempfile("bigbang-round055-missing-export-")
   source_root <- file.path(sandbox, "sources")
@@ -1210,7 +1278,7 @@ test_that("round 053 poison component cannot mask generated runtime calls", {
   conflicts <- base::getExportedValue("poisonverse", "poisonverse_conflicts")()
   expect_s3_class(conflicts, "poisonverse_conflicts")
   expect_s3_class(
-    getExportedValue("poisonverse", "poisonverse_reexport_verification")(
+    base::getExportedValue("poisonverse", "poisonverse_reexport_verification")(
       conflicts
     ),
     "poisonverse_reexport_verification"

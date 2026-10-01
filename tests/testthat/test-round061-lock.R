@@ -356,11 +356,11 @@ test_that("ambiguous lock entries remain blocked until recovery is explicit", {
   uncertain$host <- "other-host"
   .atomic_save_rds(uncertain, .update_lock_claim_path(discarded))
   expect_identical(
-    .update_lock_state(fixture$project)$action, "blocked_claim"
+    .update_lock_state(fixture$project)$action, "blocked_uncertain_discard"
   )
   expect_identical(
     .update_lock_state(fixture$project, recover = TRUE)$action,
-    "claim_orphan_discard"
+    "claim_uncertain_discard"
   )
   unlink(discarded, recursive = TRUE, force = TRUE)
 
@@ -383,17 +383,26 @@ test_that("ambiguous lock entries remain blocked until recovery is explicit", {
   expect_false(dir.exists(empty))
 })
 
-test_that("a lock symlink is uncertain and never acquired", {
+test_that("a lock symlink is aparted without touching its target", {
   skip_on_os("windows")
   fixture <- round061_lock_fixture("bigbang-round061-symlink-")
   withr::defer(unlink(fixture$root, recursive = TRUE, force = TRUE))
   target <- file.path(fixture$root, "target")
   dir.create(target)
+  marker <- file.path(target, "marker")
+  writeLines("keep", marker)
+  before <- unname(tools::md5sum(marker))
   expect_true(file.symlink(target, fixture$lock))
-  state <- .update_lock_state(fixture$project, recover = TRUE)
-  expect_identical(state$action, "blocked_lock")
-  expect_error(
-    .acquire_update_lock(fixture$project, recover = TRUE),
-    class = "bigbang_error_update_in_progress"
+  expect_identical(.update_lock_state(fixture$project)$action, "blocked_lock")
+  expect_match(
+    conditionMessage(expect_error(
+      .acquire_update_lock(fixture$project, recover = FALSE),
+      class = "bigbang_error_update_in_progress"
+    )), "symbolic link", ignore.case = TRUE
   )
+  acquired <- .acquire_update_lock(fixture$project, recover = TRUE)
+  withr::defer(.release_update_lock(acquired))
+  expect_false(.path_is_symlink(fixture$lock))
+  expect_true(dir.exists(fixture$lock))
+  expect_identical(unname(tools::md5sum(marker)), before)
 })

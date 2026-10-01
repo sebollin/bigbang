@@ -27,6 +27,15 @@
 
 ## Bug fixes
 
+- Update locks now decide discarded entries from the recorded owner before the
+  claimant, preserve live owners byte-for-byte, revalidate ownership before
+  journal mutations, and process discarded entries until no progress remains.
+  Zombie and permission-sensitive liveness is conservative, symlink locks have
+  a working recovery path, and lock-creation errors identify the parent failure.
+- Armed journal recovery now rejects mismatched `state.rds` and `marker.rds`
+  owners instead of rolling back a live update. Clean re-export verification
+  now follows the runtime library order and distinguishes installation,
+  export, and foreign-library failures.
 - Fixed the 0.4.0 regression where generated metapackage machinery could be
   hidden by an export with the same name.
 - Journal inventory and discard cleanup no longer follow directory symlinks;

@@ -162,8 +162,12 @@ exportados sean el mismo en tiempo de ejecución. El diagnóstico etiqueta cada
 colisión como `probable_same_object`, `distinct_definitions` o `undetermined`,
 y ordena las razones de sus fuentes. Para un `probable_same_object` elegido,
 `<meta>_install()` verifica los dueños instalados en un subproceso limpio de R,
-con la biblioteca destino primero; si un dueño instalado ya no exporta el símbolo,
-lo informa con el mismo aviso de verificación. Si el subproceso no se puede
+con el mismo orden de bibliotecas que usa el runtime: primero la biblioteca
+destino y después `.libPaths()`. Así, un dueño instalado solo en una biblioteca
+posterior se resuelve y se compara con el objeto que va a recibir el usuario.
+El resultado distingue entre no instalado, no exportado y cargado desde otra
+biblioteca; si un dueño instalado ya no exporta el símbolo, lo informa con el
+mismo aviso de verificación. Si el subproceso no se puede
 ejecutar, el resultado queda explícitamente sin verificar. Un espacio de nombres
 ya cargado desde otra biblioteca se informa antes de verificar. `<meta>_conflicts()` repite la comprobación y
 emite de nuevo el aviso, por lo que es la forma de verificar otra vez después de
@@ -175,6 +179,26 @@ El objeto que devuelve conserva los conflictos de enmascaramiento y guarda el
 data frame de verificación como atributo. Leelo con
 `<meta>_reexport_verification(conflicts)`, de modo que un componente que exporte
 ese nombre siga visible en la lista de conflictos.
+
+En un update interrumpido, el lock se decide primero por el dueño y después por
+el reclamante. Un dueño vivo siempre bloquea. Un dueño incierto bloquea salvo
+con `recover = TRUE`; uno muerto se puede reclamar. Un lock descartado cuyo
+`owner.rds` está vivo se restaura o bloquea informando el PID y nunca se borra.
+Solo cuando ese dueño está probado como muerto se decide por la vida del
+reclamante si hay que bloquear, exigir `recover = TRUE` o descartar la entrada.
+Antes de continuar, el update vuelve a validar que el lock publicado siga
+siendo suyo; si cambió, aborta antes de mutar. Un enlace simbólico en el nombre
+del lock se informa como enlace y `recover = TRUE` aparta el enlace sin seguir
+su destino.
+
+En Linux, la vida usa `/proc/<pid>` y considera muertos los estados zombie (`Z`)
+y terminado (`X`). Sin `/proc`, un fallo de `kill(pid, 0)` es incierto salvo
+que `ps -p` pruebe que el PID no existe; un error de permisos y un proceso de
+otro usuario nunca se consideran muertos. Un proceso del mismo usuario con
+permiso de escritura puede falsificar estos registros: eso queda fuera del
+modelo de integridad. La recuperación también exige que el dueño de `state.rds`
+coincida con el de `marker.rds`; si no coincide, el diario se aparta y no se
+usa para revertir.
 
 El análisis de colisiones es una ayuda de diagnóstico. La garantía es la decisión
 explícita `reexport_prefer` o `reexport_exclude` más la verificación de

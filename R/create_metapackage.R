@@ -690,6 +690,28 @@
 #' lock therefore always has an owner. Reclaiming an orphan first atomically
 #' renames it to a unique discarded name; only the process that wins that
 #' rename may publish a replacement, and it rechecks the owner before doing so.
+#' Lock disposition is owner-first. For the published lock, a proven live owner
+#' blocks every caller; an uncertain owner blocks without `recover = TRUE` and
+#' is reclaimable only with `recover = TRUE`; a proven dead owner is reclaimable.
+#' For a discarded lock, a proven live `owner.rds` is restored when the lock
+#' name is free or blocks on its PID when it is occupied. It is never deleted.
+#' An uncertain discarded owner follows the uncertain-lock rule. Only after the
+#' discarded owner is proven dead does the claimant decide the outcome: a live
+#' claimant blocks, an uncertain claimant needs `recover = TRUE`, and a dead
+#' claimant may be discarded. `owner.rds` and `claim.rds` are removed only when
+#' their bytes still have the digest observed for that decision; mismatches are
+#' preserved by setting the entry aside. No claim is written before the owner
+#' has been re-read immediately before publication. The update also revalidates
+#' its published owner before creating the journal, recording each intent, and
+#' completing an irreversible step. If the owner changed, it aborts before the
+#' next mutation. A discarded entry can therefore contain a claimant record,
+#' but that record is never allowed to override a live owner.
+#' For a `.lock.armando-*` entry, a live owner stays in place and blocks;
+#' an uncertain owner stays in place without `recover = TRUE` and is set aside
+#' with `recover = TRUE`; a dead or missing owner is set aside. A symbolic link
+#' at the published lock name is reported as a link without an update-running
+#' claim; with `recover = TRUE` the link itself is renamed aside and its target
+#' is not followed.
 #' A regular file or other user entry at the lock name is atomically set aside
 #' as `.<name>.bigbang-apartado-*`. Lock preparations left by an interruption
 #' are recognized on the next call and set aside without deleting their bytes.
@@ -703,13 +725,19 @@
 #' `armando-*` folder is removed; any non-empty unmarked folder is atomically
 #' set aside as `.<name>.bigbang-apartado-*` without copying or deleting bytes.
 #' The initial marker records the owner PID, host, process start token,
-#' and start time before the first backup copy. A marked preparation is
-#' discarded only after the owner is proven finished with the platform's
-#' conservative liveness policy. `recover = TRUE` resolves uncertainty, such
-#' as Windows, missing `/proc`, another host, or an unreadable owner, but never
-#' overrides a proven live owner. A proven live owner means the same host, a
-#' live PID, and the same process-start token; that case always errors and
-#' includes the PID. Journal disposal first writes an atomic tombstone with
+#' and start time before the first backup copy. On Linux, liveness reads
+#' `/proc/<pid>` and treats a missing process as dead, `Z` or `X` in
+#' `/proc/<pid>/stat` as dead, and any other readable state as existing; the
+#' process-start token still decides identity. Without `/proc`, `kill(pid, 0)`
+#' proves existence only when it succeeds. A failure is dead only when `ps -p`
+#' also proves that the PID is absent; permission errors, an existing PID, an
+#' unavailable `ps`, and an unreadable token are uncertain. The exact policy is:
+#' dead means the process does not exist or is `Z`/`X`; alive means it exists,
+#' is not terminal, and its start token matches; live-token-conflict means it
+#' exists but the token differs; uncertain means existence or identity cannot be
+#' proved. `recover = TRUE` may claim or set aside uncertain entries, but never
+#' overrides a proven live owner. A process of another user is therefore never
+#' inferred dead from `EPERM`. Journal disposal first writes an atomic tombstone with
 #' the exact relative-path and MD5 inventory of the entries bigbang wrote, then
 #' renames the folder to `.<name>.bigbang-update.descartado-*`; cleanup can
 #' therefore resume after another interruption. Cleanup checks every file
@@ -728,7 +756,11 @@
 #' limit: its bytes are identical, so deleting it loses no content, but the
 #' journal cannot prove who created it. The tombstone and its digest are local
 #' journal state, not a cryptographic signature; treat the journal as bigbang's
-#' private territory.
+#' private territory. A process of the same user with write permission can forge
+#' `owner.rds`, `marker.rds`, or `state.rds`; that is outside this integrity
+#' model. As a cheap consistency check, an armed journal is recoverable only when
+#' the owner fields in `state.rds` match those in `marker.rds`; otherwise the
+#' journal is set aside and is never used for rollback.
 #'
 #' The journal survives process termination, terminal closure, and system
 #' shutdown, including SIGKILL, SIGTERM, and SIGHUP on POSIX systems. The next
@@ -1145,16 +1177,22 @@ create_metapackage <- function(
   project_created <- FALSE
   destination_created <- !dir.exists(dest_dir)
   generation_complete <- FALSE
+  if (isTRUE(update)) {
+    .assert_update_lock_owner(update_lock, project_dir, "update")
+  }
   update_journal <- if (isTRUE(update)) {
     .create_update_journal(
       project_dir, name, update_manifest,
-      extra_files = setdiff(requested_files, update_manifest$files)
+      extra_files = setdiff(requested_files, update_manifest$files),
+      lock = update_lock
     )
   } else {
     NULL
   }
   if (!is.null(update_journal)) {
-    .activate_update_journal(update_journal, project_dir, name)
+    .activate_update_journal(
+      update_journal, project_dir, name, lock = update_lock
+    )
   }
   documentation_search <- NULL
   documentation_namespaces <- NULL
@@ -1212,7 +1250,8 @@ create_metapackage <- function(
       # unlink() to remove an empty directory on all supported platforms.
       .rollback_unlink(dest_dir)
     }
-    if (!generation_complete && !is.null(update_journal)) {
+    if (!generation_complete && !is.null(update_journal) &&
+          (is.null(update_lock) || .update_lock_is_owner(update_lock))) {
       restored <- tryCatch({
         .recover_pending_update(
           project_dir, name, recover = TRUE, handled = TRUE
@@ -1230,12 +1269,16 @@ create_metapackage <- function(
         ), call. = FALSE)
       }
     }
-  }, add = TRUE)
+  }, add = TRUE, after = FALSE)
 
   # Reconcile before documentation so stale generated R code cannot be loaded
   # by roxygen. The update backup and rollback above are already active, so a
   # failure here or later restores every pre-existing generated file.
   if (length(stale_files) > 0L) {
+    if (isTRUE(update)) {
+      .assert_update_lock_owner(update_lock, project_dir,
+                                "generated-file reconciliation")
+    }
     if (verbose) {
       message(.bb_trf(
         "Removing generated files no longer in the plan: %s",
@@ -1656,6 +1699,7 @@ StripTrailingWhitespace: Yes"
   .atomic_save_rds(manifest, file.path(project_dir, .generation_manifest_name))
 
   if (!is.null(update_journal)) {
+    .assert_update_lock_owner(update_lock, project_dir, "update completion")
     .deactivate_update_journal()
     .discard_update_journal(update_journal, project_dir, name)
     update_journal <- NULL

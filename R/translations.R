@@ -180,6 +180,7 @@
     "Set aside update-lock entry at %s; no bytes from the set-aside entry were deleted and the update continues." = "Se apart\u00f3 la entrada del lock de actualizaci\u00f3n en %s; no se eliminaron bytes de lo apartado y el update contin\u00faa.",
     "Set aside old update-lock content at %s; no bytes from the set-aside entry were deleted." = "Se apart\u00f3 contenido viejo del lock de actualizaci\u00f3n en %s; no se eliminaron bytes de lo apartado.",
     "Set aside incomplete update-lock preparation at %s; no bytes from the set-aside entry were deleted." = "Se apart\u00f3 una preparaci\u00f3n incompleta del lock de actualizaci\u00f3n en %s; no se eliminaron bytes de lo apartado.",
+    "The update-lock path %s is a symbolic link or unreadable entry; no mutation was performed. Remove or rename that link, then retry." = "La ruta del lock de actualizaci\u00f3n %s es un enlace simb\u00f3lico o una entrada ilegible; no se hizo ninguna mutaci\u00f3n. Quite o renombre ese enlace y vuelva a intentar.",
     "Deleted %d verified files from the update-journal inventory." = "Se eliminaron %d archivos verificados del inventario del diario de actualizaci\u00f3n.",
     "Could not set aside the update-lock entry: %s" = "No se pudo apartar la entrada del lock de actualizaci\u00f3n: %s",
     "Did not adopt update journal %s because project %s still exists beside it; it is a copy, so the journal was left untouched." = "No se adopt\u00f3 el diario de actualizaci\u00f3n %s porque el proyecto %s todav\u00eda existe a su lado; es una copia y el diario qued\u00f3 intacto.",
@@ -211,6 +212,10 @@
     "find the moved project, move this journal beside it without changing its contents, and retry there." = "busque el proyecto movido, coloque este diario a su lado sin cambiar su contenido y vuelva a intentar all\u00ed.",
     "An update may still be running; no mutation was performed." = "Puede haber un update todav\u00eda en ejecuci\u00f3n; no se hizo ninguna mutaci\u00f3n.",
     "An update is still running under pid %s; no mutation was performed." = "Todav\u00eda hay un update en ejecuci\u00f3n bajo el pid %s; no se hizo ninguna mutaci\u00f3n.",
+    "Cannot continue the %s because the published update lock no longer belongs to this process; no further mutation was performed." = "No se puede continuar con %s porque el lock de actualizaci\u00f3n publicado ya no pertenece a este proceso; no se hizo ninguna mutaci\u00f3n adicional.",
+    "Could not prepare the update lock at %s: %s. Check that its parent is writable and has free space; no mutation was performed." = "No se pudo preparar el lock de actualizaci\u00f3n en %s: %s. Compruebe que su directorio padre permita escribir y tenga espacio libre; no se hizo ninguna mutaci\u00f3n.",
+    "the lock parent is not writable" = "el directorio padre del lock no permite escribir",
+    "the lock parent rejected creation or has no available space" = "el directorio padre del lock rechaz\u00f3 la creaci\u00f3n o no tiene espacio disponible",
     "after confirming that no other update is running, call again with recover = TRUE." = "despu\u00e9s de confirmar que no hay otro update en ejecuci\u00f3n, vuelva a llamar con recover = TRUE.",
     "The update journal was retained for recovery at: %s. It contains a backup at %s. Next step: confirm that no other update is running and call update = TRUE, recover = TRUE." = "El diario de actualizaci\u00f3n se conserv\u00f3 para recuperaci\u00f3n en: %s. Contiene un respaldo en %s. Siguiente paso: confirme que no hay otro update en ejecuci\u00f3n y llame con update = TRUE, recover = TRUE.",
     "The interrupted update left files in an unknown state: %s. Journal: %s. The journal contains a backup at %s. Use recover = TRUE to preserve them and recover." = "El update interrumpido dej\u00f3 archivos en un estado desconocido: %s. Diario: %s. El diario contiene un respaldo en %s. Use recover = TRUE para preservarlos y recuperar.",
@@ -383,7 +388,12 @@
       "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' difieren: %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude.",
       "No se pudo verificar a los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s': %s no lo exporta. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude.",
       "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' son objetos distintos con copias equivalentes (mismo cuerpo y formales): %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude.",
-      "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' difieren como objetos distintos: %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude."
+      "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' difieren como objetos distintos: %s. Elija un proveedor con reexport_prefer u om\u00edtalo con reexport_exclude.",
+      "Un espacio de nombres ya estaba cargado desde otra biblioteca (%s); la verificaci\u00f3n se ejecuta en un proceso limpio de R.",
+      "No se pudo verificar a los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s': %s no est\u00e1 instalado en la ruta de b\u00fasqueda de bibliotecas. Inst\u00e1lelo antes de verificar.",
+      "No se pudo cargar desde la ruta de b\u00fasqueda de bibliotecas a los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s': %s. Revise la instalaci\u00f3n antes de verificar.",
+      "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' se cargaron desde otra biblioteca: %s. Reinicie R o use la ruta ordenada antes de verificar.",
+      "No se pudo verificar a los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s': %s no lo exporta; %s no est\u00e1 instalado en la ruta de b\u00fasqueda de bibliotecas. Inst\u00e1lelo antes de verificar."
     ),
     c(
       "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives.",
@@ -469,7 +479,12 @@
       "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.",
       "Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.",
       "Installed owners for re-export symbol '%s' are distinct objects with equivalent copies (same body and formals): %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.",
-      "Installed owners for re-export symbol '%s' differ as distinct objects: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+      "Installed owners for re-export symbol '%s' differ as distinct objects: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude.",
+      "A namespace was already loaded from another library (%s); verification is running in a clean R process.",
+      "Installed owners for re-export symbol '%s' could not be verified: %s is not installed in the library search path. Install it before verifying.",
+      "Installed owners for re-export symbol '%s' could not be loaded from the library search path: %s. Check the package installation before verifying.",
+      "Installed owners for re-export symbol '%s' was loaded from another library: %s. Restart R or use the ordered library path before verifying.",
+      "Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s; %s is not installed in the library search path. Install it before verifying."
     )
   )
 }

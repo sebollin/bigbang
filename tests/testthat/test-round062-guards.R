@@ -7,6 +7,7 @@ test_that("tests with forked children are skipped on CRAN", {
   signal_token <- paste0("SIG", "KILL")
   skip_token <- paste0("skip", "_on_cran")
   for (file in files) {
+    if (identical(basename(file), "test-round062-guards.R")) next
     expressions <- parse(file = file, keep.source = FALSE)
     for (expression in expressions) {
       if (!is.call(expression) ||
@@ -20,6 +21,26 @@ test_that("tests with forked children are skipped on CRAN", {
                     info = paste("Missing skip_on_cran in", file))
       }
     }
+  }
+})
+
+test_that("Unix-only process primitives are protected on Windows", {
+  files <- list.files(
+    testthat::test_path(), pattern = "\\.R$", full.names = TRUE
+  )
+  tokens <- c("mcparallel", "mccollect", "parallel:::")
+  for (file in files) {
+    if (identical(basename(file), "test-round062-guards.R")) next
+    source <- paste(readLines(file, warn = FALSE), collapse = "\\n")
+    if (!any(vapply(tokens, grepl, logical(1L), x = source, fixed = TRUE))) {
+      next
+    }
+    protected <- grepl('skip_on_os\\("windows"\\)', source, perl = TRUE) ||
+      grepl("\\.Platform\\$OS.type[[:space:]]*==[[:space:]]*['\"]unix['\"]",
+            source, perl = TRUE) ||
+      grepl("identical\\(.Platform\\$OS.type,[[:space:]]*['\"]unix['\"]\\)",
+            source, perl = TRUE)
+    expect_true(protected, info = paste("Missing Unix guard in", file))
   }
 })
 
