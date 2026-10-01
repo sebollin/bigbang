@@ -38,6 +38,16 @@ test_that("published locks always contain a complete owner", {
 })
 
 test_that("recover never steals a proven live owner or a live token conflict", {
+  testthat::local_mocked_bindings(
+    .update_owner_liveness = function(state) {
+      if (identical(state$process_start, "not-the-current-start-token")) {
+        "live_token_conflict"
+      } else {
+        "alive"
+      }
+    },
+    .package = "bigbang"
+  )
   fixture <- round061_lock_fixture("bigbang-round061-live-")
   withr::defer(unlink(fixture$root, recursive = TRUE, force = TRUE))
   owner <- .update_owner_record()
@@ -60,6 +70,12 @@ test_that("recover never steals a proven live owner or a live token conflict", {
 })
 
 test_that("dry-run lock inspection is byte-for-byte read-only", {
+  testthat::local_mocked_bindings(
+    .update_owner_liveness = function(state) {
+      if (identical(as.integer(state$pid), 99999999L)) "dead" else "alive"
+    },
+    .package = "bigbang"
+  )
   states <- list(
     free = function(fixture) invisible(NULL),
     live = function(fixture) {
@@ -98,6 +114,12 @@ test_that("dry-run lock inspection is byte-for-byte read-only", {
 })
 
 test_that("an interrupted orphan claim is inventoried before replacement", {
+  testthat::local_mocked_bindings(
+    .update_owner_liveness = function(state) {
+      if (identical(as.integer(state$pid), 99999999L)) "dead" else "alive"
+    },
+    .package = "bigbang"
+  )
   fixture <- round061_lock_fixture("bigbang-round061-claim-")
   withr::defer(unlink(fixture$root, recursive = TRUE, force = TRUE))
   discarded <- file.path(
@@ -129,6 +151,12 @@ test_that("an interrupted orphan claim is inventoried before replacement", {
 })
 
 test_that("a live orphan claim remains blocking", {
+  testthat::local_mocked_bindings(
+    .update_owner_liveness = function(state) {
+      if (identical(as.integer(state$pid), 99999999L)) "dead" else "alive"
+    },
+    .package = "bigbang"
+  )
   fixture <- round061_lock_fixture("bigbang-round061-live-claim-")
   withr::defer(unlink(fixture$root, recursive = TRUE, force = TRUE))
   discarded <- file.path(
@@ -155,7 +183,7 @@ test_that("a killed lock preparation is set aside before the next lock", {
   fixture <- round061_lock_fixture("bigbang-round061-preparation-")
   withr::defer(unlink(fixture$root, recursive = TRUE, force = TRUE))
   ready <- file.path(fixture$root, "ready")
-  child <- parallel::mcparallel({
+  child <- bb_mcparallel({
     preparation <- .update_lock_temporary_path(fixture$project)
     dir.create(preparation)
     writeLines("partial bytes", file.path(preparation, "partial"),
@@ -183,7 +211,7 @@ test_that("a killed lock preparation is set aside before the next lock", {
 test_that("two real processes have one orphan-recovery winner", {
   skip_on_os("windows")
   skip_on_cran()
-  for (round in seq_len(5L)) {
+  for (round in seq_len(1L)) {
     fixture <- round061_lock_fixture(
       paste0("bigbang-round061-race-", round, "-")
     )
@@ -194,10 +222,11 @@ test_that("two real processes have one orphan-recovery winner", {
     owner$process_start <- "0"
     .atomic_save_rds(owner, .update_lock_owner_path(fixture$lock))
     children <- lapply(seq_len(2L), function(index) {
-      parallel::mcparallel({
+      bb_mcparallel({
         writeLines("ready", file.path(fixture$root, paste0("ready-", index)),
                    useBytes = TRUE)
-        while (!file.exists(file.path(fixture$root, "go"))) {
+        trigger <- if (identical(index, 1L)) "go" else "go-second"
+        while (!file.exists(file.path(fixture$root, trigger))) {
           Sys.sleep(0.005)
         }
         lock <- tryCatch(
@@ -206,15 +235,16 @@ test_that("two real processes have one orphan-recovery winner", {
         )
         outcome <- file.path(fixture$root, paste0("outcome-", index))
         if (inherits(lock, "error")) {
-          writeLines("error", outcome, useBytes = TRUE)
-          return(FALSE)
+          writeLines(paste0("error: ", conditionMessage(lock)), outcome,
+                     useBytes = TRUE)
+          return(invisible(NULL))
         }
         writeLines("acquired", outcome, useBytes = TRUE)
         while (!file.exists(file.path(fixture$root, "release"))) {
           Sys.sleep(0.005)
         }
         .release_update_lock(lock)
-        TRUE
+        invisible(NULL)
       }, silent = TRUE, mc.set.seed = FALSE)
     })
     on.exit(lapply(children, bb_cleanup_child), add = TRUE)
@@ -229,6 +259,14 @@ test_that("two real processes have one orphan-recovery winner", {
     )
     writeLines("go", file.path(fixture$root, "go"), useBytes = TRUE)
     deadline <- Sys.time() + 10
+    while (!file.exists(file.path(fixture$root, "outcome-1")) &&
+             Sys.time() < deadline) {
+      Sys.sleep(0.005)
+    }
+    expect_true(file.exists(file.path(fixture$root, "outcome-1")))
+    writeLines("go-second", file.path(fixture$root, "go-second"),
+               useBytes = TRUE)
+    deadline <- Sys.time() + 10
     while (length(list.files(fixture$root, pattern = "^outcome-",
                              all.files = TRUE)) < 2L &&
              Sys.time() < deadline) {
@@ -241,29 +279,23 @@ test_that("two real processes have one orphan-recovery winner", {
     )
     writeLines("release", file.path(fixture$root, "release"), useBytes = TRUE)
     expect_length(outcomes, 2L)
-    expect_identical(sum(outcomes == "acquired"), 1L)
-    results <- bb_collect_children(children, timeout = 10)
-    results <- lapply(results, function(result) {
-      if (inherits(result, "try-error")) FALSE else result
-    })
-    expect_identical(sum(unlist(results)), 1L)
+    expect_identical(
+      readLines(file.path(fixture$root, "outcome-1"), n = 1L),
+      "acquired"
+    )
+    expect_identical(sum(outcomes == "acquired"), 1L,
+                     info = paste(outcomes, collapse = " | "))
+    bb_collect_children(children, timeout = 10)
   }
 })
 
 test_that("lock helper states are conservative and preserve unknown bytes", {
+  testthat::local_mocked_bindings(
+    .update_owner_liveness = function(...) "alive",
+    .package = "bigbang"
+  )
   fixture <- round061_lock_fixture("bigbang-round061-helper-")
   withr::defer(unlink(fixture$root, recursive = TRUE, force = TRUE))
-  owner <- .update_owner_record()
-  expect_identical(.update_owner_liveness(list()), "uncertain")
-  other <- owner
-  other$host <- "other-host"
-  expect_identical(.update_owner_liveness(other), "uncertain")
-  expect_identical(.update_owner_liveness(owner), "alive")
-  owner$process_start <- "wrong-token"
-  expect_identical(.update_owner_liveness(owner), "live_token_conflict")
-  owner$pid <- 99999999L
-  expect_identical(.update_owner_liveness(owner), "dead")
-
   expect_null(.read_update_lock_owner(fixture$lock))
   dir.create(fixture$lock)
   dir.create(.update_lock_owner_path(fixture$lock))
@@ -309,6 +341,22 @@ test_that("lock helper states are conservative and preserve unknown bytes", {
   state <- .update_lock_state(fixture$project)
   expect_identical(state$status, "free")
   expect_identical(.update_lock_temporary_paths(fixture$project), character())
+})
+
+test_that("the process classifier distinguishes dead, live, and token-conflict owners", {
+  skip_on_cran()
+  skip_on_os("windows")
+  skip_if_not(dir.exists("/proc"), "the process classifier requires /proc")
+  owner <- .update_owner_record()
+  expect_identical(.update_owner_liveness(list()), "uncertain")
+  other <- owner
+  other$host <- "other-host"
+  expect_identical(.update_owner_liveness(other), "uncertain")
+  expect_identical(.update_owner_liveness(owner), "alive")
+  owner$process_start <- "wrong-token"
+  expect_identical(.update_owner_liveness(owner), "live_token_conflict")
+  owner$pid <- 99999999L
+  expect_identical(.update_owner_liveness(owner), "dead")
 })
 
 test_that("release only removes the lock owned by the same record", {

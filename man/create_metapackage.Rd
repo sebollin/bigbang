@@ -203,8 +203,8 @@ durable journal owner has been confirmed finished, or when a file has user
 content that is neither the original nor an intended update value. Unknown
 content is copied byte for byte to a new preserved directory beside the
 project before recovery; that directory is reported and is never removed
-automatically. A live or uncertain owner still blocks mutation. Defaults
-to \code{FALSE}.}
+automatically. A proven-live owner still blocks mutation; an uncertain
+owner can be reclaimed only with \code{recover = TRUE}. Defaults to \code{FALSE}.}
 }
 \value{
 Invisibly, a \code{bigbang_result} containing the generated path,
@@ -426,8 +426,9 @@ the remaining race is the interval between the last revalidation and
 the owner fields in \code{state.rds} match those in \code{marker.rds}; otherwise the
 journal is set aside and is never used for rollback.
 
-The journal survives process termination, terminal closure, and system
-shutdown, including SIGKILL, SIGTERM, and SIGHUP on POSIX systems. The next
+The journal is designed to survive process interruptions such as SIGKILL, an
+R error, or Ctrl-C. It does not promise fsync durability against an OS or
+power shutdown. The next
 \code{create_metapackage(update = TRUE)} call examines it before validating the
 generation manifest. The marker identifies the metapackage and old-manifest
 hash rather than an absolute path, so moving the project together with its

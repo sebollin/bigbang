@@ -390,7 +390,8 @@ reports each path and action without mutating those folders.
   with the same path and MD5 as an inventory entry is an unavoidable boundary:
   the bytes are identical, so deleting it loses no content, but ownership is
   not provable. It records every intended write and removal and
-  survives SIGKILL, SIGTERM, SIGHUP, terminal closure, and a system restart.
+  is designed to survive process interruptions such as SIGKILL, an R error, or
+  Ctrl-C; it does not promise fsync durability against an OS or power shutdown.
   If a path contains neither its original nor an intended value, recovery stops
   instead of overwriting it. On Windows, an absent destination is known only
   while the matching intended temporary remains in the journal staging area.

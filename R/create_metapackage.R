@@ -9,9 +9,17 @@
 # Read from the installed DESCRIPTION rather than kept as a literal, so the
 # field stamped into a generated meta-package can never fall behind the version
 # that actually produced it.
+.bb_package_version <- function(package, lib_loc = NULL) {
+  if (is.null(lib_loc)) {
+    utils::packageVersion(package)
+  } else {
+    utils::packageVersion(package, lib.loc = lib_loc)
+  }
+}
+
 .bb_generator_version <- function() {
   version <- tryCatch(
-    as.character(utils::packageVersion("bigbang")),
+    as.character(.bb_package_version("bigbang")),
     error = function(e) NA_character_
   )
   if (is.na(version)) "unknown" else version
@@ -593,8 +601,8 @@
 #'   content that is neither the original nor an intended update value. Unknown
 #'   content is copied byte for byte to a new preserved directory beside the
 #'   project before recovery; that directory is reported and is never removed
-#'   automatically. A live or uncertain owner still blocks mutation. Defaults
-#'   to `FALSE`.
+#'   automatically. A proven-live owner still blocks mutation; an uncertain
+#'   owner can be reclaimed only with `recover = TRUE`. Defaults to `FALSE`.
 #' @param debug Logical. If `TRUE`, emits detailed debugging messages. Defaults
 #'   to `FALSE`.
 #'
@@ -802,8 +810,9 @@
 #' the owner fields in `state.rds` match those in `marker.rds`; otherwise the
 #' journal is set aside and is never used for rollback.
 #'
-#' The journal survives process termination, terminal closure, and system
-#' shutdown, including SIGKILL, SIGTERM, and SIGHUP on POSIX systems. The next
+#' The journal is designed to survive process interruptions such as SIGKILL, an
+#' R error, or Ctrl-C. It does not promise fsync durability against an OS or
+#' power shutdown. The next
 #' `create_metapackage(update = TRUE)` call examines it before validating the
 #' generation manifest. The marker identifies the metapackage and old-manifest
 #' hash rather than an absolute path, so moving the project together with its

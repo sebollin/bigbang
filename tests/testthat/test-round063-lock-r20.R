@@ -50,7 +50,7 @@ test_that("discarded live owners survive a killed claimant", {
   fixture <- round063_lock_fixture("bigbang-round063-live-owner-")
   withr::defer(unlink(fixture$root, recursive = TRUE, force = TRUE))
   owner_ready <- file.path(fixture$root, "owner-ready")
-  owner <- parallel::mcparallel({
+  owner <- bb_mcparallel({
     lock <- .acquire_update_lock(fixture$project)
     writeLines("ready", owner_ready, useBytes = TRUE)
     Sys.sleep(600)
@@ -66,7 +66,7 @@ test_that("discarded live owners survive a killed claimant", {
   expect_true(file.rename(fixture$lock, discarded))
 
   claim_ready <- file.path(fixture$root, "claim-ready")
-  claimant <- parallel::mcparallel({
+  claimant <- bb_mcparallel({
     .atomic_save_rds(.update_owner_record(),
                      .update_lock_claim_path(discarded))
     writeLines("ready", claim_ready, useBytes = TRUE)
@@ -93,8 +93,13 @@ test_that("discarded live owners survive a killed claimant", {
 test_that("a zombie is dead, while pid one is never classified as dead", {
   skip_on_cran()
   skip_on_os("windows")
-  child <- parallel::mcparallel(Sys.sleep(600), silent = TRUE,
-                                mc.set.seed = FALSE)
+  skip_if_not(dir.exists("/proc"), "the zombie classifier requires /proc")
+  skip_if_not(
+    identical(.update_process_stat(Sys.getpid()), "alive"),
+    "the process-stat classifier is unavailable"
+  )
+  child <- bb_mcparallel(Sys.sleep(600), silent = TRUE,
+                         mc.set.seed = FALSE)
   on.exit(bb_cleanup_child(child), add = TRUE)
   zombie <- .update_owner_record()
   zombie$pid <- as.integer(child$pid)
@@ -209,6 +214,10 @@ test_that("inventory deletion is byte-exact and keeps mismatches apart", {
 })
 
 test_that("more than eight discarded locks are processed while progress continues", {
+  testthat::local_mocked_bindings(
+    .update_owner_liveness = function(...) "dead",
+    .package = "bigbang"
+  )
   fixture <- round063_lock_fixture("bigbang-round063-many-discarded-")
   withr::defer(unlink(fixture$root, recursive = TRUE, force = TRUE))
   for (index in seq_len(9L)) {
@@ -234,6 +243,10 @@ test_that("lock creation errors name a read-only parent", {
   withr::defer(unlink(fixture$root, recursive = TRUE, force = TRUE))
   on.exit(Sys.chmod(fixture$root, mode = "0755"), add = TRUE)
   Sys.chmod(fixture$root, mode = "0555")
+  if (file.access(fixture$root, 2L) == 0L) {
+    Sys.chmod(fixture$root, mode = "0755")
+    skip("the filesystem does not represent a read-only directory")
+  }
   error <- expect_error(
     .acquire_update_lock(fixture$project),
     class = "bigbang_error_update_in_progress"

@@ -88,8 +88,8 @@ exportados sean el mismo en tiempo de ejecución. El diagnóstico etiqueta las
 colisiones como `probable_same_object`, `distinct_definitions` o `undetermined`;
 una colisión probable elegida se verifica contra los dueños instalados mediante
 `<meta>_install()` y `<meta>_conflicts()`.
-`<meta>_conflicts()` conserva los conflictos de enmascaramiento y guarda la
-verificación de instalación en su componente `reexport_verification`.
+`<meta>_conflicts()` conserva los conflictos de enmascaramiento; consulte la
+verificación de instalación con `<meta>_reexport_verification(<meta>_conflicts())`.
 
 ## Actualizaciones interrumpidas y recuperación
 

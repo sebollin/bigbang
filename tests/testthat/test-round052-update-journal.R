@@ -431,9 +431,10 @@ test_that("forced recovery handles an unknown directory and missing parents", {
 test_that("owner liveness distinguishes a live process from PID reuse", {
   skip_on_cran()
   skip_on_os("windows")
+  skip_if_not(dir.exists("/proc"), "the process classifier requires /proc")
   fixture <- round052_fixture()
   journal <- round052_arm(fixture)
-  sleeper <- parallel::mcparallel(Sys.sleep(120), silent = TRUE)
+  sleeper <- bb_mcparallel(Sys.sleep(120), silent = TRUE)
   on.exit(bb_cleanup_child(sleeper), add = TRUE)
   state_path <- file.path(journal$path, "state.rds")
   state <- readRDS(state_path)
@@ -452,6 +453,10 @@ test_that("owner liveness distinguishes a live process from PID reuse", {
     .recover_pending_update(fixture$project, "journalverse"),
     class = "bigbang_error_update_in_progress"
   )
+  if (is.na(observed_start)) {
+    expect_identical(.update_owner_liveness(state), "uncertain")
+    return(invisible(NULL))
+  }
   state$process_start <- if (is.na(observed_start)) {
     NA_character_
   } else {
@@ -509,6 +514,12 @@ test_that("unknown process identity uses the conservative liveness policy", {
 })
 
 test_that("the update lock preserves a live owner and replaces a dead one", {
+  testthat::local_mocked_bindings(
+    .update_owner_liveness = function(state) {
+      if (identical(as.integer(state$pid), 99999999L)) "dead" else "alive"
+    },
+    .package = "bigbang"
+  )
   fixture <- round052_fixture("bigbang-round057-lock-")
   lock <- .acquire_update_lock(fixture$project)
   on.exit(.release_update_lock(lock), add = TRUE)
@@ -524,15 +535,9 @@ test_that("the update lock preserves a live owner and replaces a dead one", {
   dead_owner <- .update_owner_record()
   dead_owner$pid <- 99999999L
   saveRDS(dead_owner, .update_lock_owner_path(lock_path))
-  local({
-    testthat::local_mocked_bindings(
-      .update_owner_may_be_alive = function(...) FALSE,
-      .package = "bigbang"
-    )
-    replacement <- .acquire_update_lock(fixture$project)
-    expect_true(dir.exists(replacement$path))
-    .release_update_lock(replacement)
-  })
+  replacement <- .acquire_update_lock(fixture$project)
+  expect_true(dir.exists(replacement$path))
+  .release_update_lock(replacement)
   expect_false(dir.exists(lock_path))
   expect_null(.read_update_lock_owner(file.path(fixture$root, "absent-lock")))
   empty_lock <- file.path(fixture$root, "empty-lock")
@@ -557,7 +562,7 @@ test_that("a live preparation is protected from a concurrent dry run", {
   release <- file.path(fixture$root, "RELEASE")
   Sys.setenv(BB057_READY = marker, BB057_RELEASE = release)
   on.exit(Sys.unsetenv(c("BB057_READY", "BB057_RELEASE")), add = TRUE)
-  child <- parallel::mcparallel({
+  child <- bb_mcparallel({
     trace(".journal_backup_copy", where = asNamespace("bigbang"),
           tracer = quote({
             if (!file.exists(Sys.getenv("BB057_READY"))) {
@@ -584,9 +589,12 @@ test_that("a live preparation is protected from a concurrent dry run", {
   expect_true(dir.exists(armando))
   writeLines("release", release, useBytes = TRUE)
   result <- suppressMessages(bb_collect_child(child, timeout = 10)[[1L]])
-  expect_true(is.list(result) || is.character(result))
+  expect_s3_class(result, "bigbang_result")
+  expect_true(isTRUE(result$updated))
   retry <- round052_update(fixture, version = "0.2.0")
+  expect_s3_class(retry, "bigbang_result")
   expect_true(retry$updated)
+  expect_true(.manifest_matches_project(fixture$project))
   expect_false(dir.exists(armando))
 })
 
@@ -640,7 +648,7 @@ test_that("real process death halfway through recovery converges", {
   marker <- file.path(fixture$root, "RECOVERY_MARK")
   Sys.setenv(BB052_RECOVERY_MARK = marker, BB052_PROJECT = fixture$project)
   on.exit(Sys.unsetenv(c("BB052_RECOVERY_MARK", "BB052_PROJECT")), add = TRUE)
-  child <- parallel::mcparallel({
+  child <- bb_mcparallel({
     trace(".atomic_copy", where = asNamespace("bigbang"), exit = quote({
       if (startsWith(
         normalizePath(destination, winslash = "/", mustWork = FALSE),
@@ -820,7 +828,7 @@ round052_signal_case <- function(signal, phase) {
   marker <- file.path(fixture$root, "MARK")
   Sys.setenv(BB052_MARK = marker, BB052_PROJECT = fixture$project)
   on.exit(Sys.unsetenv(c("BB052_MARK", "BB052_PROJECT")), add = TRUE)
-  child <- parallel::mcparallel({
+  child <- bb_mcparallel({
     ns <- asNamespace("bigbang")
     pause <- round052_pause_expression(phase)
     if (identical(phase, "during_backup")) {

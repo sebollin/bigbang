@@ -1179,10 +1179,23 @@
       ps <- Sys.which("ps")[[1L]]
       if (!nzchar(ps)) return("uncertain")
       listed <- tryCatch(
-        system2(ps, c("-p", as.character(as.integer(state$pid)), "-o", "pid="),
-                stdout = TRUE, stderr = FALSE),
+        withCallingHandlers(
+          system2(ps, c("-p", as.character(as.integer(state$pid)), "-o", "pid="),
+                  stdout = TRUE, stderr = FALSE),
+          warning = function(condition) {
+            if (grepl("had status 1$", conditionMessage(condition))) {
+              invokeRestart("muffleWarning")
+            }
+          }
+        ),
         error = function(e) character()
       )
+      ps_status <- attr(listed, "status", exact = TRUE)
+      if (length(ps_status) == 1L && !is.na(ps_status) &&
+            !identical(as.integer(ps_status), 0L)) {
+        if (identical(as.integer(ps_status), 1L)) return("dead")
+        return("uncertain")
+      }
       listed <- trimws(listed[nzchar(trimws(listed))])
       if (length(listed) == 0L) return("dead")
       process_state <- "uncertain"
@@ -1250,6 +1263,8 @@
   } else if (identical(status, "lock_creation")) {
     next_step
   } else if (identical(status, "lost_lock")) {
+    next_step
+  } else if (identical(status, "lock_retry")) {
     next_step
   } else {
     paste(
@@ -1342,6 +1357,12 @@
     .update_lock_claim_path(path)
   }
   if (.path_is_symlink(record_path)) return(NA_character_)
+  readable <- if (identical(record, "owner")) {
+    !is.null(.read_update_lock_owner(path))
+  } else {
+    !is.null(.read_update_lock_claim(path))
+  }
+  if (!isTRUE(readable)) return(NA_character_)
   .file_digest(record_path)
 }
 
@@ -1381,18 +1402,31 @@
   }
   removable <- c(owner_path, claim_path)
   expected <- c(expected_owner_digest, expected_claim_digest)
+  unlink_failed <- FALSE
   for (index in seq_along(removable)) {
     candidate <- removable[[index]]
     if (.path_is_symlink(candidate) || is.na(expected[[index]]) ||
           !file.exists(candidate) || dir.exists(candidate)) next
     current <- .file_digest(candidate)
     if (!is.na(current) && identical(current, expected[[index]])) {
-      unlink(candidate, force = TRUE)
+      removed <- tryCatch(unlink(candidate, force = TRUE), error = function(e) 1L)
+      if (!identical(removed, 0L) || file.exists(candidate) ||
+            dir.exists(candidate) || .path_is_symlink(candidate)) {
+        unlink_failed <- TRUE
+      }
     }
   }
   remaining <- .update_journal_entries(path)
-  if (length(remaining) == 0L) {
-    unlink(path, recursive = TRUE, force = TRUE)
+  if (!unlink_failed && !.journal_entries_unreadable(remaining) &&
+        length(remaining) == 0L) {
+    removed <- tryCatch(unlink(path, recursive = TRUE, force = TRUE),
+                        error = function(e) 1L)
+    gone <- !file.exists(path) && !dir.exists(path) && !.path_is_symlink(path)
+    if (identical(removed, 0L) && gone) return(invisible(NULL))
+    unlink_failed <- TRUE
+  }
+  if (!unlink_failed && !.journal_entries_unreadable(remaining) &&
+        length(remaining) == 0L) {
     return(invisible(NULL))
   }
   destination <- .update_lock_apart_path(path, name)
@@ -1464,7 +1498,11 @@
                    !isTRUE(recover)) {
         "blocked_uncertain_discard"
       } else if (identical(old_owner_status, "uncertain")) {
-        "claim_uncertain_discard"
+        if (is.null(old_owner) && is.null(claim)) {
+          "set_aside_unreadable_discard"
+        } else {
+          "claim_uncertain_discard"
+        }
       } else if (claim_status %in% c("alive", "live_token_conflict")) {
         "blocked_live_claim"
       } else if (identical(claim_status, "uncertain") &&
@@ -1476,7 +1514,7 @@
       status <- if (identical(action, "restore_live_discard")) {
         old_owner_status
       } else if (action %in% c("blocked_uncertain_discard",
-                               "claim_uncertain_discard")) {
+                               "set_aside_unreadable_discard")) {
         old_owner_status
       } else {
         claim_status
@@ -1499,7 +1537,8 @@
   owner <- .read_update_lock_owner(lock_path)
   if (is.null(owner)) {
     return(list(status = "uncertain", path = lock_path, owner = NULL,
-                action = if (isTRUE(recover)) "claim_uncertain_lock" else
+                owner_digest = .update_lock_record_digest(lock_path, "owner"),
+                action = if (isTRUE(recover)) "set_aside_unreadable_lock" else
                   "blocked_uncertain_lock"))
   }
   status <- .update_owner_status(owner)
@@ -1523,6 +1562,7 @@
     claim_orphan_lock = "orphan reclaimable",
     claim_uncertain_lock = "uncertain and reclaimable with recover = TRUE",
     blocked_uncertain_temporary = "blocked: an uncertain lock preparation would make the update abort",
+    blocked_live_temporary = "blocked: a live lock preparation is present",
     set_aside_symbolic_link = "symbolic link to set aside with recover = TRUE",
     apart_user_lock = "user entry to set aside",
     blocked_lock = "symbolic link or unreadable entry",
@@ -1532,6 +1572,13 @@
     restore_live_discard = "live owner in discarded lock (would be restored)",
     blocked_uncertain_discard = "uncertain discarded owner",
     claim_uncertain_discard = "uncertain discarded owner reclaimable with recover = TRUE",
+    set_aside_unreadable_lock = "unreadable lock to set aside with recover = TRUE",
+    set_aside_unreadable_discard = "unreadable discarded lock to set aside",
+    lock_creation = if (is.null(state$creation_reason)) {
+      "the lock parent is not writable"
+    } else {
+      state$creation_reason
+    },
     claim_orphan_discard = "orphan-recovery claim to discard",
     state$action
   )
@@ -1608,6 +1655,10 @@
   )
 }
 
+.update_lock_parent_writable <- function(path) {
+  isTRUE(file.access(path, 2L) == 0L)
+}
+
 .update_lock_make_temporary <- function(project_dir, lock_path) {
   temporary <- .update_lock_temporary_path(project_dir)
   warning_text <- character()
@@ -1622,7 +1673,7 @@
   if (file.exists(lock_path) || dir.exists(lock_path) ||
         .path_is_symlink(lock_path)) return(NULL)
   reason <- if (length(warning_text) > 0L) warning_text[[1L]] else if (
-    file.access(dirname(lock_path), 2L) != 0L
+    !.update_lock_parent_writable(dirname(lock_path))
   ) {
     .bb_tr("the lock parent is not writable")
   } else {
@@ -1645,12 +1696,24 @@
       function(item) identical(item$action, "uncertain_lock_preparation"),
       logical(1L)
     )
-    if (any(uncertain_temporary) && !isTRUE(recover)) {
+    live_temporary <- Filter(function(item) {
+      item$action %in% c("live_lock_preparation")
+    }, temporary_plan)
+    if (length(live_temporary) > 0L) {
+      state$status <- live_temporary[[1L]]$status
+      state$owner <- live_temporary[[1L]]$owner
+      state$action <- "blocked_live_temporary"
+    } else if (any(uncertain_temporary) && !isTRUE(recover)) {
       state$status <- "blocked"
       state$action <- "blocked_uncertain_temporary"
     } else if (identical(state$action, "blocked_lock") &&
                  isTRUE(recover)) {
       state$action <- "set_aside_symbolic_link"
+    }
+    if (identical(state$action, "free") &&
+          !.update_lock_parent_writable(dirname(lock_path))) {
+      state$action <- "lock_creation"
+      state$creation_reason <- .bb_tr("the lock parent is not writable")
     }
     .report_update_lock_dry_run(state)
     return(c(state, list(owner = owner, temporary = temporary_plan,
@@ -1664,7 +1727,30 @@
   if (any(uncertain_temporary)) {
     .update_lock_problem(project_dir, lock_path, status = "uncertain")
   }
+  live_temporary <- Filter(function(item) {
+    item$action %in% c("live_lock_preparation")
+  }, temporary_plan)
+  if (length(live_temporary) > 0L) {
+    .update_lock_problem(
+      project_dir, lock_path, live_temporary[[1L]]$owner,
+      live_temporary[[1L]]$status
+    )
+  }
+  attempts <- 0L
   repeat {
+    attempts <- attempts + 1L
+    if (attempts > 100L) {
+      .update_lock_problem(
+        project_dir, lock_path, status = "lock_retry",
+        next_step = .bb_trf(
+          paste0(
+            "Could not acquire the update lock at %s because its state made no ",
+            "progress after %s retries; inspect the lock entry before retrying."
+          ),
+          lock_path, attempts - 1L
+        )
+      )
+    }
     state <- .update_lock_state(project_dir, recover = recover)
     if (identical(state$status, "user_entry")) {
       .apart_update_lock(lock_path, basename(project_dir))
@@ -1700,6 +1786,14 @@
       if (current_status %in% c("alive", "live_token_conflict")) {
         .update_lock_problem(project_dir, lock_path, current, current_status)
       }
+      next
+    }
+    if (identical(state$action, "set_aside_unreadable_lock")) {
+      .apart_update_lock(lock_path, basename(project_dir))
+      next
+    }
+    if (identical(state$action, "set_aside_unreadable_discard")) {
+      .apart_update_lock(state$claim_path, basename(project_dir))
       next
     }
     if (state$action %in% c("claim_orphan_discard",
@@ -1814,11 +1908,18 @@
       )
       next
     }
-    .update_lock_inventory_discard(
-      discard, observed, basename(project_dir),
-      owner_digest = observed_digest, claim = owner,
-      claim_digest = claim_digest
-    )
+    discard_error <- tryCatch({
+      .update_lock_inventory_discard(
+        discard, observed, basename(project_dir),
+        owner_digest = observed_digest, claim = owner,
+        claim_digest = claim_digest
+      )
+      NULL
+    }, error = identity)
+    if (!is.null(discard_error) &&
+          !identical(.read_update_lock_owner(lock_path), owner)) {
+      stop(discard_error)
+    }
     return(list(path = lock_path, owner = owner, acquired = TRUE))
   }
 }

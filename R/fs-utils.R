@@ -150,6 +150,18 @@
   paste0('"', paste(escaped, collapse = ""), '"')
 }
 
+.r_symbol_literal <- function(symbol) {
+  if (!is.character(symbol) || length(symbol) != 1L || is.na(symbol)) {
+    stop("symbol must be one non-NA character string", call. = FALSE)
+  }
+  codepoints <- utf8ToInt(enc2utf8(symbol))
+  ascii <- all(codepoints < 0x80L)
+  control <- any(codepoints < 0x20L | codepoints == 0x7fL)
+  syntactic <- identical(make.names(symbol), symbol) &&
+    !grepl("^[0-9]", symbol) && ascii && !control
+  if (isTRUE(syntactic)) symbol else .r_string_literal(symbol)
+}
+
 .r_ascii_literal <- function(x) {
   render <- function(value) {
     if (is.null(value)) return("NULL")
@@ -362,12 +374,24 @@ safe_unlink <- function(path, recursive = FALSE, force = FALSE, verify = TRUE) {
 #' @return `TRUE` when `inner_path` is inside `outer_path`.
 #' @noRd
 is_path_inside <- function(inner_path, outer_path) {
-  # Normalize paths before comparing components.
-  # Both sides use the same separator convention as the rest of the package. A
-  # path that does not exist comes back from normalizePath() unchanged, so
-  # mixing conventions would make the comparison fail on Windows.
-  inner <- normalizePath(inner_path, winslash = "/", mustWork = FALSE)
-  outer <- normalizePath(outer_path, winslash = "/", mustWork = FALSE)
+  # Resolve the existing ancestor first. This preserves the child suffix when
+  # a temporary path does not exist yet and its parent is an aliased path.
+  resolve_path <- function(path) {
+    current <- normalizePath(path, winslash = "/", mustWork = FALSE)
+    suffix <- character()
+    repeat {
+      if (file.exists(current) || dir.exists(current)) break
+      parent <- dirname(current)
+      if (identical(parent, current)) break
+      suffix <- c(basename(current), suffix)
+      current <- parent
+    }
+    resolved <- normalizePath(current, winslash = "/", mustWork = FALSE)
+    if (length(suffix) == 0L) return(resolved)
+    do.call(file.path, c(list(resolved), as.list(suffix)))
+  }
+  inner <- resolve_path(inner_path)
+  outer <- resolve_path(outer_path)
 
   # Use one separator representation on Windows.
   if (.Platform$OS.type == "windows") {

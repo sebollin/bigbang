@@ -258,8 +258,8 @@ test_that("reexport requires a readable component NAMESPACE", {
 test_that("reexport validates explicit namespace exports and helper plans", {
   expect_true(is.character(bigbang:::.bb_generator_version()))
   testthat::local_mocked_bindings(
-    packageVersion = function(...) stop("not available"),
-    .package = "utils"
+    .bb_package_version = function(...) stop("not available"),
+    .package = "bigbang"
   )
   expect_identical(bigbang:::.bb_generator_version(), "unknown")
   expect_length(bigbang:::.planned_documentation_files("helperverse"), 20L)
@@ -426,7 +426,7 @@ test_that("non-syntactic and Unicode exports remain installable bindings", {
     reexport = TRUE
   )
   namespace <- readLines(file.path(generated$path, "NAMESPACE"), warn = FALSE)
-  expect_true(paste0("export(`", space_symbol, "`)") %in% namespace)
+  expect_true(paste0("export(\"", space_symbol, "\")") %in% namespace)
   expect_true("export(\"a\\u00f1o\")" %in% namespace)
   specs <- readLines(file.path(generated$path, "R", "reexports.R"), warn = FALSE)
   expect_true(any(grepl(space_symbol, specs, fixed = TRUE)))

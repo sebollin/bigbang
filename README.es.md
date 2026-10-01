@@ -371,8 +371,9 @@ acción sin modificar esas carpetas.
   usuario con la misma ruta y md5 que una entrada del inventario es un límite
   inevitable: los bytes son idénticos, de modo que borrarlo no pierde contenido,
   pero no se puede probar la autoría. Registra cada
-  escritura y borrado pretendidos y sobrevive a SIGKILL, SIGTERM, SIGHUP, el
-  cierre de la terminal y un reinicio del equipo. Si una ruta no contiene ni
+  escritura y borrado pretendidos y está diseñado para sobrevivir interrupciones
+  del proceso como SIGKILL, un error de R o Ctrl-C; no promete durabilidad fsync
+  ante un apagado del sistema operativo o de la energía. Si una ruta no contiene ni
   su valor original ni uno pretendido, la recuperación se detiene en vez de
   pisarla. En Windows, una ruta ausente solo se conoce durante la ventana en que
   el temporal pretendido, con el mismo hash, sigue en el área de preparación del

@@ -145,8 +145,8 @@ test_that("the source classifier fails closed on empty and unusual nodes", {
   withr::defer(unlink(root, recursive = TRUE, force = TRUE))
   writeLines("value <- function() NULL", file.path(root, "R", "value.R"))
   testthat::local_mocked_bindings(
-    getParseData = function(...) stop("parse data probe"),
-    .package = "utils"
+    .reexport_get_parse_data = function(...) stop("parse data probe"),
+    .package = "bigbang"
   )
   evidence <- bigbang:::.reexport_source_evidence(root)
   expect_match(evidence$parse_errors[[1L]]$error, "parse data probe")

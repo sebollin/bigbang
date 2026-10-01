@@ -320,7 +320,7 @@ test_that("a real SIGKILL leaves a lock that a later update reclaims", {
   skip_on_os("windows")
   fixture <- round059_fixture("bigbang-round059-lock-")
   mark <- file.path(fixture$root, "lock-ready")
-  child <- parallel::mcparallel({
+  child <- bb_mcparallel({
     lock <- bigbang:::.acquire_update_lock(fixture$project)
     writeLines("ready", mark, useBytes = TRUE)
     Sys.sleep(600)

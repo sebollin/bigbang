@@ -118,8 +118,8 @@ Use `upgrade = "always"` or `force = TRUE` for an explicit reinstall. Generated
 metapackages provide `<meta>_conflicts()` and honor
 `options(<meta>.quiet = TRUE)` for startup output. Their optional `cli` display
 falls back to a dependency-free ASCII banner.
-`<meta>_conflicts()` retains masking conflicts and stores the installation check
-in its `reexport_verification` component.
+`<meta>_conflicts()` retains masking conflicts; inspect its installation check
+with `<meta>_reexport_verification(<meta>_conflicts())`.
 
 ## Interrupted updates and recovery
 

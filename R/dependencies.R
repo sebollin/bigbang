@@ -1817,6 +1817,10 @@
   evidence
 }
 
+.reexport_get_parse_data <- function(...) {
+  utils::getParseData(...)
+}
+
 .reexport_source_evidence <- function(package_root, package = NULL) {
   evidence <- .reexport_empty_evidence()
   r_dir <- file.path(package_root, "R")
@@ -1838,7 +1842,7 @@
         ))
       }
       data <- tryCatch(
-        utils::getParseData(source, includeText = TRUE),
+        .reexport_get_parse_data(source, includeText = TRUE),
         error = identity
       )
       if (inherits(data, "error")) {
@@ -2292,23 +2296,8 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   )
 }
 
-.reexport_symbol_literal <- function(symbol) {
-  codepoints <- utf8ToInt(enc2utf8(symbol))
-  ascii <- all(codepoints < 0x80L)
-  control <- any(codepoints < 0x20L | codepoints == 0x7fL)
-  syntactic <- identical(make.names(symbol), symbol) &&
-    !grepl("^[0-9]", symbol) && ascii && !control
-  if (isTRUE(syntactic)) {
-    symbol
-  } else if (ascii && !control) {
-    paste0("`", symbol, "`")
-  } else {
-    .r_string_literal(symbol)
-  }
-}
-
 .reexport_prefer_literal <- function(symbol, package) {
-  paste0(.reexport_symbol_literal(symbol), " = ", .r_string_literal(package))
+  paste0(.r_symbol_literal(symbol), " = ", .r_string_literal(package))
 }
 
 .reexport_import_sources <- function(component, symbol, components) {
@@ -2614,7 +2603,7 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   )
   paste0(
     "reexport_prefer = ", paste(preferred, collapse = " or "),
-    "; reexport_exclude = ", .reexport_symbol_literal(symbol)
+    "; reexport_exclude = ", .r_symbol_literal(symbol)
   )
 }
 
@@ -2730,7 +2719,7 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
       .bb_trf(
         "Generated metapackage symbol(s) %s can only be resolved with reexport_exclude: %s.",
         paste(own_symbols, collapse = ", "),
-        paste(vapply(own_symbols, .reexport_symbol_literal, character(1L)),
+        paste(vapply(own_symbols, .r_symbol_literal, character(1L)),
               collapse = ", ")
       ),
       symbols = own_symbols, components = metapackage_name,

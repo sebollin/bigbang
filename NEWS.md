@@ -13,6 +13,17 @@
 - `create_metapackage()` now accepts `reexport_prefer` and `reexport_exclude`.
   Every collision requires one of them because static analysis cannot prove
   object identity, and diagnostics classify the selected resolution.
+- Generated metapackages now reserve `.component_reexport_specs`,
+  `.reexport_state`, `.reexport_library_paths`, `.set_reexport_library`,
+  `.reexport_component_value`, `.reexport_installed_version`,
+  `.reexport_loaded_version`, `.reexport_version_text`,
+  `.make_reexport_binding`, `.install_reexport_bindings`, `.reexport_verify`,
+  `.reexport_verify_subprocess`, `.meta_package_version`,
+  `<meta>_reexport_verification`, and the generated installer, lifecycle,
+  dependency, diagnostic, and translation helpers. Migrate colliding component
+  exports with `reexport_exclude = "..."`. Version 0.4.0 already rejected
+  these collisions; 0.5.0 adds explicit choose-or-exclude handling and
+  diagnostics.
 
 ## New features
 
@@ -24,6 +35,11 @@
 - Installed-owner verification runs in a clean R subprocess with the destination
   library first, and the conflicts accessor keeps verification outside symbol
   names.
+- Update recovery accepts the `recover` argument and reports `recovered`,
+  `recovery`, `reexports`, and `reexport_excluded` in its result. The generated
+  `<meta>_reexport_verification()` accessor returns installed-owner checks.
+- Dependency scanning now includes `.S`, `.s`, and `.q` sources; detected
+  dependencies can therefore differ from earlier releases.
 
 ## Bug fixes
 

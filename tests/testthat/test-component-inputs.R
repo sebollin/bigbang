@@ -146,6 +146,8 @@ test_that("skipped local dependencies propagate as skips through a metapackage",
     ignore.case = TRUE
   )
   expect_true(any(grepl("Some components were skipped", warnings, fixed = TRUE)))
+  expect_true(any(grepl("local dependencies were skipped", warnings,
+                        fixed = TRUE)))
 })
 
 test_that("the local installer reports policy, constraint, and install failures", {

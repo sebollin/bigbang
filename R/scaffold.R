@@ -130,7 +130,8 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
     ".pkgs", ".component_names", ".component_specs",
     ".component_reexport_specs", ".reexport_state", ".reexport_library_paths",
     ".set_reexport_library", ".reexport_component_value",
-    ".reexport_installed_version",
+    ".reexport_installed_version", ".reexport_loaded_version",
+    ".reexport_version_text",
     ".make_reexport_binding", ".install_reexport_bindings", ".reexport_verify",
     ".reexport_verify_subprocess",
     "attach_installed_packages", ".bigbang_abort",
@@ -147,20 +148,7 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
 }
 
 .namespace_export_directive <- function(symbol) {
-  codepoints <- utf8ToInt(enc2utf8(symbol))
-  ascii <- all(codepoints < 0x80L)
-  control <- any(codepoints < 0x20L | codepoints == 0x7fL)
-  syntactic <- identical(make.names(symbol), symbol) &&
-    !grepl("^[0-9]", symbol) &&
-    ascii && !control
-  quoted <- if (isTRUE(syntactic)) {
-    symbol
-  } else if (ascii && !control) {
-    paste0("`", symbol, "`")
-  } else {
-    .r_string_literal(symbol)
-  }
-  paste0("export(", quoted, ")")
+  paste0("export(", .r_symbol_literal(symbol), ")")
 }
 
 #' Write a generated metapackage NAMESPACE

@@ -15,7 +15,8 @@ test_that("tests with forked children are skipped on CRAN", {
       source <- paste(deparse(expression), collapse = "\n")
       uses_signal <- grepl(fork_token, source, fixed = TRUE) ||
         grepl(kill_token, source, fixed = TRUE) ||
-        grepl(signal_token, source, fixed = TRUE)
+        grepl(signal_token, source, fixed = TRUE) ||
+        grepl("round056_interrupt_discard", source, fixed = TRUE)
       if (uses_signal) {
         expect_true(grepl(skip_token, source, fixed = TRUE),
                     info = paste("Missing skip_on_cran in", file))
@@ -28,19 +29,53 @@ test_that("Unix-only process primitives are protected on Windows", {
   files <- list.files(
     testthat::test_path(), pattern = "\\.R$", full.names = TRUE
   )
-  tokens <- c("mcparallel", "mccollect", "parallel:::")
+  tokens <- c("mcparallel", "bb_mcparallel", "mccollect", "parallel:::")
   for (file in files) {
     if (identical(basename(file), "test-round062-guards.R")) next
-    source <- paste(readLines(file, warn = FALSE), collapse = "\\n")
-    if (!any(vapply(tokens, grepl, logical(1L), x = source, fixed = TRUE))) {
-      next
+    expressions <- parse(file = file, keep.source = FALSE)
+    for (expression in expressions) {
+      if (!is.call(expression) ||
+            !identical(as.character(expression[[1L]]), "test_that")) next
+      source <- paste(deparse(expression), collapse = "\\n")
+      uses_signal <- any(vapply(tokens, grepl, logical(1L),
+                                x = source, fixed = TRUE)) ||
+        grepl("round056_interrupt_discard", source, fixed = TRUE)
+      if (!uses_signal) next
+      protected <- grepl('skip_on_os\\("windows"\\)', source, perl = TRUE) ||
+        grepl("\\.Platform\\$OS.type[[:space:]]*==[[:space:]]*['\"]unix['\"]",
+              source, perl = TRUE) ||
+        grepl("identical\\(.Platform\\$OS.type,[[:space:]]*['\"]unix['\"]\\)",
+              source, perl = TRUE)
+      expect_true(protected, info = paste("Missing Unix guard in", file))
     }
-    protected <- grepl('skip_on_os\\("windows"\\)', source, perl = TRUE) ||
-      grepl("\\.Platform\\$OS.type[[:space:]]*==[[:space:]]*['\"]unix['\"]",
-            source, perl = TRUE) ||
-      grepl("identical\\(.Platform\\$OS.type,[[:space:]]*['\"]unix['\"]\\)",
-            source, perl = TRUE)
-    expect_true(protected, info = paste("Missing Unix guard in", file))
+  }
+})
+
+test_that("tests never mock base or recommended package namespaces", {
+  files <- list.files(
+    testthat::test_path(), pattern = "\\.R$", full.names = TRUE
+  )
+  packages <- c(
+    "base", "compiler", "datasets", "graphics", "grDevices", "grid",
+    "methods", "parallel", "splines", "stats", "stats4", "tcltk",
+    "tools", "utils"
+  )
+  for (file in files) {
+    if (identical(basename(file), "test-round062-guards.R")) next
+    expressions <- parse(file = file, keep.source = FALSE)
+    for (expression in expressions) {
+      if (!is.call(expression) ||
+            !identical(as.character(expression[[1L]]), "test_that")) next
+      source <- paste(deparse(expression), collapse = "\\n")
+      for (package in packages) {
+        pattern <- paste0(
+          "(?s:(?:local_mocked_bindings|with_mocked_bindings).*?\\.package\\s*=\\s*['\"])",
+          package, "['\"]"
+        )
+        expect_false(grepl(pattern, source, perl = TRUE),
+                     info = paste("Standard namespace mock in", file))
+      }
+    }
   }
 })
 

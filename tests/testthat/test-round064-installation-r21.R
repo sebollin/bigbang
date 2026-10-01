@@ -95,7 +95,7 @@ test_that("discard revalidates links after the private journal rename", {
     ext_abs <- normalizePath(external, winslash = "/", mustWork = TRUE)
     sub <- file.path(discarded, "backup", "sub")
     sub_real <- file.path(discarded, "backup", "sub.real")
-    child <- parallel::mcparallel({
+    child <- bb_mcparallel({
       deadline <- Sys.time() + 20
       while (!file.exists(Sys.getenv("BB064_MARK")) &&
                Sys.time() < deadline) Sys.sleep(0.002)
@@ -205,7 +205,9 @@ test_that("round 064 journal guards cover failed and private transitions", {
   link_root <- file.path(root, "link-root")
   target <- file.path(root, "target")
   dir.create(target)
-  expect_true(file.symlink(target, link_root))
+  if (!isTRUE(suppressWarnings(file.symlink(target, link_root)))) {
+    skip("symbolic links are unavailable")
+  }
   expect_false(.discard_update_entry(
     file.path(link_root, "file"), root = link_root, relative = "file"
   ))
@@ -250,7 +252,12 @@ test_that("recover sets aside an unrecognized armed journal owned by a dead proc
     fixture$project, fixture$name,
     .read_generation_manifest(fixture$project)
   )
-  writeLines("newline-name", file.path(journal$path, "bad\nname"),
+  bad_name <- if (identical(.Platform$OS.type, "windows")) {
+    "bad-name"
+  } else {
+    "bad\nname"
+  }
+  writeLines("newline-name", file.path(journal$path, bad_name),
              useBytes = TRUE)
   dead_owner <- list(
     pid = 4194303L, host = .update_host(), started_utc = "now",
@@ -266,7 +273,7 @@ test_that("recover sets aside an unrecognized armed journal owned by a dead proc
     fixture$project, fixture$name, recover = TRUE
   ))
   expect_identical(result$action, "apart_unrecognized_armed")
-  expect_true(file.exists(file.path(result$apart, "bad\nname")))
+  expect_true(file.exists(file.path(result$apart, bad_name)))
 })
 
 test_that("the verification accessor rejects attributes lost by subsetting", {

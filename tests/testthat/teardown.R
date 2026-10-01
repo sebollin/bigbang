@@ -20,6 +20,29 @@ if (.Platform$OS.type == "unix" &&
       suppressWarnings(parallel::mccollect(remaining, wait = FALSE))
       Sys.sleep(0.01)
     }
+    suppressWarnings(parallel::mccollect(registered, wait = TRUE))
+    remaining <- parallel:::children()
+    if (length(remaining) > 0L) {
+      # Every still-registered child was sent SIGKILL above.  Reap it with a
+      # blocking collection so the parallel finalizer has no live registry
+      # entry left to terminate during interpreter shutdown.
+      suppressWarnings(parallel::mccollect(remaining, wait = TRUE))
+    }
   }
-  parallel:::cleanup(kill = FALSE, detach = TRUE)
+  remaining <- parallel:::children()
+  if (length(remaining) > 0L) {
+    suppressWarnings(parallel::mccollect(remaining, wait = TRUE))
+  }
+  remaining <- parallel:::children()
+  if (length(remaining) > 0L) {
+    parallel:::cleanup(kill = TRUE, detach = FALSE, shutdown = TRUE)
+  }
+  remaining <- parallel:::children()
+  if (length(remaining) > 0L) {
+    parallel:::cleanup(kill = TRUE, detach = FALSE, shutdown = TRUE)
+    remaining <- parallel:::children()
+    if (length(remaining) > 0L) {
+      suppressWarnings(parallel::mccollect(remaining, wait = TRUE))
+    }
+  }
 }

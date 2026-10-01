@@ -56,6 +56,7 @@ round054_collect_child <- function(child, timeout = 1) {
   repeat {
     collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
     if (!is.null(collected)) {
+      bb_finish_child(child)
       return(invisible(TRUE))
     }
     if (Sys.time() >= deadline) return(invisible(FALSE))
@@ -64,14 +65,14 @@ round054_collect_child <- function(child, timeout = 1) {
 }
 
 round054_cleanup_child <- function(child) {
-  collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
-  if (is.null(collected)) {
-    try(tools::pskill(child$pid, tools::SIGKILL), silent = TRUE)
-    collected <- round054_collect_child(child, timeout = 1)
+  if (.bb_child_registered(child)) {
+    collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
+    if (is.null(collected)) {
+      try(tools::pskill(child$pid, tools::SIGKILL), silent = TRUE)
+      collected <- round054_collect_child(child, timeout = 1)
+    }
   }
-  if (isTRUE(collected) && length(parallel:::children()) <= 1L) {
-    try(parallel:::cleanup(kill = FALSE, detach = TRUE), silent = TRUE)
-  }
+  bb_finish_child(child)
   invisible(NULL)
 }
 
@@ -98,8 +99,8 @@ round054_snapshot <- function(path) {
 test_that("the process cleanup helper enforces its timeout", {
   skip_on_cran()
   skip_on_os("windows")
-  child <- parallel::mcparallel(Sys.sleep(10), silent = TRUE,
-                                mc.set.seed = FALSE)
+  child <- bb_mcparallel(Sys.sleep(10), silent = TRUE,
+                         mc.set.seed = FALSE)
   on.exit(round054_cleanup_child(child), add = TRUE)
   started <- Sys.time()
   hit <- round054_kill_child(child, tempfile("round054-missing-mark-"),
@@ -168,7 +169,7 @@ test_that("H1 real SIGKILL leaves no final unmarked journal", {
   mark <- file.path(fixture$root, "H1_MARK")
   Sys.setenv(BB054_H1_MARK = mark)
   on.exit(Sys.unsetenv("BB054_H1_MARK"), add = TRUE)
-  child <- parallel::mcparallel({
+  child <- bb_mcparallel({
     trace(".journal_backup_copy", where = asNamespace("bigbang"),
           tracer = quote({
             if (!file.exists(Sys.getenv("BB054_H1_MARK"))) {
@@ -201,7 +202,7 @@ test_that("H1 empty unmarked staging is discarded and non-empty is set aside", {
   mark <- file.path(fixture$root, "H1_EMPTY_MARK")
   Sys.setenv(BB054_H1_EMPTY_MARK = mark)
   on.exit(Sys.unsetenv("BB054_H1_EMPTY_MARK"), add = TRUE)
-  child <- parallel::mcparallel({
+  child <- bb_mcparallel({
     trace(".atomic_save_rds", where = asNamespace("bigbang"),
           tracer = quote({
             if (grepl("marker\\.rds$", path) &&
@@ -244,7 +245,7 @@ test_that("H2 SIGKILL after rename and during deletion resumes from tombstone", 
     Sys.setenv(BB054_H2_MARK = mark)
     Sys.setenv(BB054_H2_PHASE = phase)
     on.exit(Sys.unsetenv("BB054_H2_MARK"), add = TRUE)
-    child <- parallel::mcparallel({
+    child <- bb_mcparallel({
       ns <- asNamespace("bigbang")
       if (identical(Sys.getenv("BB054_H2_PHASE"), "during_delete")) {
         trace(".discard_update_entry", where = ns, exit = quote({
@@ -304,7 +305,7 @@ test_that("H3 moved projects recognize the journal by name and manifest hash", {
   mark <- file.path(fixture$root, "H3_MARK")
   Sys.setenv(BB054_H3_MARK = mark)
   on.exit(Sys.unsetenv("BB054_H3_MARK"), add = TRUE)
-  child <- parallel::mcparallel({
+  child <- bb_mcparallel({
     trace(".write_utf8", where = asNamespace("bigbang"), tracer = quote({
       writes <- getOption("bb054.writes", 0L) + 1L
       options(bb054.writes = writes)

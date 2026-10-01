@@ -12,7 +12,9 @@ test_that("journal traversal handles empty and linked entries", {
   dir.create(external)
   writeLines("outside", file.path(external, "file"), useBytes = TRUE)
   linked <- file.path(root, "linked")
-  expect_true(file.symlink(external, linked))
+  if (!isTRUE(suppressWarnings(file.symlink(external, linked)))) {
+    skip("symbolic links are unavailable")
+  }
   expect_length(.update_journal_entries(linked), 0L)
   expect_true(.journal_has_link_ancestor(root, "linked/file"))
   expect_error(.update_journal_inventory(root), "Could not write")
@@ -150,7 +152,9 @@ test_that("filesystem guards cover links, literals, and safe removal", {
   target <- file.path(root, "target")
   dir.create(target)
   link <- file.path(root, "link")
-  expect_true(file.symlink(target, link))
+  if (!isTRUE(suppressWarnings(file.symlink(target, link)))) {
+    skip("symbolic links are unavailable")
+  }
   expect_true(.path_is_symlink(link))
   expect_error(.validate_project_root_path(link), class = "bigbang_error_symlink_generated_path")
   expect_error(
@@ -178,12 +182,19 @@ test_that("filesystem guards cover links, literals, and safe removal", {
   expect_error(.validate_archive_members(c("ok", "../unsafe")), "unsafe")
   expect_identical(.validate_archive_members("ok/file"), "ok/file")
 
-  outside <- tempfile("bigbang-round062-outside-package-", tmpdir = "/tmp")
+  sandbox <- tempfile("bigbang-round062-safe-root-")
+  dir.create(sandbox)
+  withr::defer(unlink(sandbox, recursive = TRUE, force = TRUE))
+  safe_unlink_local <- safe_unlink
+  safe_environment <- new.env(parent = environment(safe_unlink_local))
+  safe_environment$tempdir <- function() sandbox
+  environment(safe_unlink_local) <- safe_environment
+  outside <- tempfile("bigbang-round062-outside-package-")
   dir.create(file.path(outside, "R"), recursive = TRUE)
   writeLines("Package: outside", file.path(outside, "DESCRIPTION"),
              useBytes = TRUE)
   withr::defer(unlink(outside, recursive = TRUE, force = TRUE))
-  expect_false(safe_unlink(outside, recursive = TRUE, force = TRUE))
+  expect_false(safe_unlink_local(outside, recursive = TRUE, force = TRUE))
   removable <- tempfile("bigbang-round062-removable-")
   dir.create(removable)
   expect_equal(safe_unlink(removable, recursive = TRUE, force = TRUE), 0L)
@@ -216,7 +227,9 @@ test_that("scanner validates artifact shapes and source boundaries", {
   link <- file.path(malformed, "R", "linked.R")
   source <- file.path(root, "source.R")
   writeLines("value <- 1", source, useBytes = TRUE)
-  expect_true(file.symlink(source, link))
+  if (!isTRUE(suppressWarnings(file.symlink(source, link)))) {
+    skip("symbolic links are unavailable")
+  }
   expect_error(scan_bigbang_artifact(malformed), "symbolic links")
 
   package <- file.path(root, "zipmeta")
@@ -241,7 +254,9 @@ test_that("filesystem fallbacks and local archive policies are covered", {
   external <- file.path(root, "external")
   writeLines("new", source, useBytes = TRUE)
   writeLines("old", external, useBytes = TRUE)
-  expect_true(file.symlink(external, destination))
+  if (!isTRUE(suppressWarnings(file.symlink(external, destination)))) {
+    skip("symbolic links are unavailable")
+  }
   calls <- 0L
   atomic_replace <- .atomic_replace
   atomic_environment <- new.env(parent = asNamespace("bigbang"))

@@ -70,6 +70,7 @@ round056_collect_child <- function(child, timeout = 1) {
   repeat {
     collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
     if (!is.null(collected)) {
+      bb_finish_child(child)
       return(invisible(TRUE))
     }
     if (Sys.time() >= deadline) return(invisible(FALSE))
@@ -78,14 +79,14 @@ round056_collect_child <- function(child, timeout = 1) {
 }
 
 round056_cleanup_child <- function(child) {
-  collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
-  if (is.null(collected)) {
-    try(tools::pskill(child$pid, tools::SIGKILL), silent = TRUE)
-    collected <- round056_collect_child(child, timeout = 1)
+  if (.bb_child_registered(child)) {
+    collected <- suppressWarnings(parallel::mccollect(child, wait = FALSE))
+    if (is.null(collected)) {
+      try(tools::pskill(child$pid, tools::SIGKILL), silent = TRUE)
+      collected <- round056_collect_child(child, timeout = 1)
+    }
   }
-  if (isTRUE(collected) && length(parallel:::children()) <= 1L) {
-    try(parallel:::cleanup(kill = FALSE, detach = TRUE), silent = TRUE)
-  }
+  bb_finish_child(child)
   invisible(NULL)
 }
 
@@ -118,7 +119,7 @@ round056_interrupt_discard <- function(fixture, mark) {
   manifest <- .read_generation_manifest(fixture$project)
   journal <- .create_update_journal(fixture$project, fixture$name, manifest)
   Sys.setenv(BB056_MARK = mark)
-  child <- parallel::mcparallel({
+  child <- bb_mcparallel({
     trace(".discard_update_entry", where = asNamespace("bigbang"),
           tracer = quote({
             if (!file.exists(Sys.getenv("BB056_MARK"))) {
@@ -145,7 +146,7 @@ test_that("J1 SIGKILL sets aside an unverified marker temporary", {
   before <- round056_snapshot(fixture$project)
   mark <- file.path(fixture$root, "J1_MARK")
   Sys.setenv(BB056_MARK = mark)
-  child <- parallel::mcparallel({
+  child <- bb_mcparallel({
     trace(".atomic_replace", where = asNamespace("bigbang"),
           tracer = quote({
             if (grepl("marker\\.rds$", destination) &&
@@ -189,7 +190,7 @@ test_that("J2 SIGKILL after the tombstone resumes the rename and discard", {
   journal <- .create_update_journal(fixture$project, fixture$name, manifest)
   mark <- file.path(fixture$root, "J2_MARK")
   Sys.setenv(BB056_MARK = mark)
-  child <- parallel::mcparallel({
+  child <- bb_mcparallel({
     trace(".update_journal_tombstone", where = asNamespace("bigbang"),
           exit = quote({
             if (!file.exists(Sys.getenv("BB056_MARK"))) {
@@ -223,7 +224,7 @@ test_that("J3 SIGKILL after the tombstone unlink removes the empty shell", {
   journal <- .create_update_journal(fixture$project, fixture$name, manifest)
   mark <- file.path(fixture$root, "J3_MARK")
   Sys.setenv(BB056_MARK = mark)
-  child <- parallel::mcparallel({
+  child <- bb_mcparallel({
     trace(".remove_journal_tombstones", where = asNamespace("bigbang"),
           exit = quote({
             if (!file.exists(.update_journal_tombstone_path(path)) &&
@@ -250,6 +251,7 @@ test_that("J3 SIGKILL after the tombstone unlink removes the empty shell", {
 
 test_that("J4 preserves user bytes outside the tombstone inventory", {
   skip_on_cran()
+  skip_on_os("windows")
   fixture <- round056_fixture("bigbang-round056-j4-")
   discarded <- round056_interrupt_discard(
     fixture, file.path(fixture$root, "J4_MARK")
@@ -274,6 +276,7 @@ test_that("J4 preserves user bytes outside the tombstone inventory", {
 
 test_that("J5 preserves a discarded journal from another project generation", {
   skip_on_cran()
+  skip_on_os("windows")
   first <- round056_fixture("bigbang-round056-j5-first-")
   second <- round056_fixture(
     "bigbang-round056-j5-second-", version = "0.1.1"
