@@ -1094,10 +1094,19 @@
 }
 
 .project_relative_destination <- function(destination, project_dir) {
-  destination <- normalizePath(destination, winslash = "/", mustWork = FALSE)
-  project_dir <- normalizePath(project_dir, winslash = "/", mustWork = FALSE)
-  prefix <- paste0(project_dir, "/")
-  if (!startsWith(destination, prefix)) return(NULL)
+  # A new file does not exist yet, so normalizePath() would leave it spelled
+  # through an alias (macOS /var, a Windows short name) while the existing
+  # project resolves to its physical path. A write that is not recognized as
+  # inside the project is not recorded in the journal at all.
+  destination <- .resolve_physical_path(destination)
+  project_dir <- .resolve_physical_path(project_dir)
+  prefix <- paste0(sub("/+$", "", project_dir), "/")
+  inside <- if (identical(.Platform$OS.type, "windows")) {
+    startsWith(tolower(destination), tolower(prefix))
+  } else {
+    startsWith(destination, prefix)
+  }
+  if (!inside) return(NULL)
   relative <- substring(destination, nchar(prefix) + 1L)
   if (!.valid_update_relative_path(relative)) return(NULL)
   relative

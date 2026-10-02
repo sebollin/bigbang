@@ -139,6 +139,16 @@ test_that("discard revalidates links after the private journal rename", {
 
 test_that("unreadable discarded folders are set aside and never treated as empty", {
   fixture <- round064_fixture("bigbang-round064-permissions-")
+  # Entries set aside keep their 0000 mode under a new name; restore every
+  # directory under the fixture so tempdir() can be removed afterwards.
+  withr::defer({
+    for (pass in seq_len(20L)) {
+      dirs <- list.dirs(fixture$destination, recursive = TRUE)
+      locked <- dirs[file.access(dirs, 4L) != 0L]
+      if (length(locked) == 0L) break
+      Sys.chmod(locked, "0755")
+    }
+  })
   try(untrace(".file_digest", where = asNamespace("bigbang")), silent = TRUE)
   journal <- .create_update_journal(
     fixture$project, fixture$name,

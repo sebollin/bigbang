@@ -1,22 +1,45 @@
+# Resolve the deepest existing ancestor of a path and keep the rest as a
+# suffix. normalizePath() leaves a path that does not exist as it was
+# written, while it canonicalizes an existing parent (a symbolic link such as
+# macOS /var -> /private/var, or a Windows 8.3 short name such as
+# C:/Users/RUNNER~1). Resolving the ancestor keeps both spellings comparable.
+.resolve_physical_path <- function(path) {
+  current <- normalizePath(path, winslash = "/", mustWork = FALSE)
+  suffix <- character()
+  repeat {
+    if (file.exists(current) || dir.exists(current)) break
+    parent <- dirname(current)
+    if (identical(parent, current)) break
+    suffix <- c(basename(current), suffix)
+    current <- parent
+  }
+  resolved <- normalizePath(current, winslash = "/", mustWork = FALSE)
+  if (length(suffix) == 0L) return(resolved)
+  do.call(file.path, c(list(resolved), as.list(suffix)))
+}
+
 # Windows has no readlink: Sys.readlink() returns "" there, also for
 # junctions and symbolic links. normalizePath() does resolve them, so the last
-# component is a link exactly when resolving the whole path differs from
-# resolving its parent and appending the component. Comparing the full path
-# instead would flag every 8.3 short name (C:/Users/RUNNER~1/...) and every
-# linked ancestor. No external program is run: fsutil needs administrator
-# rights and would start one process per journal entry.
+# component of an existing path is a link exactly when resolving the whole
+# path differs from resolving its parent and appending the component.
+# Comparing the full path instead would flag every 8.3 short name
+# (C:/Users/RUNNER~1/...) and every linked ancestor. A path that does not
+# exist is not resolved by normalizePath() at all, so it is never a link
+# here. No external program is run: fsutil needs administrator rights and
+# would start one process per journal entry.
 .path_is_windows_reparse_point <- function(path, is_windows = NULL,
-                                           normalize = NULL) {
+                                           normalize = NULL,
+                                           exists = NULL) {
   if (is.null(is_windows)) {
     is_windows <- identical(.Platform$OS.type, "windows")
   }
-  if (!isTRUE(is_windows)) return(FALSE)
+  if (!isTRUE(is_windows)) return(rep(FALSE, length(path)))
   if (is.null(normalize)) {
     normalize <- function(x) normalizePath(x, winslash = "/", mustWork = FALSE)
   }
-  path <- sub("[/\\\\]+$", "", path)
-  component <- basename(path)
-  if (!nzchar(component) || component %in% c(".", "..")) return(FALSE)
+  if (is.null(exists)) {
+    exists <- function(x) file.exists(x) || dir.exists(x)
+  }
   canonical <- function(x) {
     value <- tryCatch(normalize(x), error = function(e) NA_character_)
     if (!is.character(value) || length(value) != 1L || is.na(value)) {
@@ -24,17 +47,29 @@
     }
     tolower(sub("/+$", "", gsub("\\\\", "/", value)))
   }
-  resolved <- canonical(path)
-  parent <- canonical(dirname(path))
-  if (is.na(resolved) || is.na(parent)) return(FALSE)
-  !identical(resolved, paste(parent, tolower(component), sep = "/"))
+  one <- function(entry) {
+    if (is.na(entry) || !nzchar(entry)) return(FALSE)
+    entry <- sub("[/\\\\]+$", "", entry)
+    component <- basename(entry)
+    if (!nzchar(component) || component %in% c(".", "..")) return(FALSE)
+    if (!isTRUE(exists(entry))) return(FALSE)
+    resolved <- canonical(entry)
+    parent <- canonical(dirname(entry))
+    if (is.na(resolved) || is.na(parent)) return(FALSE)
+    !identical(resolved, paste(parent, tolower(component), sep = "/"))
+  }
+  vapply(as.character(path), one, logical(1L), USE.NAMES = FALSE)
 }
 
 .path_is_symlink <- function(path) {
-  target <- tryCatch(Sys.readlink(path), error = function(e) "")
-  is_link <- is.character(target) && length(target) == 1L && !is.na(target) &&
-    nzchar(target)
-  isTRUE(is_link) || isTRUE(.path_is_windows_reparse_point(path))
+  readlink <- function(entry) {
+    target <- tryCatch(Sys.readlink(entry), error = function(e) "")
+    is.character(target) && length(target) == 1L && !is.na(target) &&
+      nzchar(target)
+  }
+  linked <- vapply(as.character(path), readlink, logical(1L),
+                   USE.NAMES = FALSE)
+  linked | .path_is_windows_reparse_point(path)
 }
 
 .validate_project_root_path <- function(project_dir) {
@@ -421,22 +456,8 @@ safe_unlink <- function(path, recursive = FALSE, force = FALSE, verify = TRUE) {
 is_path_inside <- function(inner_path, outer_path) {
   # Resolve the existing ancestor first. This preserves the child suffix when
   # a temporary path does not exist yet and its parent is an aliased path.
-  resolve_path <- function(path) {
-    current <- normalizePath(path, winslash = "/", mustWork = FALSE)
-    suffix <- character()
-    repeat {
-      if (file.exists(current) || dir.exists(current)) break
-      parent <- dirname(current)
-      if (identical(parent, current)) break
-      suffix <- c(basename(current), suffix)
-      current <- parent
-    }
-    resolved <- normalizePath(current, winslash = "/", mustWork = FALSE)
-    if (length(suffix) == 0L) return(resolved)
-    do.call(file.path, c(list(resolved), as.list(suffix)))
-  }
-  inner <- resolve_path(inner_path)
-  outer <- resolve_path(outer_path)
+  inner <- .resolve_physical_path(inner_path)
+  outer <- .resolve_physical_path(outer_path)
 
   # Use one separator representation on Windows.
   if (.Platform$OS.type == "windows") {

@@ -202,11 +202,20 @@ test_that("Windows link detection looks only at the last path component", {
     }
     x
   }
+  missing <- "C:/Users/RUNNER~1/Temp/x/not-yet"
   detect <- function(path) {
-    .path_is_windows_reparse_point(path, is_windows = TRUE,
-                                   normalize = normalize)
+    .path_is_windows_reparse_point(
+      path, is_windows = TRUE, normalize = normalize,
+      exists = function(x) !identical(x, missing)
+    )
   }
   root <- "C:/Users/RUNNER~1/Temp"
+  # A path that does not exist keeps its short spelling in normalizePath().
+  expect_false(detect(missing))
+  expect_identical(
+    detect(c(file.path(root, "x", "file"), file.path(root, "linked"))),
+    c(FALSE, TRUE)
+  )
   expect_false(detect(file.path(root, "x", "file")))
   expect_false(detect(file.path(root, "x", "FILE")))
   expect_false(detect(file.path(root, "x", "file/")))
@@ -216,4 +225,28 @@ test_that("Windows link detection looks only at the last path component", {
   expect_false(.path_is_windows_reparse_point(
     file.path(root, "linked"), is_windows = FALSE, normalize = normalize
   ))
+})
+
+test_that("writes through an aliased project path are still recorded", {
+  # macOS spells tempdir() through /var, a link to /private/var: a new file
+  # does not exist yet, so only its parent gets resolved.
+  skip_on_os("windows")
+  root <- withr::local_tempdir("bigbang-alias-")
+  real <- file.path(root, "real")
+  dir.create(file.path(real, "project"), recursive = TRUE)
+  alias <- file.path(root, "alias")
+  skip_if_not(isTRUE(file.symlink(real, alias)), "symbolic links unavailable")
+  project <- file.path(alias, "project")
+  expect_identical(
+    .project_relative_destination(file.path(project, "new-file"), project),
+    "new-file"
+  )
+  expect_identical(
+    .project_relative_destination(
+      file.path(project, "R", "new.R"), file.path(real, "project")
+    ),
+    "R/new.R"
+  )
+  expect_null(.project_relative_destination(file.path(root, "outside"), project))
+  expect_identical(.path_is_symlink(c(alias, project)), c(TRUE, FALSE))
 })
