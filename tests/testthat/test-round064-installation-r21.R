@@ -194,7 +194,7 @@ test_that("unreadable discarded folders are set aside and never treated as empty
   probe <- file.path(fixture$root, "rename-probe")
   dir.create(probe)
   Sys.chmod(probe, "0000")
-  renamed <- file.rename(probe, paste0(probe, "-moved"))
+  renamed <- suppressWarnings(file.rename(probe, paste0(probe, "-moved")))
   Sys.chmod(c(probe, paste0(probe, "-moved"))[c(!renamed, renamed)], "0755")
   if (!isTRUE(renamed)) {
     skip("This platform cannot rename a directory with mode 0000.")
