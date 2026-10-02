@@ -322,6 +322,27 @@ install_local_pkg <- function(
       state$failed[[stem]] <- "Circular local dependency"
       return(FALSE)
     }
+    local_dependencies <- intersect(item$dependencies, inventory$packages)
+    skipped_dependencies <- local_dependencies[vapply(
+      local_dependencies,
+      function(dependency) {
+        match <- which(inventory$packages == dependency)
+        length(match) == 1L &&
+          length(state$skipped[[inventory$entries[[match]]$stem]]) > 0L
+      },
+      logical(1L)
+    )]
+    if (length(skipped_dependencies) > 0L) {
+      dependency <- skipped_dependencies[[1L]]
+      dependency_match <- which(inventory$packages == dependency)
+      dependency_stem <- inventory$entries[[dependency_match[[1L]]]]$stem
+      state$skipped[[stem]] <- .bb_trf(
+        "Skipped because local dependency %s was skipped: %s",
+        dependency,
+        state$skipped[[dependency_stem]]
+      )
+      return(FALSE)
+    }
     # Metadata was read before installation, so the DESCRIPTION version remains
     # authoritative even when the filename has no version or disagrees with it.
     installed_version <- tryCatch(

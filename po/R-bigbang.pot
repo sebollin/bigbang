@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.4.0\n"
+"Project-Id-Version: bigbang\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -32,6 +32,12 @@ msgid "Package archive does not exist: %s; archives were not found in the suppli
 msgstr ""
 
 msgid "The archive directory does not exist: %s"
+msgstr ""
+
+msgid "value must be one non-NA character string"
+msgstr ""
+
+msgid "symbol must be one non-NA character string"
 msgstr ""
 
 msgid "The directory specified by 'pkg_dir' does not exist"
@@ -115,6 +121,9 @@ msgstr ""
 msgid "Archive %s declares version %s, but its filename suggests version %s."
 msgstr ""
 
+msgid "Cannot update %s because planned generated files already exist outside its manifest and may belong to the user: %s. Refusing to overwrite them."
+msgstr ""
+
 msgid "More than one archive was supplied for component package(s): %s."
 msgstr ""
 
@@ -128,6 +137,9 @@ msgid "No DESCRIPTION file found in package %s"
 msgstr ""
 
 msgid "DEBUG: DESCRIPTION file created"
+msgstr ""
+
+msgid "DEBUG: %s"
 msgstr ""
 
 msgid "DEBUG: NAMESPACE file created"
@@ -161,6 +173,9 @@ msgid "Cannot re-export symbol(s) %s because components collide: %s."
 msgstr ""
 
 msgid "Cannot re-export symbol(s) %s because they belong to generated metapackage code."
+msgstr ""
+
+msgid "Cannot re-export R syntax symbol(s) %s: generated code must retain R syntax and cannot be shadowed. Use reexport_exclude = %s."
 msgstr ""
 
 msgid "SAFETY: Path is too short and may be dangerous: %s"
@@ -412,6 +427,9 @@ msgstr ""
 msgid "Could not create installation library: %s"
 msgstr ""
 
+msgid "Could not unload component namespace: %s. Restart R before retrying; another package imports it."
+msgstr ""
+
 msgid "'only' must contain component package names."
 msgstr ""
 
@@ -427,7 +445,13 @@ msgstr ""
 msgid "Cannot update %s because requested generated files are not in its manifest: %s."
 msgstr ""
 
+msgid "Cannot update %s because its manifest contains invalid paths: %s."
+msgstr ""
+
 msgid "Cannot update %s because generated path components are symbolic links: %s. Refusing to write outside the project."
+msgstr ""
+
+msgid "Archive %s does not match its DESCRIPTION identity (%s %s)."
 msgstr ""
 
 msgid "Generated files were not written as planned: %s"
@@ -439,7 +463,277 @@ msgstr ""
 msgid "Could not restore generated files after a failed update: %s"
 msgstr ""
 
-msgid "The update backup was retained for manual recovery at: %s"
+msgid "'recover' must be TRUE or FALSE"
+msgstr ""
+
+msgid "'recover' requires update = TRUE"
+msgstr ""
+
+msgid "'dry_run' must be TRUE or FALSE"
+msgstr ""
+
+msgid "'update' must be TRUE or FALSE"
+msgstr ""
+
+msgid "'ext' must be one non-empty archive extension"
+msgstr ""
+
+msgid "No valid component archives remain after applying the component error policy."
+msgstr ""
+
+msgid "Omitted because it depends on omitted component %s."
+msgstr ""
+
+msgid "No valid component archives remain after propagating omitted dependencies."
+msgstr ""
+
+msgid "NAMESPACE imports '%s' from component '%s', which was skipped: %s"
+msgstr ""
+
+msgid "Component '%s' was omitted by skip."
+msgstr ""
+
+msgid "Could not replace generated file: %s"
+msgstr ""
+
+msgid "Could not copy the component archive: %s"
+msgstr ""
+
+msgid "More than one local archive is available for dependency %s."
+msgstr ""
+
+msgid "Cannot update %s because %s is not a recognized bigbang update journal for this project. Move it aside or restore the expected journal."
+msgstr ""
+
+msgid "It contains a backup at %s."
+msgstr ""
+
+msgid "It does not contain a recognized backup."
+msgstr ""
+
+msgid "Cannot update %s because %s is an %s update-journal folder. %s %s Next step: %s"
+msgstr ""
+
+msgid "Cannot update %s because %s is not a recognized bigbang update journal. It has no recognized backup. Next step: leave it intact, preserve its contents, and inspect or move it aside before retrying."
+msgstr ""
+
+msgid "Cannot update %s because journal %s belongs to project '%s', not project '%s'. Rename the project and its journal back to '%s'."
+msgstr ""
+
+msgid "Could not arm the update journal because its final path already exists: %s"
+msgstr ""
+
+msgid "Could not arm the update journal at %s"
+msgstr ""
+
+msgid "armed"
+msgstr ""
+
+msgid "unarmed"
+msgstr ""
+
+msgid "discarded"
+msgstr ""
+
+msgid "unknown"
+msgstr ""
+
+msgid "Could not write the update-journal tombstone: %s"
+msgstr ""
+
+msgid "Could not set aside the update-journal entry: %s"
+msgstr ""
+
+msgid "Set aside unverified update-journal content at %s; no bytes were deleted and the update continues."
+msgstr ""
+
+msgid "Set aside unverified update-journal content at %s; no bytes from the set-aside entry were deleted and the update continues."
+msgstr ""
+
+msgid "Set aside update-lock entry at %s; no bytes from the set-aside entry were deleted and the update continues."
+msgstr ""
+
+msgid "Set aside old update-lock content at %s; no bytes from the set-aside entry were deleted."
+msgstr ""
+
+msgid "Set aside incomplete update-lock preparation at %s; no bytes from the set-aside entry were deleted."
+msgstr ""
+
+msgid "The update-lock path %s is a symbolic link or unreadable entry; no mutation was performed. Remove or rename that link, then retry."
+msgstr ""
+
+msgid "Deleted %d verified files from the update-journal inventory."
+msgstr ""
+
+msgid "Could not set aside the update-lock entry: %s"
+msgstr ""
+
+msgid "Did not adopt update journal %s because project %s still exists beside it; it is a copy, so the journal was left untouched."
+msgstr ""
+
+msgid "Its tombstone belongs to project '%s' with manifest hash %s, not project '%s' with manifest hash %s; nothing was deleted."
+msgstr ""
+
+msgid "leave the folder intact, preserve the backup, and move it back beside its project before retrying."
+msgstr ""
+
+msgid "It contains entries outside its discard inventory; nothing was deleted. Preserved: %s."
+msgstr ""
+
+msgid "leave the folder intact, preserve the backup, remove only the reported user entries, and retry."
+msgstr ""
+
+msgid "Completed the interrupted discard at %s."
+msgstr ""
+
+msgid "Its tombstone is missing or invalid; nothing was deleted."
+msgstr ""
+
+msgid "keep the folder intact, preserve its contents, and inspect it before retrying."
+msgstr ""
+
+msgid "Could not move the update journal to its discarded state: %s"
+msgstr ""
+
+msgid "It is not a directory with a valid marker."
+msgstr ""
+
+msgid "leave it intact, inspect it, and remove or move it only after preserving its contents."
+msgstr ""
+
+msgid "It has no marker but is not empty; nothing was deleted."
+msgstr ""
+
+msgid "leave it intact, preserve its contents, and inspect the failed preparation before retrying."
+msgstr ""
+
+msgid "Discarded an orphaned armed-update folder at %s."
+msgstr ""
+
+msgid "It is not a directory with a valid tombstone."
+msgstr ""
+
+msgid "leave it intact, preserve its contents, and inspect it before retrying."
+msgstr ""
+
+msgid "It has no valid tombstone; nothing was deleted."
+msgstr ""
+
+msgid "leave the folder intact, preserve its contents, and inspect it before retrying."
+msgstr ""
+
+msgid "It contains unexpected files; nothing was deleted."
+msgstr ""
+
+msgid "leave the folder intact, preserve the backup, and inspect the unexpected entries before retrying."
+msgstr ""
+
+msgid "Its armed state does not match the backup; nothing was deleted."
+msgstr ""
+
+msgid "leave the folder intact, preserve the backup, and inspect the state before retrying."
+msgstr ""
+
+msgid "Its intention log is invalid; nothing was deleted."
+msgstr ""
+
+msgid "leave the folder intact, preserve the backup, and inspect the intention log before retrying."
+msgstr ""
+
+msgid "Cannot update %s because the project directory is missing. It may have been moved without its update journal. Next step: find the moved project and its sibling journal, then retry with dest_dir pointing to that location."
+msgstr ""
+
+msgid "The project directory is missing, so this journal was left behind when the project was moved."
+msgstr ""
+
+msgid "find the moved project, move this journal beside it without changing its contents, and retry there."
+msgstr ""
+
+msgid "An update may still be running; no mutation was performed."
+msgstr ""
+
+msgid "An update is still running under pid %s; no mutation was performed."
+msgstr ""
+
+msgid "Cannot continue the %s because the published update lock no longer belongs to this process; no further mutation was performed."
+msgstr ""
+
+msgid "Could not prepare the update lock at %s: %s. Check that its parent is writable and has free space; no mutation was performed."
+msgstr ""
+
+msgid "the lock parent is not writable"
+msgstr ""
+
+msgid "the lock parent rejected creation or has no available space"
+msgstr ""
+
+msgid "Could not acquire the update lock at %s because its state made no progress after %s retries; inspect the lock entry before retrying."
+msgstr ""
+
+msgid "Could not acquire the update lock at %s because %s made no progress after %s consecutive retries; inspect entry %s before retrying."
+msgstr ""
+
+msgid "the free lock could not publish its temporary preparation"
+msgstr ""
+
+msgid "the lock entry remained in state %s"
+msgstr ""
+
+msgid "after confirming that no other update is running, call again with recover = TRUE."
+msgstr ""
+
+msgid "The update journal was retained for recovery at: %s. It contains a backup at %s. Next step: confirm that no other update is running and call update = TRUE, recover = TRUE."
+msgstr ""
+
+msgid "The interrupted update left files in an unknown state: %s. Journal: %s. The journal contains a backup at %s. Use recover = TRUE to preserve them and recover."
+msgstr ""
+
+msgid "The update journal at %s has an invalid intention log."
+msgstr ""
+
+msgid "The unarmed update journal at %s contains unexpected files."
+msgstr ""
+
+msgid "Discarded an unarmed update journal at %s."
+msgstr ""
+
+msgid "The update journal at %s has invalid armed state."
+msgstr ""
+
+msgid "The armed update journal at %s contains unexpected files."
+msgstr ""
+
+msgid "The update journal at %s contains unexpected files."
+msgstr ""
+
+msgid "The previous update had completed; discarded its journal at %s."
+msgstr ""
+
+msgid "An update may still be running for %s (journal: %s). If no other update is running, call again with recover = TRUE."
+msgstr ""
+
+msgid "The interrupted update left files in an unknown state: %s. Journal: %s. Use recover = TRUE to preserve them and recover."
+msgstr ""
+
+msgid "Preserved unknown files from the interrupted update at %s."
+msgstr ""
+
+msgid "Restored files that were absent when recovery started: %s."
+msgstr ""
+
+msgid "Recovered an interrupted update using %s."
+msgstr ""
+
+msgid "Dry run: pending update journal action is %s at %s."
+msgstr ""
+
+msgid "Dry run: update lock at %s is %s; no lock was acquired or changed."
+msgstr ""
+
+msgid "Dry run: update-lock preparation at %s would be %s; no entry was changed."
+msgstr ""
+
+msgid "The update journal was retained for recovery at: %s"
 msgstr ""
 
 msgid "Removing generated files no longer in the plan: %s"
@@ -451,5 +745,155 @@ msgstr ""
 msgid "Component package '%s' is not installed."
 msgstr ""
 
+msgid "Skipped because local dependency %s was skipped: %s"
+msgstr ""
+
+msgid "Some components were skipped because local dependencies were skipped: %s."
+msgstr ""
+
+msgid "Set aside remaining update-journal content at %s; only verified inventory files were deleted before unverified content was preserved and the update continues."
+msgstr ""
+
 msgid "Runtime re-export bindings are read-only."
+msgstr ""
+
+msgid "'reexport_exclude' must be a character vector of non-empty symbols"
+msgstr ""
+
+msgid "'reexport_prefer' must be a named character vector with one component per symbol"
+msgstr ""
+
+msgid "'reexport_prefer' must have non-empty, unique names"
+msgstr ""
+
+msgid "'reexport_prefer' and 'reexport_exclude' require reexport = TRUE"
+msgstr ""
+
+msgid "Unknown re-export symbol(s): %s. No component exports them."
+msgstr ""
+
+msgid "Re-export symbol(s) cannot be both preferred and excluded: %s."
+msgstr ""
+
+msgid "Preferred re-export target(s) are invalid: %s. Each component must be in the generation and export its symbol."
+msgstr ""
+
+msgid "Generated metapackage symbol(s) %s can only be resolved with reexport_exclude: %s."
+msgstr ""
+
+msgid "Re-export proof cycle while following '%s'."
+msgstr ""
+
+msgid "Local definition of re-export symbol '%s' in %s:%d."
+msgstr ""
+
+msgid "Binder or namespace mutation via %s in %s:%d; it is not known whether it changes '%s'."
+msgstr ""
+
+msgid "Assignment to re-export symbol '%s' in %s:%d."
+msgstr ""
+
+msgid "Call %s targets re-export symbol '%s' in %s:%d."
+msgstr ""
+
+msgid "Call %s has a non-literal first argument in %s:%d."
+msgstr ""
+
+msgid "Dynamic namespace mutation via %s in %s:%d."
+msgstr ""
+
+msgid "Could not parse R file %s: %s"
+msgstr ""
+
+msgid "Could not inspect R/sysdata.rda: %s"
+msgstr ""
+
+msgid "R/sysdata.rda contains re-export symbol '%s'."
+msgstr ""
+
+msgid "NAMESPACE declares useDynLib(), so the exported object's origin is undetermined."
+msgstr ""
+
+msgid "NAMESPACE does not declare an import source for '%s'."
+msgstr ""
+
+msgid "NAMESPACE imports complete '%s', which could provide '%s'."
+msgstr ""
+
+msgid "NAMESPACE imports '%s' from external package '%s'."
+msgstr ""
+
+msgid "NAMESPACE imports '%s' from component '%s'."
+msgstr ""
+
+msgid "NAMESPACE does not declare a unique import source for '%s'."
+msgstr ""
+
+msgid "NAMESPACE imports '%s' from external package '%s' with import()."
+msgstr ""
+
+msgid "NAMESPACE imports '%s' from component '%s', which was skipped."
+msgstr ""
+
+msgid "NAMESPACE imports '%s' from component '%s', which is not in this generation."
+msgstr ""
+
+msgid "NAMESPACE imports '%s' from component '%s', but that component does not export it."
+msgstr ""
+
+msgid "Proof for component '%s' is inconclusive."
+msgstr ""
+
+msgid "NAMESPACE imports '%s' from component '%s'; proof for that component is inconclusive: %s"
+msgstr ""
+
+msgid "root %s %s"
+msgstr ""
+
+msgid "The call target is not a scalar string."
+msgstr ""
+
+msgid "The call target is empty."
+msgstr ""
+
+msgid "The call target could not be parsed independently."
+msgstr ""
+
+msgid "The call target is calculated through '%s'."
+msgstr ""
+
+msgid "The call target has no classifiable root expression."
+msgstr ""
+
+msgid "For probable_same_object collisions, copy this: reexport_prefer = c(%s)"
+msgstr ""
+
+msgid "For distinct_definitions and undetermined collisions, decide among these candidates: %s"
+msgstr ""
+
+msgid "Cannot use reexport_prefer for omitted component(s): %s. The component was omitted by skip; repair it or choose an installed candidate."
+msgstr ""
+
+msgid "No re-export components remain after skip: %s. Repair the omitted archive or choose a complete generation."
+msgstr ""
+
+msgid "All re-export components were omitted by skip: %s. Repair the omitted archive or remove dependent components from the generation."
+msgstr ""
+
+msgid "Cannot resolve re-export symbol(s) because skipped components are required: %s."
+msgstr ""
+
+msgid "Cannot resolve re-export collision(s): %s. Candidates, diagnoses, and proof details: %s. %s."
+msgstr ""
+
+msgid "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr ""
+
+msgid "Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr ""
+
+msgid "Installed owners for re-export symbol '%s' are distinct objects with equivalent copies (same body and formals): %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr ""
+
+msgid "Installed owners for re-export symbol '%s' differ as distinct objects: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
 msgstr ""

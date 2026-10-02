@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: bigbang 0.4.0\n"
+"Project-Id-Version: bigbang\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -33,6 +33,12 @@ msgstr "El archivo del paquete no existe: %s; no se encontraron archivos en los 
 
 msgid "The archive directory does not exist: %s"
 msgstr "El directorio de archivos no existe: %s"
+
+msgid "value must be one non-NA character string"
+msgstr "value debe ser una cadena de caracteres no NA"
+
+msgid "symbol must be one non-NA character string"
+msgstr "symbol debe ser una cadena de caracteres no NA"
 
 msgid "The directory specified by 'pkg_dir' does not exist"
 msgstr "El directorio indicado por 'pkg_dir' no existe"
@@ -115,6 +121,9 @@ msgstr "El archivo %s declara el paquete %s, pero su nombre sugiere %s."
 msgid "Archive %s declares version %s, but its filename suggests version %s."
 msgstr "El archivo %s declara la versión %s, pero su nombre sugiere la versión %s."
 
+msgid "Cannot update %s because planned generated files already exist outside its manifest and may belong to the user: %s. Refusing to overwrite them."
+msgstr "No se puede actualizar %s porque estos archivos generados del plan ya existen fuera de su manifiesto y pueden pertenecer al usuario: %s. Se rechaza sobrescribirlos."
+
 msgid "More than one archive was supplied for component package(s): %s."
 msgstr "Se proporcionó más de un archivo para los paquetes componentes: %s."
 
@@ -129,6 +138,9 @@ msgstr "No se encontró DESCRIPTION en el paquete %s"
 
 msgid "DEBUG: DESCRIPTION file created"
 msgstr "DEBUG: archivo DESCRIPTION creado"
+
+msgid "DEBUG: %s"
+msgstr "DEBUG: %s"
 
 msgid "DEBUG: NAMESPACE file created"
 msgstr "DEBUG: archivo NAMESPACE creado"
@@ -162,6 +174,9 @@ msgstr "No se pueden reexportar los símbolos %s porque hay colisiones entre com
 
 msgid "Cannot re-export symbol(s) %s because they belong to generated metapackage code."
 msgstr "No se pueden reexportar los símbolos %s porque pertenecen al código generado del metapaquete."
+
+msgid "Cannot re-export R syntax symbol(s) %s: generated code must retain R syntax and cannot be shadowed. Use reexport_exclude = %s."
+msgstr "No se pueden reexportar símbolos de sintaxis de R (%s): el código generado debe conservar la sintaxis de R y no se puede ocultar. Use reexport_exclude = %s."
 
 msgid "SAFETY: Path is too short and may be dangerous: %s"
 msgstr "SEGURIDAD: La ruta es demasiado corta y puede ser peligrosa: %s"
@@ -412,6 +427,9 @@ msgstr "La biblioteca de instalación debe ser una ruta no vacía."
 msgid "Could not create installation library: %s"
 msgstr "No se pudo crear la biblioteca de instalación: %s"
 
+msgid "Could not unload component namespace: %s. Restart R before retrying; another package imports it."
+msgstr "No se pudo descargar el namespace del componente: %s. Reinicie R antes de volver a intentarlo; otro paquete lo importa."
+
 msgid "'only' must contain component package names."
 msgstr "'only' debe contener nombres de paquetes componentes."
 
@@ -427,8 +445,14 @@ msgstr "Los componentes de directorio fuente requieren include_archives = TRUE p
 msgid "Cannot update %s because requested generated files are not in its manifest: %s."
 msgstr "No se puede actualizar %s porque los archivos generados solicitados no están en su manifiesto: %s."
 
+msgid "Cannot update %s because its manifest contains invalid paths: %s."
+msgstr "No se puede actualizar %s porque su manifiesto contiene rutas no válidas: %s."
+
 msgid "Cannot update %s because generated path components are symbolic links: %s. Refusing to write outside the project."
 msgstr "No se puede actualizar %s porque algunos componentes de la ruta generada son enlaces simbólicos: %s. Se rechaza escribir fuera del proyecto."
+
+msgid "Archive %s does not match its DESCRIPTION identity (%s %s)."
+msgstr "El archivo %s no coincide con la identidad de su DESCRIPTION (%s %s)."
 
 msgid "Generated files were not written as planned: %s"
 msgstr "Los archivos generados no se escribieron según lo planificado: %s"
@@ -439,8 +463,278 @@ msgstr "No se pudo respaldar el archivo generado: %s"
 msgid "Could not restore generated files after a failed update: %s"
 msgstr "No se pudieron restaurar los archivos generados después de una actualización fallida: %s"
 
-msgid "The update backup was retained for manual recovery at: %s"
-msgstr "El respaldo de la actualización se conservó para recuperación manual en: %s"
+msgid "'recover' must be TRUE or FALSE"
+msgstr "'recover' debe ser TRUE o FALSE"
+
+msgid "'recover' requires update = TRUE"
+msgstr "'recover' requiere update = TRUE"
+
+msgid "'dry_run' must be TRUE or FALSE"
+msgstr "'dry_run' debe ser TRUE o FALSE"
+
+msgid "'update' must be TRUE or FALSE"
+msgstr "'update' debe ser TRUE o FALSE"
+
+msgid "'ext' must be one non-empty archive extension"
+msgstr "'ext' debe ser una extensión de archivo no vacía"
+
+msgid "No valid component archives remain after applying the component error policy."
+msgstr "No quedan archivos de componentes válidos después de aplicar la política de error de componentes."
+
+msgid "Omitted because it depends on omitted component %s."
+msgstr "Omitido porque depende del componente omitido %s."
+
+msgid "No valid component archives remain after propagating omitted dependencies."
+msgstr "No quedan archivos de componentes válidos después de propagar dependencias omitidas."
+
+msgid "NAMESPACE imports '%s' from component '%s', which was skipped: %s"
+msgstr "NAMESPACE importa '%s' desde el componente '%s', que fue omitido: %s"
+
+msgid "Component '%s' was omitted by skip."
+msgstr "El componente '%s' fue omitido."
+
+msgid "Could not replace generated file: %s"
+msgstr "No se pudo reemplazar el archivo generado: %s"
+
+msgid "Could not copy the component archive: %s"
+msgstr "No se pudo copiar el archivo del componente: %s"
+
+msgid "More than one local archive is available for dependency %s."
+msgstr "Hay más de un archivo local disponible para la dependencia %s."
+
+msgid "Cannot update %s because %s is not a recognized bigbang update journal for this project. Move it aside or restore the expected journal."
+msgstr "No se puede actualizar %s porque %s no es un diario de actualización de bigbang reconocido para este proyecto. Muévalo a otro lugar o restaure el diario esperado."
+
+msgid "It contains a backup at %s."
+msgstr "Contiene un respaldo en %s."
+
+msgid "It does not contain a recognized backup."
+msgstr "No contiene un respaldo reconocido."
+
+msgid "Cannot update %s because %s is an %s update-journal folder. %s %s Next step: %s"
+msgstr "No se puede actualizar %s porque %s es una carpeta de diario de actualización %s. %s %s Siguiente paso: %s"
+
+msgid "Cannot update %s because %s is not a recognized bigbang update journal. It has no recognized backup. Next step: leave it intact, preserve its contents, and inspect or move it aside before retrying."
+msgstr "No se puede actualizar %s porque %s no es un diario de actualización de bigbang reconocido. No tiene un respaldo reconocido. Siguiente paso: déjelo intacto, preserve su contenido e inspecciónelo o muévalo a otro lugar antes de volver a intentar."
+
+msgid "Cannot update %s because journal %s belongs to project '%s', not project '%s'. Rename the project and its journal back to '%s'."
+msgstr "No se puede actualizar %s porque el diario %s pertenece al proyecto '%s', no al proyecto '%s'. Renombre el proyecto y su diario de vuelta a '%s'."
+
+msgid "Could not arm the update journal because its final path already exists: %s"
+msgstr "No se pudo armar el diario de actualización porque su ruta final ya existe: %s"
+
+msgid "Could not arm the update journal at %s"
+msgstr "No se pudo armar el diario de actualización en %s"
+
+msgid "armed"
+msgstr "armado"
+
+msgid "unarmed"
+msgstr "sin armar"
+
+msgid "discarded"
+msgstr "descartado"
+
+msgid "unknown"
+msgstr "desconocido"
+
+msgid "Could not write the update-journal tombstone: %s"
+msgstr "No se pudo escribir la lápida del diario de actualización: %s"
+
+msgid "Could not set aside the update-journal entry: %s"
+msgstr "No se pudo apartar la entrada del diario de actualización: %s"
+
+msgid "Set aside unverified update-journal content at %s; no bytes were deleted and the update continues."
+msgstr "Se apartó contenido no verificable del diario de actualización en %s; no se eliminó ningún byte y el update continúa."
+
+msgid "Set aside unverified update-journal content at %s; no bytes from the set-aside entry were deleted and the update continues."
+msgstr "Se apartó contenido no verificable del diario de actualización en %s; no se eliminaron bytes de lo apartado y el update continúa."
+
+msgid "Set aside update-lock entry at %s; no bytes from the set-aside entry were deleted and the update continues."
+msgstr "Se apartó la entrada del lock de actualización en %s; no se eliminaron bytes de lo apartado y el update continúa."
+
+msgid "Set aside old update-lock content at %s; no bytes from the set-aside entry were deleted."
+msgstr "Se apartó contenido viejo del lock de actualización en %s; no se eliminaron bytes de lo apartado."
+
+msgid "Set aside incomplete update-lock preparation at %s; no bytes from the set-aside entry were deleted."
+msgstr "Se apartó una preparación incompleta del lock de actualización en %s; no se eliminaron bytes de lo apartado."
+
+msgid "The update-lock path %s is a symbolic link or unreadable entry; no mutation was performed. Remove or rename that link, then retry."
+msgstr "La ruta del lock de actualización %s es un enlace simbólico o una entrada ilegible; no se hizo ninguna mutación. Quite o renombre ese enlace y vuelva a intentar."
+
+msgid "Deleted %d verified files from the update-journal inventory."
+msgstr "Se eliminaron %d archivos verificados del inventario del diario de actualización."
+
+msgid "Could not set aside the update-lock entry: %s"
+msgstr "No se pudo apartar la entrada del lock de actualización: %s"
+
+msgid "Did not adopt update journal %s because project %s still exists beside it; it is a copy, so the journal was left untouched."
+msgstr "No se adoptó el diario de actualización %s porque el proyecto %s todavía existe a su lado; es una copia y el diario quedó intacto."
+
+msgid "Its tombstone belongs to project '%s' with manifest hash %s, not project '%s' with manifest hash %s; nothing was deleted."
+msgstr "Su lápida pertenece al proyecto '%s' con hash de manifiesto %s, no al proyecto '%s' con hash de manifiesto %s; no se eliminó nada."
+
+msgid "leave the folder intact, preserve the backup, and move it back beside its project before retrying."
+msgstr "deje la carpeta intacta, preserve el respaldo y muévala junto a su proyecto antes de volver a intentar."
+
+msgid "It contains entries outside its discard inventory; nothing was deleted. Preserved: %s."
+msgstr "Contiene entradas fuera de su inventario de descarte; no se eliminó nada. Se preservaron: %s."
+
+msgid "leave the folder intact, preserve the backup, remove only the reported user entries, and retry."
+msgstr "deje la carpeta intacta, preserve el respaldo, quite solo las entradas de usuario informadas y vuelva a intentar."
+
+msgid "Completed the interrupted discard at %s."
+msgstr "Se completó el descarte interrumpido en %s."
+
+msgid "Its tombstone is missing or invalid; nothing was deleted."
+msgstr "Falta la lápida o no es válida; no se eliminó nada."
+
+msgid "keep the folder intact, preserve its contents, and inspect it before retrying."
+msgstr "conserve la carpeta intacta, preserve su contenido e inspecciónelo antes de volver a intentar."
+
+msgid "Could not move the update journal to its discarded state: %s"
+msgstr "No se pudo mover el diario de actualización a su estado descartado: %s"
+
+msgid "It is not a directory with a valid marker."
+msgstr "No es un directorio con un marcador válido."
+
+msgid "leave it intact, inspect it, and remove or move it only after preserving its contents."
+msgstr "déjela intacta, inspecciónela y elimínela o muévala solo después de preservar su contenido."
+
+msgid "It has no marker but is not empty; nothing was deleted."
+msgstr "No tiene marcador pero no está vacía; no se eliminó nada."
+
+msgid "leave it intact, preserve its contents, and inspect the failed preparation before retrying."
+msgstr "déjela intacta, preserve su contenido e inspeccione la preparación fallida antes de volver a intentar."
+
+msgid "Discarded an orphaned armed-update folder at %s."
+msgstr "Se descartó una carpeta de armado huérfana en %s."
+
+msgid "It is not a directory with a valid tombstone."
+msgstr "No es un directorio con una lápida válida."
+
+msgid "leave it intact, preserve its contents, and inspect it before retrying."
+msgstr "déjela intacta, preserve su contenido e inspeccione antes de volver a intentar."
+
+msgid "It has no valid tombstone; nothing was deleted."
+msgstr "No tiene una lápida válida; no se eliminó nada."
+
+msgid "leave the folder intact, preserve its contents, and inspect it before retrying."
+msgstr "deje la carpeta intacta, preserve su contenido e inspeccione antes de volver a intentar."
+
+msgid "It contains unexpected files; nothing was deleted."
+msgstr "Contiene archivos inesperados; no se eliminó nada."
+
+msgid "leave the folder intact, preserve the backup, and inspect the unexpected entries before retrying."
+msgstr "deje la carpeta intacta, preserve el respaldo e inspeccione las entradas inesperadas antes de volver a intentar."
+
+msgid "Its armed state does not match the backup; nothing was deleted."
+msgstr "Su estado armado no coincide con el respaldo; no se eliminó nada."
+
+msgid "leave the folder intact, preserve the backup, and inspect the state before retrying."
+msgstr "deje la carpeta intacta, preserve el respaldo e inspeccione el estado antes de volver a intentar."
+
+msgid "Its intention log is invalid; nothing was deleted."
+msgstr "Su registro de intenciones no es válido; no se eliminó nada."
+
+msgid "leave the folder intact, preserve the backup, and inspect the intention log before retrying."
+msgstr "deje la carpeta intacta, preserve el respaldo e inspeccione el registro de intenciones antes de volver a intentar."
+
+msgid "Cannot update %s because the project directory is missing. It may have been moved without its update journal. Next step: find the moved project and its sibling journal, then retry with dest_dir pointing to that location."
+msgstr "No se puede actualizar %s porque falta el directorio del proyecto. Puede haberse movido sin su diario de actualización. Siguiente paso: busque el proyecto movido y su diario hermano y vuelva a intentar con dest_dir apuntando a esa ubicación."
+
+msgid "The project directory is missing, so this journal was left behind when the project was moved."
+msgstr "Falta el directorio del proyecto, por lo que este diario quedó atrás al moverlo."
+
+msgid "find the moved project, move this journal beside it without changing its contents, and retry there."
+msgstr "busque el proyecto movido, coloque este diario a su lado sin cambiar su contenido y vuelva a intentar allí."
+
+msgid "An update may still be running; no mutation was performed."
+msgstr "Puede haber un update todavía en ejecución; no se hizo ninguna mutación."
+
+msgid "An update is still running under pid %s; no mutation was performed."
+msgstr "Todavía hay un update en ejecución bajo el pid %s; no se hizo ninguna mutación."
+
+msgid "Cannot continue the %s because the published update lock no longer belongs to this process; no further mutation was performed."
+msgstr "No se puede continuar con %s porque el lock de actualización publicado ya no pertenece a este proceso; no se hizo ninguna mutación adicional."
+
+msgid "Could not prepare the update lock at %s: %s. Check that its parent is writable and has free space; no mutation was performed."
+msgstr "No se pudo preparar el lock de actualización en %s: %s. Compruebe que su directorio padre permita escribir y tenga espacio libre; no se hizo ninguna mutación."
+
+msgid "the lock parent is not writable"
+msgstr "el directorio padre del lock no permite escribir"
+
+msgid "the lock parent rejected creation or has no available space"
+msgstr "el directorio padre del lock rechazó la creación o no tiene espacio disponible"
+
+msgid "Could not acquire the update lock at %s because its state made no progress after %s retries; inspect the lock entry before retrying."
+msgstr "No se pudo adquirir el lock de actualización en %s porque su estado no avanzó después de %s reintentos; inspeccione la entrada del lock antes de volver a intentar."
+
+msgid "Could not acquire the update lock at %s because %s made no progress after %s consecutive retries; inspect entry %s before retrying."
+msgstr "No se pudo adquirir el lock de actualización en %s porque %s no avanzó después de %s reintentos consecutivos; inspeccione la entrada %s antes de volver a intentar."
+
+msgid "the free lock could not publish its temporary preparation"
+msgstr "el lock libre no pudo publicar su preparación temporal"
+
+msgid "the lock entry remained in state %s"
+msgstr "la entrada del lock permaneció en el estado %s"
+
+msgid "after confirming that no other update is running, call again with recover = TRUE."
+msgstr "después de confirmar que no hay otro update en ejecución, vuelva a llamar con recover = TRUE."
+
+msgid "The update journal was retained for recovery at: %s. It contains a backup at %s. Next step: confirm that no other update is running and call update = TRUE, recover = TRUE."
+msgstr "El diario de actualización se conservó para recuperación en: %s. Contiene un respaldo en %s. Siguiente paso: confirme que no hay otro update en ejecución y llame con update = TRUE, recover = TRUE."
+
+msgid "The interrupted update left files in an unknown state: %s. Journal: %s. The journal contains a backup at %s. Use recover = TRUE to preserve them and recover."
+msgstr "El update interrumpido dejó archivos en un estado desconocido: %s. Diario: %s. El diario contiene un respaldo en %s. Use recover = TRUE para preservarlos y recuperar."
+
+msgid "The update journal at %s has an invalid intention log."
+msgstr "El diario de actualización en %s tiene un registro de intenciones no válido."
+
+msgid "The unarmed update journal at %s contains unexpected files."
+msgstr "El diario de actualización sin armar en %s contiene archivos inesperados."
+
+msgid "Discarded an unarmed update journal at %s."
+msgstr "Se descartó un diario de actualización sin armar en %s."
+
+msgid "The update journal at %s has invalid armed state."
+msgstr "El diario de actualización en %s tiene un estado armado no válido."
+
+msgid "The armed update journal at %s contains unexpected files."
+msgstr "El diario de actualización armado en %s contiene archivos inesperados."
+
+msgid "The update journal at %s contains unexpected files."
+msgstr "El diario de actualización en %s contiene archivos inesperados."
+
+msgid "The previous update had completed; discarded its journal at %s."
+msgstr "El update anterior había terminado; se descartó su diario en %s."
+
+msgid "An update may still be running for %s (journal: %s). If no other update is running, call again with recover = TRUE."
+msgstr "Puede haber un update todavía en ejecución para %s (diario: %s). Si no hay otro update ejecutándose, vuelva a llamar con recover = TRUE."
+
+msgid "The interrupted update left files in an unknown state: %s. Journal: %s. Use recover = TRUE to preserve them and recover."
+msgstr "El update interrumpido dejó archivos en un estado desconocido: %s. Diario: %s. Use recover = TRUE para preservarlos y recuperar."
+
+msgid "Preserved unknown files from the interrupted update at %s."
+msgstr "Se preservaron los archivos desconocidos del update interrumpido en %s."
+
+msgid "Restored files that were absent when recovery started: %s."
+msgstr "Se restauraron archivos que estaban ausentes al comenzar la recuperación: %s."
+
+msgid "Recovered an interrupted update using %s."
+msgstr "Se recuperó un update interrumpido usando %s."
+
+msgid "Dry run: pending update journal action is %s at %s."
+msgstr "Dry run: la acción pendiente del diario de actualización es %s en %s."
+
+msgid "Dry run: update lock at %s is %s; no lock was acquired or changed."
+msgstr "Dry run: el lock de actualización en %s está %s; no se adquirió ni cambió ningún lock."
+
+msgid "Dry run: update-lock preparation at %s would be %s; no entry was changed."
+msgstr "Dry run: la preparación del lock de actualización en %s quedaría %s; no se cambió ninguna entrada."
+
+msgid "The update journal was retained for recovery at: %s"
+msgstr "El diario de actualización se conservó para recuperación en: %s"
 
 msgid "Removing generated files no longer in the plan: %s"
 msgstr "Eliminando archivos generados que ya no están en el plan: %s"
@@ -451,5 +745,155 @@ msgstr "No se pudo leer el archivo del componente %s; el arrastre del descarte u
 msgid "Component package '%s' is not installed."
 msgstr "El componente '%s' no está instalado."
 
+msgid "Skipped because local dependency %s was skipped: %s"
+msgstr "Omitido porque la dependencia local %s fue omitida: %s"
+
+msgid "Some components were skipped because local dependencies were skipped: %s."
+msgstr "Algunos componentes se omitieron porque se omitieron dependencias locales: %s."
+
+msgid "Set aside remaining update-journal content at %s; only verified inventory files were deleted before unverified content was preserved and the update continues."
+msgstr "Se apartó el contenido restante del diario de actualización en %s; solo se eliminaron archivos verificados del inventario antes de preservar el contenido no verificable y continuar el update."
+
 msgid "Runtime re-export bindings are read-only."
 msgstr "Los bindings de reexportación son de solo lectura."
+
+msgid "'reexport_exclude' must be a character vector of non-empty symbols"
+msgstr "'reexport_exclude' debe ser un vector de caracteres con símbolos no vacíos"
+
+msgid "'reexport_prefer' must be a named character vector with one component per symbol"
+msgstr "'reexport_prefer' debe ser un vector de caracteres con nombre y un componente por símbolo"
+
+msgid "'reexport_prefer' must have non-empty, unique names"
+msgstr "'reexport_prefer' debe tener nombres no vacíos y sin duplicados"
+
+msgid "'reexport_prefer' and 'reexport_exclude' require reexport = TRUE"
+msgstr "'reexport_prefer' y 'reexport_exclude' requieren reexport = TRUE"
+
+msgid "Unknown re-export symbol(s): %s. No component exports them."
+msgstr "Símbolo(s) de reexportación desconocido(s): %s. Ningún componente los exporta."
+
+msgid "Re-export symbol(s) cannot be both preferred and excluded: %s."
+msgstr "Los símbolos de reexportación no pueden estar a la vez elegidos y excluidos: %s."
+
+msgid "Preferred re-export target(s) are invalid: %s. Each component must be in the generation and export its symbol."
+msgstr "Los destinos preferidos de reexportación no son válidos: %s. Cada componente debe estar en la generación y exportar su símbolo."
+
+msgid "Generated metapackage symbol(s) %s can only be resolved with reexport_exclude: %s."
+msgstr "Los símbolos %s del metapaquete generado solo pueden resolverse con reexport_exclude: %s."
+
+msgid "Re-export proof cycle while following '%s'."
+msgstr "Se detectó un ciclo en la prueba de reexportación al seguir '%s'."
+
+msgid "Local definition of re-export symbol '%s' in %s:%d."
+msgstr "Definición local del símbolo de reexportación '%s' en %s:%d."
+
+msgid "Binder or namespace mutation via %s in %s:%d; it is not known whether it changes '%s'."
+msgstr "Binder o mutación del namespace mediante %s en %s:%d; no se sabe si cambia '%s'."
+
+msgid "Assignment to re-export symbol '%s' in %s:%d."
+msgstr "Asignación al símbolo de reexportación '%s' en %s:%d."
+
+msgid "Call %s targets re-export symbol '%s' in %s:%d."
+msgstr "La llamada %s apunta al símbolo de reexportación '%s' en %s:%d."
+
+msgid "Call %s has a non-literal first argument in %s:%d."
+msgstr "La llamada %s tiene un primer argumento no literal en %s:%d."
+
+msgid "Dynamic namespace mutation via %s in %s:%d."
+msgstr "Mutación dinámica del namespace mediante %s en %s:%d."
+
+msgid "Could not parse R file %s: %s"
+msgstr "No se pudo analizar el archivo R %s: %s"
+
+msgid "Could not inspect R/sysdata.rda: %s"
+msgstr "No se pudo inspeccionar R/sysdata.rda: %s"
+
+msgid "R/sysdata.rda contains re-export symbol '%s'."
+msgstr "R/sysdata.rda contiene el símbolo de reexportación '%s'."
+
+msgid "NAMESPACE declares useDynLib(), so the exported object's origin is undetermined."
+msgstr "NAMESPACE declara useDynLib(), por lo que el origen del objeto exportado es indeterminado."
+
+msgid "NAMESPACE does not declare an import source for '%s'."
+msgstr "NAMESPACE no declara una fuente de importación para '%s'."
+
+msgid "NAMESPACE imports complete '%s', which could provide '%s'."
+msgstr "NAMESPACE importa por completo '%s', que podría aportar '%s'."
+
+msgid "NAMESPACE imports '%s' from external package '%s'."
+msgstr "NAMESPACE importa '%s' desde el paquete externo '%s'."
+
+msgid "NAMESPACE imports '%s' from component '%s'."
+msgstr "NAMESPACE importa '%s' desde el componente '%s'."
+
+msgid "NAMESPACE does not declare a unique import source for '%s'."
+msgstr "NAMESPACE no declara una fuente de importación única para '%s'."
+
+msgid "NAMESPACE imports '%s' from external package '%s' with import()."
+msgstr "NAMESPACE importa '%s' desde el paquete externo '%s' con import()."
+
+msgid "NAMESPACE imports '%s' from component '%s', which was skipped."
+msgstr "NAMESPACE importa '%s' desde el componente '%s', que fue omitido."
+
+msgid "NAMESPACE imports '%s' from component '%s', which is not in this generation."
+msgstr "NAMESPACE importa '%s' desde el componente '%s', que no está en esta generación."
+
+msgid "NAMESPACE imports '%s' from component '%s', but that component does not export it."
+msgstr "NAMESPACE importa '%s' desde el componente '%s', pero ese componente no lo exporta."
+
+msgid "Proof for component '%s' is inconclusive."
+msgstr "La prueba para el componente '%s' no es concluyente."
+
+msgid "NAMESPACE imports '%s' from component '%s'; proof for that component is inconclusive: %s"
+msgstr "NAMESPACE importa '%s' desde el componente '%s'; la prueba para ese componente no es concluyente: %s"
+
+msgid "root %s %s"
+msgstr "raíz %s %s"
+
+msgid "The call target is not a scalar string."
+msgstr "El destino de la llamada no es una cadena escalar."
+
+msgid "The call target is empty."
+msgstr "El destino de la llamada está vacío."
+
+msgid "The call target could not be parsed independently."
+msgstr "El destino de la llamada no se pudo analizar de forma independiente."
+
+msgid "The call target is calculated through '%s'."
+msgstr "El destino de la llamada se calcula mediante '%s'."
+
+msgid "The call target has no classifiable root expression."
+msgstr "El destino de la llamada no tiene una expresión raíz clasificable."
+
+msgid "For probable_same_object collisions, copy this: reexport_prefer = c(%s)"
+msgstr "Para las colisiones probable_same_object, copie esto: reexport_prefer = c(%s)"
+
+msgid "For distinct_definitions and undetermined collisions, decide among these candidates: %s"
+msgstr "Para las colisiones distinct_definitions e undetermined, elija entre estos candidatos: %s"
+
+msgid "Cannot use reexport_prefer for omitted component(s): %s. The component was omitted by skip; repair it or choose an installed candidate."
+msgstr "No se puede usar reexport_prefer para componentes omitidos: %s. El componente fue omitido por skip; repárelo o elija un candidato instalado."
+
+msgid "No re-export components remain after skip: %s. Repair the omitted archive or choose a complete generation."
+msgstr "No quedan componentes de reexportación después de skip: %s. Repare el archivo omitido o elija una generación completa."
+
+msgid "All re-export components were omitted by skip: %s. Repair the omitted archive or remove dependent components from the generation."
+msgstr "Todos los componentes de reexportación fueron omitidos por skip: %s. Repare el archivo omitido o quite los componentes dependientes de la generación."
+
+msgid "Cannot resolve re-export symbol(s) because skipped components are required: %s."
+msgstr "No se pueden resolver los símbolos de reexportación porque se necesitan componentes omitidos: %s."
+
+msgid "Cannot resolve re-export collision(s): %s. Candidates, diagnoses, and proof details: %s. %s."
+msgstr "No se pueden resolver las colisiones de reexportación: %s. Candidatos, diagnósticos y detalles de la prueba: %s. %s."
+
+msgid "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr "Los dueños instalados del símbolo de reexportación '%s' difieren: %s. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."
+
+msgid "Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr "No se pudo verificar a los dueños instalados del símbolo de reexportación '%s': %s no lo exporta. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."
+
+msgid "Installed owners for re-export symbol '%s' are distinct objects with equivalent copies (same body and formals): %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr "Los dueños instalados del símbolo de reexportación '%s' son objetos distintos con copias equivalentes (mismo cuerpo y formales): %s. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."
+
+msgid "Installed owners for re-export symbol '%s' differ as distinct objects: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr "Los dueños instalados del símbolo de reexportación '%s' difieren como objetos distintos: %s. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."

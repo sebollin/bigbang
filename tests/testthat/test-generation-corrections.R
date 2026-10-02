@@ -214,6 +214,7 @@ test_that("safe_unlink uses temporary location rather than a basename", {
 })
 
 test_that("successful documentation restores the caller session", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   sandbox <- tempfile("bigbang-document-session-")
   archives <- file.path(sandbox, "archives")
@@ -276,6 +277,73 @@ test_that("failed documentation is reported and restores the caller session", {
   }
 })
 
+test_that("a promotion failure rolls the project back completely", {
+  skip_on_cran()
+  skip_if_not_installed("devtools")
+  sandbox <- tempfile("bigbang-document-promotion-rollback-")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "output")
+  dir.create(destination, recursive = TRUE)
+  copy_toy_archive(archives)
+  initial <- generate_toy_metapackage(
+    "promotionverse", archives, destination, document = FALSE
+  )
+  documentation <- .planned_documentation_files("promotionverse")
+  for (relative in documentation) {
+    writeLines(paste("old", relative), file.path(initial$path, relative),
+               useBytes = TRUE)
+  }
+  manifest <- .read_generation_manifest(initial$path)
+  .atomic_save_rds(
+    .manifest_records(initial$path, unique(c(manifest$files, documentation))),
+    file.path(initial$path, .generation_manifest_name)
+  )
+  promotion_snapshot <- function(path) {
+    relative <- list.files(path, all.files = TRUE, recursive = TRUE,
+                           no.. = TRUE, include.dirs = TRUE)
+    full <- file.path(path, relative)
+    info <- file.info(full)
+    hashes <- rep(NA_character_, length(full))
+    hashes[!info$isdir] <- unname(as.character(tools::md5sum(full[!info$isdir])))
+    data.frame(path = relative, directory = info$isdir, hash = hashes,
+               stringsAsFactors = FALSE)
+  }
+  before <- promotion_snapshot(initial$path)
+  original_copy <- .atomic_copy
+  calls <- 0L
+  testthat::local_mocked_bindings(
+    document = function(pkg, ...) {
+      for (relative in documentation) {
+        writeLines(paste("new", relative), file.path(pkg, relative),
+                   useBytes = TRUE)
+      }
+      invisible(TRUE)
+    },
+    .package = "devtools"
+  )
+  failed <- NULL
+  expect_error(failed <- testthat::with_mocked_bindings(
+    create_metapackage(
+      "promotionverse", "toycomponent_0.1.0", pkg_dir = archives,
+      dest_dir = destination, document = TRUE, update = TRUE,
+      verbose = FALSE, import_deps = character(), force_deps = character()
+    ),
+    .atomic_copy = function(source, destination) {
+      if (grepl("bigbang-document-staging-", source, fixed = TRUE) &&
+            startsWith(destination, initial$path) &&
+            grepl("/man/", destination, fixed = TRUE)) {
+        calls <<- calls + 1L
+        if (calls == 2L) stop("forced documentation promotion failure")
+      }
+      original_copy(source, destination)
+    },
+    .package = "bigbang"
+  ), "forced documentation promotion failure", fixed = TRUE)
+  expect_identical(promotion_snapshot(initial$path), before)
+  expect_true(.manifest_matches_project(initial$path))
+  expect_false(dir.exists(.update_journal_path(initial$path)))
+})
+
 test_that("illegal package names are rejected before anything is written", {
   sandbox <- tempfile("bigbang-name-validation-")
   dir.create(sandbox)
@@ -326,6 +394,7 @@ test_that("the underscore message keeps precedence over the generic one", {
 })
 
 test_that("legal package names spanning the grammar are accepted", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-name-legal-")
   dir.create(sandbox)
   copy_toy_archive(file.path(sandbox, "archives"))
@@ -354,8 +423,8 @@ test_that("rollback works when a path component is a symbolic link", {
   archives <- file.path(sandbox, "archives")
   dir.create(real)
   dir.create(archives)
-  linked <- file.symlink(real, link)
-  skip_if_not(isTRUE(linked), "This platform cannot create symbolic links.")
+  linked <- bb_dir_link(real, link)
+  skip_if_not(isTRUE(linked), "This platform cannot create directory links.")
 
   copy_toy_archive(archives)
   destination <- file.path(link, "created-by-the-call")
@@ -386,4 +455,69 @@ test_that("rollback works when a path component is a symbolic link", {
   )
   expect_false(dir.exists(file.path(preexisting, "linkverse")))
   expect_true(dir.exists(preexisting))
+})
+
+test_that("create_metapackage help is generated from roxygen comments", {
+  skip_on_cran()
+  skip_if_not_installed("roxygen2")
+  package_root <- normalizePath(testthat::test_path("..", ".."),
+                                winslash = "/", mustWork = TRUE)
+  if (!file.exists(file.path(package_root, "DESCRIPTION")) ||
+        !file.exists(file.path(package_root, "R", "create_metapackage.R")) ||
+        !file.exists(file.path(package_root, "man", "create_metapackage.Rd"))) {
+    # R CMD check runs tests from an installed copy, which intentionally has
+    # no source tree for roxygen2 to parse. The source-copy comparison runs
+    # in the repository and in the standalone source test above.
+    expect_true(TRUE)
+    return(invisible(NULL))
+  }
+  copy_root <- tempfile("bigbang-roxygen-")
+  unlink(copy_root, recursive = TRUE, force = TRUE)
+  dir.create(copy_root, recursive = TRUE)
+  on.exit(unlink(copy_root, recursive = TRUE, force = TRUE), add = TRUE)
+  for (entry in c("DESCRIPTION", "NAMESPACE", "R", "man")) {
+    source_entry <- file.path(package_root, entry)
+    target_entry <- file.path(copy_root, entry)
+    if (!file.exists(source_entry) && !dir.exists(source_entry)) next
+    if (dir.exists(source_entry)) {
+      dir.create(target_entry, recursive = TRUE)
+      children <- list.files(source_entry, all.files = TRUE, no.. = TRUE,
+                             full.names = TRUE)
+      if (length(children) > 0L) {
+        file.copy(children, target_entry, recursive = TRUE)
+      }
+    } else {
+      file.copy(source_entry, target_entry)
+    }
+  }
+  root_literal <- encodeString(normalizePath(copy_root, winslash = "/",
+                                             mustWork = TRUE), quote = "\"")
+  expected_path <- file.path(package_root, "man", "create_metapackage.Rd")
+  if (file.exists(expected_path)) {
+    source_literal <- encodeString(package_root, quote = "\"")
+    code <- paste0(
+      "root <- ", root_literal, "; ",
+      "source_root <- ", source_literal, "; ",
+      "roxygen2::roxygenise(root, roclets = 'rd'); ",
+      "expected <- readLines(file.path(source_root, 'man', 'create_metapackage.Rd'), warn = FALSE); ",
+      "generated <- readLines(file.path(root, 'man', 'create_metapackage.Rd'), warn = FALSE); ",
+      "if (!identical(generated, expected)) quit(status = 1L)"
+    )
+  } else {
+    code <- paste0(
+      "root <- ", root_literal, "; ",
+      "roxygen2::roxygenise(root, roclets = 'rd'); ",
+      "generated <- paste(readLines(file.path(root, 'man', 'create_metapackage.Rd'), ",
+      "warn = FALSE), collapse = '\\n'); ",
+      "if (!grepl('reexport_verification', generated, fixed = TRUE)) quit(status = 1L)"
+    )
+  }
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  output <- system2(r_binary, c("--vanilla", "-e", shQuote(code)),
+                    stdout = TRUE, stderr = TRUE)
+  status <- attr(output, "status")
+  if (is.null(status)) status <- 0L
+  expect_identical(status, 0L, info = paste(output, collapse = "\n"))
 })

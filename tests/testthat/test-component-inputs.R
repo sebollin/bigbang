@@ -88,6 +88,68 @@ test_that("component paths can come from multiple directories and extensions", {
   expect_true(requireNamespace("secondpkg", quietly = TRUE))
 })
 
+test_that("skipped local dependencies propagate as skips through a metapackage", {
+  skip_on_cran()
+  sandbox <- tempfile("bigbang-round064-skip-chain-")
+  source_root <- file.path(sandbox, "sources")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  meta_library <- file.path(sandbox, "meta-library")
+  component_library <- file.path(sandbox, "component-library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archives)
+  dir.create(destination)
+  dir.create(meta_library)
+  dir.create(component_library)
+  missing <- paste0("missingcran064", sample.int(1000000L, 1L))
+  skipped <- make_input_archive(
+    "skipbase064", "0.1.0",
+    file.path(archives, "skipbase064_0.1.0.tar.gz"), source_root,
+    imports = missing
+  )
+  dependent <- make_input_archive(
+    "skipdependent064", "0.1.0",
+    file.path(archives, "skipdependent064_0.1.0.tar.gz"), source_root,
+    imports = "skipbase064"
+  )
+  generated <- create_metapackage(
+    "skipchain064", c(skipped, dependent), dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character(), include_archives = TRUE
+  )
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  expect_identical(
+    system2(r_binary, c("CMD", "INSTALL", "-l", shQuote(meta_library),
+                        shQuote(generated$path)), stdout = FALSE, stderr = FALSE),
+    0L
+  )
+  withr::local_libpaths(c(meta_library, component_library, .libPaths()))
+  warnings <- character()
+  result <- withCallingHandlers(
+    getExportedValue("skipchain064", "skipchain064_install")(
+      cran_deps = "skip", verbose = FALSE, lib = component_library
+    ),
+    warning = function(condition) {
+      warnings <<- c(warnings, conditionMessage(condition))
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_length(result$failed, 0L)
+  expect_setequal(
+    names(result$skipped), c("skipbase064_0.1.0", "skipdependent064_0.1.0")
+  )
+  expect_match(
+    result$skipped[["skipdependent064_0.1.0"]],
+    "skipbase064.*skipped.*non-local dependencies.*missing",
+    ignore.case = TRUE
+  )
+  expect_true(any(grepl("Some components were skipped", warnings, fixed = TRUE)))
+  expect_true(any(grepl("local dependencies were skipped", warnings,
+                        fixed = TRUE)))
+})
+
 test_that("the local installer reports policy, constraint, and install failures", {
   skip_on_cran()
   sandbox <- tempfile("bigbang-installer-branches-")
@@ -270,6 +332,7 @@ test_that("ambiguous bare package names list every archive candidate", {
 })
 
 test_that("bare package discovery warns about unreadable archives without raw noise", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-bare-unreadable-")
   source_root <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")

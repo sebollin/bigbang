@@ -40,14 +40,12 @@
 #' @export
 scan_bigbang_artifact <- function(path, dry_run = TRUE) {
   if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
-    stop("'path' must be one non-empty character string.", call. = FALSE,
-         domain = "R-bigbang")
+    stop(.bb_tr("'path' must be one non-empty character string."), call. = FALSE)
   }
   if (!isTRUE(dry_run)) {
-    stop(
-      "Only read-only scanning is supported; 'dry_run' must remain TRUE.",
-      call. = FALSE, domain = "R-bigbang"
-    )
+    stop(.bb_tr(
+      "Only read-only scanning is supported; 'dry_run' must remain TRUE."
+    ), call. = FALSE)
   }
   if (!file.exists(path) && !dir.exists(path)) {
     stop(.bb_trf("Artifact does not exist: %s", path), call. = FALSE)
@@ -192,9 +190,10 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
   } else {
     character()
   }
-  if (length(r_files) > 0L && any(nzchar(Sys.readlink(r_files)))) {
-    stop("Refusing to scan symbolic links in the source R directory.", call. = FALSE,
-         domain = "R-bigbang")
+  if (length(r_files) > 0L && any(vapply(r_files, .path_is_symlink, logical(1L)))) {
+    stop(.bb_tr(
+      "Refusing to scan symbolic links in the source R directory."
+    ), call. = FALSE)
   }
 
   code <- character()
@@ -250,9 +249,10 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
     extract_dir, recursive = TRUE, full.names = TRUE,
     all.files = TRUE, include.dirs = TRUE, no.. = TRUE
   )
-  if (length(extracted) > 0L && any(nzchar(Sys.readlink(extracted)))) {
-    stop("Refusing to scan an archive containing symbolic links.", call. = FALSE,
-         domain = "R-bigbang")
+  if (length(extracted) > 0L &&
+        any(vapply(extracted, .path_is_symlink, logical(1L)))) {
+    stop(.bb_tr("Refusing to scan an archive containing symbolic links."),
+         call. = FALSE)
   }
   package_root <- .find_archive_root(extract_dir, archive)
   .scan_source_tree(package_root)
@@ -263,8 +263,7 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
   provenance <- .read_provenance(description)
   package <- provenance$Package
   if (is.na(package) || !nzchar(package)) {
-    stop("Installed package has no valid Package field.", call. = FALSE,
-         domain = "R-bigbang")
+    stop(.bb_tr("Installed package has no valid Package field."), call. = FALSE)
   }
 
   filebase <- file.path(root, "R", package)
@@ -273,8 +272,8 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
       file.path(root, "R"), pattern = "\\.rdx$", full.names = TRUE
     )
     if (length(candidates) != 1L) {
-      stop("Could not identify the installed lazy-load database.", call. = FALSE,
-           domain = "R-bigbang")
+      stop(.bb_tr("Could not identify the installed lazy-load database."),
+           call. = FALSE)
     }
     filebase <- sub("\\.rdx$", "", candidates)
   }

@@ -1,7 +1,75 @@
+# Resolve the deepest existing ancestor of a path and keep the rest as a
+# suffix. normalizePath() leaves a path that does not exist as it was
+# written, while it canonicalizes an existing parent (a symbolic link such as
+# macOS /var -> /private/var, or a Windows 8.3 short name such as
+# C:/Users/RUNNER~1). Resolving the ancestor keeps both spellings comparable.
+.resolve_physical_path <- function(path) {
+  current <- normalizePath(path, winslash = "/", mustWork = FALSE)
+  suffix <- character()
+  repeat {
+    if (file.exists(current) || dir.exists(current)) break
+    parent <- dirname(current)
+    if (identical(parent, current)) break
+    suffix <- c(basename(current), suffix)
+    current <- parent
+  }
+  resolved <- normalizePath(current, winslash = "/", mustWork = FALSE)
+  if (length(suffix) == 0L) return(resolved)
+  do.call(file.path, c(list(resolved), as.list(suffix)))
+}
+
+# Windows has no readlink: Sys.readlink() returns "" there, also for
+# junctions and symbolic links. normalizePath() does resolve them, so the last
+# component of an existing path is a link exactly when resolving the whole
+# path differs from resolving its parent and appending the component.
+# Comparing the full path instead would flag every 8.3 short name
+# (C:/Users/RUNNER~1/...) and every linked ancestor. A path that does not
+# exist is not resolved by normalizePath() at all, so it is never a link
+# here. No external program is run: fsutil needs administrator rights and
+# would start one process per journal entry.
+.path_is_windows_reparse_point <- function(path, is_windows = NULL,
+                                           normalize = NULL,
+                                           exists = NULL) {
+  if (is.null(is_windows)) {
+    is_windows <- identical(.Platform$OS.type, "windows")
+  }
+  if (!isTRUE(is_windows)) return(rep(FALSE, length(path)))
+  if (is.null(normalize)) {
+    normalize <- function(x) normalizePath(x, winslash = "/", mustWork = FALSE)
+  }
+  if (is.null(exists)) {
+    exists <- function(x) file.exists(x) || dir.exists(x)
+  }
+  canonical <- function(x) {
+    value <- tryCatch(normalize(x), error = function(e) NA_character_)
+    if (!is.character(value) || length(value) != 1L || is.na(value)) {
+      return(NA_character_)
+    }
+    tolower(sub("/+$", "", gsub("\\\\", "/", value)))
+  }
+  one <- function(entry) {
+    if (is.na(entry) || !nzchar(entry)) return(FALSE)
+    entry <- sub("[/\\\\]+$", "", entry)
+    component <- basename(entry)
+    if (!nzchar(component) || component %in% c(".", "..")) return(FALSE)
+    if (!isTRUE(exists(entry))) return(FALSE)
+    resolved <- canonical(entry)
+    parent <- canonical(dirname(entry))
+    if (is.na(resolved) || is.na(parent)) return(FALSE)
+    !identical(resolved, paste(parent, tolower(component), sep = "/"))
+  }
+  vapply(as.character(path), one, logical(1L), USE.NAMES = FALSE)
+}
+
 .path_is_symlink <- function(path) {
-  target <- tryCatch(Sys.readlink(path), error = function(e) "")
-  is.character(target) && length(target) == 1L && !is.na(target) &&
-    nzchar(target)
+  readlink <- function(entry) {
+    target <- tryCatch(Sys.readlink(entry), error = function(e) "")
+    is.character(target) && length(target) == 1L && !is.na(target) &&
+      nzchar(target)
+  }
+  linked <- vapply(as.character(path), readlink, logical(1L),
+                   USE.NAMES = FALSE)
+  linked | .path_is_windows_reparse_point(path)
 }
 
 .validate_project_root_path <- function(project_dir) {
@@ -62,12 +130,23 @@
 }
 
 .atomic_replace <- function(source, destination) {
+  .record_update_write(source, destination)
   if (file.rename(source, destination)) return(invisible(TRUE))
 
   # Windows cannot replace an existing file with rename(). Remove only the
-  # destination entry; if it is a link, unlink() removes the link itself.
+  # destination entry. `file.remove()` removes a file reparse point itself on
+  # Windows; using `unlink()` there can try to delete the link target.
   if (.path_is_symlink(destination)) {
-    unlink(destination, recursive = FALSE, force = TRUE)
+    removed <- if (identical(.Platform$OS.type, "windows")) {
+      suppressWarnings(file.remove(destination))
+    } else {
+      unlink(destination, recursive = FALSE, force = TRUE)
+    }
+    if (!isTRUE(removed) && (.path_is_symlink(destination) ||
+                               file.exists(destination) || dir.exists(destination))) {
+      stop(.bb_trf("Could not replace generated file: %s", destination),
+           call. = FALSE)
+    }
   } else if (file.exists(destination) && !file.remove(destination)) {
     stop(.bb_trf("Could not replace generated file: %s", destination),
          call. = FALSE)
@@ -79,19 +158,27 @@
   invisible(TRUE)
 }
 
+.atomic_temporary <- function(path) {
+  context <- .update_journal_runtime$current
+  tmpdir <- dirname(path)
+  if (!is.null(context) &&
+        (!is.null(.project_relative_destination(path, context$project)) ||
+           startsWith(normalizePath(path, winslash = "/", mustWork = FALSE),
+                      paste0(context$path, "/")))) {
+    tmpdir <- file.path(context$path, "staging")
+  }
+  tempfile(pattern = paste0(".", basename(path), "-"), tmpdir = tmpdir)
+}
+
 .write_utf8 <- function(text, path) {
-  parent <- dirname(path)
-  temporary <- tempfile(pattern = paste0(".", basename(path), "-"),
-                        tmpdir = parent)
+  temporary <- .atomic_temporary(path)
   on.exit(unlink(temporary, force = TRUE), add = TRUE)
   brio::write_lines(text, temporary)
   .atomic_replace(temporary, path)
 }
 
 .atomic_copy <- function(source, destination) {
-  parent <- dirname(destination)
-  temporary <- tempfile(pattern = paste0(".", basename(destination), "-"),
-                        tmpdir = parent)
+  temporary <- .atomic_temporary(destination)
   on.exit(unlink(temporary, force = TRUE), add = TRUE)
   if (!file.copy(source, temporary, overwrite = FALSE)) {
     stop(.bb_trf("Could not copy the component archive: %s", source),
@@ -101,9 +188,7 @@
 }
 
 .atomic_save_rds <- function(object, path) {
-  parent <- dirname(path)
-  temporary <- tempfile(pattern = paste0(".", basename(path), "-"),
-                        tmpdir = parent)
+  temporary <- .atomic_temporary(path)
   on.exit(unlink(temporary, force = TRUE), add = TRUE)
   saveRDS(object, temporary)
   .atomic_replace(temporary, path)
@@ -116,14 +201,96 @@
 .escape_non_ascii <- function(text) {
   codepoints <- utf8ToInt(enc2utf8(text))
   paste(vapply(codepoints, function(codepoint) {
+    if (codepoint < 0x20L || codepoint == 0x7fL) {
+      return(sprintf("\\u%04x", codepoint))
+    }
     if (codepoint <= 0x7fL) return(intToUtf8(codepoint))
     if (codepoint <= 0xffffL) return(sprintf("\\u%04x", codepoint))
     sprintf("\\U%08x", codepoint)
   }, character(1L)), collapse = "")
 }
 
+.r_string_literal <- function(value) {
+  if (!is.character(value) || length(value) != 1L || is.na(value)) {
+    stop(.bb_tr("value must be one non-NA character string"), call. = FALSE)
+  }
+  codepoints <- utf8ToInt(enc2utf8(value))
+  escaped <- vapply(codepoints, function(codepoint) {
+    if (codepoint == 0x22L) return("\\\"")
+    if (codepoint == 0x5cL) return("\\\\")
+    if (codepoint < 0x20L || codepoint == 0x7fL) {
+      return(sprintf("\\u%04x", codepoint))
+    }
+    if (codepoint <= 0x7fL) return(intToUtf8(codepoint))
+    if (codepoint <= 0xffffL) return(sprintf("\\u%04x", codepoint))
+    sprintf("\\U%08x", codepoint)
+  }, character(1L))
+  paste0('"', paste(escaped, collapse = ""), '"')
+}
+
+.r_symbol_literal <- function(symbol) {
+  if (!is.character(symbol) || length(symbol) != 1L || is.na(symbol)) {
+    stop(.bb_tr("symbol must be one non-NA character string"), call. = FALSE)
+  }
+  codepoints <- utf8ToInt(enc2utf8(symbol))
+  ascii <- all(codepoints < 0x80L)
+  control <- any(codepoints < 0x20L | codepoints == 0x7fL)
+  syntactic <- identical(make.names(symbol), symbol) &&
+    !grepl("^[0-9]", symbol) && ascii && !control &&
+    !symbol %in% .r_syntax_symbols()
+  if (isTRUE(syntactic)) symbol else .r_string_literal(symbol)
+}
+
 .r_ascii_literal <- function(x) {
-  .escape_non_ascii(.r_literal(x))
+  render <- function(value) {
+    if (is.null(value)) return("NULL")
+    if (is.character(value)) {
+      if (length(value) == 0L) return("character()")
+      values <- paste(vapply(value, function(item) {
+        if (is.na(item)) "NA_character_" else .r_string_literal(item)
+      }, character(1L)),
+      collapse = ", ")
+      rendered <- if (length(value) == 1L) {
+        if (is.na(value[[1L]])) "NA_character_" else .r_string_literal(value[[1L]])
+      } else {
+        paste0("c(", values, ")")
+      }
+      if (!is.null(names(value))) {
+        rendered <- paste0(
+          "structure(", rendered, ", names = ",
+          render(unname(names(value))), ")"
+        )
+      }
+      return(rendered)
+    }
+    if (is.list(value)) {
+      rendered <- if (length(value) == 0L) {
+        "list()"
+      } else {
+        paste0("list(", paste(vapply(value, render, character(1L)),
+                              collapse = ", "), ")")
+      }
+      if (!is.null(names(value))) {
+        rendered <- paste0(
+          "structure(", rendered, ", names = ",
+          render(unname(names(value))), ")"
+        )
+      }
+      return(rendered)
+    }
+    if (is.logical(value) || is.numeric(value) || is.integer(value)) {
+      rendered <- paste(deparse(value, width.cutoff = 500L), collapse = "")
+      if (!is.null(names(value))) {
+        rendered <- paste0(
+          "structure(", rendered, ", names = ",
+          render(unname(names(value))), ")"
+        )
+      }
+      return(rendered)
+    }
+    .escape_non_ascii(.r_literal(value))
+  }
+  render(x)
 }
 
 .copyright_holders <- function(authors) {
@@ -233,6 +400,17 @@ safe_unlink <- function(path, recursive = FALSE, force = FALSE, verify = TRUE) {
           return(invisible(FALSE))
         }
 
+        temp_root <- normalizePath(
+          tempdir(), winslash = "/", mustWork = TRUE
+        )
+        candidate <- normalizePath(
+          p, winslash = "/", mustWork = FALSE
+        )
+        if (identical(candidate, temp_root)) {
+          message(.bb_trf("SAFETY: Potentially important directory: %s", p))
+          return(invisible(FALSE))
+        }
+
         # Apply directory-specific checks.
         if (dir.exists(p)) {
           # Never remove protected directories.
@@ -251,7 +429,7 @@ safe_unlink <- function(path, recursive = FALSE, force = FALSE, verify = TRUE) {
             if (has_desc && (has_r_dir || has_man_dir)) {
               # Location, not a basename, establishes that this is temporary.
               # A name such as 'templates' is not evidence of ownership.
-              if (!is_path_inside(p, tempdir())) {
+              if (!is_path_inside(p, temp_root)) {
                 message(.bb_trf("SAFETY: Possible non-temporary R package directory: %s", p))
                 return(invisible(FALSE))
               }
@@ -286,18 +464,21 @@ safe_unlink <- function(path, recursive = FALSE, force = FALSE, verify = TRUE) {
 #' @return `TRUE` when `inner_path` is inside `outer_path`.
 #' @noRd
 is_path_inside <- function(inner_path, outer_path) {
-  # Normalize paths before comparing components.
-  # Both sides use the same separator convention as the rest of the package. A
-  # path that does not exist comes back from normalizePath() unchanged, so
-  # mixing conventions would make the comparison fail on Windows.
-  inner <- normalizePath(inner_path, winslash = "/", mustWork = FALSE)
-  outer <- normalizePath(outer_path, winslash = "/", mustWork = FALSE)
+  # Resolve the existing ancestor first. This preserves the child suffix when
+  # a temporary path does not exist yet and its parent is an aliased path.
+  inner <- .resolve_physical_path(inner_path)
+  outer <- .resolve_physical_path(outer_path)
 
   # Use one separator representation on Windows.
   if (.Platform$OS.type == "windows") {
     inner <- gsub("\\\\", "/", inner)
     outer <- gsub("\\\\", "/", outer)
   }
+
+  # Equality is containment: callers that need a strict descendant must reject
+  # equality separately. Paths are compared after resolving the existing
+  # ancestor, so a suffix that traverses a link is judged by its physical path.
+  if (identical(inner, outer)) return(TRUE)
 
   # Add a separator to prevent partial-prefix matches.
   if (!endsWith(outer, "/")) {

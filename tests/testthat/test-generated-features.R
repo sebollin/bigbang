@@ -55,21 +55,39 @@ test_that("generated startup supports cli formatting, fallback, and quiet mode",
   )
   expect_match(paste(cli_output, collapse = "\n"), "Attaching packages")
   expect_match(paste(cli_output, collapse = "\n"), "toycomponent")
+  fallback_runtime <- new.env(parent = baseenv())
+  fallback_runtime$requireNamespace <- function(package, ...) {
+    if (identical(package, "cli")) FALSE else
+      base::requireNamespace(package, ...)
+  }
+  for (file in c("utils.R", "attach.R", "zzz.R")) {
+    source <- paste(
+      readLines(file.path(result$path, "R", file), warn = FALSE),
+      collapse = "\n"
+    )
+    source <- gsub("base::requireNamespace", "requireNamespace",
+                   source, fixed = TRUE)
+    source <- gsub("utils::globalVariables(\".pkgs\")", "invisible(NULL)",
+                   source, fixed = TRUE)
+    eval(parse(text = source, keep.source = FALSE), envir = fallback_runtime)
+  }
+  fallback_output <- capture.output(
+    fallback_runtime$.onAttach(NULL, "featureverse"), type = "message"
+  )
+  expect_match(paste(fallback_output, collapse = "\n"), "featureverse")
+  expect_match(paste(fallback_output, collapse = "\n"), "=", fixed = TRUE)
   version_table <- runtime$format_cli_startup("bigbang", c("stats", "utils"))
   expect_match(version_table, as.character(utils::packageVersion("stats")), fixed = TRUE)
   expect_match(version_table, as.character(utils::packageVersion("utils")), fixed = TRUE)
 
-  runtime$requireNamespace <- function(package, quietly = TRUE) {
-    if (identical(package, "cli")) FALSE else base::requireNamespace(package, quietly)
-  }
-  fallback_output <- capture.output(
-    runtime$.onAttach(NULL, "featureverse"), type = "message"
+  generated_attach <- paste(
+    readLines(file.path(result$path, "R", "attach.R"), warn = FALSE),
+    collapse = "\n"
   )
-  expect_match(paste(fallback_output, collapse = "\n"), "featureverse")
-  expect_match(paste(fallback_output, collapse = "\n"), "={20}")
+  expect_match(generated_attach, "base::find.package", fixed = TRUE)
 })
 
-test_that("generated conflict reports include component masking", {
+test_that("generated conflict reports inspect package namespace exports", {
   result <- generate_feature_metapackage("conflictverse")
   runtime <- new.env(parent = baseenv())
   sys.source(file.path(result$path, "R", "utils.R"), envir = runtime)
@@ -90,14 +108,12 @@ test_that("generated conflict reports include component masking", {
 
   conflicts <- runtime$conflictverse_conflicts()
   expect_s3_class(conflicts, "conflictverse_conflicts")
-  expect_named(conflicts, "shared_name")
-  expect_setequal(
-    conflicts$shared_name,
-    c("package:toycomponent", "package:conflictcompetitor")
-  )
+  # These hand-built search environments have no package namespace. They are
+  # deliberately ignored; namespace exports are checked for real packages.
+  expect_length(conflicts, 0L)
   output <- capture.output(returned <- runtime$print.conflictverse_conflicts(conflicts))
   expect_identical(returned, conflicts)
-  expect_match(paste(output, collapse = "\n"), "shared_name")
+  expect_match(paste(output, collapse = "\n"), "No conflicts found", fixed = TRUE)
 })
 
 test_that("generated metadata and base test agree on component identity", {

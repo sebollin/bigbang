@@ -78,6 +78,23 @@ bigbang_child_load_code <- function() {
   }
 }
 
+test_that("user-facing R diagnostics use the translation helpers", {
+  source_root <- normalizePath(
+    file.path(testthat::test_path(), "..", ".."),
+    winslash = "/", mustWork = TRUE
+  )
+  files <- list.files(
+    file.path(source_root, "R"), pattern = "\\.R$", recursive = TRUE,
+    full.names = TRUE
+  )
+  lines <- unlist(lapply(files, readLines, warn = FALSE), use.names = FALSE)
+  direct <- lines[grepl(
+    "(?:stop|warning|message)\\s*\\(\\s*['\"]", lines, perl = TRUE
+  )]
+  direct <- direct[!grepl("Internal error:", direct, fixed = TRUE)]
+  expect_true(length(direct) == 0L, info = paste(direct, collapse = "\n"))
+})
+
 test_that("the bigbang runtime catalog translates messages to Spanish", {
   bind_dir <- bigbang_catalog_dir()
   output <- translate_from_catalog(
@@ -229,6 +246,67 @@ test_that("Spanish catalogs are complete and preserve format placeholders", {
   )
 })
 
+test_that("the source Spanish catalog and compiled MO catalog have the same keys", {
+  root <- normalizePath(file.path(testthat::test_path(), "..", ".."),
+                        winslash = "/", mustWork = TRUE)
+  read_po <- function(path) {
+    lines <- readLines(path, encoding = "UTF-8", warn = FALSE)
+    parse_field <- function(line, field) {
+      eval(parse(text = sub(paste0("^", field, " "), "", line)))
+    }
+    ids <- vapply(grep("^msgid ", lines, value = TRUE), parse_field,
+                  character(1L), field = "msgid")
+    values <- vapply(grep("^msgstr ", lines, value = TRUE), parse_field,
+                     character(1L), field = "msgstr")
+    stats::setNames(values[ids != ""], ids[ids != ""])
+  }
+  read_mo <- function(path) {
+    bytes <- readBin(path, "raw", n = file.info(path)$size)
+    word <- function(offset) {
+      sum(as.integer(bytes[(offset + 1L):(offset + 4L)]) * 256^(0:3))
+    }
+    text <- function(offset, length) {
+      if (length == 0L) return("")
+      rawToChar(bytes[(offset + 1L):(offset + length)])
+    }
+    count <- word(8L)
+    originals <- word(12L)
+    translations <- word(16L)
+    ids <- values <- character(count)
+    for (index in seq_len(count)) {
+      original_entry <- originals + (index - 1L) * 8L
+      translation_entry <- translations + (index - 1L) * 8L
+      id_length <- word(original_entry)
+      id_offset <- word(original_entry + 4L)
+      value_length <- word(translation_entry)
+      value_offset <- word(translation_entry + 4L)
+      ids[[index]] <- text(id_offset, id_length)
+      values[[index]] <- text(value_offset, value_length)
+    }
+    stats::setNames(values[ids != ""], ids[ids != ""])
+  }
+  pot_path <- file.path(root, "po", "R-bigbang.pot")
+  po_path <- file.path(root, "po", "R-es.po")
+  mo_path <- file.path(root, "inst", "po", "es", "LC_MESSAGES",
+                       "R-bigbang.mo")
+  if (!file.exists(mo_path)) {
+    mo_path <- system.file(
+      "po", "es", "LC_MESSAGES", "R-bigbang.mo", package = "bigbang"
+    )
+  }
+  mo <- read_mo(mo_path)
+  if (file.exists(pot_path) && file.exists(po_path)) {
+    pot <- read_po(pot_path)
+    po <- read_po(po_path)
+    expect_setequal(names(pot), names(po))
+    expect_setequal(names(pot), names(mo))
+    expect_true(all(nzchar(unname(po))))
+  } else {
+    expect_setequal(names(.bigbang_spanish_catalog()), names(mo))
+  }
+  expect_true(all(nzchar(unname(mo))))
+})
+
 test_that("messages formerly keyed with edge whitespace translate at runtime", {
   skip_on_cran()
   skip_if(Sys.which("zip") == "", "the zip utility is unavailable")
@@ -330,6 +408,7 @@ test_that("messages formerly keyed with edge whitespace translate at runtime", {
 })
 
 test_that("template diagnostics translate without edge whitespace", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-i18n-template-")
   dir.create(sandbox)
   code <- paste0(

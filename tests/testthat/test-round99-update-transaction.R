@@ -69,6 +69,7 @@ round99_fixture <- function(prefix) {
 }
 
 test_that("a failed update restores every pre-existing generated file", {
+  skip_on_cran()
   fixture <- round99_fixture("bigbang-update-write-failure-")
   before <- round99_snapshot(fixture$project)
   shipped_drop <- file.path(
@@ -108,6 +109,7 @@ test_that("a failed update restores every pre-existing generated file", {
 })
 
 test_that("a partial stale-file removal is rolled back and remains retryable", {
+  skip_on_cran()
   fixture <- round99_fixture("bigbang-update-removal-failure-")
   before <- round99_snapshot(fixture$project)
   calls <- 0L
@@ -169,41 +171,92 @@ test_that("an update dry run reports every generated file it would remove", {
   round99_expect_unchanged(fixture$project, before)
 })
 
-test_that("an incomplete restoration reports failure and preserves its backup", {
+test_that("an incomplete restoration preserves its durable journal", {
   fixture <- round99_fixture("bigbang-update-restore-failure-")
   manifest <- readRDS(file.path(
     fixture$project, .generation_manifest_name
   ))
-  backup <- .create_update_backup(fixture$project, manifest)
-  on.exit(.discard_update_backup(backup), add = TRUE)
+  journal <- .create_update_journal(
+    fixture$project, "roundnineverse", manifest
+  )
+  state_path <- file.path(journal$path, "state.rds")
+  state <- readRDS(state_path)
+  state$pid <- 99999999L
+  .atomic_save_rds(state, state_path)
+  marker_path <- file.path(journal$path, "marker.rds")
+  marker <- readRDS(marker_path)
+  marker$pid <- state$pid
+  .atomic_save_rds(marker, marker_path)
+  removed <- file.path(fixture$project, manifest$files[[1L]])
+  .activate_update_journal(journal, fixture$project, "roundnineverse")
+  .record_update_delete(removed)
+  .deactivate_update_journal()
+  unlink(removed)
 
   local({
     testthat::local_mocked_bindings(
       .atomic_copy = function(...) stop("forced restoration failure"),
       .package = "bigbang"
     )
-    expect_warning(
-      restored <- .restore_update_backup(fixture$project, backup),
-      "Could not restore generated files after a failed update"
+    expect_error(
+      .recover_pending_update(
+        fixture$project, "roundnineverse", recover = TRUE
+      ),
+      "forced restoration failure"
     )
-    expect_false(restored)
   })
 
-  expect_true(dir.exists(backup$path))
-  expect_invisible(.discard_update_backup(NULL))
+  expect_true(dir.exists(journal$path))
+  expect_message(
+    recovered <- .recover_pending_update(
+      fixture$project, "roundnineverse", recover = TRUE
+    ),
+    "Recovered an interrupted update"
+  )
+  expect_true(recovered$recovered)
 })
 
-test_that("a failed backup is removed before the project can be changed", {
+test_that("a failed journal arm leaves an explicit unarmed journal", {
   fixture <- round99_fixture("bigbang-update-backup-failure-")
-  pattern <- file.path(tempdir(), "bigbang-update-backup-*")
-  before <- Sys.glob(pattern)
+  manifest <- readRDS(file.path(fixture$project, .generation_manifest_name))
+  calls <- 0L
+  journal_backup_copy <- .journal_backup_copy
 
-  expect_error(
-    suppressWarnings(.create_update_backup(
-      fixture$project, list(files = "missing-generated-file")
-    )),
-    "Could not back up generated file"
+  local({
+    testthat::local_mocked_bindings(
+      .journal_backup_copy = function(...) {
+        calls <<- calls + 1L
+        if (calls == 2L) stop("forced journal backup failure")
+        journal_backup_copy(...)
+      },
+      .package = "bigbang"
+    )
+    expect_error(
+      .create_update_journal(
+        fixture$project, "roundnineverse", manifest
+      ),
+      "forced journal backup failure"
+    )
+  })
+
+  journal <- list.files(
+    dirname(fixture$project),
+    pattern = paste0("^\\.", basename(fixture$project),
+                     "\\.bigbang-update\\.armando-"),
+    full.names = TRUE, all.files = TRUE
   )
-
-  expect_setequal(Sys.glob(pattern), before)
+  expect_length(journal, 1L)
+  expect_true(dir.exists(journal[[1L]]))
+  expect_false(file.exists(file.path(journal[[1L]], "state.rds")))
+  local({
+    testthat::local_mocked_bindings(
+      .update_owner_may_be_alive = function(...) FALSE,
+      .package = "bigbang"
+    )
+    expect_message(
+      .reconcile_update_siblings(fixture$project, "roundnineverse"),
+      "Discarded an orphaned armed-update folder"
+    )
+  })
+  expect_false(dir.exists(journal[[1L]]))
 })

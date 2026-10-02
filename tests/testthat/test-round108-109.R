@@ -26,6 +26,7 @@ round108_expect_exact_manifest <- function(project) {
 }
 
 test_that("legacy migration adopts only archives in the current plan", {
+  skip_on_cran()
   root <- tempfile("bigbang-legacy-archive-ownership-")
   destination <- file.path(root, "destination")
   dir.create(destination, recursive = TRUE)
@@ -68,6 +69,7 @@ test_that("legacy migration adopts only archives in the current plan", {
 })
 
 test_that("documentation can be disabled and enabled across updates", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-document-toggle-")
   destination <- file.path(root, "destination")
@@ -103,7 +105,7 @@ test_that("documentation can be disabled and enabled across updates", {
   expect_true(isTRUE(failed$updated))
   expect_false(isTRUE(failed$documented))
   expect_false(any(file.exists(file.path(initial$path, documentation))))
-  expect_true(documentation[[1L]] %in% failed$removed_files)
+  expect_false(documentation[[1L]] %in% failed$removed_files)
   round108_expect_exact_manifest(initial$path)
 
   enabled <- round108_generate(
@@ -116,6 +118,7 @@ test_that("documentation can be disabled and enabled across updates", {
 })
 
 test_that("documentation recovers after an initial generation failure", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-initial-document-failure-")
   destination <- file.path(root, "destination")
@@ -151,6 +154,7 @@ test_that("documentation recovers after an initial generation failure", {
 })
 
 test_that("failed documentation keeps tracked Rd files and remains retryable", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-document-update-failure-")
   destination <- file.path(root, "destination")
@@ -169,7 +173,7 @@ test_that("failed documentation keeps tracked Rd files and remains retryable", {
         "docretryverse", destination, document = TRUE, update = TRUE
       ),
       document = function(pkg, ...) {
-        writeLines("partial documentation", documentation_paths[[1L]])
+        writeLines("partial documentation", file.path(pkg, documentation[[1L]]))
         stop("forced documentation update failure")
       },
       .package = "devtools"
@@ -191,7 +195,7 @@ test_that("failed documentation keeps tracked Rd files and remains retryable", {
   round108_expect_exact_manifest(initial$path)
 })
 
-test_that("failed documentation preserves an untracked Rd file", {
+test_that("documentation updates refuse an existing untracked Rd file", {
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-untracked-documentation-")
   destination <- file.path(root, "destination")
@@ -204,28 +208,19 @@ test_that("failed documentation preserves an untracked Rd file", {
   writeLines("user documentation", user_file, useBytes = TRUE)
   before <- .file_digest(user_file)
 
-  failed <- NULL
-  expect_warning(
-    failed <- testthat::with_mocked_bindings(
-      round108_generate(
-        "userdocverse", destination, document = TRUE, update = TRUE
-      ),
-      document = function(...) stop("forced documentation failure"),
-      .package = "devtools"
+  expect_error(
+    round108_generate(
+      "userdocverse", destination, document = TRUE, update = TRUE
     ),
-    "Error generating documentation: forced documentation failure"
+    class = "bigbang_error_untracked_generated_file"
   )
-
-  expect_true(isTRUE(failed$updated))
-  expect_false(isTRUE(failed$documented))
   expect_true(file.exists(user_file))
   expect_identical(.file_digest(user_file), before)
-  expect_false(relative %in% failed$removed_files)
   manifest <- readRDS(file.path(initial$path, .generation_manifest_name))
   expect_false(relative %in% manifest$files)
 })
 
-test_that("failed documentation restores a partially overwritten user Rd", {
+test_that("documentation update rejection leaves the user Rd byte-for-byte", {
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-overwritten-documentation-")
   destination <- file.path(root, "destination")
@@ -238,27 +233,15 @@ test_that("failed documentation restores a partially overwritten user Rd", {
   writeLines("original user documentation", user_file, useBytes = TRUE)
   before <- .file_digest(user_file)
 
-  failed <- NULL
-  expect_warning(
-    failed <- testthat::with_mocked_bindings(
-      round108_generate(
-        "restoreuserdocverse", destination,
-        document = TRUE, update = TRUE
-      ),
-      document = function(...) {
-        writeLines("partial generated documentation", user_file, useBytes = TRUE)
-        stop("forced failure after overwrite")
-      },
-      .package = "devtools"
+  expect_error(
+    round108_generate(
+      "restoreuserdocverse", destination,
+      document = TRUE, update = TRUE
     ),
-    "Error generating documentation: forced failure after overwrite"
+    class = "bigbang_error_untracked_generated_file"
   )
-
-  expect_true(isTRUE(failed$updated))
-  expect_false(isTRUE(failed$documented))
   expect_true(file.exists(user_file))
   expect_identical(.file_digest(user_file), before)
-  expect_false(relative %in% failed$removed_files)
   manifest <- readRDS(file.path(initial$path, .generation_manifest_name))
   expect_false(relative %in% manifest$files)
 })

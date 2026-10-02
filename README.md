@@ -136,16 +136,52 @@ the metapackage namespace, so `teamverse::report()` is not supported.
 To expose explicit component exports through read-only runtime bindings, use
 `reexport = TRUE` when generating. Components remain outside `Imports` and
 `Depends`, so the metapackage can be installed and loaded offline before they
-exist. Before installation, reading a binding returns a placeholder function;
-its clear missing-component error appears only when that function is called.
-For non-function exports, access returns the placeholder instead of the object
-until installation. The binding then resolves the real function or object
-without reloading the metapackage. Only explicit
+exist. Evaluating a binding never throws: when a component is absent, cannot be
+loaded, or is an older installation that no longer exports the symbol, it
+returns a callable placeholder. Calling it reports the component, installed
+version, missing export, and the `<meta>_install()` call that repairs the
+installation. This also keeps namespace inspection (`as.list()`, `mget()`, and
+IDE environment panels) safe. For non-function exports, access returns the
+placeholder instead of the object until installation. The binding then resolves
+the real function or object without reloading the metapackage. Only explicit
 `export()` directives become bindings, including non-syntactic names, which are
 quoted safely in NAMESPACE. S4 classes and methods remain available by loading
 the component. An object restored with `readRDS()` does not load a
 component by itself, so base R cannot dispatch that component's S3 method until
 the component has been loaded.
+
+### Re-export collisions
+
+When several components export the same symbol, use
+`reexport_prefer = c(symbol = "component")` to select its provider or
+`reexport_exclude = "symbol"` to omit it. Every collision requires one of those
+choices because static analysis cannot prove that two exported objects are the
+same at runtime. The diagnostic labels collisions as `probable_same_object`,
+`distinct_definitions`, or `undetermined`, and reports ordered source reasons.
+For a preferred `probable_same_object`, `<meta>_install()` verifies installed
+owners in a clean R subprocess using the same ordered libraries as runtime:
+the destination library first, followed by `.libPaths()`. An owner installed
+only in a later library is therefore resolved and compared to the object the
+user will obtain. The result distinguishes not installed, not exported, and
+loaded from another library; an installed owner that no longer exports the
+symbol is reported with the same verification warning.
+If the subprocess cannot run, the result is explicitly unverified. A namespace
+already loaded from another library is reported before verification.
+`<meta>_conflicts()` repeats the check and emits the warning again, so it is the
+way to re-verify after installation. A `FALSE` identity warning distinguishes
+equivalent function copies (same body and formals) from distinct objects. If `on_component_error = "skip"`
+omits a required owner, generation errors rather than emitting a binding to a
+component that is not included.
+The returned conflicts object keeps masking conflicts and stores the verification
+data frame as an attribute. Use `<meta>_reexport_verification(conflicts)` to
+read it, so a component exported under that name remains visible in the conflict
+list.
+
+The collision analysis is a diagnostic aid. The guarantee is the explicit
+`reexport_prefer` or `reexport_exclude` choice plus `<meta>_install()`'s
+verification; `library(<meta>)` alone does not verify installed owners. The
+scanner is conservative and may count a never-forced `delayedAssign`, an
+`if (FALSE)` branch, or a `reg.finalizer()` body.
 
 `teamverse` carries its components, so the call takes no arguments and that is
 all anyone who receives it has to do. Hand over the built
@@ -153,6 +189,48 @@ all anyone who receives it has to do. Hand over the built
 and no path to agree on beforehand. If the archives should stay in a shared
 location instead, generate with `include_archives = FALSE`; then
 `teamverse_install()` requires an explicit `pkg_dir`.
+
+### Interrupted updates and recovery
+
+An interrupted `update = TRUE` leaves a durable journal beside the project.
+The next update inspects it before writing; use `dry_run = TRUE` to preview the
+action. After confirming that no other update is running, pass `recover = TRUE`
+to preserve unknown user bytes and complete the rollback or recovery.
+
+The lock is decided by the owner before the claimant. A live published owner
+always blocks. An uncertain owner blocks unless `recover = TRUE`; a dead owner
+can be reclaimed. A discarded lock with a live `owner.rds` is restored or
+blocks on its PID and is never deleted. Only when that owner is proven dead does
+the claimant state decide whether the entry is blocked, needs `recover = TRUE`,
+or can be discarded. Lock and journal mutations revalidate ownership before
+continuing; if the published owner changed, the update aborts before its next
+mutation. A symlink at the lock name is reported as a symlink, and
+`recover = TRUE` moves the link itself without following its target. During
+discard, the journal is first renamed to an unpredictable private sibling after
+its inventory is checked, and every deletion rechecks ancestors and MD5 just
+before `unlink()`. R has no `unlinkat()`/`O_NOFOLLOW`, so a same-user process
+that actively replaces journal directories during discard remains an integrity
+boundary, like forged records; the remaining race window is measured by the
+last recheck-to-unlink interval.
+
+On Linux, liveness uses `/proc/<pid>` and treats zombie (`Z`) and dead (`X`)
+states as dead. Without `/proc`, a failed `kill(pid, 0)` is uncertain unless
+`ps -p` proves that the PID is absent; permission errors and another user's
+process are never treated as dead. A same-user process with write permission
+can forge these records; that is outside the integrity model. Recovery also
+requires the owner fields of `state.rds` and `marker.rds` to match, otherwise
+the journal is set aside rather than used for rollback.
+
+The liveness proof and process-start token are selected by platform:
+
+| Platform | Existence proof | Start token | Policy |
+| --- | --- | --- | --- |
+| Linux with `/proc` | `/proc/<pid>/stat` | field 20, source `proc` | A non-terminal PID whose token matches is proven live. |
+| macOS, BSD, or Unix without `/proc` | `kill(pid, 0)` or `LC_ALL=C ps -p <pid>` | `LC_ALL=C ps -o lstart= -p <pid>`, source `ps` | A live PID whose `lstart` matches is proven live. |
+| Windows | Never probed with `tools::pskill()` | None | Ownership is uncertain; recovery never overrides a proven live owner. |
+
+The source is stored with the token, so a `/proc` token is never compared with
+a `ps` token. `LANGUAGE` and `LC_TIME` cannot change the portable `ps` token.
 
 `cran_deps = "skip"` is the default and never accesses the network. Use
 `"error"` to fail immediately when a non-local dependency is missing, or
@@ -257,7 +335,9 @@ plan$findings                                    # every validation finding
 ```
 
 `dry_run = TRUE` does not create `dest_dir` and does not touch the destination at
-all, so it is a safe way to see what a call would do before it does it.
+all, so it is a safe way to see what a call would do before it does it. During
+an update it also plans reconciliation of every sibling journal folder and
+reports each path and action without mutating those folders.
 
 - `on_component_error = "skip"` generates from the components that are valid
   instead of aborting, and reports the ones it left out. The exclusion is
@@ -277,12 +357,71 @@ all, so it is a safe way to see what a call would do before it does it.
   and its manifest. A failed update restores that state so the same update can
   be retried. Both dry runs and real results list removed paths in
   `removed_files`. Removing a component removes its shipped archive, which may
-  be the last available copy. A real result also lists partial documentation
-  files created and cleaned up after a failed roxygen run; a dry run cannot
-  predict those failure-dependent cleanups.
+  be the last available copy.
+  When an update grows the plan, files absent from both the manifest and the
+  project are new and are written; existing files outside the manifest are
+  treated as user content and the update aborts without overwriting them.
+  The result reports new paths in `added_files`, including a newly added
+  component, a re-added component, a component version bump, or a workflow
+  vignette.
+  Updates hold an exclusive project lock from preparation through rollback and
+  journal publication. The lock is published only by renaming a sibling
+  temporary folder that already contains `owner.rds`, so every published lock
+  has an owner. An orphan is first renamed to a unique discarded name; the
+  winner rechecks that owner before publishing its replacement. A regular file
+  or other user entry at the lock name is set aside as
+  `.<name>.bigbang-apartado-*`, without deleting its bytes. `recover = TRUE`
+  resolves uncertainty (Windows, missing `/proc`, another host, or an
+  unreadable owner), but never overrides a proven live owner: same host, live
+  PID, and the same process-start token. That case errors and reports the PID.
+  The sibling names `.<name>.bigbang-update`,
+  `.<name>.bigbang-update.armando-*`, `.<name>.bigbang-update.lock`,
+  `.<name>.bigbang-update.lock.armando-*`,
+  `.<name>.bigbang-update.lock.descartado-*`,
+  `.<name>.bigbang-update.descartado-*`, and `.<name>.bigbang-apartado-*`
+  are reserved for these operations.
   Updates also refuse to write through a symbolic project root or symbolic
   links inside the generated project, including links in parent directories of
   generated files.
+- Interrupted updates are assembled in a durable sibling
+  `.<name>.bigbang-update.armando-*` folder and renamed to
+  `.<name>.bigbang-update` only after the marker and backup have been verified.
+  An empty unmarked preparation is removed; any non-empty unmarked preparation
+  is atomically set aside as `.<name>.bigbang-apartado-*`, without copying or
+  deleting bytes. Discarding a journal first writes an atomic tombstone with
+  the exact recursive relative-path and MD5 inventory of entries bigbang wrote,
+  records a digest beside the tombstone, and then renames it to
+  `.<name>.bigbang-update.descartado-*`, so cleanup resumes after another
+  interruption. Cleanup removes only files whose path and MD5 match that
+  inventory, and only empty inventory directories. Any other file, directory,
+  or symbolic link sets the whole folder aside and the update continues. A
+  missing or changed tombstone digest has the same outcome. The next
+  `update = TRUE` call can recover a project moved together with its journal.
+  Renaming a project is not supported because generated file names contain the
+  metapackage name: rename the project and its journal back to `<name>`. A
+  byte-for-byte copy placed at the same path and name as the moved original is
+  indistinguishable from that original, so the journal treats it as the
+  project. If the original still exists beside a copied journal, that journal
+  is not adopted or changed. A discarded sibling from another generation or
+  project is set aside with an actionable message. A user file
+  with the same path and MD5 as an inventory entry is an unavoidable boundary:
+  the bytes are identical, so deleting it loses no content, but ownership is
+  not provable. It records every intended write and removal and
+  is designed to survive process interruptions such as SIGKILL, an R error, or
+  Ctrl-C; it does not promise fsync durability against an OS or power shutdown.
+  If a path contains neither its original nor an intended value, recovery stops
+  instead of overwriting it. On Windows, an absent destination is known only
+  while the matching intended temporary remains in the journal staging area.
+  Every original file restored while absent is listed in the recovery result and
+  message. After confirming that no update is still running,
+  `recover = TRUE` preserves those unknown bytes in a reported sibling
+  directory and then recovers. A dry run reports the pending action without
+  changing the project, lock, or any sibling journal folder. The lock is only
+  evaluated and reported as free, live, orphaned, or uncertain. Documentation generation
+  failures in the staging copy are warnings; a failure while promoting a
+  documentation file aborts and rolls the complete update back. On Windows
+  liveness is never tested with
+  `tools::pskill()`, because it would terminate the probed process.
 - `install_upgrade` fixes the default upgrade policy of the installer that gets
   emitted, so you decide when generating whether recipients stay pinned to the
   versions you ship (`"always"`) or keep anything newer they already have

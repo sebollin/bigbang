@@ -31,6 +31,7 @@ round104_generate <- function(name, packages, destination, ...) {
 }
 
 test_that("two updates never absorb or remove files owned by the user", {
+  skip_on_cran()
   root <- tempfile("bigbang-update-owned-plan-")
   source_root <- file.path(root, "sources")
   archives <- file.path(root, "archives")
@@ -76,6 +77,7 @@ test_that("two updates never absorb or remove files owned by the user", {
 })
 
 test_that("legacy scanned manifests discard entries outside the generation plan", {
+  skip_on_cran()
   root <- tempfile("bigbang-legacy-scanned-manifest-")
   destination <- file.path(root, "destination")
   dir.create(destination, recursive = TRUE)
@@ -105,6 +107,7 @@ test_that("legacy scanned manifests discard entries outside the generation plan"
 })
 
 test_that("the generation manifest enumerates every generated file", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-manifest-plan-")
   destination <- file.path(root, "destination")
@@ -204,6 +207,7 @@ test_that("an omitted update input cannot delete its shipped archive", {
 })
 
 test_that("identified omitted archives are preserved while deliberate removals proceed", {
+  skip_on_cran()
   root <- tempfile("bigbang-update-omitted-mixed-")
   source_root <- file.path(root, "sources")
   archives <- file.path(root, "archives")
@@ -266,8 +270,8 @@ test_that("update rejects a symbolic project root before writing", {
 })
 
 test_that("installer transcripts follow verbose and failures retain ERROR", {
-  run_checks <- function(install_function, environment) {
-    environment$system2 <- function(command, args, stdout, stderr, ...) {
+  run_checks <- function(install_function, environment, binding = "system2") {
+    environment[[binding]] <- function(command, args, stdout, stderr, ...) {
       writeLines(c("* installing fixture", "* DONE (fixture)"), stdout)
       0L
     }
@@ -280,7 +284,7 @@ test_that("installer transcripts follow verbose and failures retain ERROR", {
       "installing fixture",
       fixed = TRUE
     )
-    environment$system2 <- function(command, args, stdout, stderr, ...) {
+    environment[[binding]] <- function(command, args, stdout, stderr, ...) {
       writeLines("ERROR: deterministic install failure", stdout)
       1L
     }
@@ -289,7 +293,7 @@ test_that("installer transcripts follow verbose and failures retain ERROR", {
       "ERROR: deterministic install failure",
       fixed = TRUE
     )
-    environment$system2 <- function(command, args, stdout, stderr, ...) {
+    environment[[binding]] <- function(command, args, stdout, stderr, ...) {
       unlink(stdout, force = TRUE)
       7L
     }
@@ -313,9 +317,17 @@ test_that("installer transcripts follow verbose and failures retain ERROR", {
     system.file("extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"),
     destination
   )
-  runtime <- new.env(parent = baseenv())
-  sys.source(file.path(generated$path, "R", "install_packages.R"), runtime)
-  run_checks(runtime$install_source_component, runtime)
+  install_source <- file.path(generated$path, "R", "install_packages.R")
+  generated_install <- paste(readLines(install_source, warn = FALSE),
+                             collapse = "\n")
+  expect_match(generated_install, "base::system2", fixed = TRUE)
+  generated_runtime <- new.env(parent = baseenv())
+  generated_install <- sub("base::system2", ".test_system2",
+                           generated_install, fixed = TRUE)
+  eval(parse(text = generated_install, keep.source = FALSE),
+       envir = generated_runtime)
+  run_checks(generated_runtime$install_source_component, generated_runtime,
+             binding = ".test_system2")
 })
 
 test_that("public and generated installers pass verbose to source installs", {

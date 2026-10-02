@@ -116,20 +116,40 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
 
 
 
-#' Names reserved by generated metapackage code.
+#' Names reserved by generated metapackage code and R syntax.
 #'
 #' @param name Character metapackage name.
 #' @return Character vector of symbols that cannot be replaced by active
 #'   component bindings.
 #' @noRd
+.r_syntax_symbols <- function() {
+  reserved <- c(
+    "if", "else", "repeat", "while", "function", "for", "in", "next",
+    "break", "TRUE", "FALSE", "NULL", "Inf", "NaN", "NA", "NA_integer_",
+    "NA_real_", "NA_complex_", "NA_character_", "..."
+  )
+  operators <- c(
+    "{", "(", ";", ",", "[", "[[", "$", "@", "::", ":::", "?", ":",
+    "~", "=", "<-", "<<-", "->", "->>", "|>", "&&", "||", "&", "|", "!",
+    "+", "-", "*", "/", "^", "%%", "%/%", "%*%", "%in%", "==", "!=",
+    "<", ">", "<=", ">="
+  )
+  unique(c(reserved, operators))
+}
+
 .generated_metapackage_symbols <- function(name) {
   public <- paste0(name, c("_attach", "_detach", "_packages", "_attach_all",
-                           "_install", "_load_all", "_deps", "_conflicts"))
+                           "_install", "_load_all", "_deps", "_conflicts",
+                           "_reexport_verification"))
   c(public, paste0("print.", name, "_conflicts"),
     ".pkgs", ".component_names", ".component_specs",
     ".component_reexport_specs", ".reexport_state", ".reexport_library_paths",
     ".set_reexport_library", ".reexport_component_value",
-    ".make_reexport_binding", ".install_reexport_bindings",
+    ".reexport_installed_version", ".reexport_loaded_version",
+    ".reexport_version_text",
+    ".make_reexport_binding", ".install_reexport_bindings", ".reexport_verify",
+    ".reexport_verify_subprocess",
+    ".archive_warning_state", ".warn_archive_filename_mismatch",
     "attach_installed_packages", ".bigbang_abort",
     "install_packages_in_order", "resolve_upgrade_policy",
     "with_install_library_path", "install_source_component",
@@ -138,18 +158,14 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
     "validate_local_constraints", "classify_package_archive",
     "install_local_archive", "detect_cycles", "build_dependency_graph",
     "topological_order",
-    "style_startup_text", "package_version", "startup_message",
+    "style_startup_text", ".meta_package_version", "startup_message",
     "generate_ascii_banner", "format_cli_startup", "safe_unlink",
-    "is_path_inside", ".meta_tr", ".meta_trf", ".onLoad", ".onAttach", ".onUnload")
+    "is_path_inside", ".meta_tr", ".meta_trf", ".onLoad", ".onAttach", ".onUnload",
+    .r_syntax_symbols())
 }
 
 .namespace_export_directive <- function(symbol) {
-  quoted <- if (any(utf8ToInt(enc2utf8(symbol)) > 0x7fL)) {
-    .r_ascii_literal(symbol)
-  } else {
-    paste(deparse(as.name(symbol), backtick = TRUE), collapse = "")
-  }
-  paste0("export(", quoted, ")")
+  paste0("export(", .r_symbol_literal(symbol), ")")
 }
 
 #' Write a generated metapackage NAMESPACE
@@ -164,7 +180,8 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
 write_namespace_file <- function(name, namespace_path,
                                  implicit_deps = NULL, import_deps = NULL,
                                  verbose = FALSE,
-                                 reexport_symbols = character()) {
+                                 reexport_symbols = character(),
+                                 reexport = FALSE) {
   # Export the complete generated API without requiring roxygen at generation time.
   export <- paste0(
     "export(", name, "_attach)\n",
@@ -175,7 +192,12 @@ write_namespace_file <- function(name, namespace_path,
     "export(", name, "_load_all)\n",
     "export(", name, "_deps)\n",
     "export(", name, "_conflicts)\n",
-    "S3method(print,", name, "_conflicts)\n"
+    "S3method(print,", name, "_conflicts)\n",
+    if (isTRUE(reexport)) {
+      paste0("export(", name, "_reexport_verification)\n")
+    } else {
+      ""
+    }
   )
   reexports <- if (length(reexport_symbols) > 0L) {
     paste(vapply(
@@ -223,18 +245,36 @@ write_namespace_file <- function(name, namespace_path,
 }
 
 .write_reexport_documentation <- function(project_dir, symbols) {
+  table <- if (is.data.frame(symbols)) symbols else NULL
+  symbols <- if (is.null(table)) symbols else table$symbol
   symbols <- unique(symbols[nzchar(symbols)])
   if (length(symbols) == 0L) return(invisible(NULL))
+  rd_symbols <- gsub("%", "\\%", symbols, fixed = TRUE)
+  details <- if (is.null(table)) {
+    character()
+  } else {
+    table <- table[match(symbols, table$symbol), , drop = FALSE]
+    paste0(
+      "\\item \\code{", gsub("%", "\\%", table$symbol, fixed = TRUE), "}: ",
+      table$package, " (",
+      table$resolution, ")."
+    )
+  }
   content <- c(
     "\\name{reexports}",
     "\\alias{reexports}",
-    paste0("\\alias{", symbols, "}"),
+    paste0("\\alias{", rd_symbols, "}"),
     "\\title{Runtime component re-exports}",
     paste0(
       "\\description{Explicit exports from component packages are resolved ",
       "through read-only active bindings when the component is installed.}"
     ),
     "\\details{The component package is loaded lazily when a binding is read.}",
+    if (length(details) > 0L) {
+      c("\\section{Resolved symbols}{", "\\itemize{", details, "}", "}")
+    } else {
+      character()
+    },
     "\\keyword{internal}"
   )
   .write_utf8(content, file.path(project_dir, "man", "reexports.Rd"))
@@ -288,7 +328,19 @@ write_metapackage_readme <- function(name, project_dir,
         "directives become bindings; S4 classes and methods remain available by",
         "loading their component package.",
         "An object restored with readRDS() does not load a component by itself,",
-        "so base R cannot dispatch that component's S3 method until it is loaded."
+        "so base R cannot dispatch that component's S3 method until it is loaded.",
+        "When several components export the same symbol, every collision requires",
+        "reexport_prefer = c(symbol = \"component\") or reexport_exclude = \"symbol\".",
+        "Static analysis cannot prove that two exported objects are the same at",
+        "runtime. Diagnostics label collisions as probable_same_object,",
+        "distinct_definitions, or undetermined; unchosen collisions stop generation.",
+        "dry_run, man/reexports.Rd, and",
+        paste0(name, "_conflicts() report selected resolutions and re-verify"),
+        "installed owners without installing missing components. Installation",
+        "verification is a snapshot; warnings identify owners that no longer export",
+        "the symbol and distinguish equivalent function copies from distinct objects.",
+        "If on_component_error = \"skip\" omits a required owner, generation errors",
+        "instead of leaving a binding that points to a component that does not travel."
       )
     } else {
       c(
@@ -411,19 +463,19 @@ write_consistency_test <- function(name, project_dir) {
   dir.create(test_dir, recursive = TRUE, showWarnings = FALSE)
   test_path <- file.path(test_dir, "component-consistency.R")
   content <- c(
-    paste0("stopifnot(requireNamespace(\"", name, "\", quietly = TRUE))"),
+    paste0("base::stopifnot(base::requireNamespace(\"", name, "\", quietly = TRUE))"),
     paste0("description <- utils::packageDescription(\"", name, "\")"),
-    "declared <- strsplit(description[[\"Config/bigbang/packages\"]], \",\", fixed = TRUE)[[1L]]",
-    "declared <- trimws(declared[nzchar(declared)])",
+    "declared <- base::strsplit(description[[\"Config/bigbang/packages\"]], \",\", fixed = TRUE)[[1L]]",
+    "declared <- base::trimws(declared[base::nzchar(declared)])",
     paste0(
-      "component_packages <- get(\"", name, "_packages\", envir = ",
-      "asNamespace(\"", name, "\"))()"
+      "component_packages <- base::get(\"", name, "_packages\", envir = ",
+      "base::asNamespace(\"", name, "\"))()"
     ),
-    "stopifnot(setequal(component_packages, declared))",
+    "base::stopifnot(base::setequal(component_packages, declared))",
     "imports <- description[[\"Imports\"]]",
-    "imports <- if (is.null(imports)) character() else strsplit(imports, \",\", fixed = TRUE)[[1L]]",
-    "imports <- trimws(gsub(\"\\\\s*\\\\([^)]*\\\\)\", \"\", imports))",
-    "stopifnot(length(intersect(component_packages, imports)) == 0L)"
+    "imports <- if (base::is.null(imports)) base::character() else base::strsplit(imports, \",\", fixed = TRUE)[[1L]]",
+    "imports <- base::trimws(base::gsub(\"\\\\s*\\\\([^)]*\\\\)\", \"\", imports))",
+    "base::stopifnot(base::length(base::intersect(component_packages, imports)) == 0L)"
   )
   .write_utf8(content, test_path)
   invisible(test_path)
@@ -441,7 +493,8 @@ write_consistency_test <- function(name, project_dir) {
 #' @noRd
 
 write_basic_vignette <- function(name, packages, project_dir,
-                                 include_archives = FALSE, verbose = FALSE) {
+                                 include_archives = FALSE,
+                                 reexport = FALSE, verbose = FALSE) {
   project_dir <- normalizePath(project_dir, winslash = "/", mustWork = TRUE)
   desc_file <- file.path(project_dir, "DESCRIPTION")
   if (!file.exists(desc_file)) {
@@ -486,7 +539,19 @@ write_basic_vignette <- function(name, packages, project_dir,
       "library(", name, ")\n",
       "```\n\n",
       "Attached component exports are available directly or through their own",
-      "package namespace; they are not copied into this metapackage namespace.\n\n",
+      if (isTRUE(reexport)) {
+        paste0(
+          "package namespace; explicit exports are exposed through read-only bindings.\n\n",
+          "## Re-export collisions\n\n",
+          "Use `reexport_prefer = c(symbol = \"component\")` to choose a provider or ",
+          "`reexport_exclude = \"symbol\"` to omit a symbol. Every collision requires ",
+          "one of those choices because static analysis cannot prove that two exported ",
+          "objects are the same at runtime. Diagnostics label collisions as ",
+          "`probable_same_object`, `distinct_definitions`, or `undetermined`.\n\n"
+        )
+      } else {
+        "package namespace; they are not copied into this metapackage namespace.\n\n"
+      },
       "## Available functions\n\n",
       if (isTRUE(include_archives)) {
         paste0("* `", name, "_install()`: installs the components shipped inside this package.\n")

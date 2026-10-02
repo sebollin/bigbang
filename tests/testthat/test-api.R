@@ -12,7 +12,8 @@ test_that("the public API uses English snake_case names", {
       "reexport", "document", "verbose", "authors", "description",
       "license", "additional_deps", "ignore_deps", "import_deps",
       "force_deps", "debug", "workflow", "include_archives", "tolerate",
-      "dry_run", "on_component_error", "update", "install_upgrade"
+      "dry_run", "on_component_error", "update", "install_upgrade",
+      "reexport_prefer", "reexport_exclude", "recover"
     )
   )
   expect_named(
@@ -23,6 +24,23 @@ test_that("the public API uses English snake_case names", {
     )
   )
   expect_named(formals(diagnose_dependencies), c("packages", "pkg_dir", "ext"))
+})
+
+test_that("recover is a strict update-only flag", {
+  expect_error(
+    create_metapackage(
+      "recoververse", "component", dest_dir = tempdir(), recover = NA
+    ),
+    "'recover' must be TRUE or FALSE",
+    fixed = TRUE
+  )
+  expect_error(
+    create_metapackage(
+      "recoververse", "component", dest_dir = tempdir(), recover = TRUE
+    ),
+    "'recover' requires update = TRUE",
+    fixed = TRUE
+  )
 })
 
 test_that("generated provenance uses the installed package version", {

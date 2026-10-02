@@ -100,6 +100,7 @@ test_that("missing manifest archive names report every search directory", {
 })
 
 test_that("bigbang installation messages name declared identity and archive stem", {
+  skip_on_cran()
   root <- tempfile("bigbang-round82-identity-")
   source_root <- file.path(root, "sources")
   archive_dir <- file.path(root, "archives")

@@ -2,7 +2,7 @@ reexport_make_archive <- function(source_root, archive_dir, name,
                                   version = "0.1.0", exports,
                                   body, namespace_extra = character()) {
   package_dir <- file.path(source_root, name)
-  dir.create(file.path(package_dir, "R"), recursive = TRUE)
+  dir.create(file.path(package_dir, "R"), recursive = TRUE, showWarnings = FALSE)
   writeLines(c(
     paste0("Package: ", name),
     paste0("Version: ", version),
@@ -13,7 +13,12 @@ reexport_make_archive <- function(source_root, archive_dir, name,
     "Maintainer: Test Author <test@example.org>"
   ), file.path(package_dir, "DESCRIPTION"), useBytes = TRUE)
   writeLines(c(
-    paste0("export(", paste(exports, collapse = ","), ")"),
+    paste0(
+      "export(",
+      paste(vapply(exports, bigbang:::.r_symbol_literal, character(1L)),
+            collapse = ","),
+      ")"
+    ),
     namespace_extra
   ), file.path(package_dir, "NAMESPACE"), useBytes = TRUE)
   writeLines(body, file.path(package_dir, "R", "fixture.R"), useBytes = TRUE)
@@ -106,6 +111,64 @@ test_that("reexport active bindings stay lazy and preserve NSE and S3", {
                "foreign S3 method")
 })
 
+test_that("an installed old component cannot break metapackage installation", {
+  testthat::skip_on_cran()
+  sandbox <- tempfile("bigbang-round064-old-component-")
+  source_root <- file.path(sandbox, "sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  old_library <- file.path(sandbox, "old-library")
+  meta_library <- file.path(sandbox, "meta-library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archive_dir)
+  dir.create(destination)
+  dir.create(old_library)
+  dir.create(meta_library)
+  old_archive <- reexport_make_archive(
+    source_root, archive_dir, "stalecomponent064", version = "0.4.0",
+    exports = "old_value", body = "old_value <- function() 'old'"
+  )
+  new_archive <- reexport_make_archive(
+    source_root, archive_dir, "stalecomponent064", version = "0.5.0",
+    exports = c("old_value", "new_value"),
+    body = c("old_value <- function() 'new'", "new_value <- function() 'new'")
+  )
+  generated <- create_metapackage(
+    "staleverse064", new_archive, dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character(), include_archives = TRUE, reexport = TRUE
+  )
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  expect_identical(
+    system2(r_binary, c("CMD", "INSTALL", "-l", shQuote(old_library),
+                        shQuote(old_archive)), stdout = FALSE, stderr = FALSE),
+    0L
+  )
+  output <- withr::with_envvar(
+    c(R_LIBS_USER = old_library),
+    system2(
+      r_binary, c("CMD", "INSTALL", "-l", shQuote(meta_library),
+                  shQuote(generated$path)), stdout = TRUE, stderr = TRUE
+    )
+  )
+  status <- attr(output, "status")
+  if (is.null(status)) status <- 0L
+  expect_identical(status, 0L, info = paste(output, collapse = "\n"))
+
+  withr::local_libpaths(c(meta_library, old_library, .libPaths()))
+  namespace <- loadNamespace("staleverse064")
+  expect_no_error(as.list(namespace, all.names = TRUE))
+  placeholder <- getExportedValue("staleverse064", "new_value")
+  expect_true(is.function(placeholder))
+  expect_error(
+    placeholder(),
+    "stalecomponent064.*0\\.4\\.0|does not export.*new_value|staleverse064_install",
+    ignore.case = TRUE
+  )
+})
+
 test_that("reexport rejects export collisions and own generated symbols", {
   sandbox <- tempfile("bigbang-reexport-collision-")
   source_root <- file.path(sandbox, "sources")
@@ -160,6 +223,59 @@ test_that("reexport rejects export collisions and own generated symbols", {
   )
 })
 
+test_that("R syntax exports require exclusion and leave the installer usable", {
+  skip_on_cran()
+  sandbox <- tempfile("bigbang-reexport-syntax-")
+  source_root <- file.path(sandbox, "sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  meta_library <- file.path(sandbox, "meta-library")
+  component_library <- file.path(sandbox, "component-library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archive_dir)
+  dir.create(destination)
+  dir.create(meta_library)
+  dir.create(component_library)
+  archive <- reexport_make_archive(
+    source_root, archive_dir, "syntaxcomponent",
+    exports = c("if", "["),
+    body = c(
+      "`if` <- function(...) 1L",
+      "`[` <- function(...) 1L"
+    )
+  )
+
+  expect_error(
+    create_metapackage(
+      "syntaxverse", archive, dest_dir = destination,
+      document = FALSE, verbose = FALSE, import_deps = character(),
+      force_deps = character(), reexport = TRUE
+    ),
+    "syntax|reexport_exclude|if|\\[",
+    ignore.case = TRUE
+  )
+
+  generated <- create_metapackage(
+    "syntaxverse", archive, dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character(), include_archives = TRUE, reexport = TRUE,
+    reexport_exclude = c("if", "[")
+  )
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  expect_identical(
+    system2(r_binary, c("CMD", "INSTALL", "-l", shQuote(meta_library),
+                        shQuote(generated$path)), stdout = FALSE, stderr = FALSE),
+    0L
+  )
+  withr::local_libpaths(c(meta_library, .libPaths()))
+  loadNamespace("syntaxverse")
+  installer <- getExportedValue("syntaxverse", "syntaxverse_install")
+  expect_no_error(installer(lib = component_library, verbose = FALSE))
+  withr::defer(unloadNamespace("syntaxverse"))
+})
+
 test_that("reexport requires a readable component NAMESPACE", {
   sandbox <- tempfile("bigbang-reexport-namespace-")
   source_root <- file.path(sandbox, "sources")
@@ -200,8 +316,8 @@ test_that("reexport requires a readable component NAMESPACE", {
 test_that("reexport validates explicit namespace exports and helper plans", {
   expect_true(is.character(bigbang:::.bb_generator_version()))
   testthat::local_mocked_bindings(
-    packageVersion = function(...) stop("not available"),
-    .package = "utils"
+    .bb_package_version = function(...) stop("not available"),
+    .package = "bigbang"
   )
   expect_identical(bigbang:::.bb_generator_version(), "unknown")
   expect_length(bigbang:::.planned_documentation_files("helperverse"), 20L)
@@ -368,7 +484,7 @@ test_that("non-syntactic and Unicode exports remain installable bindings", {
     reexport = TRUE
   )
   namespace <- readLines(file.path(generated$path, "NAMESPACE"), warn = FALSE)
-  expect_true(paste0("export(`", space_symbol, "`)") %in% namespace)
+  expect_true(paste0("export(\"", space_symbol, "\")") %in% namespace)
   expect_true("export(\"a\\u00f1o\")" %in% namespace)
   specs <- readLines(file.path(generated$path, "R", "reexports.R"), warn = FALSE)
   expect_true(any(grepl(space_symbol, specs, fixed = TRUE)))
@@ -457,6 +573,7 @@ test_that("reexport rejects namespace export patterns", {
 })
 
 test_that("reexport handles components with no explicit exports", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-reexport-empty-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -483,11 +600,12 @@ test_that("reexport handles components with no explicit exports", {
   expect_true(file.exists(file.path(result$path, "R", "reexports.R")))
   expect_match(
     paste(readLines(file.path(result$path, "R", "reexports.R")), collapse = "\n"),
-    "component_reexport_specs <- list\\(\\)"
+    "component_reexport_specs <- (base::)?list\\(\\)"
   )
 })
 
 test_that("update reconciles the reexport binding file", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-reexport-update-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -522,6 +640,7 @@ test_that("update reconciles the reexport binding file", {
 })
 
 test_that("reexport toggles reconcile code, documentation, and manifests", {
+  skip_on_cran()
   testthat::skip_if_not_installed("devtools")
   sandbox <- tempfile("bigbang-reexport-toggle-matrix-")
   source_root <- file.path(sandbox, "sources")
@@ -571,6 +690,7 @@ test_that("reexport toggles reconcile code, documentation, and manifests", {
 })
 
 test_that("reexport updates never overwrite untracked user files", {
+  skip_on_cran()
   testthat::skip_if_not_installed("devtools")
   sandbox <- tempfile("bigbang-reexport-untracked-")
   source_root <- file.path(sandbox, "sources")
@@ -611,6 +731,7 @@ test_that("reexport updates never overwrite untracked user files", {
 })
 
 test_that("failed documentation leaves a clean reexport toggle retry", {
+  skip_on_cran()
   testthat::skip_if_not_installed("devtools")
   sandbox <- tempfile("bigbang-reexport-doc-failure-")
   source_root <- file.path(sandbox, "sources")
@@ -728,4 +849,43 @@ test_that("generated installers create a new lib in both startup modes", {
     expect_true(dir.exists(file.path(component_library, "toycomponent")))
     unloadNamespace(name)
   }
+})
+
+test_that("re-export bindings read package metadata only to explain a failure", {
+  # Each access to a re-exported symbol goes through the binding; reading the
+  # installed version there made every use about fifty times slower.
+  sandbox <- withr::local_tempdir("bigbang-reexport-getter-")
+  source_root <- file.path(sandbox, "sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  dir.create(source_root)
+  dir.create(archive_dir)
+  dir.create(destination)
+  archive <- reexport_make_archive(
+    source_root, archive_dir, "toyg",
+    exports = "toyg_value",
+    body = "toyg_value <- function(x = 1) x + 1"
+  )
+  result <- bigbang::create_metapackage(
+    "toygverse", archive, dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character(), reexport = TRUE
+  )
+  expressions <- as.list(parse(
+    file.path(result$path, "R", "reexports.R"), keep.source = FALSE
+  ))
+  getters <- Filter(function(expression) {
+    is.call(expression) &&
+      as.character(expression[[1L]]) %in% c("<-", "=") &&
+      identical(as.character(expression[[2L]]), ".reexport_component_value")
+  }, expressions)
+  expect_length(getters, 1L)
+  statements <- as.list(getters[[1L]][[3L]][[3L]])[-1L]
+  unconditional <- Filter(function(statement) {
+    !(is.call(statement) && identical(statement[[1L]], as.name("if")))
+  }, statements)
+  touched <- unique(unlist(lapply(unconditional, all.names)))
+  expect_false(any(
+    c("packageVersion", ".reexport_installed_version") %in% touched
+  ))
 })

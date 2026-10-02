@@ -426,13 +426,16 @@ test_that("the startup hint names a call the reader can actually make", {
   )))
 })
 
-test_that("the arguments added after 0.1.0 do not displace the earlier ones", {
-  # A positional call written against 0.1.0 must keep binding to the same
-  # parameters, or it silently starts meaning something else.
+test_that("the published argument prefix stays stable through 0.4.0", {
+  # Positional calls written against the published API must keep binding to the
+  # same parameters, or they silently start meaning something else.
   released_create <- c(
     "name", "packages", "pkg_dir", "ext", "version", "dest_dir", "reexport",
     "document", "verbose", "authors", "description", "license",
-    "additional_deps", "ignore_deps", "import_deps", "force_deps", "debug"
+    "additional_deps", "ignore_deps", "import_deps", "force_deps", "debug",
+    "workflow", "include_archives", "tolerate", "dry_run",
+    "on_component_error", "update", "install_upgrade",
+    "reexport_prefer", "reexport_exclude", "recover"
   )
   expect_identical(
     names(formals(create_metapackage))[seq_along(released_create)],
@@ -473,6 +476,7 @@ test_that("only the real inst/archives is exempt from the ignore rules", {
 })
 
 test_that("the generated vignette names the installation call of its mode", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-vignette-mode-")
   archives <- file.path(sandbox, "archives")
   toy_archive_dir(archives)

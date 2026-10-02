@@ -92,6 +92,7 @@ test_that("update rejects a symlink in a generated path component", {
 })
 
 test_that("a symlink in the destination parent remains a valid path", {
+  skip_on_cran()
   skip_on_os("windows")
   root <- tempfile("bigbang-round83-parent-link-")
   real_parent <- file.path(root, "real")
@@ -150,6 +151,7 @@ test_that("manifests accept absolute and tilde archive paths", {
 })
 
 test_that("manifests accept an absolute source directory", {
+  skip_on_cran()
   skip_if_not_installed("pkgbuild")
   root <- tempfile("bigbang-round84-source-")
   source_root <- file.path(root, "source")

@@ -1,3 +1,105 @@
+# bigbang 0.5.0
+
+## Breaking changes
+
+- `update = TRUE` refuses a planned generated path that already exists outside
+  the manifest, including generated documentation files that were previously
+  regenerated over it. Remove or rename that file to let the update write it.
+- `bigbang_error_missing_project` now inherits from
+  `bigbang_error_missing_manifest` while identifying a missing project more
+  precisely.
+- `dry_run` now reports a read-only reconciliation plan for sibling journals
+  and the project lock; uncertain owners require `recover = TRUE`.
+- A failure while promoting generated documentation now aborts the update and
+  rolls the project back through its journal. Only failures in the staging
+  generation remain warnings.
+- `create_metapackage()` now accepts `reexport_prefer` and `reexport_exclude`.
+  Every collision requires one of them because static analysis cannot prove
+  object identity, and diagnostics classify the selected resolution.
+- Generated metapackages now reserve `.component_reexport_specs`,
+  `.reexport_state`, `.reexport_library_paths`, `.set_reexport_library`,
+  `.reexport_component_value`, `.reexport_installed_version`,
+  `.reexport_loaded_version`, `.reexport_version_text`,
+  `.make_reexport_binding`, `.install_reexport_bindings`, `.reexport_verify`,
+  `.reexport_verify_subprocess`, `.meta_package_version`,
+  `<meta>_reexport_verification`, and the generated installer, lifecycle,
+  dependency, diagnostic, and translation helpers. Migrate colliding component
+  exports with `reexport_exclude = "..."`. Version 0.4.0 already rejected
+  these collisions; 0.5.0 adds explicit choose-or-exclude handling and
+  diagnostics.
+- Re-exporting R syntax names such as `if`, `[`, or arithmetic and comparison
+  operators now requires `reexport_exclude`. Version 0.4.0 did not reserve
+  those names, so a component export could shadow syntax in generated code and
+  in the attached session. Migrate by excluding the syntax names; the generated
+  metapackage retains R's syntax and its installer remains usable.
+
+## New features
+
+- Interrupted updates now use a durable journal, resumable tombstones, and an
+  exclusive project lock; recovery preserves unverified user bytes and supports
+  read-only planning.
+- Re-export diagnostics follow same-package helpers and classify calculated
+  destinations and foreign namespace indirection conservatively.
+- Installed-owner verification runs in a clean R subprocess with the destination
+  library first, and the conflicts accessor keeps verification outside symbol
+  names.
+- Update recovery accepts the `recover` argument and reports `recovered`,
+  `recovery`, `reexports`, and `reexport_excluded` in its result. The generated
+  `<meta>_reexport_verification()` accessor returns installed-owner checks.
+- Dependency scanning now includes `.S`, `.s`, and `.q` sources; detected
+  dependencies can therefore differ from earlier releases.
+- Updates can now add planned files that are absent from both the manifest and
+  the project, including new, re-added, or version-bumped components and
+  workflow vignettes; existing untracked paths are refused as user content.
+
+## Bug fixes
+
+- Generated metapackages: `<meta>_detach()` detaches components from the top of
+  the search path down, so families linked through `Depends` detach completely;
+  `library(<meta>)` reports components that cannot be attached, such as one
+  whose `Depends` are missing or whose namespace was loaded from another
+  library, instead of failing; installer messages respect `verbose = FALSE`;
+  `<meta>_conflicts()` compares namespace exports, so internal objects such as
+  `.Depends` are no longer reported as conflicts.
+- A warning about an archive whose file name and `DESCRIPTION` version differ is
+  now given once per archive and installation call.
+- Fixed a 0.4.0 defect where an installed older component that no longer
+  exported a re-exported symbol made `R CMD INSTALL` fail while loading the
+  metapackage. Re-export bindings now always evaluate safely and provide an
+  actionable `<meta>_install()` placeholder error when called.
+- Components skipped because a local dependency was skipped are now reported as
+  skipped with the chained reason, and the skipped summary is shown even when
+  another component fails.
+- Discarded-journal cleanup now sets aside unreadable content, revalidates
+  paths and MD5 values immediately before deletion, checks every discard unlink,
+  and moves unreadable armed journals aside during recovery. Verification now
+  reports unavailable checks, preserves its accessor class, uses the runtime
+  library when no destination library exists, qualifies subprocess helpers, and
+  reports namespace unload failures with their importing package and restart
+  guidance. Windows liveness never probes a process with a terminating signal.
+- Update locks now decide discarded entries from the recorded owner before the
+  claimant, preserve live owners byte-for-byte, revalidate ownership before
+  journal mutations, and process discarded entries until no progress remains.
+  Zombie and permission-sensitive liveness is conservative, symlink locks have
+  a working recovery path, and lock-creation errors identify the parent failure.
+  Unix systems without `/proc` now record a locale-independent `ps lstart`
+  token, and the retry guard counts only consecutive no-progress attempts.
+- Armed journal recovery now rejects mismatched `state.rds` and `marker.rds`
+  owners instead of rolling back a live update. Clean re-export verification
+  now follows the runtime library order and distinguishes installation,
+  export, and foreign-library failures.
+- Fixed the 0.4.0 regression where generated metapackage machinery could be
+  hidden by an export with the same name.
+- Journal inventory and discard cleanup no longer follow directory symlinks;
+  linked entries and their descendants are set aside byte-for-byte.
+- Installation verification no longer reuses a namespace loaded from another
+  library and never reports identity when a clean verification is unavailable.
+- Generated re-export calls now qualify base, utils, tools, and methods helpers;
+  source validation and generated diagnostics remain safe when components export
+  those names.
+- Re-export source evidence reuses per-file parse indexes, and update recovery
+  preserves staged files and unknown external deletions conservatively.
+
 # bigbang 0.4.0
 
 ## New features

@@ -9,9 +9,17 @@
 # Read from the installed DESCRIPTION rather than kept as a literal, so the
 # field stamped into a generated meta-package can never fall behind the version
 # that actually produced it.
+.bb_package_version <- function(package, lib_loc = NULL) {
+  if (is.null(lib_loc)) {
+    utils::packageVersion(package)
+  } else {
+    utils::packageVersion(package, lib.loc = lib_loc)
+  }
+}
+
 .bb_generator_version <- function() {
   version <- tryCatch(
-    as.character(utils::packageVersion("bigbang")),
+    as.character(.bb_package_version("bigbang")),
     error = function(e) NA_character_
   )
   if (is.na(version)) "unknown" else version
@@ -37,7 +45,7 @@
 .allowed_tolerations <- c("filename_mismatch", "unincluded_local_dep")
 .generation_manifest_name <- ".bigbang-manifest.rds"
 
-.planned_documentation_files <- function(name) {
+.planned_documentation_files <- function(name, reexport = FALSE) {
   static <- c(
     "build_dependency_graph", "classify_package_archive", "detect_cycles",
     "format_cli_startup", "generate_ascii_banner", "install_local_archive",
@@ -48,6 +56,11 @@
     "_attach_all", "_attach", "_conflicts", "_deps", "_detach", "_install",
     "_load_all", "_packages"
   ))
+  public <- if (isTRUE(reexport)) {
+    c(public, paste0(name, "_reexport_verification"))
+  } else {
+    public
+  }
   file.path("man", paste0(c(static, public), ".Rd"))
 }
 
@@ -55,7 +68,8 @@
                                       include_archives = TRUE,
                                       license = "MIT + file LICENSE",
                                       document = FALSE,
-                                      reexport = FALSE) {
+                                      reexport = FALSE,
+                                      reexport_symbols = NULL) {
   files <- c(
     "DESCRIPTION", "NAMESPACE", "README.md", ".Rbuildignore", ".gitignore",
     ".BBSoptions", paste0(name, ".Rproj"),
@@ -78,11 +92,15 @@
     files <- c(files, file.path("vignettes", paste0("workflow-", name, ".Rmd")))
   }
   if (isTRUE(document)) {
-    files <- c(files, .planned_documentation_files(name))
+    files <- c(files, .planned_documentation_files(name, reexport = reexport))
     if (isTRUE(reexport)) {
-      exports <- unique(unlist(lapply(components, function(component) {
-        .or_null(component$exports, character())
-      }), use.names = FALSE))
+      exports <- if (is.null(reexport_symbols)) {
+        unique(unlist(lapply(components, function(component) {
+          .or_null(component$exports, character())
+        }), use.names = FALSE))
+      } else {
+        unique(reexport_symbols)
+      }
       if (length(exports) > 0L) files <- c(files, file.path("man", "reexports.Rd"))
     }
   }
@@ -240,171 +258,6 @@
   manifest
 }
 
-.snapshot_untracked_docs <- function(project_dir, documentation_files,
-                                     update_manifest = NULL,
-                                     update_backup = NULL) {
-  tracked <- if (is.null(update_manifest)) {
-    character()
-  } else {
-    intersect(documentation_files, update_manifest$files)
-  }
-  candidates <- setdiff(documentation_files, tracked)
-  .validate_project_write_paths(project_dir, candidates)
-  paths <- file.path(project_dir, candidates)
-  existing <- candidates[file.exists(paths) & !dir.exists(paths)]
-  if (length(existing) == 0L) {
-    return(list(
-      path = NULL, files = character(), hashes = character(),
-      candidates = candidates
-    ))
-  }
-  if (is.null(update_backup)) {
-    stop("Internal error: documentation backup is unavailable", call. = FALSE)
-  }
-
-  backup_dir <- file.path(update_backup$path, ".untracked-documentation")
-  if (!dir.create(backup_dir)) {
-    stop(.bb_trf("Could not create temporary directory for %s", project_dir),
-         call. = FALSE)
-  }
-  complete <- FALSE
-  on.exit({
-    if (!complete) unlink(backup_dir, recursive = TRUE, force = TRUE)
-  }, add = TRUE)
-  for (relative in existing) {
-    source <- file.path(project_dir, relative)
-    destination <- file.path(backup_dir, relative)
-    parent <- dirname(destination)
-    if (!dir.exists(parent) && !dir.create(parent, recursive = TRUE)) {
-      stop(.bb_trf("Could not create temporary directory for %s", relative),
-           call. = FALSE)
-    }
-    if (!file.copy(source, destination, overwrite = FALSE)) {
-      stop(.bb_trf("Could not back up generated file: %s", source),
-           call. = FALSE)
-    }
-  }
-  hashes <- vapply(
-    file.path(project_dir, existing), .file_digest, character(1L)
-  )
-  names(hashes) <- existing
-  complete <- TRUE
-  list(
-    path = backup_dir, files = existing, hashes = hashes,
-    candidates = candidates
-  )
-}
-
-.restore_untracked_docs <- function(project_dir, snapshot) {
-  if (is.null(snapshot)) return(invisible(character()))
-  .validate_project_write_paths(project_dir, snapshot$candidates)
-  current <- snapshot$candidates[file.exists(file.path(
-    project_dir, snapshot$candidates
-  ))]
-  appeared <- setdiff(current, snapshot$files)
-  .remove_stale_generation_files(project_dir, appeared)
-
-  for (relative in snapshot$files) {
-    .atomic_copy(
-      file.path(snapshot$path, relative),
-      file.path(project_dir, relative)
-    )
-  }
-  restored <- vapply(
-    file.path(project_dir, snapshot$files), .file_digest, character(1L)
-  )
-  if (!identical(unname(restored), unname(snapshot$hashes[snapshot$files]))) {
-    stop(.bb_trf(
-      "Could not restore generated files after a failed update: %s",
-      paste(snapshot$files, collapse = ", ")
-    ), call. = FALSE)
-  }
-  invisible(appeared)
-}
-
-.reconcile_failed_docs <- function(project_dir, documentation_files,
-                                   documentation_snapshot = NULL,
-                                   update_manifest = NULL,
-                                   update_backup = NULL) {
-  tracked <- if (is.null(update_manifest)) {
-    character()
-  } else {
-    intersect(documentation_files, update_manifest$files)
-  }
-  # A failed roxygen run may have written only part of its output. Files that
-  # appeared during this call are removed, while pre-existing untracked files
-  # are restored without becoming manifest-owned. Tracked documentation is
-  # restored byte-for-byte from the main update backup.
-  removed <- .restore_untracked_docs(project_dir, documentation_snapshot)
-  if (length(tracked) > 0L) {
-    if (is.null(update_backup)) {
-      stop("Internal error: documentation backup is unavailable", call. = FALSE)
-    }
-    for (relative in tracked) {
-      .atomic_copy(
-        file.path(update_backup$path, relative),
-        file.path(project_dir, relative)
-      )
-    }
-  }
-  list(retained = tracked, removed = removed)
-}
-
-.create_update_backup <- function(project_dir, manifest) {
-  files <- unique(c(manifest$files, .generation_manifest_name))
-  backup_dir <- tempfile("bigbang-update-backup-")
-  if (!dir.create(backup_dir)) {
-    stop(.bb_trf("Could not create temporary directory for %s", project_dir),
-         call. = FALSE)
-  }
-  complete <- FALSE
-  on.exit({
-    if (!complete) unlink(backup_dir, recursive = TRUE, force = TRUE)
-  }, add = TRUE)
-
-  for (relative in files) {
-    source <- file.path(project_dir, relative)
-    destination <- file.path(backup_dir, relative)
-    parent <- dirname(destination)
-    if (!dir.exists(parent) && !dir.create(parent, recursive = TRUE)) {
-      stop(.bb_trf("Could not create temporary directory for %s", relative),
-           call. = FALSE)
-    }
-    if (!file.copy(source, destination, overwrite = FALSE)) {
-      stop(.bb_trf("Could not back up generated file: %s", source),
-           call. = FALSE)
-    }
-  }
-  complete <- TRUE
-  list(path = backup_dir, files = files)
-}
-
-.restore_update_backup <- function(project_dir, backup) {
-  failures <- character()
-  for (relative in backup$files) {
-    source <- file.path(backup$path, relative)
-    destination <- file.path(project_dir, relative)
-    restored <- tryCatch({
-      .atomic_copy(source, destination)
-      TRUE
-    }, error = function(e) FALSE)
-    if (!restored) failures <- c(failures, relative)
-  }
-  if (length(failures) > 0L) {
-    warning(.bb_trf(
-      "Could not restore generated files after a failed update: %s",
-      paste(failures, collapse = ", ")
-    ), call. = FALSE)
-  }
-  invisible(length(failures) == 0L)
-}
-
-.discard_update_backup <- function(backup) {
-  if (is.null(backup)) return(invisible(NULL))
-  unlink(backup$path, recursive = TRUE, force = TRUE)
-  invisible(NULL)
-}
-
 .stale_unlink <- function(path) {
   unlink(path, recursive = FALSE, force = TRUE)
 }
@@ -430,6 +283,7 @@
         path = project_dir, files = relative
       )
     }
+    .record_update_delete(path)
     if (.stale_unlink(path) != 0L) {
       stop(.bb_trf("Could not remove completely: %s", path), call. = FALSE)
     }
@@ -508,6 +362,41 @@
   tolerate
 }
 
+.validate_reexport_options <- function(reexport, prefer, exclude) {
+  if (!is.character(exclude) || anyNA(exclude) || any(!nzchar(exclude))) {
+    .bigbang_abort(
+      "bigbang_error_reexport_exclude",
+      .bb_tr("'reexport_exclude' must be a character vector of non-empty symbols")
+    )
+  }
+  if (!is.character(prefer) || anyNA(prefer) || any(!nzchar(prefer))) {
+    .bigbang_abort(
+      "bigbang_error_reexport_prefer",
+      .bb_tr("'reexport_prefer' must be a named character vector with one component per symbol")
+    )
+  }
+  if (length(prefer) > 0L) {
+    prefer_names <- names(prefer)
+    if (is.null(prefer_names) || length(prefer_names) != length(prefer) ||
+          anyNA(prefer_names) || any(!nzchar(prefer_names)) ||
+          anyDuplicated(prefer_names)) {
+      .bigbang_abort(
+        "bigbang_error_reexport_prefer",
+        .bb_tr("'reexport_prefer' must have non-empty, unique names")
+      )
+    }
+  }
+  if (!isTRUE(reexport) && (length(prefer) > 0L || length(exclude) > 0L)) {
+    .bigbang_abort(
+      "bigbang_error_reexport_options",
+      .bb_tr(
+        "'reexport_prefer' and 'reexport_exclude' require reexport = TRUE"
+      )
+    )
+  }
+  invisible(list(prefer = prefer, exclude = exclude))
+}
+
 # Keep rollback's filesystem operation behind a package binding so its
 # defensive failure path can be tested without replacing base::unlink globally.
 .rollback_unlink <- function(path) {
@@ -536,6 +425,31 @@
     }
     if (length(setdiff(loadedNamespaces(), namespaces_before)) >= count_before) {
       break
+    }
+  }
+
+  remaining <- setdiff(loadedNamespaces(), namespaces_before)
+  if (length(remaining) > 0L) {
+    importers <- unique(unlist(lapply(remaining, function(namespace) {
+      packages <- setdiff(loadedNamespaces(), namespaces_before)
+      packages[vapply(packages, function(package) {
+        imports <- tryCatch(
+          getNamespaceInfo(asNamespace(package), "imports"),
+          error = function(e) list()
+        )
+        namespace %in% names(imports)
+      }, logical(1L))]
+    }), use.names = FALSE))
+    if (length(importers) > 0L) {
+      .bigbang_abort(
+        "bigbang_error_unload_namespace",
+        .bb_trf(
+          "Could not unload component namespace: %s. Restart R before retrying; another package imports it.",
+          paste0(remaining, " (imported by ", paste(importers, collapse = ", "), ")",
+                 collapse = "; ")
+        ),
+        namespaces = remaining, importers = importers
+      )
     }
   }
 
@@ -578,12 +492,16 @@
 #'   components as usual. With `TRUE`, explicit exports read from each
 #'   component's NAMESPACE are exposed through read-only active bindings.
 #'   Components are never added to `Imports` or `Depends`, so the generated
-#'   package still installs offline without them. Before installation, reading
-#'   a binding returns a placeholder function whose clear missing-component
-#'   error appears only when that function is called. For non-function exports,
-#'   access therefore returns the placeholder instead of the object until the
-#'   component is installed. The same binding then works without reloading the
-#'   metapackage. Only explicit `export()` directives become bindings. S4
+#'   package still installs offline without them. Evaluating a binding never
+#'   throws: if a component is absent, cannot be loaded, or is an older
+#'   installation that no longer exports the symbol, it returns a callable
+#'   placeholder. Calling it reports the component, installed version, missing
+#'   export, and the `<name>_install()` call that repairs the installation.
+#'   Namespace inspection is safe for the same reason. For non-function
+#'   exports, access therefore returns the placeholder instead of the object
+#'   until the component is installed. The same binding then works without
+#'   reloading the metapackage. Only explicit `export()` directives become
+#'   bindings. S4
 #'   classes and methods remain available by loading their component package.
 #'   Non-syntactic explicit export names are quoted in the generated NAMESPACE.
 #'   An object restored with `readRDS()` does not load a
@@ -637,7 +555,8 @@
 #'   returned `tolerated` table.
 #' @param dry_run Logical. If TRUE, resolves and validates components and
 #'   returns the planned generation without creating dest_dir or writing a
-#'   project.
+#'   project. For an update, sibling journal reconciliation is also planned
+#'   and reported with its paths and actions without changing those folders.
 #' @param on_component_error Character policy for component-level failures:
 #'   "abort" (default) stops generation, while "skip" omits the failed
 #'   component and transitively omits components that depend on it. When a
@@ -650,31 +569,51 @@
 #'   update rather than risking the only surviving copy.
 #' @param update Logical. If TRUE, update a previously generated project only
 #'   when its bigbang manifest is present and all generated files are unchanged.
-#'   Files outside that manifest are never touched. Updates are refused when the
+#'   A planned file absent from both the manifest and the project is a new
+#'   generated file and is added. A planned file already present outside the
+#'   manifest is treated as user content and makes the update fail without
+#'   touching it. Files outside that manifest are never touched. Updates are refused when the
 #'   generated project root, a manifest file, or any path component inside the
 #'   project is a symbolic link, so writes cannot escape the project tree.
 #'   Generated files
 #'   no longer in the plan are reported in `removed_files`. Removing a component
 #'   also removes its shipped archive, which may be the last available copy.
-#'   The same field includes partial documentation outputs created and cleaned
-#'   up after a failed documentation run. A dry run cannot predict those
-#'   failure-dependent cleanups and reports only planned removals.
 #'   Before changing the project, an update backs up every generated file and
 #'   its manifest. A failed update restores that state so the same update can be
-#'   retried. Documentation files requested by `document = TRUE` can always be
-#'   regenerated: they can be restored after documentation was disabled, and an
-#'   update that cannot regenerate them retains the previously tracked Rd files.
-#'   See `document` for the reserved generated-documentation filenames.
+#'   retried. Updates take an exclusive project lock across preparation,
+#'   reconciliation, generation, rollback, and journal publication. A second
+#'   session preserves a live preparation and reports `recover = TRUE` as the
+#'   next action until the owner is proven to have finished. Documentation files
+#'   requested by `document = TRUE` follow the same rule: absent planned files
+#'   are added, while existing untracked files are refused. See `document` for
+#'   the reserved generated-documentation filenames.
 #' @param install_upgrade Character default upgrade policy emitted in the
 #'   generated installer function: "newer", "always", or "never".
 #'   This controls whether a generated installer keeps newer installed
 #'   versions, reinstalls every component, or skips archive inspection.
+#' @param reexport_prefer Named character vector mapping symbols to the one
+#'   component that should provide them when `reexport = TRUE`, for example
+#'   `c(filter = "componentb")`. Names and values must be non-empty and each
+#'   named component must be included and export the mapped symbol.
+#' @param reexport_exclude Character vector of symbols that must not be
+#'   re-exported. Symbols are validated against the explicit exports of the
+#'   included components and cannot also appear in `reexport_prefer`.
+#' @param recover Logical. With `update = TRUE`, request recovery after the
+#'   durable journal owner has been confirmed finished, or when a file has user
+#'   content that is neither the original nor an intended update value. Unknown
+#'   content is copied byte for byte to a new preserved directory beside the
+#'   project before recovery; that directory is reported and is never removed
+#'   automatically. A proven-live owner still blocks mutation; an uncertain
+#'   owner can be reclaimed only with `recover = TRUE`. Defaults to `FALSE`.
 #' @param debug Logical. If `TRUE`, emits detailed debugging messages. Defaults
 #'   to `FALSE`.
 #'
 #' @return Invisibly, a `bigbang_result` containing the generated path,
 #'   component archives, dependency classification, applied tolerations,
-#'   files removed by the call, and documentation status.
+#'   files removed by the call, documentation status, the `reexports` table,
+#'   `reexport_excluded` symbols, and whether an interrupted update was
+#'   recovered. Recovery details include any directory used to preserve unknown
+#'   user content and the sibling-journal reconciliation plan.
 #'
 #' @details
 #' The function performs the following steps:
@@ -736,11 +675,179 @@
 #' With `reexport = TRUE`, explicit component exports are instead exposed through
 #' read-only active bindings in the meta-package namespace. This does not add
 #' components to `Imports` or `Depends`: loading remains possible without them,
-#' and a binding resolves the component on every access. Only explicit
-#' `export()` directives are rebound; S4 classes and methods are used through
+#' and a binding resolves the component on every access. Evaluating a binding
+#' never throws: if a component is absent, cannot be loaded, or is an older
+#' installation that no longer exports the symbol, it returns a callable
+#' placeholder. Calling it reports the component, installed version, missing
+#' export, and the `<name>_install()` call that repairs the installation. This
+#' also keeps namespace inspection safe. Only explicit `export()` directives
+#' are rebound; S4 classes and methods are used through
 #' the loaded component namespace. An object restored with `readRDS()` cannot
 #' load a component by itself, so base R cannot dispatch that component's S3
 #' method until the component has been loaded.
+#'
+#' @section Re-export collisions:
+#' When more than one component exports a symbol, `reexport_prefer` chooses its
+#' provider explicitly and `reexport_exclude` removes it from the generated
+#' namespace. Every collision requires one of those options because static
+#' source analysis cannot prove that two exported objects are the same at
+#' runtime. The analysis remains as a diagnostic with
+#' `probable_same_object`, `distinct_definitions`, or `undetermined`, including
+#' ordered file, line, import, and parse reasons. For a preferred
+#' `probable_same_object`, `<name>_install()` verifies the installed owners in
+#' a clean R subprocess whose destination library is first in `.libPaths()`.
+#' If that subprocess cannot run, the result is explicitly unverified and never
+#' reports a false identity. A namespace already loaded from another library is
+#' reported before the clean verification starts. Missing owners remain
+#' unverified and the verification is retained in the returned result. The
+#' diagnostic is a help, not the guarantee: the guarantee is the explicit
+#' `reexport_prefer` or `reexport_exclude` decision plus that verification.
+#' Calling `library(<meta>)` alone does not verify installed owners. The scanner
+#' is deliberately conservative and can count a never-forced `delayedAssign`,
+#' an `if (FALSE)` branch, or a `reg.finalizer()` body; this overcount does not
+#' weaken the explicit decision and installation-verification guarantee.
+#' `<name>_conflicts()` repeats that check on request. Its masking-conflict
+#' names remain ordinary symbols; use
+#' `<name>_reexport_verification(conflicts)` to access the verification
+#' attribute without a name collision. If `on_component_error = "skip"` omits a component required by a preferred
+#' binding or an import source, generation errors with an actionable skipped
+#' condition instead of creating a binding to a component that will not travel
+#' with the metapackage.
+#' With `reexport = TRUE`, `<name>_conflicts()` retains the masking-conflict
+#' list from earlier releases and stores its installed-owner table as an
+#' attribute. The accessor keeps the same `<name>_reexport_verification` class
+#' when it has zero rows.
+#'
+#' @section Interrupted updates:
+#' Before an in-place update mutates the project, bigbang assembles a durable
+#' journal beside it in a private `.<name>.bigbang-update.armando-*` folder.
+#' The marker is written before the backup, and the complete folder is renamed
+#' to `.<name>.bigbang-update` only after every hash has been verified.
+#' Every later file write or removal records its intention first. Generated
+#' files, shipped component archives, catalogs, `.Rbuildignore`, and the final
+#' manifest are replaced atomically. On Windows the guarantee is that a file is
+#' old, new, or temporarily absent with a journal backup. Roxygen runs in a staging copy and only its
+#' known outputs are promoted atomically to the project.
+#'
+#' Updates also publish `.<name>.bigbang-update.lock` atomically from a sibling
+#' temporary folder that already contains a complete `owner.rds`. A published
+#' lock therefore always has an owner. Reclaiming an orphan first atomically
+#' renames it to a unique discarded name; only the process that wins that
+#' rename may publish a replacement, and it rechecks the owner before doing so.
+#' Lock disposition is owner-first. For the published lock, a proven live owner
+#' blocks every caller; an uncertain owner blocks without `recover = TRUE` and
+#' is reclaimable only with `recover = TRUE`; a proven dead owner is reclaimable.
+#' For a discarded lock, a proven live `owner.rds` is restored when the lock
+#' name is free or blocks on its PID when it is occupied. It is never deleted.
+#' An uncertain discarded owner follows the uncertain-lock rule. Only after the
+#' discarded owner is proven dead does the claimant decide the outcome: a live
+#' claimant blocks, an uncertain claimant needs `recover = TRUE`, and a dead
+#' claimant may be discarded. `owner.rds` and `claim.rds` are removed only when
+#' their bytes still have the digest observed for that decision; mismatches are
+#' preserved by setting the entry aside. No claim is written before the owner
+#' has been re-read immediately before publication. The update also revalidates
+#' its published owner before creating the journal, recording each intent, and
+#' completing an irreversible step. If the owner changed, it aborts before the
+#' next mutation. A discarded entry can therefore contain a claimant record,
+#' but that record is never allowed to override a live owner.
+#' For a `.lock.armando-*` entry, a live owner stays in place and blocks;
+#' an uncertain owner stays in place without `recover = TRUE` and is set aside
+#' with `recover = TRUE`; a dead or missing owner is set aside. A symbolic link
+#' at the published lock name is reported as a link without an update-running
+#' claim; with `recover = TRUE` the link itself is renamed aside and its target
+#' is not followed.
+#' A regular file or other user entry at the lock name is atomically set aside
+#' as `.<name>.bigbang-apartado-*`. Lock preparations left by an interruption
+#' are recognized on the next call and set aside without deleting their bytes.
+#' These names are reserved bigbang siblings: `.<name>.bigbang-update`,
+#' `.<name>.bigbang-update.armando-*`, `.<name>.bigbang-update.lock`,
+#' `.<name>.bigbang-update.lock.armando-*`,
+#' `.<name>.bigbang-update.lock.descartado-*`,
+#' `.<name>.bigbang-update.descartado-*`, and `.<name>.bigbang-apartado-*`.
+#'
+#' If a process dies while preparing the journal, an empty unmarked
+#' `armando-*` folder is removed; any non-empty unmarked folder is atomically
+#' set aside as `.<name>.bigbang-apartado-*` without copying or deleting bytes.
+#' The initial marker records the owner PID, host, process start token,
+#' and start time before the first backup copy. On Linux, liveness reads
+#' `/proc/<pid>` and treats a missing process as dead, `Z` or `X` in
+#' `/proc/<pid>/stat` as dead, and any other readable state as existing; the
+#' process-start token still decides identity. Without `/proc`, `kill(pid, 0)`
+#' proves existence only when it succeeds; if that probe is unavailable,
+#' `LC_ALL=C ps -p <pid>` establishes whether the PID is present or absent, and
+#' `ps -o lstart= -p <pid>` supplies the portable start token. The token source
+#' is stored (`proc` or `ps`) and mismatched sources never compare equal. A
+#' failure is dead only when `ps -p` also proves that the PID is absent;
+#' permission errors, an unavailable `ps`, and an unreadable token are uncertain.
+#' The exact policy is:
+#' dead means the process does not exist or is `Z`/`X`; alive means it exists,
+#' is not terminal, and its start token matches; live-token-conflict means it
+#' exists but the token differs; uncertain means existence or identity cannot be
+#' proved. `recover = TRUE` may claim or set aside uncertain entries, but never
+#' overrides a proven live owner. A process of another user is therefore never
+#' inferred dead from `EPERM`. Journal disposal first writes an atomic tombstone with
+#' the exact relative-path and MD5 inventory of the entries bigbang wrote, then
+#' renames the folder to `.<name>.bigbang-update.descartado-*`; cleanup can
+#' therefore resume after another interruption. Cleanup checks every file
+#' recursively and removes it only when its relative path and MD5 match the
+#' inventory; it removes an inventory directory only after it is empty. Before
+#' destructive cleanup the journal is renamed to an unpredictable private
+#' sibling after verifying it is not a link, and each deletion revalidates its
+#' ancestors and MD5 immediately before `unlink()`. Any
+#' file, directory, or symbolic link that cannot be proved to be in the
+#' inventory causes the whole discarded folder to be set aside atomically and
+#' reported, so the update continues without deleting user bytes. The tombstone
+#' has a digest recorded beside it before the rename; a missing or changed
+#' digest is set aside rather than trusted. A discarded folder without a valid
+#' tombstone is set aside when non-empty; an empty one is removed as an
+#' interrupted cleanup shell. A matching name and manifest are required before
+#' a discarded folder is cleaned. A stale generation or another project is
+#' therefore set aside beside the current project and never blocks a later
+#' update. A file with the same path and MD5 as the inventory is an unavoidable
+#' limit: its bytes are identical, so deleting it loses no content, but the
+#' journal cannot prove who created it. The tombstone and its digest are local
+#' journal state, not a cryptographic signature; treat the journal as bigbang's
+#' private territory. A process of the same user with write permission can forge
+#' `owner.rds`, `marker.rds`, or `state.rds`; that is outside this integrity
+#' model. R has no `unlinkat()`/`O_NOFOLLOW`, so a same-user process that actively
+#' replaces journal directories during discard remains an integrity boundary;
+#' the remaining race is the interval between the last revalidation and
+#' `unlink()`. As a cheap consistency check, an armed journal is recoverable only when
+#' the owner fields in `state.rds` match those in `marker.rds`; otherwise the
+#' journal is set aside and is never used for rollback.
+#'
+#' The journal is designed to survive process interruptions such as SIGKILL, an
+#' R error, or Ctrl-C. It does not promise fsync durability against an OS or
+#' power shutdown. The next
+#' `create_metapackage(update = TRUE)` call examines it before validating the
+#' generation manifest. The marker identifies the metapackage and old-manifest
+#' hash rather than an absolute path, so moving the project together with its
+#' journal remains recoverable. Renaming a project is not supported: generated
+#' file names contain the metapackage name. Rename the project and its journal
+#' back to `<name>` before updating. A byte-for-byte copy placed at the same
+#' path and name as the moved original is indistinguishable from that original;
+#' the journal consequently treats it as the project. If the original project
+#' still exists beside a copied journal, the journal is not adopted or changed.
+#' A partial tombstone temporary is set aside after the owner is confirmed dead,
+#' and recovery continues. An already completed update is recognized by its new
+#' manifest;
+#' otherwise a dead owner's changes are rolled back and the requested update
+#' continues. On POSIX systems liveness uses the PID and, where Linux `/proc`
+#' exposes it, the process start time. Windows is never probed with
+#' the process-termination helper because that operation terminates a process. A dry run
+#' evaluates and reports the lock as free, live, orphaned, or uncertain without
+#' acquiring, reclaiming, renaming, or deleting any lock entry.
+#'
+#' Automatic recovery proceeds only when every affected path contains its
+#' original bytes, intended bytes, or an expected absence. Other content raises
+#' `bigbang_error_interrupted_update`; `recover = TRUE` preserves it outside the
+#' project before rollback. Recovery is idempotent, so another interruption can
+#' be recovered by a later call. `dry_run = TRUE` reports the pending action and
+#' leaves the project and every sibling journal folder untouched. A handled
+#' error uses this same journal for immediate rollback and retains it if
+#' verification cannot finish. Documentation generation failures in the staging
+#' copy are warnings; a failure while promoting any documentation output aborts
+#' the update and rolls the complete project back through the journal.
 #'
 #' @section Requirements:
 #' - Each component must be an existing archive path or a stem resolvable in
@@ -799,7 +906,10 @@ create_metapackage <- function(
   dry_run = FALSE,
   on_component_error = c("abort", "skip"),
   update = FALSE,
-  install_upgrade = c("newer", "always", "never")
+  install_upgrade = c("newer", "always", "never"),
+  reexport_prefer = character(),
+  reexport_exclude = character(),
+  recover = FALSE
 ) {
   verbose <- isTRUE(verbose)
   debug <- isTRUE(debug)
@@ -808,6 +918,7 @@ create_metapackage <- function(
   if (!is.logical(reexport) || length(reexport) != 1L || is.na(reexport)) {
     stop(.bb_tr("'reexport' must be TRUE or FALSE"), call. = FALSE)
   }
+  .validate_reexport_options(reexport, reexport_prefer, reexport_exclude)
 
   # Validate public arguments before touching the filesystem.
   if (missing(dest_dir) || is.null(dest_dir) ||
@@ -838,6 +949,12 @@ create_metapackage <- function(
   }
   if (!is.logical(update) || length(update) != 1L || is.na(update)) {
     stop(.bb_tr("'update' must be TRUE or FALSE"), call. = FALSE)
+  }
+  if (!is.logical(recover) || length(recover) != 1L || is.na(recover)) {
+    stop(.bb_tr("'recover' must be TRUE or FALSE"), call. = FALSE)
+  }
+  if (isTRUE(recover) && !isTRUE(update)) {
+    stop(.bb_tr("'recover' requires update = TRUE"), call. = FALSE)
   }
 
   # Resolve caller-supplied paths before any generated files are written. A
@@ -871,6 +988,46 @@ create_metapackage <- function(
     ), name), call. = FALSE)
   }
 
+  project_path <- file.path(dest_dir, name)
+  if (isTRUE(update)) .validate_project_root_path(project_path)
+  project_dir <- normalizePath(project_path, winslash = "/", mustWork = FALSE)
+  update_lock <- NULL
+  if (isTRUE(update) && dir.exists(project_dir)) {
+    update_lock <- .acquire_update_lock(
+      project_dir, recover = recover, dry_run = dry_run
+    )
+    if (!isTRUE(dry_run)) {
+      on.exit(.release_update_lock(update_lock), add = TRUE)
+    }
+  }
+  recovery <- list(pending = FALSE, recovered = FALSE, preserved = NULL,
+                   restored_absent = character(), lock = update_lock)
+  if (isTRUE(update)) {
+    sibling_reconciliation <- .reconcile_update_siblings(
+      project_dir, name, dry_run = dry_run, recover = recover
+    )
+    recovery <- .recover_pending_update(
+      project_dir, name, recover = recover, dry_run = dry_run
+    )
+    recovery$reconciliation <- sibling_reconciliation
+    if (isTRUE(dry_run) && isTRUE(recovery$pending)) {
+      message(.bb_trf("Dry run: pending update journal action is %s at %s.",
+                      recovery$action, .update_journal_path(project_dir)))
+      return(invisible(structure(list(
+        path = project_dir, name = name, packages = character(),
+        archives = character(), components = list(), reexports = data.frame(),
+        reexport_excluded = character(), order = character(),
+        files = character(), added_files = character(),
+        removed_files = character(), findings = list(),
+        local_dependencies = character(), cran_dependencies = character(),
+        implicit_dependencies = character(), tolerated = character(),
+        omitted = data.frame(), workflow = workflow, documented = FALSE,
+        dry_run = TRUE, updated = FALSE, recovered = FALSE,
+        recovery = recovery
+      ), class = "bigbang_result")))
+    }
+  }
+
   resolved_components <- .resolve_components(
     packages, pkg_dir, ext, on_component_error = on_component_error,
     reexport = isTRUE(reexport)
@@ -878,13 +1035,16 @@ create_metapackage <- function(
   validated <- .validate_generation(
     resolved_components, tolerate = tolerate,
     on_component_error = on_component_error,
-    reexport = isTRUE(reexport), metapackage_name = name
+    reexport = isTRUE(reexport), metapackage_name = name,
+    reexport_prefer = reexport_prefer,
+    reexport_exclude = reexport_exclude
   )
   resolved_components <- validated$resolved
   validation <- validated$validation
   omitted <- validated$omitted
   components <- validation$components
   tolerated <- validation$tolerated
+  reexport_plan <- validated$reexport
   component_packages <- vapply(components, `[[`, character(1L), "package")
   archive_stems <- vapply(components, `[[`, character(1L), "stem")
   archive_paths <- vapply(components, `[[`, character(1L), "path")
@@ -968,19 +1128,16 @@ create_metapackage <- function(
     }
   }
 
-  project_path <- file.path(dest_dir, name)
-  if (isTRUE(update)) .validate_project_root_path(project_path)
-  project_dir <- normalizePath(
-    project_path, winslash = "/", mustWork = FALSE
-  )
   update_manifest <- NULL
+  added_files <- character()
   stale_files <- character()
   preserved_files <- character()
   requested_files <- setdiff(
     .planned_generation_files(
       name, resolved_components$components, workflow,
       include_archives, license = license, document = document,
-      reexport = isTRUE(reexport)
+      reexport = isTRUE(reexport),
+      reexport_symbols = reexport_plan$table$symbol
     ),
     .generation_manifest_name
   )
@@ -997,29 +1154,28 @@ create_metapackage <- function(
     update_manifest <- .validate_update_manifest(
       project_dir, requested_files
     )
-    regenerable <- if (isTRUE(document)) {
-      .planned_documentation_files(name)
-    } else {
-      character()
-    }
-    if (isTRUE(reexport)) {
-      reexport_files <- c(
-        file.path("R", "reexports.R"),
-        if (isTRUE(document)) file.path("man", "reexports.Rd") else character()
-      )
-      reexport_files <- reexport_files[!file.exists(file.path(
-        project_dir, reexport_files
-      ))]
-      regenerable <- c(regenerable, reexport_files)
-    }
-    untracked <- setdiff(
-      requested_files, union(update_manifest$files, regenerable)
+    outside_manifest <- setdiff(requested_files, update_manifest$files)
+    .validate_project_write_paths(project_dir, outside_manifest)
+    outside_paths <- file.path(project_dir, outside_manifest)
+    already_present <- vapply(
+      outside_paths,
+      function(path) {
+        file.exists(path) || dir.exists(path) || .path_is_symlink(path)
+      },
+      logical(1L)
     )
+    untracked <- outside_manifest[already_present]
+    added_files <- outside_manifest[!already_present]
     if (length(untracked) > 0L) {
       .bigbang_abort(
-        "bigbang_error_modified_generated_file",
+        c("bigbang_error_untracked_generated_file",
+          "bigbang_error_modified_generated_file"),
         .bb_trf(
-          "Cannot update %s because requested generated files are not in its manifest: %s.",
+          paste0(
+            "Cannot update %s because planned generated files already exist ",
+            "outside its manifest and may belong to the user: %s. Refusing ",
+            "to overwrite them."
+          ),
           project_dir, paste(untracked, collapse = ", ")
         ),
         path = project_dir, files = untracked
@@ -1041,11 +1197,15 @@ create_metapackage <- function(
       packages = component_packages,
       archives = archive_stems,
       components = components,
+      reexports = reexport_plan$table,
+      reexport_excluded = reexport_plan$excluded,
       order = .component_topological_order(components),
       files = .planned_generation_files(
         name, components, workflow, include_archives,
-        license = license, document = document, reexport = isTRUE(reexport)
+        license = license, document = document, reexport = isTRUE(reexport),
+        reexport_symbols = reexport_plan$table$symbol
       ),
+      added_files = added_files,
       removed_files = stale_files,
       findings = generation_findings,
       local_dependencies = local_deps,
@@ -1056,14 +1216,16 @@ create_metapackage <- function(
       workflow = workflow,
       documented = FALSE,
       dry_run = TRUE,
-      updated = FALSE
+      updated = FALSE,
+      recovered = isTRUE(recovery$recovered),
+      recovery = recovery
     ), class = "bigbang_result")
     return(invisible(result))
   }
 
   # Debug logger.
   log_debug <- function(debug_message) {
-    if (debug) message(paste0("DEBUG: ", debug_message))
+    if (debug) message(.bb_trf("DEBUG: %s", debug_message))
   }
 
   log_debug("Starting create_metapackage()")
@@ -1072,18 +1234,33 @@ create_metapackage <- function(
   project_created <- FALSE
   destination_created <- !dir.exists(dest_dir)
   generation_complete <- FALSE
-  update_backup <- if (isTRUE(update)) {
-    .create_update_backup(project_dir, update_manifest)
+  if (isTRUE(update)) {
+    .assert_update_lock_owner(update_lock, project_dir, "update")
+  }
+  update_journal <- if (isTRUE(update)) {
+    .create_update_journal(
+      project_dir, name, update_manifest,
+      extra_files = setdiff(requested_files, update_manifest$files),
+      lock = update_lock
+    )
   } else {
     NULL
   }
+  if (!is.null(update_journal)) {
+    .activate_update_journal(
+      update_journal, project_dir, name, lock = update_lock
+    )
+  }
   documentation_search <- NULL
   documentation_namespaces <- NULL
-  documentation_snapshot <- NULL
   documentation_files <- if (isTRUE(document)) {
     c(
-      .planned_documentation_files(name),
-      if (isTRUE(reexport)) file.path("man", "reexports.Rd") else character()
+      .planned_documentation_files(name, reexport = reexport),
+      if (isTRUE(reexport) && nrow(reexport_plan$table) > 0L) {
+        file.path("man", "reexports.Rd")
+      } else {
+        character()
+      }
     )
   } else {
     character()
@@ -1094,6 +1271,7 @@ create_metapackage <- function(
         documentation_search, documentation_namespaces, name
       )
     }
+    .deactivate_update_journal()
 
     # Roll back only a project directory created by this exact invocation.
     # Pre-existing directories, including empty ones, are never removed.
@@ -1129,32 +1307,35 @@ create_metapackage <- function(
       # unlink() to remove an empty directory on all supported platforms.
       .rollback_unlink(dest_dir)
     }
-    documentation_restored <- TRUE
-    if (!generation_complete && !is.null(documentation_snapshot)) {
-      documentation_restored <- tryCatch({
-        .restore_untracked_docs(project_dir, documentation_snapshot)
+    if (!generation_complete && !is.null(update_journal) &&
+          (is.null(update_lock) || .update_lock_is_owner(update_lock))) {
+      restored <- tryCatch({
+        .recover_pending_update(
+          project_dir, name, recover = TRUE, handled = TRUE
+        )
         TRUE
       }, error = function(e) FALSE)
+      if (!restored) {
+        warning(.bb_trf(
+          paste0(
+            "The update journal was retained for recovery at: %s. It contains",
+            " a backup at %s. Next step: confirm that no other update is running",
+            " and call update = TRUE, recover = TRUE."
+          ),
+          update_journal$path, file.path(update_journal$path, "backup")
+        ), call. = FALSE)
+      }
     }
-    backup_restored <- TRUE
-    if (!generation_complete && !is.null(update_backup)) {
-      backup_restored <- .restore_update_backup(project_dir, update_backup)
-    }
-    recovery_complete <- backup_restored && documentation_restored
-    if (generation_complete || recovery_complete) {
-      .discard_update_backup(update_backup)
-    } else if (!is.null(update_backup)) {
-      warning(.bb_trf(
-        "The update backup was retained for manual recovery at: %s",
-        update_backup$path
-      ), call. = FALSE)
-    }
-  }, add = TRUE)
+  }, add = TRUE, after = FALSE)
 
   # Reconcile before documentation so stale generated R code cannot be loaded
   # by roxygen. The update backup and rollback above are already active, so a
   # failure here or later restores every pre-existing generated file.
   if (length(stale_files) > 0L) {
+    if (isTRUE(update)) {
+      .assert_update_lock_owner(update_lock, project_dir,
+                                "generated-file reconciliation")
+    }
     if (verbose) {
       message(.bb_trf(
         "Removing generated files no longer in the plan: %s",
@@ -1278,7 +1459,8 @@ create_metapackage <- function(
 
   # Create the basic vignette after DESCRIPTION exists.
   write_basic_vignette(name, component_packages, project_dir,
-                       include_archives = include_archives, verbose = debug)
+                       include_archives = include_archives,
+                       reexport = isTRUE(reexport), verbose = debug)
   if (!is.null(workflow)) {
     write_workflow_vignette(name, workflow, project_dir)
   }
@@ -1297,10 +1479,9 @@ create_metapackage <- function(
     implicit_deps = hard_implicit_deps,
     import_deps = import_deps,
     verbose = debug,
+    reexport = isTRUE(reexport),
     reexport_symbols = if (isTRUE(reexport)) {
-      unique(unlist(lapply(components, function(component) {
-        .or_null(component$exports, character())
-      }), use.names = FALSE))
+      reexport_plan$table$symbol
     } else {
       character()
     }
@@ -1315,6 +1496,7 @@ create_metapackage <- function(
   )
 
   install_packages_content <- .drop_regular_comment_lines(install_packages_content)
+  install_packages_content <- .qualify_generated_runtime_calls(install_packages_content)
   .write_utf8(install_packages_content, file.path(project_dir, "R", "install_packages.R"))
   log_debug("install_packages.R created")
 
@@ -1465,30 +1647,11 @@ StripTrailingWhitespace: Yes"
     install_upgrade = install_upgrade,
     reexport = isTRUE(reexport),
     reexport_specs = if (isTRUE(reexport)) {
-      specs <- lapply(components, function(component) {
-        exports <- unique(.or_null(component$exports, character()))
-        lapply(exports, function(symbol) {
-          list(package = component$package, symbol = symbol)
-        })
-      })
-      unname(unlist(specs, recursive = FALSE))
+      unname(reexport_plan$specs)
     } else {
       list()
     }
   )
-  if (isTRUE(document)) {
-    documentation_snapshot <- .snapshot_untracked_docs(
-      project_dir, documentation_files, update_manifest, update_backup
-    )
-  }
-  if (isTRUE(reexport) && isTRUE(document)) {
-    .write_reexport_documentation(
-      project_dir,
-      unique(unlist(lapply(components, function(component) {
-        .or_null(component$exports, character())
-      }), use.names = FALSE))
-    )
-  }
   log_debug("Additional metapackage files created")
 
 
@@ -1514,46 +1677,65 @@ StripTrailingWhitespace: Yes"
       message(.bb_trf("Generating documentation for %s...", name))
     }
 
-    # Run roxygen without loading unclassified legacy source.
-    tryCatch({
+    # Run roxygen in a staging copy. Only known outputs are promoted through
+    # the atomic writer, after their intentions have been recorded.
+    documentation_generated <- tryCatch({
+      staging_parent <- tempfile("bigbang-document-staging-")
+      dir.create(staging_parent)
+      on.exit(unlink(staging_parent, recursive = TRUE, force = TRUE), add = TRUE)
+      if (!file.copy(project_dir, staging_parent, recursive = TRUE)) {
+        stop(.bb_trf("Could not create temporary directory for %s", project_dir),
+             call. = FALSE)
+      }
+      staging_project <- file.path(staging_parent, basename(project_dir))
+      if (isTRUE(reexport)) {
+        .write_reexport_documentation(staging_project, reexport_plan$table)
+      }
       if (verbose) {
-        devtools::document(pkg = project_dir, quiet = TRUE)
+        devtools::document(pkg = staging_project, quiet = TRUE)
       } else {
         suppressPackageStartupMessages(
-          devtools::document(pkg = project_dir, quiet = TRUE)
+          devtools::document(pkg = staging_project, quiet = TRUE)
         )
+      }
+      staged_outputs <- unique(c(documentation_files, "NAMESPACE", "DESCRIPTION"))
+      staged_outputs <- staged_outputs[file.exists(file.path(
+        staging_project, staged_outputs
+      )) & !dir.exists(file.path(staging_project, staged_outputs))]
+      TRUE
+    }, error = function(e) {
+      warning(.bb_trf("Error generating documentation: %s", e$message),
+              call. = FALSE)
+      FALSE
+    })
+    if (isTRUE(documentation_generated)) {
+      for (relative in staged_outputs) {
+        .atomic_copy(file.path(staging_project, relative),
+                     file.path(project_dir, relative))
       }
       if (verbose) {
         message(.bb_tr("Documentation generated successfully."))
       }
       doc_ok <- TRUE
-    }, error = function(e) {
-      warning(.bb_trf("Error generating documentation: %s", e$message),
-              call. = FALSE)
-    })
+    }
   } else if (isTRUE(document) && verbose) {
     message(.bb_tr("Install package 'devtools' to generate documentation automatically."))
   }
 
-  retained_documentation <- character()
-  reverted_documentation <- character()
-  if (isTRUE(document) && !doc_ok) {
-    reconciliation <- .reconcile_failed_docs(
-      project_dir, documentation_files,
-      documentation_snapshot, update_manifest, update_backup
-    )
-    retained_documentation <- reconciliation$retained
-    reverted_documentation <- reconciliation$removed
+  retained_documentation <- if (isTRUE(document) && !doc_ok &&
+                                  !is.null(update_manifest)) {
+    intersect(documentation_files, update_manifest$files)
+  } else {
+    character()
   }
+  reverted_documentation <- character()
 
   # Keep the emitted NAMESPACE deterministic when documentation rewrites it.
   .deduplicate_namespace_imports(file.path(project_dir, "NAMESPACE"))
   .ensure_namespace_exports(
     file.path(project_dir, "NAMESPACE"),
     if (isTRUE(reexport)) {
-      unique(unlist(lapply(components, function(component) {
-        .or_null(component$exports, character())
-      }), use.names = FALSE))
+      reexport_plan$table$symbol
     } else {
       character()
     }
@@ -1563,7 +1745,8 @@ StripTrailingWhitespace: Yes"
     setdiff(
       .planned_generation_files(
         name, components, workflow, include_archives,
-        license = license, document = doc_ok, reexport = isTRUE(reexport)
+        license = license, document = doc_ok, reexport = isTRUE(reexport),
+        reexport_symbols = reexport_plan$table$symbol
       ),
       .generation_manifest_name
     ),
@@ -1572,13 +1755,23 @@ StripTrailingWhitespace: Yes"
   manifest <- .manifest_records(project_dir, manifest_files)
   .atomic_save_rds(manifest, file.path(project_dir, .generation_manifest_name))
 
+  if (!is.null(update_journal)) {
+    .assert_update_lock_owner(update_lock, project_dir, "update completion")
+    .deactivate_update_journal()
+    .discard_update_journal(update_journal, project_dir, name)
+    update_journal <- NULL
+  }
+
   result <- structure(
     list(
       path = normalizePath(project_dir, winslash = "/", mustWork = TRUE),
       name = name,
       packages = component_packages,
       archives = archive_stems,
+      reexports = reexport_plan$table,
+      reexport_excluded = reexport_plan$excluded,
       order = .component_topological_order(components),
+      added_files = added_files,
       removed_files = unique(c(stale_files, reverted_documentation)),
       local_dependencies = local_deps,
       cran_dependencies = cran_deps,
@@ -1589,6 +1782,8 @@ StripTrailingWhitespace: Yes"
       documented = doc_ok,
       dry_run = FALSE,
       updated = isTRUE(update),
+      recovered = isTRUE(recovery$recovered),
+      recovery = recovery,
       findings = generation_findings
     ),
     class = "bigbang_result"

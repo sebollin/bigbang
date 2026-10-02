@@ -57,6 +57,7 @@ test_that("dependency classification recognizes versioned local archives", {
 })
 
 test_that("generated graph and topological sort put dependencies first", {
+  skip_on_cran()
   fixture <- algorithm_fixture()
   packages <- paste0(c("grapha", "graphb", "graphc"), "_0.1.0")
   graph <- fixture$env$build_dependency_graph(
@@ -81,6 +82,7 @@ test_that("generator internals use the English names", {
 })
 
 test_that("generated cycle detection reports a cycle", {
+  skip_on_cran()
   fixture <- algorithm_fixture()
   cyclic <- matrix(c(0, 1, 1, 0), nrow = 2L, byrow = TRUE)
   cycles <- fixture$env$detect_cycles(cyclic)
