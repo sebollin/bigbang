@@ -420,8 +420,8 @@ test_that("rollback works when a path component is a symbolic link", {
   archives <- file.path(sandbox, "archives")
   dir.create(real)
   dir.create(archives)
-  linked <- file.symlink(real, link)
-  skip_if_not(isTRUE(linked), "This platform cannot create symbolic links.")
+  linked <- bb_dir_link(real, link)
+  skip_if_not(isTRUE(linked), "This platform cannot create directory links.")
 
   copy_toy_archive(archives)
   destination <- file.path(link, "created-by-the-call")

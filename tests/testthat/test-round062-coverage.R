@@ -272,6 +272,8 @@ test_that("filesystem fallbacks and local archive policies are covered", {
   if (!isTRUE(suppressWarnings(file.symlink(external, destination)))) {
     skip("symbolic links are unavailable")
   }
+  # Remove the file link itself before the recursive cleanup of `root`.
+  withr::defer(suppressWarnings(file.remove(destination)))
   calls <- 0L
   atomic_replace <- .atomic_replace
   atomic_environment <- new.env(parent = asNamespace("bigbang"))

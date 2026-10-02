@@ -218,8 +218,8 @@ test_that("round 064 journal guards cover failed and private transitions", {
   link_root <- file.path(root, "link-root")
   target <- file.path(root, "target")
   dir.create(target)
-  if (!isTRUE(suppressWarnings(file.symlink(target, link_root)))) {
-    skip("symbolic links are unavailable")
+  if (!bb_dir_link(target, link_root)) {
+    skip("directory links are unavailable")
   }
   expect_false(.discard_update_entry(
     file.path(link_root, "file"), root = link_root, relative = "file"
@@ -284,17 +284,16 @@ test_that("journal deletion recognizes portable directory links", {
 })
 
 test_that("recover sets aside an unrecognized armed journal owned by a dead process", {
+  # Only a control character makes an entry name unverifiable here, and
+  # Windows file names cannot contain one: the state cannot occur there.
+  skip_on_os("windows")
   fixture <- round064_fixture("bigbang-round064-armed-")
   try(untrace(".file_digest", where = asNamespace("bigbang")), silent = TRUE)
   journal <- .create_update_journal(
     fixture$project, fixture$name,
     .read_generation_manifest(fixture$project)
   )
-  bad_name <- if (identical(.Platform$OS.type, "windows")) {
-    "bad-name"
-  } else {
-    "bad\nname"
-  }
+  bad_name <- "bad\nname"
   writeLines("newline-name", file.path(journal$path, bad_name),
              useBytes = TRUE)
   dead_owner <- list(
