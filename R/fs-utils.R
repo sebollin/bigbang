@@ -134,9 +134,19 @@
   if (file.rename(source, destination)) return(invisible(TRUE))
 
   # Windows cannot replace an existing file with rename(). Remove only the
-  # destination entry; if it is a link, unlink() removes the link itself.
+  # destination entry. `file.remove()` removes a file reparse point itself on
+  # Windows; using `unlink()` there can try to delete the link target.
   if (.path_is_symlink(destination)) {
-    unlink(destination, recursive = FALSE, force = TRUE)
+    removed <- if (identical(.Platform$OS.type, "windows")) {
+      suppressWarnings(file.remove(destination))
+    } else {
+      unlink(destination, recursive = FALSE, force = TRUE)
+    }
+    if (!isTRUE(removed) && (.path_is_symlink(destination) ||
+                               file.exists(destination) || dir.exists(destination))) {
+      stop(.bb_trf("Could not replace generated file: %s", destination),
+           call. = FALSE)
+    }
   } else if (file.exists(destination) && !file.remove(destination)) {
     stop(.bb_trf("Could not replace generated file: %s", destination),
          call. = FALSE)
@@ -202,7 +212,7 @@
 
 .r_string_literal <- function(value) {
   if (!is.character(value) || length(value) != 1L || is.na(value)) {
-    stop("value must be one non-NA character string", call. = FALSE)
+    stop(.bb_tr("value must be one non-NA character string"), call. = FALSE)
   }
   codepoints <- utf8ToInt(enc2utf8(value))
   escaped <- vapply(codepoints, function(codepoint) {
@@ -220,7 +230,7 @@
 
 .r_symbol_literal <- function(symbol) {
   if (!is.character(symbol) || length(symbol) != 1L || is.na(symbol)) {
-    stop("symbol must be one non-NA character string", call. = FALSE)
+    stop(.bb_tr("symbol must be one non-NA character string"), call. = FALSE)
   }
   codepoints <- utf8ToInt(enc2utf8(symbol))
   ascii <- all(codepoints < 0x80L)

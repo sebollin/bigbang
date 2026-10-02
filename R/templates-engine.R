@@ -160,6 +160,24 @@ resolve_component_archive <- function(package, pkg_dir, ext = NULL) {{
        ext = spec$ext, stem = spec$stem)
 }}
 
+# .archive_warning_state belongs to the generated runtime, not to the
+# roxygen block for read_archive_metadata.
+.archive_warning_state <- base::new.env(parent = base::emptyenv())
+.archive_warning_state$active <- FALSE
+.archive_warning_state$seen <- base::character()
+.warn_archive_filename_mismatch <- function(archive, message) {{
+  key <- base::normalizePath(archive, winslash = "/", mustWork = FALSE)
+  if (!base::isTRUE(.archive_warning_state$active)) {{
+    base::warning(message, call. = FALSE)
+    return(base::invisible(NULL))
+  }}
+  if (!base::`%in%`(key, .archive_warning_state$seen)) {{
+    .archive_warning_state$seen <- base::c(.archive_warning_state$seen, key)
+    base::warning(message, call. = FALSE)
+  }}
+  base::invisible(NULL)
+}}
+
 #\' Read dependencies from a local package archive
 #\'
 #\' Extracts into an owned temporary directory and reads Depends, Imports, and
@@ -280,20 +298,20 @@ read_archive_metadata <- function(package, pkg_dir, ext = NULL) {{
   has_version <- grepl("_", spec$stem, fixed = TRUE)
   expected_version <- if (has_version) sub("^[^_]+_", "", spec$stem) else NA_character_
   if (!identical(declared_package, expected_package)) {{
-    warning(.meta_trf(
+    .warn_archive_filename_mismatch(archive, .meta_trf(
       "Archive %s declares package %s, but its filename suggests %s.",
       archive, declared_package, expected_package
-    ), call. = FALSE)
+    ))
   }}
   if (has_version && !tryCatch(
       isTRUE(base::package_version(declared_version) ==
              base::package_version(expected_version)),
       error = function(e) FALSE
   )) {{
-    warning(.meta_trf(
+    .warn_archive_filename_mismatch(archive, .meta_trf(
       "Archive %s declares version %s, but its filename suggests version %s.",
       archive, declared_version, expected_version
-    ), call. = FALSE)
+    ))
   }}
   dependencies <- character()
   constraints <- list()
@@ -454,7 +472,7 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
   )
   if (keep_installed) {{
     newer <- installed_version > base::package_version(version)
-    message(if (newer) {{
+    if (base::isTRUE(verbose)) message(if (newer) {{
       .meta_trf(
         "Package %s has installed version %s, newer than archive version %s; keeping the installed version.",
         base_name, as.character(installed_version), version
@@ -635,9 +653,9 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
     ))
   }}
 
-  if (identical(base_name, package)) {{
+  if (base::isTRUE(verbose) && identical(base_name, package)) {{
     message(.meta_trf("Installed package %s successfully.", base_name))
-  }} else {{
+  }} else if (base::isTRUE(verbose)) {{
     message(.meta_trf(
       "Installed package %s from %s successfully.", base_name, package
     ))
@@ -862,6 +880,12 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
                                       lib = .libPaths()[[1L]]) {{
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
+  .archive_warning_state$seen <- base::character()
+  .archive_warning_state$active <- TRUE
+  base::on.exit({{
+    .archive_warning_state$active <- FALSE
+    .archive_warning_state$seen <- base::character()
+  }}, add = TRUE)
   if (!is.character(lib) || length(lib) != 1L || is.na(lib) || !nzchar(lib)) {{
     stop(.meta_tr("The installation library must be one non-empty path."),
          call. = FALSE)
@@ -1133,7 +1157,7 @@ write_metapackage_files <- function(
   qualify_runtime_calls <- .qualify_generated_runtime_calls
 
   log_debug <- function(debug_message) {
-    if (verbose) message(paste0("DEBUG: ", debug_message))
+    if (verbose) message(.bb_trf("DEBUG: %s", debug_message))
   }
 
   log_debug("Preparing template data")
@@ -1192,7 +1216,10 @@ write_metapackage_files <- function(
     "  if (length(component_entries) == 0L) {",
     paste0("    return(structure(list(), class = c(\"", name, "_conflicts\", \"list\")))"),
     "  }",
-    "  objects <- lapply(package_entries, function(entry) ls(envir = as.environment(entry), all.names = TRUE))",
+    "  objects <- lapply(package_entries, function(entry) {",
+    "    package <- sub(\"^package:\", \"\", entry)",
+    "    tryCatch(base::getNamespaceExports(package), error = function(e) character())",
+    "  })",
     "  names(objects) <- package_entries",
     "  candidates <- unique(unlist(objects[component_entries], use.names = FALSE))",
     "  conflicts <- lapply(candidates, function(object) package_entries[vapply(objects, function(exports) object %in% exports, logical(1))])",
@@ -1352,7 +1379,7 @@ write_metapackage_files <- function(
       "    clean_rows <- base::lapply(clean_rows, function(row) {",
       "      candidates <- base::strsplit(row$candidates[[1L]], ', ', fixed = TRUE)[[1L]]",
       "      foreign_here <- base::intersect(candidates, foreign)",
-      "      if (base::length(foreign_here) > 0L) row$loaded_from_other_library <- base::paste(base::unique(base::c(row$loaded_from_other_library[[1L]], foreign_here)), collapse = ', ')",
+      "      if (base::length(foreign_here) > 0L) row$loaded_from_other_library <- base::paste(base::Filter(base::nzchar, base::unique(base::c(row$loaded_from_other_library[[1L]], foreign_here))), collapse = ', ')",
       "      same <- row$identical[[1L]]",
       "      equivalent <- base::isTRUE(row$equivalent[[1L]])",
       "      row$equivalent <- NULL",
@@ -1412,7 +1439,10 @@ write_metapackage_files <- function(
       "  conflicts <- if (base::length(component_entries) == 0L) {",
       "    base::list()",
       "  } else {",
-      "    objects <- base::lapply(package_entries, function(entry) base::ls(envir = base::as.environment(entry), all.names = TRUE))",
+      "    objects <- base::lapply(package_entries, function(entry) {",
+      "      package <- base::sub(\"^package:\", \"\", entry)",
+      "      base::tryCatch(base::getNamespaceExports(package), error = function(e) base::character())",
+      "    })",
       "    base::names(objects) <- package_entries",
       "    candidates <- base::unique(base::unlist(objects[component_entries], use.names = FALSE))",
       "    conflicts <- base::lapply(candidates, function(object) package_entries[base::vapply(objects, function(exports) base::`%in%`(object, exports), base::logical(1))])",
@@ -1490,21 +1520,58 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
                                       lib.loc = base::.libPaths()) {
   already_attached <- base::gsub("^package:", "", base::search())
   to_load <- base::setdiff(pkgs, already_attached)
-  missing <- to_load[!base::vapply(to_load, base::requireNamespace, base::logical(1),
-                             quietly = TRUE, lib.loc = lib.loc)]
+  package_available <- function(package, seen = base::character()) {
+    if (base::`%in%`(package, seen)) return(TRUE)
+    if (base::isNamespaceLoaded(package)) return(TRUE)
+    target <- base::find.package(package, lib.loc = lib.loc, quiet = TRUE)
+    if (base::length(target) == 0L) return(FALSE)
+    description <- base::tryCatch(
+      utils::packageDescription(package, lib.loc = lib.loc),
+      error = function(e) NULL
+    )
+    depends <- if (base::is.null(description)) {
+      base::character()
+    } else {
+      value <- description[["Depends"]]
+      if (base::is.null(value) || base::is.na(value)) base::character() else
+        base::trimws(base::strsplit(value, ",", fixed = TRUE)[[1L]])
+    }
+    depends <- base::sub("[[:space:]]*\\\\(.*$", "", depends)
+    depends <- base::setdiff(depends[base::nzchar(depends)], "R")
+    base::all(base::vapply(
+      depends, package_available, base::logical(1),
+      seen = base::c(seen, package)
+    ))
+  }
+  available <- base::vapply(to_load, package_available, base::logical(1))
+  missing <- to_load[!available]
+  attached <- character()
+  to_attach <- base::setdiff(to_load, missing)
+  for (package in to_attach) {
+    loaded <- base::tryCatch({
+      if (base::isNamespaceLoaded(package)) {
+        base::attachNamespace(package)
+      } else {
+        base::suppressPackageStartupMessages(
+          base::library(package, character.only = TRUE, lib.loc = lib.loc)
+        )
+      }
+      TRUE
+    }, error = function(e) FALSE)
+    if (base::isTRUE(loaded)) {
+      attached <- base::c(attached, package)
+    } else {
+      missing <- base::c(missing, package)
+    }
+  }
+  missing <- base::unique(missing)
   if (warn_missing && base::length(missing) > 0) {
-    base::warning(base::gettextf(
+    base::warning(.meta_trf(
       "Not installed: %s. Run {{{ install_call }}} to install them.",
-      base::paste(missing, collapse = ", "), domain = "R-{{ name }}"
+      base::paste(missing, collapse = ", ")
     ), call. = FALSE)
   }
-  to_load <- base::setdiff(to_load, missing)
-  if (base::length(to_load) > 0) {
-    base::suppressPackageStartupMessages(
-      base::lapply(to_load, base::library, character.only = TRUE, lib.loc = lib.loc)
-    )
-  }
-  base::invisible(base::list(attached = to_load, missing = missing))
+  base::invisible(base::list(attached = attached, missing = missing))
 }
 
 #\' Attach installed local packages
@@ -1583,16 +1650,15 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
     only = only, lib = lib
   )
   if (base::length(result$skipped_nonlocal) > 0L) {
-    base::warning(base::gettextf(
+    base::warning(.meta_trf(
       "Some components were skipped because non-local dependencies are missing: %s. Install those dependencies, or call {{{ install_call_repo }}} to obtain them from a repository.",
-      base::paste(base::names(result$skipped_nonlocal), collapse = ", "), domain = "R-{{ name }}"
+      base::paste(base::names(result$skipped_nonlocal), collapse = ", ")
     ), call. = FALSE)
   }
   if (base::length(result$skipped_local) > 0L) {
-    base::warning(base::gettextf(
+    base::warning(.meta_trf(
       "Some components were skipped because local dependencies were skipped: %s.",
-      base::paste(base::names(result$skipped_local), collapse = ", "),
-      domain = "R-{{ name }}"
+      base::paste(base::names(result$skipped_local), collapse = ", ")
     ), call. = FALSE)
   }
   if (base::length(result$failed) > 0) {
@@ -1601,9 +1667,9 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
     )
     condition <- base::structure(
       list(
-        message = base::gettextf(
+        message = .meta_trf(
           "Could not install all components: %s",
-          base::paste(details, collapse = "; "), domain = "R-{{ name }}"
+          base::paste(details, collapse = "; ")
         ),
         call = NULL,
         failures = result$failed
@@ -1667,8 +1733,15 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
 #\' }
 
 {{ name }}_detach <- function() {
-  search_entries <- base::paste0("package:", .pkgs)
-  base::lapply(search_entries[base::`%in%`(search_entries, base::search())], base::detach, character.only = TRUE)
+  component_entries <- base::paste0("package:", .pkgs)
+  search_entries <- base::search()
+  attached <- search_entries[
+    base::startsWith(search_entries, "package:") &
+      base::`%in%`(search_entries, component_entries)
+  ]
+  for (entry in attached) {
+    base::try(base::detach(entry, character.only = TRUE), silent = TRUE)
+  }
   base::invisible()
 }
 
@@ -2086,9 +2159,11 @@ zzz = '
   # Detach only; never delete.
   tryCatch({
     if (exists(".pkgs")) {
-      for (pkg in .pkgs) {
+      attached <- search()[startsWith(search(), "package:") &
+        paste0("package:", sub("^package:", "", search())) %in% paste0("package:", .pkgs)]
+      for (entry in attached) {
         # Detach without unloading component namespaces.
-        try(detach(paste0("package:", pkg), character.only = TRUE, unload = FALSE),
+        try(detach(entry, character.only = TRUE, unload = FALSE),
             silent = TRUE)
       }
     }
@@ -2138,7 +2213,7 @@ zzz = '
         "    reason <- if (base::inherits(loaded, \"error\")) {",
         "      .meta_trf(\"component could not be loaded: %s\", base::conditionMessage(loaded))",
         "    } else {",
-        "      .meta_trf(\"Component package '%s' is not installed.\", package)",
+        "      .meta_trf(\"Component package '%s' is not installed\", package)",
         "    }",
         "    message <- .meta_trf(",
         "      \"Re-exported symbol '%s' from component package '%s' (installed version: %s) is unavailable: %s. Run %s to install the required component version.\",",
@@ -2201,7 +2276,7 @@ zzz = '
         "    base::tryCatch(base::loadNamespace(package, lib.loc = libraries), error = base::identity)",
         "  }",
         "  if (base::inherits(loaded, 'error') || base::is.character(loaded)) {",
-        "    reason <- if (base::inherits(loaded, 'error')) .meta_trf('component could not be loaded: %s', base::conditionMessage(loaded)) else .meta_trf(\"Component package '%s' is not installed.\", package)",
+        "    reason <- if (base::inherits(loaded, 'error')) .meta_trf('component could not be loaded: %s', base::conditionMessage(loaded)) else .meta_trf(\"Component package '%s' is not installed\", package)",
         "    message <- .meta_trf(\"Re-exported symbol '%s' from component package '%s' (%s) is unavailable: %s. Run %s to install the required component version.\", symbol, package, .reexport_version_text(package, libraries), reason, \"{{ name }}_install()\")",
         "    return(function(...) base::stop(message, call. = FALSE))",
         "  }",

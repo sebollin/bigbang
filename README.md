@@ -358,6 +358,12 @@ reports each path and action without mutating those folders.
   be retried. Both dry runs and real results list removed paths in
   `removed_files`. Removing a component removes its shipped archive, which may
   be the last available copy.
+  When an update grows the plan, files absent from both the manifest and the
+  project are new and are written; existing files outside the manifest are
+  treated as user content and the update aborts without overwriting them.
+  The result reports new paths in `added_files`, including a newly added
+  component, a re-added component, a component version bump, or a workflow
+  vignette.
   Updates hold an exclusive project lock from preparation through rollback and
   journal publication. The lock is published only by renaming a sibling
   temporary folder that already contains `owner.rds`, so every published lock

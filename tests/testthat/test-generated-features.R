@@ -84,10 +84,10 @@ test_that("generated startup supports cli formatting, fallback, and quiet mode",
     readLines(file.path(result$path, "R", "attach.R"), warn = FALSE),
     collapse = "\n"
   )
-  expect_match(generated_attach, "base::requireNamespace", fixed = TRUE)
+  expect_match(generated_attach, "base::find.package", fixed = TRUE)
 })
 
-test_that("generated conflict reports include component masking", {
+test_that("generated conflict reports inspect package namespace exports", {
   result <- generate_feature_metapackage("conflictverse")
   runtime <- new.env(parent = baseenv())
   sys.source(file.path(result$path, "R", "utils.R"), envir = runtime)
@@ -108,14 +108,12 @@ test_that("generated conflict reports include component masking", {
 
   conflicts <- runtime$conflictverse_conflicts()
   expect_s3_class(conflicts, "conflictverse_conflicts")
-  expect_named(conflicts, "shared_name")
-  expect_setequal(
-    conflicts$shared_name,
-    c("package:toycomponent", "package:conflictcompetitor")
-  )
+  # These hand-built search environments have no package namespace. They are
+  # deliberately ignored; namespace exports are checked for real packages.
+  expect_length(conflicts, 0L)
   output <- capture.output(returned <- runtime$print.conflictverse_conflicts(conflicts))
   expect_identical(returned, conflicts)
-  expect_match(paste(output, collapse = "\n"), "shared_name")
+  expect_match(paste(output, collapse = "\n"), "No conflicts found", fixed = TRUE)
 })
 
 test_that("generated metadata and base test agree on component identity", {

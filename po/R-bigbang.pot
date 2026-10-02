@@ -34,6 +34,12 @@ msgstr ""
 msgid "The archive directory does not exist: %s"
 msgstr ""
 
+msgid "value must be one non-NA character string"
+msgstr ""
+
+msgid "symbol must be one non-NA character string"
+msgstr ""
+
 msgid "The directory specified by 'pkg_dir' does not exist"
 msgstr ""
 
@@ -115,6 +121,9 @@ msgstr ""
 msgid "Archive %s declares version %s, but its filename suggests version %s."
 msgstr ""
 
+msgid "Cannot update %s because planned generated files already exist outside its manifest and may belong to the user: %s. Refusing to overwrite them."
+msgstr ""
+
 msgid "More than one archive was supplied for component package(s): %s."
 msgstr ""
 
@@ -128,6 +137,9 @@ msgid "No DESCRIPTION file found in package %s"
 msgstr ""
 
 msgid "DEBUG: DESCRIPTION file created"
+msgstr ""
+
+msgid "DEBUG: %s"
 msgstr ""
 
 msgid "DEBUG: NAMESPACE file created"
@@ -827,6 +839,36 @@ msgid "NAMESPACE imports '%s' from component '%s', which is not in this generati
 msgstr ""
 
 msgid "NAMESPACE imports '%s' from component '%s', but that component does not export it."
+msgstr ""
+
+msgid "Proof for component '%s' is inconclusive."
+msgstr ""
+
+msgid "NAMESPACE imports '%s' from component '%s'; proof for that component is inconclusive: %s"
+msgstr ""
+
+msgid "root %s %s"
+msgstr ""
+
+msgid "The call target is not a scalar string."
+msgstr ""
+
+msgid "The call target is empty."
+msgstr ""
+
+msgid "The call target could not be parsed independently."
+msgstr ""
+
+msgid "The call target is calculated through '%s'."
+msgstr ""
+
+msgid "The call target has no classifiable root expression."
+msgstr ""
+
+msgid "For probable_same_object collisions, copy this: reexport_prefer = c(%s)"
+msgstr ""
+
+msgid "For distinct_definitions and undetermined collisions, decide among these candidates: %s"
 msgstr ""
 
 msgid "Cannot use reexport_prefer for omitted component(s): %s. The component was omitted by skip; repair it or choose an installed candidate."

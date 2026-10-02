@@ -237,7 +237,7 @@ test_that("generated installation reports the declared package identity", {
   withr::local_libpaths(c(library_dir, .libPaths()))
   messages <- suppressWarnings(capture.output(
     generated <- environment$install_packages_in_order(
-      result$archives, archive_dir, NULL, verbose = FALSE, upgrade = "always",
+      result$archives, archive_dir, NULL, verbose = TRUE, upgrade = "always",
       lib = library_dir
     ),
     type = "message"

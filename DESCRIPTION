@@ -51,6 +51,7 @@ Suggests:
     devtools,
     knitr,
     pkgbuild,
+    pkgload,
     rmarkdown,
     roxygen2,
     testthat (>= 3.0.0),

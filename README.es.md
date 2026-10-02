@@ -337,6 +337,12 @@ acción sin modificar esas carpetas.
   eliminadas en `removed_files`.
   Quitar un componente elimina su archivo embarcado, que puede ser la última
   copia.
+  Cuando el plan crece, los archivos que no están ni en el manifiesto ni en el
+  proyecto son nuevos y se escriben; los archivos existentes fuera del
+  manifiesto se consideran del usuario y el update aborta sin sobrescribirlos.
+  El resultado informa las rutas nuevas en `added_files`: incluye agregar o
+  volver a agregar un componente, subir su versión o agregar una viñeta de
+  workflow.
   Los updates mantienen una exclusión mutua desde el armado hasta el rollback y
   la publicación del diario. El lock solo se publica renombrando una carpeta
   temporal hermana que ya contiene `owner.rds`, por lo que todo lock publicado

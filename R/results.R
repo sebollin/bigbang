@@ -30,6 +30,10 @@ print.bigbang_result <- function(x, ...) {
   if (isTRUE(x$dry_run)) cat("  Mode: dry run (no files written)\n")
   if (isTRUE(x$updated)) cat("  Mode: updated from generation manifest\n")
   if (isTRUE(x$recovered)) cat("  Recovered: interrupted update\n")
+  if (length(x$added_files) > 0L) {
+    label <- if (isTRUE(x$dry_run)) "  Would add: " else "  Added: "
+    cat(label, paste(x$added_files, collapse = ", "), "\n", sep = "")
+  }
   if (length(x$removed_files) > 0L) {
     label <- if (isTRUE(x$dry_run)) "  Would remove: " else "  Removed: "
     cat(label, paste(x$removed_files, collapse = ", "), "\n", sep = "")

@@ -191,7 +191,7 @@ test_that("failed documentation keeps tracked Rd files and remains retryable", {
   round108_expect_exact_manifest(initial$path)
 })
 
-test_that("failed documentation preserves an untracked Rd file", {
+test_that("documentation updates refuse an existing untracked Rd file", {
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-untracked-documentation-")
   destination <- file.path(root, "destination")
@@ -204,28 +204,19 @@ test_that("failed documentation preserves an untracked Rd file", {
   writeLines("user documentation", user_file, useBytes = TRUE)
   before <- .file_digest(user_file)
 
-  failed <- NULL
-  expect_warning(
-    failed <- testthat::with_mocked_bindings(
-      round108_generate(
-        "userdocverse", destination, document = TRUE, update = TRUE
-      ),
-      document = function(...) stop("forced documentation failure"),
-      .package = "devtools"
+  expect_error(
+    round108_generate(
+      "userdocverse", destination, document = TRUE, update = TRUE
     ),
-    "Error generating documentation: forced documentation failure"
+    class = "bigbang_error_untracked_generated_file"
   )
-
-  expect_true(isTRUE(failed$updated))
-  expect_false(isTRUE(failed$documented))
   expect_true(file.exists(user_file))
   expect_identical(.file_digest(user_file), before)
-  expect_false(relative %in% failed$removed_files)
   manifest <- readRDS(file.path(initial$path, .generation_manifest_name))
   expect_false(relative %in% manifest$files)
 })
 
-test_that("failed documentation restores a partially overwritten user Rd", {
+test_that("documentation update rejection leaves the user Rd byte-for-byte", {
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-overwritten-documentation-")
   destination <- file.path(root, "destination")
@@ -238,28 +229,15 @@ test_that("failed documentation restores a partially overwritten user Rd", {
   writeLines("original user documentation", user_file, useBytes = TRUE)
   before <- .file_digest(user_file)
 
-  failed <- NULL
-  expect_warning(
-    failed <- testthat::with_mocked_bindings(
-      round108_generate(
-        "restoreuserdocverse", destination,
-        document = TRUE, update = TRUE
-      ),
-      document = function(pkg, ...) {
-        writeLines("partial generated documentation",
-                   file.path(pkg, relative), useBytes = TRUE)
-        stop("forced failure after overwrite")
-      },
-      .package = "devtools"
+  expect_error(
+    round108_generate(
+      "restoreuserdocverse", destination,
+      document = TRUE, update = TRUE
     ),
-    "Error generating documentation: forced failure after overwrite"
+    class = "bigbang_error_untracked_generated_file"
   )
-
-  expect_true(isTRUE(failed$updated))
-  expect_false(isTRUE(failed$documented))
   expect_true(file.exists(user_file))
   expect_identical(.file_digest(user_file), before)
-  expect_false(relative %in% failed$removed_files)
   manifest <- readRDS(file.path(initial$path, .generation_manifest_name))
   expect_false(relative %in% manifest$files)
 })

@@ -34,6 +34,12 @@ msgstr "El archivo del paquete no existe: %s; no se encontraron archivos en los 
 msgid "The archive directory does not exist: %s"
 msgstr "El directorio de archivos no existe: %s"
 
+msgid "value must be one non-NA character string"
+msgstr "value debe ser una cadena de caracteres no NA"
+
+msgid "symbol must be one non-NA character string"
+msgstr "symbol debe ser una cadena de caracteres no NA"
+
 msgid "The directory specified by 'pkg_dir' does not exist"
 msgstr "El directorio indicado por 'pkg_dir' no existe"
 
@@ -115,6 +121,9 @@ msgstr "El archivo %s declara el paquete %s, pero su nombre sugiere %s."
 msgid "Archive %s declares version %s, but its filename suggests version %s."
 msgstr "El archivo %s declara la versión %s, pero su nombre sugiere la versión %s."
 
+msgid "Cannot update %s because planned generated files already exist outside its manifest and may belong to the user: %s. Refusing to overwrite them."
+msgstr "No se puede actualizar %s porque estos archivos generados del plan ya existen fuera de su manifiesto y pueden pertenecer al usuario: %s. Se rechaza sobrescribirlos."
+
 msgid "More than one archive was supplied for component package(s): %s."
 msgstr "Se proporcionó más de un archivo para los paquetes componentes: %s."
 
@@ -129,6 +138,9 @@ msgstr "No se encontró DESCRIPTION en el paquete %s"
 
 msgid "DEBUG: DESCRIPTION file created"
 msgstr "DEBUG: archivo DESCRIPTION creado"
+
+msgid "DEBUG: %s"
+msgstr "DEBUG: %s"
 
 msgid "DEBUG: NAMESPACE file created"
 msgstr "DEBUG: archivo NAMESPACE creado"
@@ -828,6 +840,36 @@ msgstr "NAMESPACE importa '%s' desde el componente '%s', que no está en esta ge
 
 msgid "NAMESPACE imports '%s' from component '%s', but that component does not export it."
 msgstr "NAMESPACE importa '%s' desde el componente '%s', pero ese componente no lo exporta."
+
+msgid "Proof for component '%s' is inconclusive."
+msgstr "La prueba para el componente '%s' no es concluyente."
+
+msgid "NAMESPACE imports '%s' from component '%s'; proof for that component is inconclusive: %s"
+msgstr "NAMESPACE importa '%s' desde el componente '%s'; la prueba para ese componente no es concluyente: %s"
+
+msgid "root %s %s"
+msgstr "raíz %s %s"
+
+msgid "The call target is not a scalar string."
+msgstr "El destino de la llamada no es una cadena escalar."
+
+msgid "The call target is empty."
+msgstr "El destino de la llamada está vacío."
+
+msgid "The call target could not be parsed independently."
+msgstr "El destino de la llamada no se pudo analizar de forma independiente."
+
+msgid "The call target is calculated through '%s'."
+msgstr "El destino de la llamada se calcula mediante '%s'."
+
+msgid "The call target has no classifiable root expression."
+msgstr "El destino de la llamada no tiene una expresión raíz clasificable."
+
+msgid "For probable_same_object collisions, copy this: reexport_prefer = c(%s)"
+msgstr "Para las colisiones probable_same_object, copie esto: reexport_prefer = c(%s)"
+
+msgid "For distinct_definitions and undetermined collisions, decide among these candidates: %s"
+msgstr "Para las colisiones distinct_definitions e undetermined, elija entre estos candidatos: %s"
 
 msgid "Cannot use reexport_prefer for omitted component(s): %s. The component was omitted by skip; repair it or choose an installed candidate."
 msgstr "No se puede usar reexport_prefer para componentes omitidos: %s. El componente fue omitido por skip; repárelo o elija un candidato instalado."

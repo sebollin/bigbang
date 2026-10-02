@@ -2,6 +2,9 @@
 
 ## Breaking changes
 
+- `update = TRUE` refuses a planned generated path that already exists outside
+  the manifest, including generated documentation files that were previously
+  regenerated over it. Remove or rename that file to let the update write it.
 - `bigbang_error_missing_project` now inherits from
   `bigbang_error_missing_manifest` while identifying a missing project more
   precisely.
@@ -45,9 +48,21 @@
   `<meta>_reexport_verification()` accessor returns installed-owner checks.
 - Dependency scanning now includes `.S`, `.s`, and `.q` sources; detected
   dependencies can therefore differ from earlier releases.
+- Updates can now add planned files that are absent from both the manifest and
+  the project, including new, re-added, or version-bumped components and
+  workflow vignettes; existing untracked paths are refused as user content.
 
 ## Bug fixes
 
+- Generated metapackages: `<meta>_detach()` detaches components from the top of
+  the search path down, so families linked through `Depends` detach completely;
+  `library(<meta>)` reports components that cannot be attached, such as one
+  whose `Depends` are missing or whose namespace was loaded from another
+  library, instead of failing; installer messages respect `verbose = FALSE`;
+  `<meta>_conflicts()` compares namespace exports, so internal objects such as
+  `.Depends` are no longer reported as conflicts.
+- A warning about an archive whose file name and `DESCRIPTION` version differ is
+  now given once per archive and installation call.
 - Fixed a 0.4.0 defect where an installed older component that no longer
   exported a re-exported symbol made `R CMD INSTALL` fail while loading the
   metapackage. Re-export bindings now always evaluate safely and provide an

@@ -569,7 +569,10 @@
 #'   update rather than risking the only surviving copy.
 #' @param update Logical. If TRUE, update a previously generated project only
 #'   when its bigbang manifest is present and all generated files are unchanged.
-#'   Files outside that manifest are never touched. Updates are refused when the
+#'   A planned file absent from both the manifest and the project is a new
+#'   generated file and is added. A planned file already present outside the
+#'   manifest is treated as user content and makes the update fail without
+#'   touching it. Files outside that manifest are never touched. Updates are refused when the
 #'   generated project root, a manifest file, or any path component inside the
 #'   project is a symbolic link, so writes cannot escape the project tree.
 #'   Generated files
@@ -581,10 +584,9 @@
 #'   reconciliation, generation, rollback, and journal publication. A second
 #'   session preserves a live preparation and reports `recover = TRUE` as the
 #'   next action until the owner is proven to have finished. Documentation files
-#'   requested by `document = TRUE` can always be
-#'   regenerated: they can be restored after documentation was disabled, and an
-#'   update that cannot regenerate them retains the previously tracked Rd files.
-#'   See `document` for the reserved generated-documentation filenames.
+#'   requested by `document = TRUE` follow the same rule: absent planned files
+#'   are added, while existing untracked files are refused. See `document` for
+#'   the reserved generated-documentation filenames.
 #' @param install_upgrade Character default upgrade policy emitted in the
 #'   generated installer function: "newer", "always", or "never".
 #'   This controls whether a generated installer keeps newer installed
@@ -1015,7 +1017,8 @@ create_metapackage <- function(
         path = project_dir, name = name, packages = character(),
         archives = character(), components = list(), reexports = data.frame(),
         reexport_excluded = character(), order = character(),
-        files = character(), removed_files = character(), findings = list(),
+        files = character(), added_files = character(),
+        removed_files = character(), findings = list(),
         local_dependencies = character(), cran_dependencies = character(),
         implicit_dependencies = character(), tolerated = character(),
         omitted = data.frame(), workflow = workflow, documented = FALSE,
@@ -1126,6 +1129,7 @@ create_metapackage <- function(
   }
 
   update_manifest <- NULL
+  added_files <- character()
   stale_files <- character()
   preserved_files <- character()
   requested_files <- setdiff(
@@ -1150,29 +1154,28 @@ create_metapackage <- function(
     update_manifest <- .validate_update_manifest(
       project_dir, requested_files
     )
-    regenerable <- if (isTRUE(document)) {
-      .planned_documentation_files(name, reexport = reexport)
-    } else {
-      character()
-    }
-    if (isTRUE(reexport)) {
-      reexport_files <- c(
-        file.path("R", "reexports.R"),
-        if (isTRUE(document)) file.path("man", "reexports.Rd") else character()
-      )
-      reexport_files <- reexport_files[!file.exists(file.path(
-        project_dir, reexport_files
-      ))]
-      regenerable <- c(regenerable, reexport_files)
-    }
-    untracked <- setdiff(
-      requested_files, union(update_manifest$files, regenerable)
+    outside_manifest <- setdiff(requested_files, update_manifest$files)
+    .validate_project_write_paths(project_dir, outside_manifest)
+    outside_paths <- file.path(project_dir, outside_manifest)
+    already_present <- vapply(
+      outside_paths,
+      function(path) {
+        file.exists(path) || dir.exists(path) || .path_is_symlink(path)
+      },
+      logical(1L)
     )
+    untracked <- outside_manifest[already_present]
+    added_files <- outside_manifest[!already_present]
     if (length(untracked) > 0L) {
       .bigbang_abort(
-        "bigbang_error_modified_generated_file",
+        c("bigbang_error_untracked_generated_file",
+          "bigbang_error_modified_generated_file"),
         .bb_trf(
-          "Cannot update %s because requested generated files are not in its manifest: %s.",
+          paste0(
+            "Cannot update %s because planned generated files already exist ",
+            "outside its manifest and may belong to the user: %s. Refusing ",
+            "to overwrite them."
+          ),
           project_dir, paste(untracked, collapse = ", ")
         ),
         path = project_dir, files = untracked
@@ -1202,6 +1205,7 @@ create_metapackage <- function(
         license = license, document = document, reexport = isTRUE(reexport),
         reexport_symbols = reexport_plan$table$symbol
       ),
+      added_files = added_files,
       removed_files = stale_files,
       findings = generation_findings,
       local_dependencies = local_deps,
@@ -1221,7 +1225,7 @@ create_metapackage <- function(
 
   # Debug logger.
   log_debug <- function(debug_message) {
-    if (debug) message(paste0("DEBUG: ", debug_message))
+    if (debug) message(.bb_trf("DEBUG: %s", debug_message))
   }
 
   log_debug("Starting create_metapackage()")
@@ -1767,6 +1771,7 @@ StripTrailingWhitespace: Yes"
       reexports = reexport_plan$table,
       reexport_excluded = reexport_plan$excluded,
       order = .component_topological_order(components),
+      added_files = added_files,
       removed_files = unique(c(stale_files, reverted_documentation)),
       local_dependencies = local_deps,
       cran_dependencies = cran_deps,

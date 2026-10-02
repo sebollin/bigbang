@@ -1292,11 +1292,15 @@
 
 .reexport_call_target_kind <- function(text) {
   if (!is.character(text) || length(text) != 1L || is.na(text)) {
-    return(list(kind = "undetermined", reason = "The call target is not a scalar string."))
+    return(list(kind = "undetermined", reason = .bb_tr(
+      "The call target is not a scalar string."
+    )))
   }
   trimmed <- trimws(text)
   if (!nzchar(trimmed)) {
-    return(list(kind = "undetermined", reason = "The call target is empty."))
+    return(list(kind = "undetermined", reason = .bb_tr(
+      "The call target is empty."
+    )))
   }
   if (.reexport_simple_symbol(trimmed)) {
     return(list(kind = "simple", name = trimmed))
@@ -1308,7 +1312,7 @@
   if (is.null(expression)) {
     return(list(
       kind = "undetermined",
-      reason = "The call target could not be parsed independently."
+      reason = .bb_tr("The call target could not be parsed independently.")
     ))
   }
   if (is.symbol(expression) && length(expression) == 1L &&
@@ -1332,12 +1336,12 @@
   if (length(root) == 1L) {
     return(list(
       kind = "calculated", root = root,
-      reason = sprintf("The call target is calculated through '%s'.", root)
+      reason = .bb_trf("The call target is calculated through '%s'.", root)
     ))
   }
   list(
     kind = "undetermined",
-    reason = "The call target has no classifiable root expression."
+    reason = .bb_tr("The call target has no classifiable root expression.")
   )
 }
 
@@ -2593,7 +2597,16 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   parent_probe <- .reexport_probe(
     parent, symbol, components, omitted_names, c(trail, key)
   )
-  if (!isTRUE(parent_probe$demonstrated)) return(parent_probe)
+  if (!isTRUE(parent_probe$demonstrated)) {
+    parent_reason <- .or_null(
+      parent_probe$reason,
+      .bb_trf("Proof for component '%s' is inconclusive.", source$package)
+    )
+    return(.reexport_probe_failure(.bb_trf(
+      "NAMESPACE imports '%s' from component '%s'; proof for that component is inconclusive: %s",
+      symbol, source$package, parent_reason
+    ), skipped = isTRUE(parent_probe$skipped)))
+  }
   parent_probe
 }
 
@@ -2868,7 +2881,7 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
     reason <- vapply(seq_along(probes), function(index) {
       probe <- probes[[index]]
       detail <- if (isTRUE(probe$demonstrated)) {
-        paste0("root ", probe$root_type, " ", probe$root)
+        .bb_trf("root %s %s", probe$root_type, probe$root)
       } else {
         probe$reason
       }
@@ -2927,12 +2940,12 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
       ""
     }
     resolution_text <- paste(c(
-      if (nzchar(probable_choices)) paste0(
-        "For probable_same_object collisions, copy this: reexport_prefer = c(",
-        probable_choices, ")"
+      if (nzchar(probable_choices)) .bb_trf(
+        "For probable_same_object collisions, copy this: reexport_prefer = c(%s)",
+        probable_choices
       ) else NULL,
-      if (nzchar(other_choices)) paste0(
-        "For distinct_definitions and undetermined collisions, decide among these candidates: ",
+      if (nzchar(other_choices)) .bb_trf(
+        "For distinct_definitions and undetermined collisions, decide among these candidates: %s",
         other_choices
       ) else NULL
     ), collapse = "; ")

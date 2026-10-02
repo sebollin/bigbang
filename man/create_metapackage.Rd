@@ -167,7 +167,10 @@ update rather than risking the only surviving copy.}
 
 \item{update}{Logical. If TRUE, update a previously generated project only
 when its bigbang manifest is present and all generated files are unchanged.
-Files outside that manifest are never touched. Updates are refused when the
+A planned file absent from both the manifest and the project is a new
+generated file and is added. A planned file already present outside the
+manifest is treated as user content and makes the update fail without
+touching it. Files outside that manifest are never touched. Updates are refused when the
 generated project root, a manifest file, or any path component inside the
 project is a symbolic link, so writes cannot escape the project tree.
 Generated files
@@ -179,10 +182,9 @@ retried. Updates take an exclusive project lock across preparation,
 reconciliation, generation, rollback, and journal publication. A second
 session preserves a live preparation and reports \code{recover = TRUE} as the
 next action until the owner is proven to have finished. Documentation files
-requested by \code{document = TRUE} can always be
-regenerated: they can be restored after documentation was disabled, and an
-update that cannot regenerate them retains the previously tracked Rd files.
-See \code{document} for the reserved generated-documentation filenames.}
+requested by \code{document = TRUE} follow the same rule: absent planned files
+are added, while existing untracked files are refused. See \code{document} for
+the reserved generated-documentation filenames.}
 
 \item{install_upgrade}{Character default upgrade policy emitted in the
 generated installer function: "newer", "always", or "never".
