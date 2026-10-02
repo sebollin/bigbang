@@ -17,7 +17,7 @@
   siblings <- siblings[startsWith(basename(siblings), prefix)]
   suffix <- substring(basename(siblings), nchar(prefix) + 1L)
   siblings <- siblings[nzchar(suffix) & grepl("^[[:alnum:]-]+$", suffix)]
-  sort(siblings)
+  sort(normalizePath(siblings, winslash = "/", mustWork = FALSE))
 }
 
 .update_journal_backup_path <- function(path) file.path(path, "backup")
@@ -338,6 +338,9 @@
 .update_tombstone_owner <- function(tombstone) {
   fields <- c("pid", "host", "started_utc", "process_start")
   if (!is.list(tombstone) || !all(fields %in% names(tombstone))) return(NULL)
+  if ("process_start_source" %in% names(tombstone)) {
+    fields <- c(fields, "process_start_source")
+  }
   tombstone[fields]
 }
 
@@ -745,7 +748,7 @@
 # reused its pid). Windows owners are never probed; they are "uncertain".
 .update_is_windows <- function() identical(.Platform$OS.type, "windows")
 
-.update_signal_probe <- function(pid) tools::pskill(as.integer(pid), 0L)
+.update_signal_probe <- function(pid) if (.update_is_windows()) NA else tools::pskill(pid, 0L)
 
 .update_process_stat <- function(pid) {
   if (.update_is_windows() || !dir.exists("/proc") ||
@@ -767,18 +770,56 @@
   if (fields[[1L]] %in% c("Z", "X")) "dead" else "alive"
 }
 
-.update_process_start <- function(pid = Sys.getpid()) {
-  if (.Platform$OS.type == "windows" || !dir.exists("/proc")) return(NA_character_)
-  stat <- tryCatch(
-    readLines(sprintf("/proc/%d/stat", as.integer(pid)), warn = FALSE, n = 1L),
+.update_ps_process_start <- function(pid) {
+  ps <- Sys.which("ps")[[1L]]
+  if (!nzchar(ps) || length(pid) != 1L || is.na(pid) || pid <= 0) {
+    return(NA_character_)
+  }
+  output <- tryCatch(
+    suppressWarnings(system2(
+      ps,
+      c("-o", "lstart=", "-p", as.character(as.integer(pid))),
+      stdout = TRUE, stderr = FALSE, env = "LC_ALL=C"
+    )),
     error = function(e) character()
   )
-  if (length(stat) != 1L) return(NA_character_)
-  closing <- regexpr("\\)[^)]*$", stat, perl = TRUE)
-  if (closing[[1L]] < 1L) return(NA_character_)
-  fields <- strsplit(trimws(substring(stat, closing[[1L]] + 1L)),
-                     "[[:space:]]+", perl = TRUE)[[1L]]
-  if (length(fields) < 20L) NA_character_ else fields[[20L]]
+  status <- attr(output, "status", exact = TRUE)
+  if (length(status) == 1L && !is.na(status) &&
+        !identical(as.integer(status), 0L)) return(NA_character_)
+  output <- trimws(output[nzchar(trimws(output))])
+  if (length(output) != 1L || !nzchar(output[[1L]])) NA_character_ else output[[1L]]
+}
+
+.update_process_start <- function(pid = Sys.getpid()) {
+  if (.Platform$OS.type == "windows" || length(pid) != 1L ||
+        is.na(pid) || pid <= 0) return(NA_character_)
+  process_state <- .update_process_stat(pid)
+  if (identical(process_state, "alive") && dir.exists("/proc")) {
+    stat <- tryCatch(
+      readLines(sprintf("/proc/%d/stat", as.integer(pid)), warn = FALSE, n = 1L),
+      error = function(e) character()
+    )
+    if (length(stat) == 1L) {
+      closing <- regexpr("\\)[^)]*$", stat, perl = TRUE)
+      if (closing[[1L]] >= 1L) {
+        fields <- strsplit(trimws(substring(stat, closing[[1L]] + 1L)),
+                           "[[:space:]]+", perl = TRUE)[[1L]]
+        if (length(fields) >= 20L) return(fields[[20L]])
+      }
+    }
+  }
+  .update_ps_process_start(pid)
+}
+
+.update_process_start_source <- function(pid = Sys.getpid()) {
+  if (.Platform$OS.type == "windows" || length(pid) != 1L ||
+        is.na(pid) || pid <= 0) return(NA_character_)
+  process_state <- .update_process_stat(pid)
+  if (identical(process_state, "alive") && dir.exists("/proc")) {
+    return("proc")
+  }
+  token <- .update_ps_process_start(pid)
+  if (length(token) == 1L && !is.na(token) && nzchar(token)) "ps" else NA_character_
 }
 
 .update_host <- function() {
@@ -791,13 +832,17 @@
     pid = as.integer(Sys.getpid()),
     host = .update_host(),
     started_utc = format(Sys.time(), tz = "UTC", usetz = TRUE),
-    process_start = .update_process_start()
+    process_start = .update_process_start(),
+    process_start_source = .update_process_start_source()
   )
 }
 
 .update_marker_owner <- function(marker) {
   fields <- c("pid", "host", "started_utc", "process_start")
   if (!is.list(marker) || !all(fields %in% names(marker))) return(NULL)
+  if ("process_start_source" %in% names(marker)) {
+    fields <- c(fields, "process_start_source")
+  }
   marker[fields]
 }
 
@@ -852,7 +897,10 @@
       length(marker$pid) == 1L && !is.na(marker$pid) && marker$pid > 0 &&
       is.character(marker$host) && length(marker$host) == 1L &&
       is.character(marker$started_utc) && length(marker$started_utc) == 1L &&
-      is.character(marker$process_start) && length(marker$process_start) == 1L
+      is.character(marker$process_start) && length(marker$process_start) == 1L &&
+      (!"process_start_source" %in% names(marker) ||
+         (is.character(marker$process_start_source) &&
+            length(marker$process_start_source) == 1L))
   }
   shape_valid <- is.list(marker) && identical(marker$format, .update_journal_format) &&
     identical(marker$version, .update_journal_version) &&
@@ -1047,6 +1095,7 @@
 
 .project_relative_destination <- function(destination, project_dir) {
   destination <- normalizePath(destination, winslash = "/", mustWork = FALSE)
+  project_dir <- normalizePath(project_dir, winslash = "/", mustWork = FALSE)
   prefix <- paste0(project_dir, "/")
   if (!startsWith(destination, prefix)) return(NULL)
   relative <- substring(destination, nchar(prefix) + 1L)
@@ -1183,7 +1232,7 @@
       listed <- tryCatch(
         suppressWarnings(
           system2(ps, c("-p", as.character(as.integer(state$pid)), "-o", "pid="),
-                  stdout = TRUE, stderr = FALSE)
+                  stdout = TRUE, stderr = FALSE, env = "LC_ALL=C")
         ),
         error = function(e) character()
       )
@@ -1195,14 +1244,27 @@
       }
       listed <- trimws(listed[nzchar(trimws(listed))])
       if (length(listed) == 0L) return("dead")
-      process_state <- "uncertain"
+      process_state <- "alive"
     }
   }
   if (!identical(process_state, "alive")) return("uncertain")
   recorded <- state$process_start
   current <- .update_process_start(state$pid)
+  recorded_source <- if ("process_start_source" %in% names(state)) {
+    state$process_start_source
+  } else if (identical(.update_process_start_source(state$pid), "proc")) {
+    # Four-field records from 0.4/early 0.5 can only be compared safely on
+    # the /proc path. A ps token without a recorded source remains uncertain.
+    "proc"
+  } else {
+    NA_character_
+  }
+  current_source <- .update_process_start_source(state$pid)
   if (length(recorded) != 1L || is.na(recorded) ||
-        length(current) != 1L || is.na(current)) return("uncertain")
+        length(current) != 1L || is.na(current) ||
+        length(recorded_source) != 1L || is.na(recorded_source) ||
+        length(current_source) != 1L || is.na(current_source)) return("uncertain")
+  if (!identical(recorded_source, current_source)) return("live_token_conflict")
   if (!identical(recorded, current)) return("live_token_conflict")
   "alive"
 }
@@ -1237,6 +1299,9 @@
   if (!is.list(owner) || length(owner$pid) != 1L ||
         length(owner$host) != 1L || length(owner$started_utc) != 1L ||
         length(owner$process_start) != 1L ||
+        ("process_start_source" %in% names(owner) &&
+           (length(owner$process_start_source) != 1L ||
+              !is.character(owner$process_start_source))) ||
         is.na(owner$pid) || is.na(owner$host) || is.na(owner$started_utc)) {
     return(NULL)
   }
@@ -1378,7 +1443,10 @@
   if (!is.list(claim) || length(claim$pid) != 1L ||
         length(claim$host) != 1L || length(claim$started_utc) != 1L ||
         length(claim$process_start) != 1L || is.na(claim$pid) ||
-        is.na(claim$host) || is.na(claim$started_utc)) return(NULL)
+        is.na(claim$host) || is.na(claim$started_utc) ||
+        ("process_start_source" %in% names(claim) &&
+           (length(claim$process_start_source) != 1L ||
+              !is.character(claim$process_start_source)))) return(NULL)
   claim
 }
 
@@ -1733,22 +1801,36 @@
       live_temporary[[1L]]$status
     )
   }
-  attempts <- 0L
+  no_progress <- 0L
   repeat {
-    attempts <- attempts + 1L
-    if (attempts > 100L) {
+    state <- .update_lock_state(project_dir, recover = recover)
+    progress_actions <- c(
+      "user_entry", "set_aside_symbolic_link", "set_aside_unreadable_lock",
+      "set_aside_unreadable_discard", "claim_orphan_discard",
+      "claim_uncertain_discard"
+    )
+    if (state$action %in% progress_actions) {
+      no_progress <- 0L
+    } else {
+      no_progress <- no_progress + 1L
+    }
+    if (no_progress > 100L) {
+      reason <- if (identical(state$action, "free")) {
+        .bb_tr("the free lock could not publish its temporary preparation")
+      } else {
+        .bb_trf("the lock entry remained in state %s", state$action)
+      }
       .update_lock_problem(
         project_dir, lock_path, status = "lock_retry",
         next_step = .bb_trf(
           paste0(
-            "Could not acquire the update lock at %s because its state made no ",
-            "progress after %s retries; inspect the lock entry before retrying."
+            "Could not acquire the update lock at %s because %s made no ",
+            "progress after %s consecutive retries; inspect entry %s before retrying."
           ),
-          lock_path, attempts - 1L
+          lock_path, reason, no_progress, state$path
         )
       )
     }
-    state <- .update_lock_state(project_dir, recover = recover)
     if (identical(state$status, "user_entry")) {
       .apart_update_lock(lock_path, basename(project_dir))
       next
@@ -2317,6 +2399,9 @@
     is.character(state$host) && length(state$host) == 1L &&
     is.character(state$started_utc) && length(state$started_utc) == 1L &&
     is.character(state$process_start) && length(state$process_start) == 1L &&
+    (!"process_start_source" %in% names(state) ||
+       (is.character(state$process_start_source) &&
+          length(state$process_start_source) == 1L)) &&
     is.character(state$bigbang_version) &&
     length(state$bigbang_version) == 1L &&
     is.character(state$original_hashes) &&

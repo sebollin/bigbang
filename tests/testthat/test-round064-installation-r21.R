@@ -155,6 +155,7 @@ test_that("unreadable discarded folders are set aside and never treated as empty
   expect_true(file.rename(journal$path, discarded))
   locked <- file.path(discarded, "backup", "locked")
   Sys.chmod(locked, "0000")
+  withr::defer(Sys.chmod(locked, "0755"))
   if (file.access(locked, 4L) == 0L) {
     Sys.chmod(locked, "0755")
     skip("The current user can list chmod 0000 directories.")
@@ -174,6 +175,7 @@ test_that("unreadable discarded folders are set aside and never treated as empty
   expect_true(is.list(result))
   apart <- result$apart
   Sys.chmod(file.path(apart, "backup", "locked"), "0755")
+  withr::defer(Sys.chmod(file.path(apart, "backup", "locked"), "0755"))
   expect_true(file.exists(file.path(apart, "backup", "locked", "value.txt")))
 
   empty <- file.path(
@@ -182,6 +184,7 @@ test_that("unreadable discarded folders are set aside and never treated as empty
   )
   dir.create(empty)
   Sys.chmod(empty, "0000")
+  withr::defer(Sys.chmod(empty, "0755"))
   if (file.access(empty, 4L) == 0L) {
     Sys.chmod(empty, "0755")
     skip("The current user can list chmod 0000 directories.")
@@ -243,6 +246,31 @@ test_that("round 064 journal guards cover failed and private transitions", {
     "no bytes from the set-aside entry were deleted"
   )
   expect_true(dir.exists(result$apart))
+})
+
+test_that("journal deletion recognizes portable directory links", {
+  root <- tempfile("bigbang-round064-reparse-")
+  dir.create(root)
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  target <- file.path(root, "target")
+  dir.create(target)
+  payload <- file.path(target, "payload")
+  writeLines("keep", payload, useBytes = TRUE)
+  link <- file.path(root, "link")
+  made <- if (identical(.Platform$OS.type, "windows")) {
+    skip_if_not(exists("Sys.junction", mode = "function"),
+                "Sys.junction is unavailable")
+    isTRUE(suppressWarnings(Sys.junction(target, link)))
+  } else {
+    isTRUE(suppressWarnings(file.symlink(target, link)))
+  }
+  if (!made) skip("the platform cannot create the directory link")
+  withr::defer(unlink(link, recursive = TRUE, force = TRUE))
+  expect_true(.path_is_symlink(link))
+  expect_false(.discard_update_entry(
+    file.path(link, "payload"), root = link, relative = "payload"
+  ))
+  expect_identical(readLines(payload, warn = FALSE), "keep")
 })
 
 test_that("recover sets aside an unrecognized armed journal owned by a dead process", {
@@ -361,7 +389,7 @@ test_that("verification preparation failures return unverified rows", {
   expect_false(any(grepl("another library", messages, ignore.case = TRUE)))
   temp_root <- tempdir()
   old_mode <- file.info(temp_root)$mode
-  on.exit(Sys.chmod(temp_root, old_mode), add = TRUE)
+  withr::defer(Sys.chmod(temp_root, old_mode))
   Sys.chmod(temp_root, "0555")
   if (file.access(temp_root, 2L) == 0L) {
     Sys.chmod(temp_root, old_mode)

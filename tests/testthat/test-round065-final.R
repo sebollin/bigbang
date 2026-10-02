@@ -19,6 +19,11 @@ test_that("R symbol literals round-trip through namespace and suggestions", {
   suggestion <- .reexport_prefer_literal("a`b", "component")
   expect_identical(eval(parse(text = paste0("c(", suggestion, ")"))[[1L]]),
                    c("a`b" = "component"))
+  backslash_suggestion <- .reexport_prefer_literal("a\\b", "component")
+  expect_identical(
+    eval(parse(text = paste0("c(", backslash_suggestion, ")"))[[1L]]),
+    c("a\\b" = "component")
+  )
 })
 
 test_that("an unreadable published lock is set aside without a retry hang", {
@@ -155,4 +160,27 @@ test_that("the ps fallback stays quiet in every language", {
       expect_identical(status, "dead")
     })
   }
+})
+
+test_that("the ps start token is stable outside /proc and under foreign locales", {
+  skip_on_os("windows")
+  ps <- Sys.which("ps")[[1L]]
+  skip_if_not(nzchar(ps), "ps is not available")
+  testthat::local_mocked_bindings(
+    .update_is_windows = function() FALSE,
+    .update_process_stat = function(pid) NULL,
+    .update_signal_probe = function(pid) FALSE,
+    .package = "bigbang"
+  )
+  withr::with_envvar(
+    c(LANGUAGE = "es", LC_TIME = "fr_FR.UTF-8", LC_ALL = ""),
+    {
+      owner <- .update_owner_record()
+      expect_identical(owner$process_start_source, "ps")
+      expect_true(is.character(owner$process_start))
+      expect_length(owner$process_start, 1L)
+      expect_true(nzchar(owner$process_start))
+      expect_identical(.update_owner_liveness(owner), "alive")
+    }
+  )
 })

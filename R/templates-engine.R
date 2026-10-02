@@ -1895,6 +1895,17 @@ safe_unlink <- function(path, recursive = FALSE, force = FALSE, verify = TRUE) {
           return(invisible(FALSE))
         }
 
+        temp_root <- base::normalizePath(
+          base::tempdir(), winslash = "/", mustWork = TRUE
+        )
+        candidate <- base::normalizePath(
+          p, winslash = "/", mustWork = FALSE
+        )
+        if (base::identical(candidate, temp_root)) {
+          message(.meta_trf("SAFETY: Potentially important directory: %s", p))
+          return(invisible(FALSE))
+        }
+
         # Apply directory-specific checks.
         if (dir.exists(p)) {
           # Never remove protected directories.
@@ -1911,10 +1922,7 @@ safe_unlink <- function(path, recursive = FALSE, force = FALSE, verify = TRUE) {
             has_man_dir <- dir.exists(file.path(p, "man"))
 
             if (has_desc && (has_r_dir || has_man_dir)) {
-              # Only known temporary package directories may pass.
-              is_temp_pkg <- grepl("^00LOCK-|^\\\\.Rcheck$|^tmp|^temp", basename(p))
-
-              if (!is_temp_pkg) {
+              if (!is_path_inside(p, temp_root)) {
                 message(.meta_trf("SAFETY: Possible non-temporary R package directory: %s", p))
                 return(invisible(FALSE))
               }
@@ -1982,6 +1990,8 @@ is_path_inside <- function(inner_path, outer_path) {
     inner <- gsub("\\\\\\\\", "/", inner)
     outer <- gsub("\\\\\\\\", "/", outer)
   }
+
+  if (identical(inner, outer)) return(TRUE)
 
   # Add a separator to prevent partial-prefix matches.
   if (!endsWith(outer, "/")) {

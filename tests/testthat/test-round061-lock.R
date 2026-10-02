@@ -211,6 +211,10 @@ test_that("a killed lock preparation is set aside before the next lock", {
 test_that("two real processes have one orphan-recovery winner", {
   skip_on_os("windows")
   skip_on_cran()
+  testthat::local_mocked_bindings(
+    .update_process_stat = function(...) NULL,
+    .package = "bigbang"
+  )
   for (round in seq_len(1L)) {
     fixture <- round061_lock_fixture(
       paste0("bigbang-round061-race-", round, "-")

@@ -192,7 +192,7 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
   } else {
     character()
   }
-  if (length(r_files) > 0L && any(nzchar(Sys.readlink(r_files)))) {
+  if (length(r_files) > 0L && any(vapply(r_files, .path_is_symlink, logical(1L)))) {
     stop("Refusing to scan symbolic links in the source R directory.", call. = FALSE,
          domain = "R-bigbang")
   }
@@ -250,7 +250,8 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
     extract_dir, recursive = TRUE, full.names = TRUE,
     all.files = TRUE, include.dirs = TRUE, no.. = TRUE
   )
-  if (length(extracted) > 0L && any(nzchar(Sys.readlink(extracted)))) {
+  if (length(extracted) > 0L &&
+        any(vapply(extracted, .path_is_symlink, logical(1L)))) {
     stop("Refusing to scan an archive containing symbolic links.", call. = FALSE,
          domain = "R-bigbang")
   }

@@ -1,9 +1,5 @@
 round051_export_directive <- function(symbol) {
-  if (grepl("^[A-Za-z.][A-Za-z0-9._]*$", symbol)) {
-    paste0("export(", symbol, ")")
-  } else {
-    paste0("export(\"", symbol, "\")")
-  }
+  paste0("export(", bigbang:::.r_symbol_literal(symbol), ")")
 }
 
 round051_make_archive <- function(source_root, archive_dir, name,
@@ -1185,16 +1181,18 @@ test_that("round 053 poison component cannot mask generated runtime calls", {
   function_names <- sort(unique(function_names))
   special_names <- sort(unique(special_names))
   own_symbols <- bigbang:::.generated_metapackage_symbols("poisonverse")
-  poison_exports <- sort(unique(c(
+  poison_exports <- setdiff(sort(unique(c(
     function_names, special_names, own_symbols,
     "identical", "requireNamespace", "getExportedValue", "readRDS",
     "saveRDS"
-  )))
+  ))), bigbang:::.r_syntax_symbols())
   excluded <- intersect(poison_exports, own_symbols)
   poison_body <- vapply(
     poison_exports,
     function(symbol) {
-      lhs <- if (grepl("^[A-Za-z.][A-Za-z0-9._]*$", symbol)) {
+      lhs <- if (symbol %in% bigbang:::.r_syntax_symbols()) {
+        paste0("`", symbol, "`")
+      } else if (grepl("^[A-Za-z.][A-Za-z0-9._]*$", symbol)) {
         symbol
       } else {
         paste0("`", symbol, "`")
@@ -1278,7 +1276,7 @@ test_that("round 053 poison component cannot mask generated runtime calls", {
   expect_null(missing_after)
   install_function <- base::getExportedValue("poisonverse", "poisonverse_install")
   result <- install_function(lib = component_library, verbose = FALSE)
-  expect_true(is.data.frame(result$reexport_verification))
+  expect_true(base::is.data.frame(result$reexport_verification))
   conflicts <- base::getExportedValue("poisonverse", "poisonverse_conflicts")()
   expect_s3_class(conflicts, "poisonverse_conflicts")
   expect_s3_class(

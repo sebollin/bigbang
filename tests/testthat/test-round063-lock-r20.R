@@ -47,6 +47,10 @@ round063_journal_fixture <- function(prefix = "bigbang-round063-journal-") {
 test_that("discarded live owners survive a killed claimant", {
   skip_on_cran()
   skip_on_os("windows")
+  testthat::local_mocked_bindings(
+    .update_process_stat = function(...) NULL,
+    .package = "bigbang"
+  )
   fixture <- round063_lock_fixture("bigbang-round063-live-owner-")
   withr::defer(unlink(fixture$root, recursive = TRUE, force = TRUE))
   owner_ready <- file.path(fixture$root, "owner-ready")
@@ -213,14 +217,14 @@ test_that("inventory deletion is byte-exact and keeps mismatches apart", {
   expect_false(file.exists(file.path(apart, "claim.rds")))
 })
 
-test_that("more than eight discarded locks are processed while progress continues", {
+test_that("150 discarded locks are processed while progress continues", {
   testthat::local_mocked_bindings(
     .update_owner_liveness = function(...) "dead",
     .package = "bigbang"
   )
   fixture <- round063_lock_fixture("bigbang-round063-many-discarded-")
   withr::defer(unlink(fixture$root, recursive = TRUE, force = TRUE))
-  for (index in seq_len(9L)) {
+  for (index in seq_len(150L)) {
     discarded <- file.path(
       fixture$root,
       paste0(".project.bigbang-update.lock.descartado-old-", index)
@@ -241,7 +245,7 @@ test_that("more than eight discarded locks are processed while progress continue
 test_that("lock creation errors name a read-only parent", {
   fixture <- round063_lock_fixture("bigbang-round063-read-only-")
   withr::defer(unlink(fixture$root, recursive = TRUE, force = TRUE))
-  on.exit(Sys.chmod(fixture$root, mode = "0755"), add = TRUE)
+  withr::defer(Sys.chmod(fixture$root, mode = "0755"))
   Sys.chmod(fixture$root, mode = "0555")
   if (file.access(fixture$root, 2L) == 0L) {
     Sys.chmod(fixture$root, mode = "0755")

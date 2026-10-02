@@ -169,6 +169,20 @@ test_that("filesystem guards cover links, literals, and safe removal", {
   expect_identical(is_path_inside(file.path(root, "child"), root), TRUE)
   expect_identical(is_path_inside(file.path(root, "other"), dirname(root)), TRUE)
 
+  physical <- file.path(root, "physical")
+  dir.create(file.path(physical, "nuevo"), recursive = TRUE)
+  outer <- file.path(root, "outer")
+  dir.create(outer)
+  link_outside <- file.path(outer, "sublink")
+  expect_true(isTRUE(file.symlink(physical, link_outside)))
+  expect_true(is_path_inside(outer, outer))
+  expect_true(is_path_inside(tempdir(), tempdir()))
+  expect_false(is_path_inside(file.path(outer, "sublink", ".."), outer))
+  expect_false(is_path_inside(file.path(outer, "sublink", "nuevo"), outer))
+  outer_with_parent <- file.path(root, "container", "..")
+  dir.create(file.path(root, "container"))
+  expect_true(is_path_inside(file.path(root, "child"), outer_with_parent))
+
   expect_match(.escape_non_ascii("A\n\u00e1\U0001f600"), "\\\\u000a")
   expect_match(.r_string_literal("quote\" slash\\"), "\\\\\"")
   expect_match(.r_string_literal("\u0001"), "\\\\u0001")
@@ -189,6 +203,7 @@ test_that("filesystem guards cover links, literals, and safe removal", {
   safe_environment <- new.env(parent = environment(safe_unlink_local))
   safe_environment$tempdir <- function() sandbox
   environment(safe_unlink_local) <- safe_environment
+  expect_false(safe_unlink_local(sandbox, recursive = TRUE, force = TRUE))
   outside <- tempfile("bigbang-round062-outside-package-")
   dir.create(file.path(outside, "R"), recursive = TRUE)
   writeLines("Package: outside", file.path(outside, "DESCRIPTION"),

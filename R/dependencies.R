@@ -852,7 +852,8 @@
     extract_dir, recursive = TRUE, full.names = TRUE,
     all.files = TRUE, include.dirs = TRUE, no.. = TRUE
   )
-  if (length(entries) > 0L && any(nzchar(Sys.readlink(entries)))) {
+  if (length(entries) > 0L &&
+        any(vapply(entries, .path_is_symlink, logical(1L)))) {
     stop(.bb_trf(
       "Archive %s contains symbolic links, which are not supported.", archive
     ), call. = FALSE)
@@ -2714,15 +2715,33 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
       symbol = own_symbols, candidates = own_candidates,
       reason = "generated metapackage symbol", stringsAsFactors = FALSE
     )
+    syntax_symbols <- intersect(own_symbols, .r_syntax_symbols())
+    if (length(syntax_symbols) > 0L) {
+      .bigbang_abort(
+        "bigbang_error_reexport_collision",
+        .bb_trf(
+          paste0(
+            "Cannot re-export R syntax symbol(s) %s: generated code must retain ",
+            "R syntax and cannot be shadowed. Use reexport_exclude = %s."
+          ),
+          paste(syntax_symbols, collapse = ", "),
+          paste(vapply(syntax_symbols, .r_symbol_literal, character(1L)),
+                collapse = ", ")
+        ),
+        symbols = syntax_symbols, components = metapackage_name,
+        collisions = own_table, data = own_table
+      )
+    }
+    generated_symbols <- setdiff(own_symbols, syntax_symbols)
     .bigbang_abort(
       "bigbang_error_reexport_collision",
       .bb_trf(
         "Generated metapackage symbol(s) %s can only be resolved with reexport_exclude: %s.",
-        paste(own_symbols, collapse = ", "),
-        paste(vapply(own_symbols, .r_symbol_literal, character(1L)),
+        paste(generated_symbols, collapse = ", "),
+        paste(vapply(generated_symbols, .r_symbol_literal, character(1L)),
               collapse = ", ")
       ),
-      symbols = own_symbols, components = metapackage_name,
+      symbols = generated_symbols, components = metapackage_name,
       collisions = own_table, data = own_table
     )
   }

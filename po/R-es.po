@@ -163,6 +163,9 @@ msgstr "No se pueden reexportar los símbolos %s porque hay colisiones entre com
 msgid "Cannot re-export symbol(s) %s because they belong to generated metapackage code."
 msgstr "No se pueden reexportar los símbolos %s porque pertenecen al código generado del metapaquete."
 
+msgid "Cannot re-export R syntax symbol(s) %s: generated code must retain R syntax and cannot be shadowed. Use reexport_exclude = %s."
+msgstr "No se pueden reexportar símbolos de sintaxis de R (%s): el código generado debe conservar la sintaxis de R y no se puede ocultar. Use reexport_exclude = %s."
+
 msgid "SAFETY: Path is too short and may be dangerous: %s"
 msgstr "SEGURIDAD: La ruta es demasiado corta y puede ser peligrosa: %s"
 
@@ -652,6 +655,18 @@ msgstr "el directorio padre del lock no permite escribir"
 msgid "the lock parent rejected creation or has no available space"
 msgstr "el directorio padre del lock rechazó la creación o no tiene espacio disponible"
 
+msgid "Could not acquire the update lock at %s because its state made no progress after %s retries; inspect the lock entry before retrying."
+msgstr "No se pudo adquirir el lock de actualización en %s porque su estado no avanzó después de %s reintentos; inspeccione la entrada del lock antes de volver a intentar."
+
+msgid "Could not acquire the update lock at %s because %s made no progress after %s consecutive retries; inspect entry %s before retrying."
+msgstr "No se pudo adquirir el lock de actualización en %s porque %s no avanzó después de %s reintentos consecutivos; inspeccione la entrada %s antes de volver a intentar."
+
+msgid "the free lock could not publish its temporary preparation"
+msgstr "el lock libre no pudo publicar su preparación temporal"
+
+msgid "the lock entry remained in state %s"
+msgstr "la entrada del lock permaneció en el estado %s"
+
 msgid "after confirming that no other update is running, call again with recover = TRUE."
 msgstr "después de confirmar que no hay otro update en ejecución, vuelva a llamar con recover = TRUE."
 
@@ -720,6 +735,9 @@ msgstr "El componente '%s' no está instalado."
 
 msgid "Skipped because local dependency %s was skipped: %s"
 msgstr "Omitido porque la dependencia local %s fue omitida: %s"
+
+msgid "Some components were skipped because local dependencies were skipped: %s."
+msgstr "Algunos componentes se omitieron porque se omitieron dependencias locales: %s."
 
 msgid "Set aside remaining update-journal content at %s; only verified inventory files were deleted before unverified content was preserved and the update continues."
 msgstr "Se apartó el contenido restante del diario de actualización en %s; solo se eliminaron archivos verificados del inventario antes de preservar el contenido no verificable y continuar el update."

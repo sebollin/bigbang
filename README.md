@@ -221,6 +221,17 @@ can forge these records; that is outside the integrity model. Recovery also
 requires the owner fields of `state.rds` and `marker.rds` to match, otherwise
 the journal is set aside rather than used for rollback.
 
+The liveness proof and process-start token are selected by platform:
+
+| Platform | Existence proof | Start token | Policy |
+| --- | --- | --- | --- |
+| Linux with `/proc` | `/proc/<pid>/stat` | field 20, source `proc` | A non-terminal PID whose token matches is proven live. |
+| macOS, BSD, or Unix without `/proc` | `kill(pid, 0)` or `LC_ALL=C ps -p <pid>` | `LC_ALL=C ps -o lstart= -p <pid>`, source `ps` | A live PID whose `lstart` matches is proven live. |
+| Windows | Never probed with `tools::pskill()` | None | Ownership is uncertain; recovery never overrides a proven live owner. |
+
+The source is stored with the token, so a `/proc` token is never compared with
+a `ps` token. `LANGUAGE` and `LC_TIME` cannot change the portable `ps` token.
+
 `cran_deps = "skip"` is the default and never accesses the network. Use
 `"error"` to fail immediately when a non-local dependency is missing, or
 `"install"` with an explicitly configured `repos` value to allow repository

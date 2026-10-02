@@ -771,9 +771,13 @@
 #' `/proc/<pid>` and treats a missing process as dead, `Z` or `X` in
 #' `/proc/<pid>/stat` as dead, and any other readable state as existing; the
 #' process-start token still decides identity. Without `/proc`, `kill(pid, 0)`
-#' proves existence only when it succeeds. A failure is dead only when `ps -p`
-#' also proves that the PID is absent; permission errors, an existing PID, an
-#' unavailable `ps`, and an unreadable token are uncertain. The exact policy is:
+#' proves existence only when it succeeds; if that probe is unavailable,
+#' `LC_ALL=C ps -p <pid>` establishes whether the PID is present or absent, and
+#' `ps -o lstart= -p <pid>` supplies the portable start token. The token source
+#' is stored (`proc` or `ps`) and mismatched sources never compare equal. A
+#' failure is dead only when `ps -p` also proves that the PID is absent;
+#' permission errors, an unavailable `ps`, and an unreadable token are uncertain.
+#' The exact policy is:
 #' dead means the process does not exist or is `Z`/`X`; alive means it exists,
 #' is not terminal, and its start token matches; live-token-conflict means it
 #' exists but the token differs; uncertain means existence or identity cannot be

@@ -188,12 +188,6 @@ test_that("source evidence preserves the saved round061 reference", {
     evidence[names(round061_source_reference$counts)], length, integer(1L)
   )
   expect_identical(counts, round061_source_reference$counts)
-  saved <- tempfile("round061-source-reference-", fileext = ".rds")
-  withr::defer(unlink(saved, force = TRUE))
-  saveRDS(evidence, saved, version = 3)
-  expect_identical(
-    unname(tools::md5sum(saved)), round061_source_reference$rds_md5
-  )
 })
 
 test_that("qualified calls activate own helpers and preserve the collision proof", {

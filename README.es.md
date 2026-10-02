@@ -210,6 +210,18 @@ modelo de integridad. La recuperación también exige que el dueño de `state.rd
 coincida con el de `marker.rds`; si no coincide, el diario se aparta y no se
 usa para revertir.
 
+La prueba de vida y el token de inicio se eligen según la plataforma:
+
+| Plataforma | Prueba de existencia | Token de inicio | Política |
+| --- | --- | --- | --- |
+| Linux con `/proc` | `/proc/<pid>/stat` | campo 20, fuente `proc` | Un PID no terminal cuyo token coincide está probado como vivo. |
+| macOS, BSD o Unix sin `/proc` | `kill(pid, 0)` o `LC_ALL=C ps -p <pid>` | `LC_ALL=C ps -o lstart= -p <pid>`, fuente `ps` | Un PID vivo cuyo `lstart` coincide está probado como vivo. |
+| Windows | Nunca se sondea con `tools::pskill()` | Ninguno | La propiedad es incierta; la recuperación nunca vence a un dueño probado vivo. |
+
+La fuente se guarda junto con el token, por lo que nunca se compara un token de
+`/proc` con uno de `ps`. `LANGUAGE` y `LC_TIME` no pueden cambiar el token
+portable de `ps`.
+
 El análisis de colisiones es una ayuda de diagnóstico. La garantía es la decisión
 explícita `reexport_prefer` o `reexport_exclude` más la verificación de
 `<meta>_install()`; `library(<meta>)` por sí sola no verifica los dueños instalados.

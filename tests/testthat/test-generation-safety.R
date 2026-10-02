@@ -611,9 +611,12 @@ test_that("generation tolerations cannot disable recipient protection invariants
 
   absolute_dir <- archive_dir("absolute")
   absolute <- file.path(absolute_dir, "guardabsolute.tar")
-  utils::tar(
-    absolute, traversal_payload, compression = "none", tar = "internal"
-  )
+  absolute_work <- file.path(sandbox, "absolute-work")
+  dir.create(absolute_work)
+  file.copy(traversal_payload, file.path(absolute_work, "payload.txt"))
+  withr::with_dir(absolute_work, utils::tar(
+    absolute, "payload.txt", compression = "none", tar = "internal"
+  ))
 
   roots_dir <- archive_dir("roots")
   roots_work <- file.path(sandbox, "roots-work")

@@ -24,6 +24,11 @@
   exports with `reexport_exclude = "..."`. Version 0.4.0 already rejected
   these collisions; 0.5.0 adds explicit choose-or-exclude handling and
   diagnostics.
+- Re-exporting R syntax names such as `if`, `[`, or arithmetic and comparison
+  operators now requires `reexport_exclude`. Version 0.4.0 did not reserve
+  those names, so a component export could shadow syntax in generated code and
+  in the attached session. Migrate by excluding the syntax names; the generated
+  metapackage retains R's syntax and its installer remains usable.
 
 ## New features
 
@@ -62,6 +67,8 @@
   journal mutations, and process discarded entries until no progress remains.
   Zombie and permission-sensitive liveness is conservative, symlink locks have
   a working recovery path, and lock-creation errors identify the parent failure.
+  Unix systems without `/proc` now record a locale-independent `ps lstart`
+  token, and the retry guard counts only consecutive no-progress attempts.
 - Armed journal recovery now rejects mismatched `state.rds` and `marker.rds`
   owners instead of rolling back a live update. Clean re-export verification
   now follows the runtime library order and distinguishes installation,

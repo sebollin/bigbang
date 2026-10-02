@@ -163,6 +163,9 @@ msgstr ""
 msgid "Cannot re-export symbol(s) %s because they belong to generated metapackage code."
 msgstr ""
 
+msgid "Cannot re-export R syntax symbol(s) %s: generated code must retain R syntax and cannot be shadowed. Use reexport_exclude = %s."
+msgstr ""
+
 msgid "SAFETY: Path is too short and may be dangerous: %s"
 msgstr ""
 
@@ -652,6 +655,18 @@ msgstr ""
 msgid "the lock parent rejected creation or has no available space"
 msgstr ""
 
+msgid "Could not acquire the update lock at %s because its state made no progress after %s retries; inspect the lock entry before retrying."
+msgstr ""
+
+msgid "Could not acquire the update lock at %s because %s made no progress after %s consecutive retries; inspect entry %s before retrying."
+msgstr ""
+
+msgid "the free lock could not publish its temporary preparation"
+msgstr ""
+
+msgid "the lock entry remained in state %s"
+msgstr ""
+
 msgid "after confirming that no other update is running, call again with recover = TRUE."
 msgstr ""
 
@@ -719,6 +734,9 @@ msgid "Component package '%s' is not installed."
 msgstr ""
 
 msgid "Skipped because local dependency %s was skipped: %s"
+msgstr ""
+
+msgid "Some components were skipped because local dependencies were skipped: %s."
 msgstr ""
 
 msgid "Set aside remaining update-journal content at %s; only verified inventory files were deleted before unverified content was preserved and the update continues."

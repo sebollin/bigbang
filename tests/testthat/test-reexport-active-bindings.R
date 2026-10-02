@@ -13,7 +13,12 @@ reexport_make_archive <- function(source_root, archive_dir, name,
     "Maintainer: Test Author <test@example.org>"
   ), file.path(package_dir, "DESCRIPTION"), useBytes = TRUE)
   writeLines(c(
-    paste0("export(", paste(exports, collapse = ","), ")"),
+    paste0(
+      "export(",
+      paste(vapply(exports, bigbang:::.r_symbol_literal, character(1L)),
+            collapse = ","),
+      ")"
+    ),
     namespace_extra
   ), file.path(package_dir, "NAMESPACE"), useBytes = TRUE)
   writeLines(body, file.path(package_dir, "R", "fixture.R"), useBytes = TRUE)
@@ -216,6 +221,58 @@ test_that("reexport rejects export collisions and own generated symbols", {
     ".reexport_component_value",
     fixed = TRUE
   )
+})
+
+test_that("R syntax exports require exclusion and leave the installer usable", {
+  sandbox <- tempfile("bigbang-reexport-syntax-")
+  source_root <- file.path(sandbox, "sources")
+  archive_dir <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "destination")
+  meta_library <- file.path(sandbox, "meta-library")
+  component_library <- file.path(sandbox, "component-library")
+  dir.create(source_root, recursive = TRUE)
+  dir.create(archive_dir)
+  dir.create(destination)
+  dir.create(meta_library)
+  dir.create(component_library)
+  archive <- reexport_make_archive(
+    source_root, archive_dir, "syntaxcomponent",
+    exports = c("if", "["),
+    body = c(
+      "`if` <- function(...) 1L",
+      "`[` <- function(...) 1L"
+    )
+  )
+
+  expect_error(
+    create_metapackage(
+      "syntaxverse", archive, dest_dir = destination,
+      document = FALSE, verbose = FALSE, import_deps = character(),
+      force_deps = character(), reexport = TRUE
+    ),
+    "syntax|reexport_exclude|if|\\[",
+    ignore.case = TRUE
+  )
+
+  generated <- create_metapackage(
+    "syntaxverse", archive, dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character(), include_archives = TRUE, reexport = TRUE,
+    reexport_exclude = c("if", "[")
+  )
+  r_binary <- file.path(
+    R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
+  )
+  expect_identical(
+    system2(r_binary, c("CMD", "INSTALL", "-l", shQuote(meta_library),
+                        shQuote(generated$path)), stdout = FALSE, stderr = FALSE),
+    0L
+  )
+  withr::local_libpaths(c(meta_library, .libPaths()))
+  loadNamespace("syntaxverse")
+  installer <- getExportedValue("syntaxverse", "syntaxverse_install")
+  expect_no_error(installer(lib = component_library, verbose = FALSE))
+  withr::defer(unloadNamespace("syntaxverse"))
 })
 
 test_that("reexport requires a readable component NAMESPACE", {

@@ -116,12 +116,27 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
 
 
 
-#' Names reserved by generated metapackage code.
+#' Names reserved by generated metapackage code and R syntax.
 #'
 #' @param name Character metapackage name.
 #' @return Character vector of symbols that cannot be replaced by active
 #'   component bindings.
 #' @noRd
+.r_syntax_symbols <- function() {
+  reserved <- c(
+    "if", "else", "repeat", "while", "function", "for", "in", "next",
+    "break", "TRUE", "FALSE", "NULL", "Inf", "NaN", "NA", "NA_integer_",
+    "NA_real_", "NA_complex_", "NA_character_", "..."
+  )
+  operators <- c(
+    "{", "(", ";", ",", "[", "[[", "$", "@", "::", ":::", "?", ":",
+    "~", "=", "<-", "<<-", "->", "->>", "|>", "&&", "||", "&", "|", "!",
+    "+", "-", "*", "/", "^", "%%", "%/%", "%*%", "%in%", "==", "!=",
+    "<", ">", "<=", ">="
+  )
+  unique(c(reserved, operators))
+}
+
 .generated_metapackage_symbols <- function(name) {
   public <- paste0(name, c("_attach", "_detach", "_packages", "_attach_all",
                            "_install", "_load_all", "_deps", "_conflicts",
@@ -144,7 +159,8 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
     "topological_order",
     "style_startup_text", ".meta_package_version", "startup_message",
     "generate_ascii_banner", "format_cli_startup", "safe_unlink",
-    "is_path_inside", ".meta_tr", ".meta_trf", ".onLoad", ".onAttach", ".onUnload")
+    "is_path_inside", ".meta_tr", ".meta_trf", ".onLoad", ".onAttach", ".onUnload",
+    .r_syntax_symbols())
 }
 
 .namespace_export_directive <- function(symbol) {

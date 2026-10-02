@@ -1,7 +1,39 @@
+.path_is_windows_reparse_point <- function(path) {
+  if (!identical(.Platform$OS.type, "windows")) return(FALSE)
+  fsutil <- Sys.which("fsutil")[[1L]]
+  if (nzchar(fsutil)) {
+    status <- tryCatch(
+      suppressWarnings(system2(
+        fsutil,
+        c("reparsepoint", "query", shQuote(path)),
+        stdout = FALSE, stderr = FALSE
+      )),
+      error = function(e) NA_integer_
+    )
+    if (identical(as.integer(status), 0L)) return(TRUE)
+  }
+
+  # R's Windows normalizePath() resolves symbolic links and junctions.  This
+  # fallback is deliberately conservative for an existing absolute path: a
+  # canonical path different from its lexical spelling is not safe to remove.
+  if (!file.exists(path) && !dir.exists(path)) return(FALSE)
+  lexical <- gsub("\\\\", "/", path.expand(path))
+  if (!grepl("^(?:[A-Za-z]:/|/)", lexical, perl = TRUE)) {
+    lexical <- file.path(getwd(), lexical)
+  }
+  resolved <- tryCatch(
+    normalizePath(path, winslash = "/", mustWork = FALSE),
+    error = function(e) NA_character_
+  )
+  is.character(resolved) && length(resolved) == 1L && !is.na(resolved) &&
+    !identical(tolower(gsub("\\\\", "/", resolved)), tolower(lexical))
+}
+
 .path_is_symlink <- function(path) {
   target <- tryCatch(Sys.readlink(path), error = function(e) "")
-  is.character(target) && length(target) == 1L && !is.na(target) &&
+  is_link <- is.character(target) && length(target) == 1L && !is.na(target) &&
     nzchar(target)
+  isTRUE(is_link) || isTRUE(.path_is_windows_reparse_point(path))
 }
 
 .validate_project_root_path <- function(project_dir) {
@@ -158,7 +190,8 @@
   ascii <- all(codepoints < 0x80L)
   control <- any(codepoints < 0x20L | codepoints == 0x7fL)
   syntactic <- identical(make.names(symbol), symbol) &&
-    !grepl("^[0-9]", symbol) && ascii && !control
+    !grepl("^[0-9]", symbol) && ascii && !control &&
+    !symbol %in% .r_syntax_symbols()
   if (isTRUE(syntactic)) symbol else .r_string_literal(symbol)
 }
 
@@ -321,6 +354,17 @@ safe_unlink <- function(path, recursive = FALSE, force = FALSE, verify = TRUE) {
           return(invisible(FALSE))
         }
 
+        temp_root <- normalizePath(
+          tempdir(), winslash = "/", mustWork = TRUE
+        )
+        candidate <- normalizePath(
+          p, winslash = "/", mustWork = FALSE
+        )
+        if (identical(candidate, temp_root)) {
+          message(.bb_trf("SAFETY: Potentially important directory: %s", p))
+          return(invisible(FALSE))
+        }
+
         # Apply directory-specific checks.
         if (dir.exists(p)) {
           # Never remove protected directories.
@@ -339,7 +383,7 @@ safe_unlink <- function(path, recursive = FALSE, force = FALSE, verify = TRUE) {
             if (has_desc && (has_r_dir || has_man_dir)) {
               # Location, not a basename, establishes that this is temporary.
               # A name such as 'templates' is not evidence of ownership.
-              if (!is_path_inside(p, tempdir())) {
+              if (!is_path_inside(p, temp_root)) {
                 message(.bb_trf("SAFETY: Possible non-temporary R package directory: %s", p))
                 return(invisible(FALSE))
               }
@@ -398,6 +442,11 @@ is_path_inside <- function(inner_path, outer_path) {
     inner <- gsub("\\\\", "/", inner)
     outer <- gsub("\\\\", "/", outer)
   }
+
+  # Equality is containment: callers that need a strict descendant must reject
+  # equality separately. Paths are compared after resolving the existing
+  # ancestor, so a suffix that traverses a link is judged by its physical path.
+  if (identical(inner, outer)) return(TRUE)
 
   # Add a separator to prevent partial-prefix matches.
   if (!endsWith(outer, "/")) {

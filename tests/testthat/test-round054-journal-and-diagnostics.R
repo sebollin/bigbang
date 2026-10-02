@@ -158,7 +158,7 @@ test_that("sibling matching escapes the name literally", {
   for (path in c(controls, valid)) dir.create(path)
   expect_identical(
     .update_journal_sibling_paths(project, "x.y", "armando"),
-    valid
+    normalizePath(valid, winslash = "/", mustWork = FALSE)
   )
 })
 
