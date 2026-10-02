@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,47 @@
       <small>Source: <a href="https://github.com/sebollin/bigbang/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.5.0" id="bigbang-050">bigbang 0.5.0<a class="anchor" aria-label="anchor" href="#bigbang-050"></a></h2>
+<div class="section level3">
+<h3 id="breaking-changes-0-5-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-5-0"></a></h3>
+<ul><li>
+<code>update = TRUE</code> refuses a planned generated path that already exists outside the manifest, including generated documentation files that were previously regenerated over it. Remove or rename that file to let the update write it.</li>
+<li>
+<code>bigbang_error_missing_project</code> now inherits from <code>bigbang_error_missing_manifest</code> while identifying a missing project more precisely.</li>
+<li>
+<code>dry_run</code> now reports a read-only reconciliation plan for sibling journals and the project lock; uncertain owners require <code>recover = TRUE</code>.</li>
+<li>A failure while promoting generated documentation now aborts the update and rolls the project back through its journal. Only failures in the staging generation remain warnings.</li>
+<li>
+<code><a href="../reference/create_metapackage.html">create_metapackage()</a></code> now accepts <code>reexport_prefer</code> and <code>reexport_exclude</code>. Every collision requires one of them because static analysis cannot prove object identity, and diagnostics classify the selected resolution.</li>
+<li>Generated metapackages now reserve <code>.component_reexport_specs</code>, <code>.reexport_state</code>, <code>.reexport_library_paths</code>, <code>.set_reexport_library</code>, <code>.reexport_component_value</code>, <code>.reexport_installed_version</code>, <code>.reexport_loaded_version</code>, <code>.reexport_version_text</code>, <code>.make_reexport_binding</code>, <code>.install_reexport_bindings</code>, <code>.reexport_verify</code>, <code>.reexport_verify_subprocess</code>, <code>.meta_package_version</code>, <code>&lt;meta&gt;_reexport_verification</code>, and the generated installer, lifecycle, dependency, diagnostic, and translation helpers. Migrate colliding component exports with <code>reexport_exclude = "..."</code>. Version 0.4.0 already rejected these collisions; 0.5.0 adds explicit choose-or-exclude handling and diagnostics.</li>
+<li>Re-exporting R syntax names such as <code>if</code>, <code>[</code>, or arithmetic and comparison operators now requires <code>reexport_exclude</code>. Version 0.4.0 did not reserve those names, so a component export could shadow syntax in generated code and in the attached session. Migrate by excluding the syntax names; the generated metapackage retains R’s syntax and its installer remains usable.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-0-5-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-5-0"></a></h3>
+<ul><li>Interrupted updates now use a durable journal, resumable tombstones, and an exclusive project lock; recovery preserves unverified user bytes and supports read-only planning.</li>
+<li>Re-export diagnostics follow same-package helpers and classify calculated destinations and foreign namespace indirection conservatively.</li>
+<li>Installed-owner verification runs in a clean R subprocess with the destination library first, and the conflicts accessor keeps verification outside symbol names.</li>
+<li>Update recovery accepts the <code>recover</code> argument and reports <code>recovered</code>, <code>recovery</code>, <code>reexports</code>, and <code>reexport_excluded</code> in its result. The generated <code>&lt;meta&gt;_reexport_verification()</code> accessor returns installed-owner checks.</li>
+<li>Dependency scanning now includes <code>.S</code>, <code>.s</code>, and <code>.q</code> sources; detected dependencies can therefore differ from earlier releases.</li>
+<li>Updates can now add planned files that are absent from both the manifest and the project, including new, re-added, or version-bumped components and workflow vignettes; existing untracked paths are refused as user content.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-0-5-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-5-0"></a></h3>
+<ul><li>Generated metapackages: <code>&lt;meta&gt;_detach()</code> detaches components from the top of the search path down, so families linked through <code>Depends</code> detach completely; <code>library(&lt;meta&gt;)</code> reports components that cannot be attached, such as one whose <code>Depends</code> are missing or whose namespace was loaded from another library, instead of failing; installer messages respect <code>verbose = FALSE</code>; <code>&lt;meta&gt;_conflicts()</code> compares namespace exports, so internal objects such as <code>.Depends</code> are no longer reported as conflicts.</li>
+<li>A warning about an archive whose file name and <code>DESCRIPTION</code> version differ is now given once per archive and installation call.</li>
+<li>Fixed a 0.4.0 defect where an installed older component that no longer exported a re-exported symbol made <code>R CMD INSTALL</code> fail while loading the metapackage. Re-export bindings now always evaluate safely and provide an actionable <code>&lt;meta&gt;_install()</code> placeholder error when called.</li>
+<li>Components skipped because a local dependency was skipped are now reported as skipped with the chained reason, and the skipped summary is shown even when another component fails.</li>
+<li>Discarded-journal cleanup now sets aside unreadable content, revalidates paths and MD5 values immediately before deletion, checks every discard unlink, and moves unreadable armed journals aside during recovery. Verification now reports unavailable checks, preserves its accessor class, uses the runtime library when no destination library exists, qualifies subprocess helpers, and reports namespace unload failures with their importing package and restart guidance. Windows liveness never probes a process with a terminating signal.</li>
+<li>Update locks now decide discarded entries from the recorded owner before the claimant, preserve live owners byte-for-byte, revalidate ownership before journal mutations, and process discarded entries until no progress remains. Zombie and permission-sensitive liveness is conservative, symlink locks have a working recovery path, and lock-creation errors identify the parent failure. Unix systems without <code>/proc</code> now record a locale-independent <code>ps lstart</code> token, and the retry guard counts only consecutive no-progress attempts.</li>
+<li>Armed journal recovery now rejects mismatched <code>state.rds</code> and <code>marker.rds</code> owners instead of rolling back a live update. Clean re-export verification now follows the runtime library order and distinguishes installation, export, and foreign-library failures.</li>
+<li>Fixed the 0.4.0 regression where generated metapackage machinery could be hidden by an export with the same name.</li>
+<li>Journal inventory and discard cleanup no longer follow directory symlinks; linked entries and their descendants are set aside byte-for-byte.</li>
+<li>Installation verification no longer reuses a namespace loaded from another library and never reports identity when a clean verification is unavailable.</li>
+<li>Generated re-export calls now qualify base, utils, tools, and methods helpers; source validation and generated diagnostics remain safe when components export those names.</li>
+<li>Re-export source evidence reuses per-file parse indexes, and update recovery preserves staged files and unknown external deletions conservatively.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.4.0" id="bigbang-040">bigbang 0.4.0<a class="anchor" aria-label="anchor" href="#bigbang-040"></a></h2><p class="text-muted">CRAN release: 2026-08-19</p>
 <div class="section level3">

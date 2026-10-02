@@ -128,6 +128,14 @@ preferís que los archivos queden en una ubicación compartida, generá con
 `include_archives = FALSE` y entonces `equipoverse_install()` va a pedir
 un `pkg_dir` explícito.
 
+### Actualizaciones interrumpidas y recuperación
+
+Un `update = TRUE` interrumpido deja un diario durable junto al
+proyecto. El update siguiente lo revisa antes de escribir; usá
+`dry_run = TRUE` para ver la acción prevista. Después de confirmar que
+no sigue corriendo otro update, pasá `recover = TRUE` para preservar
+bytes de usuario desconocidos y completar el rollback o la recuperación.
+
 `"skip"` es el modo predeterminado y nunca usa la red. `"error"` falla
 si falta una dependencia no local; `"install"` permite instalar desde un
 `repos` configurado explícitamente.
@@ -153,18 +161,104 @@ workflow = c("Importación" = "datos", "Informe" = "reportes")
 Para exponer las exportaciones explícitas mediante bindings activos de
 solo lectura, usá `reexport = TRUE` al generar. Los componentes quedan
 fuera de `Imports` y `Depends`, así que el metapaquete se puede instalar
-y cargar sin conexión antes de que existan. Antes de instalarlo, leer un
-binding devuelve una función provisoria; el error claro de componente
-faltante aparece solo al llamarla. Para exports que no son funciones, el
-acceso devuelve esa función en lugar del objeto hasta la instalación.
-Después el binding resuelve la función u objeto real sin recargar el
-metapaquete. Solo las directivas `export()` explícitas se convierten en
-bindings, incluidos los nombres no sintácticos, que se citan de forma
-segura en NAMESPACE. Las clases y métodos S4 quedan disponibles cargando
-el componente. Un objeto restaurado con
-[`readRDS()`](https://rdrr.io/r/base/readRDS.html) no carga un
-componente por sí mismo, así que R no puede despachar su método S3 hasta
-que el componente se haya cargado.
+y cargar sin conexión antes de que existan. Evaluar un binding nunca
+lanza un error: si falta el componente, no puede cargarse o es una
+instalación vieja que ya no exporta el símbolo, devuelve una función
+provisoria. Al llamarla informa el componente, la versión instalada, la
+exportación faltante y la llamada a `<meta>_install()` que repara la
+instalación. Así también son seguros la inspección del namespace
+([`as.list()`](https://rdrr.io/r/base/list.html),
+[`mget()`](https://rdrr.io/r/base/get.html)) y los paneles de entorno
+del IDE. Para exports que no son funciones, el acceso devuelve esa
+función en lugar del objeto hasta la instalación. Después el binding
+resuelve la función u objeto real sin recargar el metapaquete. Solo las
+directivas `export()` explícitas se convierten en bindings, incluidos
+los nombres no sintácticos, que se citan de forma segura en NAMESPACE.
+Las clases y métodos S4 quedan disponibles cargando el componente. Un
+objeto restaurado con [`readRDS()`](https://rdrr.io/r/base/readRDS.html)
+no carga un componente por sí mismo, así que R no puede despachar su
+método S3 hasta que el componente se haya cargado.
+
+### Colisiones de reexportación
+
+Cuando varios componentes exportan el mismo símbolo, usá
+`reexport_prefer = c(símbolo = "componente")` para elegir su proveedor o
+`reexport_exclude = "símbolo"` para excluirlo. Toda colisión requiere
+una de esas decisiones porque el análisis estático no puede probar que
+dos objetos exportados sean el mismo en tiempo de ejecución. El
+diagnóstico etiqueta cada colisión como `probable_same_object`,
+`distinct_definitions` o `undetermined`, y ordena las razones de sus
+fuentes. Para un `probable_same_object` elegido, `<meta>_install()`
+verifica los dueños instalados en un subproceso limpio de R, con el
+mismo orden de bibliotecas que usa el runtime: primero la biblioteca
+destino y después [`.libPaths()`](https://rdrr.io/r/base/libPaths.html).
+Así, un dueño instalado solo en una biblioteca posterior se resuelve y
+se compara con el objeto que va a recibir el usuario. El resultado
+distingue entre no instalado, no exportado y cargado desde otra
+biblioteca; si un dueño instalado ya no exporta el símbolo, lo informa
+con el mismo aviso de verificación. Si el subproceso no se puede
+ejecutar, el resultado queda explícitamente sin verificar. Un espacio de
+nombres ya cargado desde otra biblioteca se informa antes de verificar.
+`<meta>_conflicts()` repite la comprobación y emite de nuevo el aviso,
+por lo que es la forma de verificar otra vez después de instalar. Un
+aviso de identidad `FALSE` distingue copias equivalentes de funciones
+(mismo cuerpo y formales) de objetos distintos. Si
+`on_component_error = "skip"` omite un dueño necesario, la generación
+falla en vez de crear un binding hacia un componente que no viaja. El
+objeto que devuelve conserva los conflictos de enmascaramiento y guarda
+el data frame de verificación como atributo. Leelo con
+`<meta>_reexport_verification(conflicts)`, de modo que un componente que
+exporte ese nombre siga visible en la lista de conflictos.
+
+En un update interrumpido, el lock se decide primero por el dueño y
+después por el reclamante. Un dueño vivo siempre bloquea. Un dueño
+incierto bloquea salvo con `recover = TRUE`; uno muerto se puede
+reclamar. Un lock descartado cuyo `owner.rds` está vivo se restaura o
+bloquea informando el PID y nunca se borra. Solo cuando ese dueño está
+probado como muerto se decide por la vida del reclamante si hay que
+bloquear, exigir `recover = TRUE` o descartar la entrada. Antes de
+continuar, el update vuelve a validar que el lock publicado siga siendo
+suyo; si cambió, aborta antes de mutar. Un enlace simbólico en el nombre
+del lock se informa como enlace y `recover = TRUE` aparta el enlace sin
+seguir su destino. Al descartar, el diario primero se renombra a un
+hermano privado impredecible después de verificar su inventario, y cada
+borrado vuelve a verificar ancestros y MD5 justo antes de
+[`unlink()`](https://rdrr.io/r/base/unlink.html). R no ofrece
+`unlinkat()`/`O_NOFOLLOW`, así que un proceso del mismo usuario que
+reemplace activamente carpetas del diario durante el descarte sigue
+siendo una frontera de integridad, igual que los registros falsificados;
+se mide la ventana restante entre la última verificación y
+[`unlink()`](https://rdrr.io/r/base/unlink.html).
+
+En Linux, la vida usa `/proc/<pid>` y considera muertos los estados
+zombie (`Z`) y terminado (`X`). Sin `/proc`, un fallo de `kill(pid, 0)`
+es incierto salvo que `ps -p` pruebe que el PID no existe; un error de
+permisos y un proceso de otro usuario nunca se consideran muertos. Un
+proceso del mismo usuario con permiso de escritura puede falsificar
+estos registros: eso queda fuera del modelo de integridad. La
+recuperación también exige que el dueño de `state.rds` coincida con el
+de `marker.rds`; si no coincide, el diario se aparta y no se usa para
+revertir.
+
+La prueba de vida y el token de inicio se eligen según la plataforma:
+
+| Plataforma | Prueba de existencia | Token de inicio | Política |
+|----|----|----|----|
+| Linux con `/proc` | `/proc/<pid>/stat` | campo 20, fuente `proc` | Un PID no terminal cuyo token coincide está probado como vivo. |
+| macOS, BSD o Unix sin `/proc` | `kill(pid, 0)` o `LC_ALL=C ps -p <pid>` | `LC_ALL=C ps -o lstart= -p <pid>`, fuente `ps` | Un PID vivo cuyo `lstart` coincide está probado como vivo. |
+| Windows | Nunca se sondea con [`tools::pskill()`](https://rdrr.io/r/tools/pskill.html) | Ninguno | La propiedad es incierta; la recuperación nunca vence a un dueño probado vivo. |
+
+La fuente se guarda junto con el token, por lo que nunca se compara un
+token de `/proc` con uno de `ps`. `LANGUAGE` y `LC_TIME` no pueden
+cambiar el token portable de `ps`.
+
+El análisis de colisiones es una ayuda de diagnóstico. La garantía es la
+decisión explícita `reexport_prefer` o `reexport_exclude` más la
+verificación de `<meta>_install()`; `library(<meta>)` por sí sola no
+verifica los dueños instalados. El escáner es conservador y puede contar
+un `delayedAssign` que nunca se fuerza, una rama `if (FALSE)` o el
+cuerpo de un
+[`reg.finalizer()`](https://rdrr.io/r/base/reg.finalizer.html).
 
 bigbang mantiene como errores duros todas las validaciones que protegen
 a quien recibe el metapaquete: archivos inseguros o malformados,
@@ -261,7 +355,9 @@ plan$findings                                    # todos los hallazgos
 ```
 
 `dry_run = TRUE` no crea `dest_dir` ni toca el destino, así que es una
-forma segura de ver qué haría una llamada antes de que la haga.
+forma segura de ver qué haría una llamada antes de que la haga. Durante
+un update también planifica la reconciliación de cada diario hermano e
+informa su ruta y acción sin modificar esas carpetas.
 
 - `on_component_error = "skip"` genera con los componentes válidos en
   lugar de abortar, e informa los que dejó afuera. El descarte es
@@ -282,13 +378,80 @@ forma segura de ver qué haría una llamada antes de que la haga.
   manifiesto. Si el update falla, restaura ese estado para poder
   reintentarlo. Tanto el dry run como el resultado real enumeran las
   rutas eliminadas en `removed_files`. Quitar un componente elimina su
-  archivo embarcado, que puede ser la última copia. Un resultado real
-  también incluye los archivos parciales de documentación creados y
-  limpiados tras un fallo de roxygen; un dry run no puede predecir esas
-  limpiezas dependientes de un fallo. También se niega a escribir a
-  través de una raíz de proyecto simbólica o de enlaces simbólicos
-  dentro del proyecto generado, incluidos los enlaces en directorios
-  padre de los archivos generados.
+  archivo embarcado, que puede ser la última copia. Cuando el plan
+  crece, los archivos que no están ni en el manifiesto ni en el proyecto
+  son nuevos y se escriben; los archivos existentes fuera del manifiesto
+  se consideran del usuario y el update aborta sin sobrescribirlos. El
+  resultado informa las rutas nuevas en `added_files`: incluye agregar o
+  volver a agregar un componente, subir su versión o agregar una viñeta
+  de workflow. Los updates mantienen una exclusión mutua desde el armado
+  hasta el rollback y la publicación del diario. El lock solo se publica
+  renombrando una carpeta temporal hermana que ya contiene `owner.rds`,
+  por lo que todo lock publicado tiene dueño. Un huérfano se renombra
+  primero a un descarte único; el ganador vuelve a verificar ese dueño
+  antes de publicar el reemplazo. Un archivo regular u otra entrada del
+  usuario en el nombre del lock se aparta como
+  `.<nombre>.bigbang-apartado-*`, sin borrar sus bytes. `recover = TRUE`
+  resuelve la incertidumbre (Windows, falta de `/proc`, otro host o
+  dueño ilegible), pero nunca fuerza a pasar por encima de un dueño
+  probado vivo: mismo host, PID vivo y el mismo token de inicio del
+  proceso. En ese caso da error e informa el PID. Los nombres hermanos
+  `.<nombre>.bigbang-update`, `.<nombre>.bigbang-update.armando-*`,
+  `.<nombre>.bigbang-update.lock`,
+  `.<nombre>.bigbang-update.lock.armando-*`,
+  `.<nombre>.bigbang-update.lock.descartado-*`,
+  `.<nombre>.bigbang-update.descartado-*` y
+  `.<nombre>.bigbang-apartado-*` están reservados para estas
+  operaciones. También se niega a escribir a través de una raíz de
+  proyecto simbólica o de enlaces simbólicos dentro del proyecto
+  generado, incluidos los enlaces en directorios padre de los archivos
+  generados.
+- Los updates interrumpidos se arman en una carpeta hermana durable
+  `.<nombre>.bigbang-update.armando-*` y se renombran a
+  `.<nombre>.bigbang-update` solo después de verificar el marcador y el
+  respaldo. Una preparación sin marcador vacía se elimina; cualquier
+  preparación sin marcador que no esté vacía se aparta atómicamente como
+  `.<nombre>.bigbang-apartado-*`, sin copiar ni borrar bytes. Para
+  descartar un diario se escribe primero una lápida atómica con el
+  inventario recursivo exacto de rutas relativas y md5 de lo que
+  escribió bigbang, se registra un digest junto a la lápida y se lo
+  renombra a `.<nombre>.bigbang-update.descartado-*`, de modo que la
+  limpieza se reanuda después de otra interrupción. Solo se eliminan
+  archivos cuya ruta y md5 coinciden con el inventario, y directorios
+  del inventario solo cuando están vacíos. Cualquier otro archivo,
+  directorio o enlace simbólico aparta toda la carpeta y el update
+  continúa. Una lápida sin digest o con digest cambiado tiene el mismo
+  tratamiento. La llamada siguiente con `update = TRUE` puede recuperar
+  un proyecto movido junto con su diario. Renombrar un proyecto no está
+  soportado porque los nombres de los archivos generados contienen el
+  nombre del metapaquete: renombre el proyecto y su diario de vuelta a
+  `<nombre>`. Una copia byte a byte puesta en el mismo lugar y con el
+  mismo nombre que el original movido es indistinguible del original,
+  así que el diario la trata como el proyecto. Si el original todavía
+  existe junto al diario copiado, ese diario no se adopta ni se cambia.
+  Un descartado de otra generación o proyecto se aparta con un mensaje
+  accionable. Un archivo del usuario con la misma ruta y md5 que una
+  entrada del inventario es un límite inevitable: los bytes son
+  idénticos, de modo que borrarlo no pierde contenido, pero no se puede
+  probar la autoría. Registra cada escritura y borrado pretendidos y
+  está diseñado para sobrevivir interrupciones del proceso como SIGKILL,
+  un error de R o Ctrl-C; no promete durabilidad fsync ante un apagado
+  del sistema operativo o de la energía. Si una ruta no contiene ni su
+  valor original ni uno pretendido, la recuperación se detiene en vez de
+  pisarla. En Windows, una ruta ausente solo se conoce durante la
+  ventana en que el temporal pretendido, con el mismo hash, sigue en el
+  área de preparación del diario. Cada archivo original restaurado
+  estando ausente queda en el resultado y en el mensaje de recuperación.
+  Después de confirmar que no sigue corriendo otro update,
+  `recover = TRUE` preserva esos bytes desconocidos en un directorio
+  hermano informado y recién entonces recupera. Un dry run informa la
+  acción pendiente sin cambiar el proyecto, el lock ni ninguna carpeta
+  de diario hermana. El lock solo se evalúa e informa como libre, vivo,
+  huérfano o incierto. Los fallos al generar documentación en el área de
+  preparación son warnings; un fallo al promover una documentación
+  aborta y revierte el update completo. En Windows nunca se prueba la
+  vida con [`tools::pskill()`](https://rdrr.io/r/tools/pskill.html),
+  porque esa llamada terminaría el proceso sondeado.
 - `install_upgrade` fija la política de actualización por defecto del
   instalador emitido, así que decidís al generar si los destinatarios
   quedan clavados en las versiones que distribuís (`"always"`) o

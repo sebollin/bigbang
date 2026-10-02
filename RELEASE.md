@@ -77,9 +77,10 @@ source and archive, and run the same `R CMD check --as-cran` gate on it.
     `windows-release`, and `macos-release`.
 3.  Record the CI commit SHA and the covr percentage produced from that
     exact SHA in `cran-comments.md`.
-4.  Review the complete `lintr::lint_package()` result. Every remaining
-    item must be either fixed or explicitly justified in the release
-    notes.
+4.  Review the complete
+    [`lintr::lint_package()`](https://lintr.r-lib.org/reference/lint.html)
+    result. Every remaining item must be either fixed or explicitly
+    justified in the release notes.
 
 ## 3. External CRAN-like gates
 

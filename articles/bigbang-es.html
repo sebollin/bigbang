@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -145,6 +145,34 @@ cualquier versión instalada. <code>force = TRUE</code> equivale a
 <code>options(&lt;meta&gt;.quiet = TRUE)</code>. Si <code>cli</code> no
 está disponible, el mensaje de arranque vuelve al banner ASCII sin
 fallar.</p>
+</div>
+<div class="section level2">
+<h2 id="colisiones-de-reexportación">Colisiones de reexportación<a class="anchor" aria-label="anchor" href="#colisiones-de-reexportaci%C3%B3n"></a>
+</h2>
+<p>Cuando varios componentes exportan el mismo símbolo, indique
+<code>reexport_prefer = c(símbolo = "componente")</code> para elegir el
+proveedor o <code>reexport_exclude = "símbolo"</code> para excluirlo.
+Toda colisión requiere una de esas decisiones porque el análisis
+estático no puede probar que dos objetos exportados sean el mismo en
+tiempo de ejecución. El diagnóstico etiqueta las colisiones como
+<code>probable_same_object</code>, <code>distinct_definitions</code> o
+<code>undetermined</code>; una colisión probable elegida se verifica
+contra los dueños instalados mediante
+<code>&lt;meta&gt;_install()</code> y
+<code>&lt;meta&gt;_conflicts()</code>.
+<code>&lt;meta&gt;_conflicts()</code> conserva los conflictos de
+enmascaramiento; consulte la verificación de instalación con
+<code>&lt;meta&gt;_reexport_verification(&lt;meta&gt;_conflicts())</code>.</p>
+</div>
+<div class="section level2">
+<h2 id="actualizaciones-interrumpidas-y-recuperación">Actualizaciones interrumpidas y recuperación<a class="anchor" aria-label="anchor" href="#actualizaciones-interrumpidas-y-recuperaci%C3%B3n"></a>
+</h2>
+<p>Una actualización con <code>update = TRUE</code> interrumpida deja un
+diario durable junto al proyecto. La actualización siguiente lo revisa
+antes de escribir y <code>dry_run = TRUE</code> muestra la acción
+pendiente. Después de confirmar que no sigue corriendo otra
+actualización, usá <code>recover = TRUE</code> para preservar bytes de
+usuario desconocidos y completar la recuperación.</p>
 </div>
 <div class="section level2">
 <h2 id="archivos-zip">Archivos ZIP<a class="anchor" aria-label="anchor" href="#archivos-zip"></a>

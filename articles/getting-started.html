@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -119,7 +119,7 @@ separately.</p>
 <span><span class="va">result</span></span>
 <span><span class="co">#&gt; &lt;bigbang metapackage&gt;</span></span>
 <span><span class="co">#&gt;   Package: toyverse</span></span>
-<span><span class="co">#&gt;   Path: /tmp/Rtmp3LZQmR/bigbang-vignette-1bca7cb006ad/generated/toyverse</span></span>
+<span><span class="co">#&gt;   Path: /tmp/RtmplRYgXZ/bigbang-vignette-1b8954368313/generated/toyverse</span></span>
 <span><span class="co">#&gt;   Components: toycomponent</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">list.files</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span></span>
 <span><span class="co">#&gt;  [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           </span></span>
@@ -130,7 +130,7 @@ separately.</p>
 <code class="sourceCode R"><span><span class="va">scan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/scan_bigbang_artifact.html">scan_bigbang_artifact</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span></span>
 <span><span class="va">scan</span></span>
 <span><span class="co">#&gt; &lt;bigbang artifact scan&gt;</span></span>
-<span><span class="co">#&gt;   Path: /tmp/Rtmp3LZQmR/bigbang-vignette-1bca7cb006ad/generated/toyverse</span></span>
+<span><span class="co">#&gt;   Path: /tmp/RtmplRYgXZ/bigbang-vignette-1b8954368313/generated/toyverse</span></span>
 <span><span class="co">#&gt;   Type: source</span></span>
 <span><span class="co">#&gt;   Result: no deletion signatures found</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot</a></span><span class="op">(</span><span class="op">!</span><span class="va">scan</span><span class="op">$</span><span class="va">vulnerable</span><span class="op">)</span></span></code></pre></div>
@@ -155,6 +155,20 @@ no path agreed on in advance. The default <code>pkg_dir</code> is
 <code>system.file("archives", package = "toyverse")</code>, which is
 resolved when the installer runs and therefore points at the library it
 was installed into.</p>
+</div>
+<div class="section level2">
+<h2 id="re-export-collisions">Re-export collisions<a class="anchor" aria-label="anchor" href="#re-export-collisions"></a>
+</h2>
+<p>When multiple components export the same symbol, pass
+<code>reexport_prefer = c(symbol = "component")</code> to choose its
+provider or <code>reexport_exclude = "symbol"</code> to omit it. Every
+collision requires one of those choices because static analysis cannot
+prove that two exported objects are the same at runtime. The diagnostic
+labels collisions as <code>probable_same_object</code>,
+<code>distinct_definitions</code>, or <code>undetermined</code>; a
+preferred probable collision is checked against installed owners by
+<code>&lt;meta&gt;_install()</code> and
+<code>&lt;meta&gt;_conflicts()</code>.</p>
 <p>Generate with <code>include_archives = FALSE</code> when the archives
 should stay in a location every recipient can already reach; then
 <code>toyverse_install()</code> requires an explicit
@@ -167,7 +181,19 @@ explicit reinstall. Generated metapackages provide
 <code>&lt;meta&gt;_conflicts()</code> and honor
 <code>options(&lt;meta&gt;.quiet = TRUE)</code> for startup output.
 Their optional <code>cli</code> display falls back to a dependency-free
-ASCII banner.</p>
+ASCII banner. <code>&lt;meta&gt;_conflicts()</code> retains masking
+conflicts; inspect its installation check with
+<code>&lt;meta&gt;_reexport_verification(&lt;meta&gt;_conflicts())</code>.</p>
+</div>
+<div class="section level2">
+<h2 id="interrupted-updates-and-recovery">Interrupted updates and recovery<a class="anchor" aria-label="anchor" href="#interrupted-updates-and-recovery"></a>
+</h2>
+<p>An interrupted <code>update = TRUE</code> leaves a durable journal
+beside the project. The next update inspects it before writing, and
+<code>dry_run = TRUE</code> previews the pending action. After
+confirming that no other update is running, use
+<code>recover = TRUE</code> to preserve unknown user bytes and complete
+recovery.</p>
 </div>
 <div class="section level2">
 <h2 id="beyond-the-simple-case">Beyond the simple case<a class="anchor" aria-label="anchor" href="#beyond-the-simple-case"></a>

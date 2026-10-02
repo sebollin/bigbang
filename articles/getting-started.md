@@ -60,7 +60,7 @@ result <- create_metapackage(
 result
 #> <bigbang metapackage>
 #>   Package: toyverse
-#>   Path: /tmp/Rtmp3LZQmR/bigbang-vignette-1bca7cb006ad/generated/toyverse
+#>   Path: /tmp/RtmplRYgXZ/bigbang-vignette-1b8954368313/generated/toyverse
 #>   Components: toycomponent
 list.files(result$path)
 #>  [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           
@@ -75,7 +75,7 @@ The generated tree can be scanned without loading it:
 scan <- scan_bigbang_artifact(result$path)
 scan
 #> <bigbang artifact scan>
-#>   Path: /tmp/Rtmp3LZQmR/bigbang-vignette-1bca7cb006ad/generated/toyverse
+#>   Path: /tmp/RtmplRYgXZ/bigbang-vignette-1b8954368313/generated/toyverse
 #>   Type: source
 #>   Result: no deletion signatures found
 stopifnot(!scan$vulnerable)
@@ -103,6 +103,17 @@ directory beside it and no path agreed on in advance. The default
 resolved when the installer runs and therefore points at the library it
 was installed into.
 
+## Re-export collisions
+
+When multiple components export the same symbol, pass
+`reexport_prefer = c(symbol = "component")` to choose its provider or
+`reexport_exclude = "symbol"` to omit it. Every collision requires one
+of those choices because static analysis cannot prove that two exported
+objects are the same at runtime. The diagnostic labels collisions as
+`probable_same_object`, `distinct_definitions`, or `undetermined`; a
+preferred probable collision is checked against installed owners by
+`<meta>_install()` and `<meta>_conflicts()`.
+
 Generate with `include_archives = FALSE` when the archives should stay
 in a location every recipient can already reach; then
 `toyverse_install()` requires an explicit `pkg_dir`.
@@ -113,6 +124,16 @@ available. Use `upgrade = "always"` or `force = TRUE` for an explicit
 reinstall. Generated metapackages provide `<meta>_conflicts()` and honor
 `options(<meta>.quiet = TRUE)` for startup output. Their optional `cli`
 display falls back to a dependency-free ASCII banner.
+`<meta>_conflicts()` retains masking conflicts; inspect its installation
+check with `<meta>_reexport_verification(<meta>_conflicts())`.
+
+## Interrupted updates and recovery
+
+An interrupted `update = TRUE` leaves a durable journal beside the
+project. The next update inspects it before writing, and
+`dry_run = TRUE` previews the pending action. After confirming that no
+other update is running, use `recover = TRUE` to preserve unknown user
+bytes and complete recovery.
 
 ## Beyond the simple case
 
