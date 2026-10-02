@@ -184,3 +184,36 @@ test_that("the ps start token is stable outside /proc and under foreign locales"
     }
   )
 })
+
+test_that("Windows link detection looks only at the last path component", {
+  # GitHub's Windows tempdir is spelled with an 8.3 short name
+  # (C:/Users/RUNNER~1/...) that normalizePath() expands; neither that nor a
+  # linked ancestor may turn every path into a "link".
+  links <- c(
+    "C:/Users/runneradmin/Temp/x/junction" = "D:/elsewhere/target",
+    "C:/Users/runneradmin/Temp/linked" = "E:/redirected"
+  )
+  normalize <- function(x) {
+    x <- sub("RUNNER~1", "runneradmin", gsub("\\\\", "/", x), fixed = TRUE)
+    for (link in names(links)) {
+      if (startsWith(x, link)) {
+        x <- paste0(links[[link]], substring(x, nchar(link) + 1L))
+      }
+    }
+    x
+  }
+  detect <- function(path) {
+    .path_is_windows_reparse_point(path, is_windows = TRUE,
+                                   normalize = normalize)
+  }
+  root <- "C:/Users/RUNNER~1/Temp"
+  expect_false(detect(file.path(root, "x", "file")))
+  expect_false(detect(file.path(root, "x", "FILE")))
+  expect_false(detect(file.path(root, "x", "file/")))
+  expect_true(detect(file.path(root, "x", "junction")))
+  expect_true(detect(file.path(root, "linked")))
+  expect_false(detect(file.path(root, "linked", "inner")))
+  expect_false(.path_is_windows_reparse_point(
+    file.path(root, "linked"), is_windows = FALSE, normalize = normalize
+  ))
+})

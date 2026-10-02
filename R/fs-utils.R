@@ -1,32 +1,33 @@
-.path_is_windows_reparse_point <- function(path) {
-  if (!identical(.Platform$OS.type, "windows")) return(FALSE)
-  fsutil <- Sys.which("fsutil")[[1L]]
-  if (nzchar(fsutil)) {
-    status <- tryCatch(
-      suppressWarnings(system2(
-        fsutil,
-        c("reparsepoint", "query", shQuote(path)),
-        stdout = FALSE, stderr = FALSE
-      )),
-      error = function(e) NA_integer_
-    )
-    if (identical(as.integer(status), 0L)) return(TRUE)
+# Windows has no readlink: Sys.readlink() returns "" there, also for
+# junctions and symbolic links. normalizePath() does resolve them, so the last
+# component is a link exactly when resolving the whole path differs from
+# resolving its parent and appending the component. Comparing the full path
+# instead would flag every 8.3 short name (C:/Users/RUNNER~1/...) and every
+# linked ancestor. No external program is run: fsutil needs administrator
+# rights and would start one process per journal entry.
+.path_is_windows_reparse_point <- function(path, is_windows = NULL,
+                                           normalize = NULL) {
+  if (is.null(is_windows)) {
+    is_windows <- identical(.Platform$OS.type, "windows")
   }
-
-  # R's Windows normalizePath() resolves symbolic links and junctions.  This
-  # fallback is deliberately conservative for an existing absolute path: a
-  # canonical path different from its lexical spelling is not safe to remove.
-  if (!file.exists(path) && !dir.exists(path)) return(FALSE)
-  lexical <- gsub("\\\\", "/", path.expand(path))
-  if (!grepl("^(?:[A-Za-z]:/|/)", lexical, perl = TRUE)) {
-    lexical <- file.path(getwd(), lexical)
+  if (!isTRUE(is_windows)) return(FALSE)
+  if (is.null(normalize)) {
+    normalize <- function(x) normalizePath(x, winslash = "/", mustWork = FALSE)
   }
-  resolved <- tryCatch(
-    normalizePath(path, winslash = "/", mustWork = FALSE),
-    error = function(e) NA_character_
-  )
-  is.character(resolved) && length(resolved) == 1L && !is.na(resolved) &&
-    !identical(tolower(gsub("\\\\", "/", resolved)), tolower(lexical))
+  path <- sub("[/\\\\]+$", "", path)
+  component <- basename(path)
+  if (!nzchar(component) || component %in% c(".", "..")) return(FALSE)
+  canonical <- function(x) {
+    value <- tryCatch(normalize(x), error = function(e) NA_character_)
+    if (!is.character(value) || length(value) != 1L || is.na(value)) {
+      return(NA_character_)
+    }
+    tolower(sub("/+$", "", gsub("\\\\", "/", value)))
+  }
+  resolved <- canonical(path)
+  parent <- canonical(dirname(path))
+  if (is.na(resolved) || is.na(parent)) return(FALSE)
+  !identical(resolved, paste(parent, tolower(component), sep = "/"))
 }
 
 .path_is_symlink <- function(path) {
