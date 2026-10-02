@@ -2,6 +2,8 @@
 
 ## bigbang 0.5.0
 
+CRAN release: 2026-10-02
+
 ### Breaking changes
 
 - `update = TRUE` refuses a planned generated path that already exists
