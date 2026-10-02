@@ -188,6 +188,17 @@ test_that("unreadable discarded folders are set aside and never treated as empty
   withr::defer(Sys.chmod(file.path(apart, "backup", "locked"), "0755"))
   expect_true(file.exists(file.path(apart, "backup", "locked", "value.txt")))
 
+  # Some platforms (macOS) refuse to rename a directory whose own mode is
+  # 0000; there the entry cannot be set aside and the reconciliation reports
+  # it instead. Probe that capability before expecting a set-aside.
+  probe <- file.path(fixture$root, "rename-probe")
+  dir.create(probe)
+  Sys.chmod(probe, "0000")
+  renamed <- file.rename(probe, paste0(probe, "-moved"))
+  Sys.chmod(c(probe, paste0(probe, "-moved"))[c(!renamed, renamed)], "0755")
+  if (!isTRUE(renamed)) {
+    skip("This platform cannot rename a directory with mode 0000.")
+  }
   empty <- file.path(
     fixture$destination,
     paste0(".", fixture$name, ".bigbang-update.descartado-empty-permissions")
