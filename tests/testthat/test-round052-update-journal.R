@@ -100,6 +100,7 @@ round052_update_dead_owner <- function(fixture, ...) {
 }
 
 test_that("unknown user edits are refused and preserved with forced recovery", {
+  skip_on_cran()
   fixture <- round052_fixture()
   relative <- "README.md"
   journal <- round052_arm(fixture)
@@ -184,6 +185,7 @@ test_that("a user file appearing at an intended new path is never guessed away",
 })
 
 test_that("unrecognized journal names are actionable and never touched", {
+  skip_on_cran()
   for (kind in c("file", "directory")) {
     fixture <- round052_fixture(paste0("bigbang-round052-h8-", kind, "-"))
     journal <- .update_journal_path(fixture$project)
@@ -329,6 +331,7 @@ test_that("journal defensive formats and partial arm states are explicit", {
 })
 
 test_that("journal checksum, state, host, and manifest guards reject ambiguity", {
+  skip_on_cran()
   fixture <- round052_fixture()
   manifest_path <- file.path(fixture$project, .generation_manifest_name)
   manifest <- readRDS(manifest_path)
@@ -794,6 +797,7 @@ test_that("an unrecorded self-consistent manifest is not treated as completed", 
 })
 
 test_that("journal is external to artifacts and result file lists", {
+  skip_on_cran()
   fixture <- round052_fixture()
   journal <- round052_arm(fixture)
   result <- NULL

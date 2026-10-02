@@ -476,6 +476,7 @@ test_that("only the real inst/archives is exempt from the ignore rules", {
 })
 
 test_that("the generated vignette names the installation call of its mode", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-vignette-mode-")
   archives <- file.path(sandbox, "archives")
   toy_archive_dir(archives)

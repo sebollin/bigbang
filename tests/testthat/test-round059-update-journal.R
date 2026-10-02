@@ -85,6 +85,7 @@ round059_make_discarded <- function(fixture, suffix = "dead") {
 }
 
 test_that("F1 and glm-02 set aside every non-empty unmarked preparation", {
+  skip_on_cran()
   fixture <- round059_fixture("bigbang-round059-f1-")
   armando <- file.path(
     fixture$destination,
@@ -125,6 +126,7 @@ test_that("F1 and glm-02 set aside every non-empty unmarked preparation", {
 })
 
 test_that("journal-shaped non-directories are set aside without blocking", {
+  skip_on_cran()
   fixture <- round059_fixture("bigbang-round059-nondirectory-")
   armando <- file.path(
     fixture$destination,
@@ -153,6 +155,7 @@ test_that("journal-shaped non-directories are set aside without blocking", {
 })
 
 test_that("F2 recursively deletes only exact inventory entries and sets aside the rest", {
+  skip_on_cran()
   fixture <- round059_fixture("bigbang-round059-f2-")
   discarded <- round059_make_discarded(fixture)
   user_file <- file.path(discarded, "backup", "user-notes.txt")
@@ -194,6 +197,7 @@ test_that("F2 recursively deletes only exact inventory entries and sets aside th
 })
 
 test_that("discarding a directory symlink never reaches its external target", {
+  skip_on_cran()
   skip_on_os("windows")
   fixture <- round059_fixture("bigbang-round059-directory-link-")
   discarded <- round059_make_discarded(fixture)
@@ -220,6 +224,7 @@ test_that("discarding a directory symlink never reaches its external target", {
 })
 
 test_that("F3 keeps the exact-path and exact-MD5 boundary explicit", {
+  skip_on_cran()
   fixture <- round059_fixture("bigbang-round059-f3-")
   discarded <- round059_make_discarded(fixture)
   tombstone <- readRDS(file.path(discarded, "tombstone.rds"))
@@ -242,6 +247,7 @@ test_that("F3 keeps the exact-path and exact-MD5 boundary explicit", {
 })
 
 test_that("F4 stale generations are set aside and the next update runs", {
+  skip_on_cran()
   first <- round059_fixture("bigbang-round059-f4-first-")
   second <- round059_fixture("bigbang-round059-f4-second-")
   expect_true(round059_update(first, version = "0.1.1")$updated)
@@ -283,6 +289,7 @@ test_that("F5 does not adopt a copied journal while its source project exists", 
 })
 
 test_that("F6 sets aside a partial tombstone and keeps the journal recoverable", {
+  skip_on_cran()
   fixture <- round059_fixture("bigbang-round059-f6-")
   manifest <- .read_generation_manifest(fixture$project)
   journal <- .create_update_journal(fixture$project, fixture$name, manifest)

@@ -31,6 +31,7 @@ round104_generate <- function(name, packages, destination, ...) {
 }
 
 test_that("two updates never absorb or remove files owned by the user", {
+  skip_on_cran()
   root <- tempfile("bigbang-update-owned-plan-")
   source_root <- file.path(root, "sources")
   archives <- file.path(root, "archives")
@@ -76,6 +77,7 @@ test_that("two updates never absorb or remove files owned by the user", {
 })
 
 test_that("legacy scanned manifests discard entries outside the generation plan", {
+  skip_on_cran()
   root <- tempfile("bigbang-legacy-scanned-manifest-")
   destination <- file.path(root, "destination")
   dir.create(destination, recursive = TRUE)
@@ -105,6 +107,7 @@ test_that("legacy scanned manifests discard entries outside the generation plan"
 })
 
 test_that("the generation manifest enumerates every generated file", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-manifest-plan-")
   destination <- file.path(root, "destination")
@@ -204,6 +207,7 @@ test_that("an omitted update input cannot delete its shipped archive", {
 })
 
 test_that("identified omitted archives are preserved while deliberate removals proceed", {
+  skip_on_cran()
   root <- tempfile("bigbang-update-omitted-mixed-")
   source_root <- file.path(root, "sources")
   archives <- file.path(root, "archives")

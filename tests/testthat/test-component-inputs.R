@@ -332,6 +332,7 @@ test_that("ambiguous bare package names list every archive candidate", {
 })
 
 test_that("bare package discovery warns about unreadable archives without raw noise", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-bare-unreadable-")
   source_root <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")

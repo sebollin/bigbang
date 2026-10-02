@@ -47,6 +47,7 @@ round067_generate <- function(name, packages, fixture, ...) {
 }
 
 test_that("update adds, re-adds, and previews new generated files", {
+  skip_on_cran()
   fixture <- round067_fixture()
   first <- round067_make_archive(fixture$sources, fixture$archives, "first")
   second <- round067_make_archive(fixture$sources, fixture$archives, "second")
@@ -92,6 +93,7 @@ test_that("update refuses an existing user file at a planned new path", {
 })
 
 test_that("workflow addition follows the new-file update rule", {
+  skip_on_cran()
   fixture <- round067_fixture()
   first <- round067_make_archive(fixture$sources, fixture$archives, "first")
   initial <- round067_generate("r24workflowverse", first, fixture)
@@ -106,6 +108,7 @@ test_that("workflow addition follows the new-file update rule", {
 })
 
 test_that("a version bump adds the new archive and removes the old one", {
+  skip_on_cran()
   fixture <- round067_fixture()
   old <- round067_make_archive(fixture$sources, fixture$archives, "versioned", "0.1.0")
   new <- round067_make_archive(fixture$sources, fixture$archives, "versioned", "0.2.0")
@@ -155,6 +158,7 @@ test_that("attachment uses loaded namespaces and preflights Depends", {
 })
 
 test_that("archive filename mismatch is warned once per install call", {
+  skip_on_cran()
   fixture <- round067_fixture()
   original <- round067_make_archive(
     fixture$sources, fixture$archives, "mismatch", "0.1.0"

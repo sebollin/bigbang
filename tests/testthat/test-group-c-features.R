@@ -154,6 +154,7 @@ test_that("component resolution guards report actionable errors", {
 })
 
 test_that("component source directories are built in a temporary archive", {
+  skip_on_cran()
   skip_if_not_installed("pkgbuild")
   root <- tempfile("bigbang-group-c-source-")
   source_root <- file.path(root, "sources", "directorypkg")
@@ -211,6 +212,7 @@ test_that("component errors can be skipped transitively", {
 })
 
 test_that("update rewrites only an unmodified generated tree", {
+  skip_on_cran()
   root <- tempfile("bigbang-group-c-update-")
   archives <- file.path(root, "archives")
   destination <- file.path(root, "destination")

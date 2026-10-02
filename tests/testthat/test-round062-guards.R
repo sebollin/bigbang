@@ -52,6 +52,7 @@ test_that("Unix-only process primitives are protected on Windows", {
 })
 
 test_that("tests never mock base or recommended package namespaces", {
+  skip_on_cran()
   files <- list.files(
     testthat::test_path(), pattern = "\\.R$", full.names = TRUE
   )

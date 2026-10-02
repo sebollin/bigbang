@@ -26,6 +26,7 @@ round108_expect_exact_manifest <- function(project) {
 }
 
 test_that("legacy migration adopts only archives in the current plan", {
+  skip_on_cran()
   root <- tempfile("bigbang-legacy-archive-ownership-")
   destination <- file.path(root, "destination")
   dir.create(destination, recursive = TRUE)
@@ -68,6 +69,7 @@ test_that("legacy migration adopts only archives in the current plan", {
 })
 
 test_that("documentation can be disabled and enabled across updates", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-document-toggle-")
   destination <- file.path(root, "destination")
@@ -116,6 +118,7 @@ test_that("documentation can be disabled and enabled across updates", {
 })
 
 test_that("documentation recovers after an initial generation failure", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-initial-document-failure-")
   destination <- file.path(root, "destination")
@@ -151,6 +154,7 @@ test_that("documentation recovers after an initial generation failure", {
 })
 
 test_that("failed documentation keeps tracked Rd files and remains retryable", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-document-update-failure-")
   destination <- file.path(root, "destination")

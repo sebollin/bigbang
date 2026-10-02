@@ -45,6 +45,7 @@ build_safety_archive <- function(name, version, source_root, archive_dir,
 }
 
 test_that("default implicit scanning reports guesses without binding them", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-implicit-default-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -150,6 +151,7 @@ test_that("dependency constraints are validated and R requirements propagate", {
 })
 
 test_that("local dependencies outside the component set are rejected", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-orphan-dependency-")
   source_root <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")
@@ -182,6 +184,7 @@ test_that("local dependencies outside the component set are rejected", {
 })
 
 test_that("named tolerances are explicit, reported, and typo-safe", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-tolerate-")
   source_root <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")
@@ -254,6 +257,7 @@ test_that("named tolerances are explicit, reported, and typo-safe", {
 })
 
 test_that("reserved component names cannot exclude generated package files", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-reserved-components-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -372,6 +376,7 @@ test_that("archives without a root DESCRIPTION and truncated archives fail clear
 })
 
 test_that("malformed R source is reported during heuristic scanning", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-parse-warning-")
   source_root <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")
@@ -514,6 +519,7 @@ test_that("archive metadata mismatches warn but use DESCRIPTION identity", {
 })
 
 test_that("duplicate components and cycles are rejected by the generator", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-graph-validation-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -544,6 +550,7 @@ test_that("duplicate components and cycles are rejected by the generator", {
 })
 
 test_that("generation tolerations cannot disable recipient protection invariants", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-tolerance-invariant-")
   source_root <- file.path(sandbox, "sources")
   destination <- file.path(sandbox, "destination")

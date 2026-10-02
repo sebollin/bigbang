@@ -174,6 +174,7 @@ test_that("generated artifact option combinations pass R CMD check", {
 })
 
 test_that("atomic writer leftovers are excluded from generated tarballs", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-round89-temporary-")
   archives <- file.path(sandbox, "archives")
   destination <- file.path(sandbox, "destination")

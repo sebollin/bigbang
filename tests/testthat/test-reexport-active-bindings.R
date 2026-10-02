@@ -224,6 +224,7 @@ test_that("reexport rejects export collisions and own generated symbols", {
 })
 
 test_that("R syntax exports require exclusion and leave the installer usable", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-reexport-syntax-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -572,6 +573,7 @@ test_that("reexport rejects namespace export patterns", {
 })
 
 test_that("reexport handles components with no explicit exports", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-reexport-empty-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -603,6 +605,7 @@ test_that("reexport handles components with no explicit exports", {
 })
 
 test_that("update reconciles the reexport binding file", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-reexport-update-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -637,6 +640,7 @@ test_that("update reconciles the reexport binding file", {
 })
 
 test_that("reexport toggles reconcile code, documentation, and manifests", {
+  skip_on_cran()
   testthat::skip_if_not_installed("devtools")
   sandbox <- tempfile("bigbang-reexport-toggle-matrix-")
   source_root <- file.path(sandbox, "sources")
@@ -686,6 +690,7 @@ test_that("reexport toggles reconcile code, documentation, and manifests", {
 })
 
 test_that("reexport updates never overwrite untracked user files", {
+  skip_on_cran()
   testthat::skip_if_not_installed("devtools")
   sandbox <- tempfile("bigbang-reexport-untracked-")
   source_root <- file.path(sandbox, "sources")
@@ -726,6 +731,7 @@ test_that("reexport updates never overwrite untracked user files", {
 })
 
 test_that("failed documentation leaves a clean reexport toggle retry", {
+  skip_on_cran()
   testthat::skip_if_not_installed("devtools")
   sandbox <- tempfile("bigbang-reexport-doc-failure-")
   source_root <- file.path(sandbox, "sources")

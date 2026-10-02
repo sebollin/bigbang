@@ -214,6 +214,7 @@ test_that("safe_unlink uses temporary location rather than a basename", {
 })
 
 test_that("successful documentation restores the caller session", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   sandbox <- tempfile("bigbang-document-session-")
   archives <- file.path(sandbox, "archives")
@@ -277,6 +278,7 @@ test_that("failed documentation is reported and restores the caller session", {
 })
 
 test_that("a promotion failure rolls the project back completely", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   sandbox <- tempfile("bigbang-document-promotion-rollback-")
   archives <- file.path(sandbox, "archives")
@@ -392,6 +394,7 @@ test_that("the underscore message keeps precedence over the generic one", {
 })
 
 test_that("legal package names spanning the grammar are accepted", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-name-legal-")
   dir.create(sandbox)
   copy_toy_archive(file.path(sandbox, "archives"))
@@ -455,6 +458,7 @@ test_that("rollback works when a path component is a symbolic link", {
 })
 
 test_that("create_metapackage help is generated from roxygen comments", {
+  skip_on_cran()
   skip_if_not_installed("roxygen2")
   package_root <- normalizePath(testthat::test_path("..", ".."),
                                 winslash = "/", mustWork = TRUE)

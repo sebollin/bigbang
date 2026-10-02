@@ -408,6 +408,7 @@ test_that("messages formerly keyed with edge whitespace translate at runtime", {
 })
 
 test_that("template diagnostics translate without edge whitespace", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-i18n-template-")
   dir.create(sandbox)
   code <- paste0(

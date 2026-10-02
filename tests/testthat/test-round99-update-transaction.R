@@ -69,6 +69,7 @@ round99_fixture <- function(prefix) {
 }
 
 test_that("a failed update restores every pre-existing generated file", {
+  skip_on_cran()
   fixture <- round99_fixture("bigbang-update-write-failure-")
   before <- round99_snapshot(fixture$project)
   shipped_drop <- file.path(
@@ -108,6 +109,7 @@ test_that("a failed update restores every pre-existing generated file", {
 })
 
 test_that("a partial stale-file removal is rolled back and remains retryable", {
+  skip_on_cran()
   fixture <- round99_fixture("bigbang-update-removal-failure-")
   before <- round99_snapshot(fixture$project)
   calls <- 0L

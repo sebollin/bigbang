@@ -153,6 +153,7 @@ test_that("the source classifier fails closed on empty and unusual nodes", {
 })
 
 test_that("the source tree is itself a valid diagnostic corpus", {
+  skip_on_cran()
   package_root <- normalizePath(testthat::test_path("..", ".."),
                                 winslash = "/", mustWork = TRUE)
   r_dir <- file.path(package_root, "R")

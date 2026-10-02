@@ -305,6 +305,7 @@ test_that("J5 preserves a discarded journal from another project generation", {
 })
 
 test_that("J6 recognizes a renamed project and reports an unrecognized owner", {
+  skip_on_cran()
   fixture <- round056_fixture("bigbang-round056-j6-good-")
   manifest <- .read_generation_manifest(fixture$project)
   journal <- .create_update_journal(fixture$project, fixture$name, manifest)

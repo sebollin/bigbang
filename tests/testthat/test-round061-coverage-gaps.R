@@ -29,6 +29,7 @@ round061_make_coverage_archive <- function(root, name, imports = NULL,
 }
 
 test_that("install policy failures and offline dependency results are covered", {
+  skip_on_cran()
   root <- tempfile("bigbang-round061-coverage-")
   dir.create(root)
   withr::defer(unlink(root, recursive = TRUE, force = TRUE))

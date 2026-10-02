@@ -342,6 +342,7 @@ test_that("a journal left behind by a move reports where to look", {
 })
 
 test_that("user folders with journal-looking names are set aside byte-for-byte", {
+  skip_on_cran()
   fixture <- round054_fixture("bigbang-round054-control-")
   armando <- file.path(
     fixture$destination, paste0(".", fixture$name, ".bigbang-update.armando-user")
@@ -370,6 +371,7 @@ test_that("user folders with journal-looking names are set aside byte-for-byte",
 })
 
 test_that("a discarded folder with an invalid tombstone is set aside", {
+  skip_on_cran()
   fixture <- round054_fixture("bigbang-round054-bad-tombstone-")
   discarded <- file.path(
     fixture$destination,
@@ -573,6 +575,7 @@ test_that("re-export blocker filtering distinguishes the requested symbol", {
 })
 
 test_that("two generations from one archive are byte-for-byte deterministic", {
+  skip_on_cran()
   fixture <- round054_fixture("bigbang-round054-determinism-")
   second_destination <- file.path(fixture$root, "second-destination")
   dir.create(second_destination)

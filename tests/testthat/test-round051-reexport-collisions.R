@@ -312,6 +312,7 @@ test_that("round 051 reports genuine collisions and every selected proof blocker
 })
 
 test_that("round 051 validates options, names, exclusions, preference, and order", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-round051-options-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -397,6 +398,7 @@ test_that("round 051 validates options, names, exclusions, preference, and order
 })
 
 test_that("round 051 dry runs and updates re-export plans without stale files", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-round051-update-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -929,6 +931,7 @@ test_that("clean re-export verification follows the runtime library order", {
 })
 
 test_that("round 055 verification warns when an installed owner lost its export", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-round055-missing-export-")
   source_root <- file.path(sandbox, "sources")
   bad_source_root <- file.path(sandbox, "bad-sources")
@@ -1010,6 +1013,7 @@ test_that("round 055 verification warns when an installed owner lost its export"
 })
 
 test_that("round 055 names equivalent copies separately from distinct objects", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-round055-equivalent-copies-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
