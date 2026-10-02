@@ -14,3 +14,4 @@
 ^tests/integration$
 ^tools/WORDLIST-es$
 ^CRAN-SUBMISSION$
+^LICENSE\.md$
