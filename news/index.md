@@ -1,5 +1,7 @@
 # Changelog
 
+## bigbang (development version)
+
 ## bigbang 0.5.0
 
 CRAN release: 2026-10-02
