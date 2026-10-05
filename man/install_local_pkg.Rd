@@ -84,6 +84,17 @@ archive filename because the archive is not read. Use \code{upgrade = "newer"} w
 the declared \code{Package} field must be checked against the installed package.
 }
 
+\examples{
+\donttest{
+archive <- system.file(
+  "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
+)
+example_library <- tempfile("bigbang-example-library-")
+dir.create(example_library)
+on.exit(unlink(example_library, recursive = TRUE), add = TRUE)
+install_local_pkg(archive, lib = example_library, verbose = FALSE)
+}
+}
 \seealso{
 \code{\link[=create_metapackage]{create_metapackage()}} for generating a meta-package with an explicit
 component installer.

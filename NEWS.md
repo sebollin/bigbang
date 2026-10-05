@@ -1,5 +1,16 @@
 # bigbang (development version)
 
+## Bug fixes
+
+- Archive analysis reuses work within each generation, diagnostic, or local
+  installation call, preserving the generated plans and diagnostics while
+  reducing repeated archive processing.
+- Generated re-export bindings remain lazy during package installation,
+  attachment, conflict reporting, and dependency inspection.
+- Re-export mode no longer prints R's "The following objects are masked..."
+  messages for deliberately re-exported symbols; use `<meta>_conflicts()` to
+  inspect those intentional conflicts.
+
 # bigbang 0.5.0
 
 ## Breaking changes

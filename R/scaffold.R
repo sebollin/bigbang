@@ -149,6 +149,8 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
     ".reexport_version_text",
     ".make_reexport_binding", ".install_reexport_bindings", ".reexport_verify",
     ".reexport_verify_subprocess",
+    ".archive_cache_new", ".archive_cache_entry", ".archive_cache_listing",
+    ".archive_cache_extract", ".conflicts.OK",
     ".archive_warning_state", ".warn_archive_filename_mismatch",
     "attach_installed_packages", ".bigbang_abort",
     "install_packages_in_order", "resolve_upgrade_policy",
