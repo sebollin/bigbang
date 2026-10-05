@@ -1336,16 +1336,9 @@ write_metapackage_files <- function(
     log_debug(paste("extension:", template_data$extension))
   }
 
-  component_entries_line <- if (isTRUE(reexport)) {
-    "  component_entries <- paste0(\"package:\", .pkgs[vapply(.pkgs, function(package) length(find.package(package, lib.loc = .reexport_library_paths(), quiet = TRUE)) > 0L, logical(1))])"
-  } else {
-    "  component_entries <- intersect(paste0(\"package:\", .pkgs), package_entries)"
-  }
-
   masking_conflicts_body <- c(
     "  package_entries <- grep(\"^package:\", search(), value = TRUE)",
-    component_entries_line,
-    "  package_entries <- unique(c(package_entries, component_entries))",
+    "  component_entries <- intersect(paste0(\"package:\", .pkgs), package_entries)",
     "  if (length(component_entries) == 0L) {",
     paste0("    return(structure(list(), class = c(\"", name, "_conflicts\", \"list\")))"),
     "  }",
@@ -1568,8 +1561,7 @@ write_metapackage_files <- function(
       "#' @export",
       paste0(name, "_conflicts <- function() {"),
       "  package_entries <- base::grep(\"^package:\", base::search(), value = TRUE)",
-      "  component_entries <- base::paste0(\"package:\", .pkgs[base::vapply(.pkgs, function(package) base::length(base::find.package(package, lib.loc = .reexport_library_paths(), quiet = TRUE)) > 0L, base::logical(1))])",
-      "  package_entries <- base::unique(base::c(package_entries, component_entries))",
+      "  component_entries <- base::intersect(base::paste0(\"package:\", .pkgs), package_entries)",
       "  conflicts <- if (base::length(component_entries) == 0L) {",
       "    base::list()",
       "  } else {",

@@ -27,6 +27,8 @@
   cache
 }
 
+# The cache lives for one call. An archive rewritten during that call with the
+# same size and timestamp keeps its first reading, so the call stays consistent.
 .archive_cache_signature <- function(archive) {
   archive <- normalizePath(archive, winslash = "/", mustWork = TRUE)
   info <- file.info(archive)

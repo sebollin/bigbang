@@ -199,6 +199,9 @@ test_that("install and attachment keep re-export bindings unevaluated", {
   # attached only on request.
   expect_false("package:guardcomponent068" %in% search())
   expect_false(file.exists(marker))
+  # Conflicts describe the search path, so unattached components report none.
+  expect_length(suppressWarnings(guardverse068_conflicts()), 0L)
+  expect_false(file.exists(marker))
   attach_messages <- capture.output(
     suppressWarnings(guardverse068_attach()), type = "message"
   )
