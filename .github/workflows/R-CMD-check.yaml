@@ -48,7 +48,7 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck, any::covr, any::lintr, any::tinytex
+          extra-packages: any::rcmdcheck, any::covr, any::xml2, any::lintr, any::tinytex
           needs: check
 
       - name: Install LaTeX packages required by the PDF manual
@@ -79,6 +79,17 @@ jobs:
         run: |
           coverage <- covr::package_coverage(quiet = FALSE)
           print(coverage)
+          covr::to_cobertura(coverage, filename = "cobertura.xml")
+
+      - name: Upload test coverage to Codecov
+        if: matrix.config.os == 'ubuntu-latest' && matrix.config.r == 'release'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./cobertura.xml
+          plugins: noop
+          disable_search: true
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Report lint findings
         if: matrix.config.os == 'ubuntu-latest' && matrix.config.r == 'release'
