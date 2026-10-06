@@ -2,6 +2,8 @@
 
 ## bigbang 0.5.1
 
+CRAN release: 2026-10-06
+
 ### Bug fixes
 
 - Each component archive is listed and extracted once per generation,

@@ -3,6 +3,8 @@
 > **Creá tus propios metapaquetes de R a partir de paquetes locales.**
 
 [![R-CMD-check](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml)
+[![Cobertura de tests en
+Codecov](https://codecov.io/gh/sebollin/bigbang/graph/badge.svg)](https://app.codecov.io/gh/sebollin/bigbang)
 [![CRAN
 status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.org/package=bigbang)
 [![Descargas de
