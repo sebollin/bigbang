@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,7 +33,18 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="bigbang-development-version">bigbang (development version)<a class="anchor" aria-label="anchor" href="#bigbang-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.5.1" id="bigbang-051">bigbang 0.5.1<a class="anchor" aria-label="anchor" href="#bigbang-051"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-5-1">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-5-1"></a></h3>
+<ul><li>Each component archive is listed and extracted once per generation, diagnostic, or local installation call, and re-export source evidence asks R for the text of the parse tokens it needs only. Generating a re-export meta-package for 11 components is about four times faster, with the same plans and diagnostics.</li>
+<li>Attaching the components of a re-export meta-package no longer evaluates its re-export bindings, and <code>&lt;meta&gt;_conflicts()</code> and <code>&lt;meta&gt;_deps()</code> do not evaluate them either. R’s own load test at the end of <code>R CMD INSTALL</code> can still evaluate them.</li>
+<li>Re-export mode no longer prints R’s “The following objects are masked…” messages for deliberately re-exported symbols; use <code>&lt;meta&gt;_conflicts()</code> to inspect those intentional conflicts.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-0-5-1">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-5-1"></a></h3>
+<ul><li>
+<code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code> has an example that installs the bundled example archive into a temporary library.</li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.5.0" id="bigbang-050">bigbang 0.5.0<a class="anchor" aria-label="anchor" href="#bigbang-050"></a></h2><p class="text-muted">CRAN release: 2026-10-02</p>
