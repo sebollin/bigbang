@@ -81,7 +81,7 @@
 </div>
 <div class="section level2">
 <h2 id="id_4-submission">4. Submission<a class="anchor" aria-label="anchor" href="#id_4-submission"></a></h2>
-<ol style="list-style-type: decimal"><li><p>Update <code>NEWS.md</code>, package version and release date.</p></li>
+<ol style="list-style-type: decimal"><li><p>Update <code>NEWS.md</code>, the package version in <code>DESCRIPTION</code> and <code>CITATION.cff</code>, and the release date.</p></li>
 <li><p>Update <code>cran-comments.md</code> with local, generated-metapackage, GitHub Actions, win-builder, R-hub, coverage, spelling, lint, PDF, and vignette results.</p></li>
 <li><p>Rebuild once from the final commit and verify the tarball contents.</p></li>
 <li>
@@ -89,7 +89,7 @@
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://devtools.r-lib.org/reference/submit_cran.html" class="external-link">submit_cran</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </li>
-<li><p>Tag the submitted commit. Announce the package only after the internal remediation in step 0 is complete and the CRAN result is known.</p></li>
+<li><p>Tag the submitted commit. Once CRAN publishes it, publish the GitHub release from that tag: Zenodo archives each release and mints its DOI. Announce the package only after the internal remediation in step 0 is complete and the CRAN result is known.</p></li>
 </ol></div>
 </div>
 
