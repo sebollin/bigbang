@@ -15,6 +15,7 @@ authors:
     given-names: Sebastián
     orcid: "https://orcid.org/0009-0009-9068-0276"
 version: 0.5.1
+doi: 10.5281/zenodo.23192961
 license: GPL-3.0-or-later
 repository-code: "https://github.com/sebollin/bigbang"
 repository-artifact: "https://CRAN.R-project.org/package=bigbang"
