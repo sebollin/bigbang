@@ -12,7 +12,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/sebollin/bigbang/blob/main/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/sebollin/bigbang/blob/v0.5.1/DESCRIPTION)
 
 Lucas S (2026). *bigbang: Build 'Tidyverse'-Style Meta-Packages from
 Local Package Files*. R package version 0.5.1,
