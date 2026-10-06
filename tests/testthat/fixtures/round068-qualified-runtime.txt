@@ -1,0 +1,30 @@
+
+.bigbang_abort <- function(class, message, ...) {
+  condition <- base::structure(
+    base::c(base::list(message = message, call = NULL), base::list(...)),
+    class = base::c(class, "bigbang_error", "error", "condition")
+  )
+  base::stop(condition)
+}
+
+resolve_upgrade_policy <- function(force, upgrade, upgrade_missing) {
+  if (!base::is.logical(force) || base::length(force) != 1L || base::is.na(force)) {
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .meta_tr("'force' must be TRUE or FALSE")
+    )
+  }
+    upgrade <- base::match.arg(upgrade, base::c("newer", "always", "never"))
+  if (base::isTRUE(force)) {
+    if (!base::isTRUE(upgrade_missing) && !base::identical(upgrade, "always")) {
+      .bigbang_abort(
+        "bigbang_error_install_policy",
+        .meta_tr(
+          "'force = TRUE' conflicts with an explicit upgrade policy other than 'always'"
+        )
+      )
+    }
+    upgrade <- "always"
+  }
+  upgrade
+}

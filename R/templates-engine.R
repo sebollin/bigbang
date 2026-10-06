@@ -119,6 +119,92 @@ install_source_component <- function(target, lib, verbose = TRUE) {{
 .component_specs <- {component_specs_literal}
 .component_names <- {package_list_literal}
 
+.archive_cache_new <- function() {{
+  cache <- base::new.env(parent = base::emptyenv())
+  cache$entries <- base::new.env(hash = TRUE, parent = base::emptyenv())
+  cache$extracted <- base::character()
+  cache
+}}
+
+.archive_cache_entry <- function(cache, archive, ext) {{
+  info <- base::file.info(archive)
+  key <- base::paste(
+    base::normalizePath(archive, winslash = "/", mustWork = TRUE),
+    base::as.character(info$size), base::as.numeric(info$mtime),
+    base::tolower(ext), sep = "|"
+  )
+  if (base::exists(key, envir = cache$entries, inherits = FALSE)) {{
+    return(base::get(key, envir = cache$entries, inherits = FALSE))
+  }}
+  entry <- base::new.env(parent = base::emptyenv())
+  entry$archive <- base::normalizePath(archive, winslash = "/", mustWork = TRUE)
+  entry$listing <- NULL
+  entry$extract_dir <- NULL
+  base::assign(key, entry, envir = cache$entries)
+  entry
+}}
+
+.archive_cache_listing <- function(cache, archive, ext) {{
+  entry <- .archive_cache_entry(cache, archive, ext)
+  if (base::is.null(entry$listing)) {{
+    entry$listing <- base::suppressWarnings({{
+      if (base::identical(base::tolower(ext), ".zip")) utils::unzip(archive, list = TRUE)
+      else utils::untar(archive, list = TRUE)
+    }})
+  }}
+  entry$listing
+}}
+
+.archive_cache_extract <- function(cache, archive, ext) {{
+  entry <- .archive_cache_entry(cache, archive, ext)
+  if (!base::is.null(entry$extract_dir)) return(entry$extract_dir)
+  listing <- .archive_cache_listing(cache, archive, ext)
+  members <- if (base::identical(base::tolower(ext), ".zip")) listing$Name else listing
+  members <- base::gsub("\\\\", "/", members, fixed = TRUE)
+  unsafe <- base::startsWith(members, "/") |
+    base::grepl("^[A-Za-z]:", members) |
+    base::grepl("(^|/)\\\\.\\\\.(/|$)", members, perl = TRUE)
+  if (base::any(unsafe)) {{
+    base::stop(.meta_trf(
+      "Archive contains unsafe absolute or parent-traversal paths: %s",
+      base::paste(utils::head(members[unsafe], 3L), collapse = ", ")
+    ), call. = FALSE)
+  }}
+  extract_dir <- base::tempfile("bigbang-archive-cache-")
+  if (!base::dir.create(extract_dir)) base::stop(.meta_tr(
+    "Could not create a temporary archive directory."), call. = FALSE)
+  extraction <- base::tryCatch(base::suppressWarnings({{
+    if (base::identical(base::tolower(ext), ".zip")) utils::unzip(archive, exdir = extract_dir)
+    else utils::untar(archive, exdir = extract_dir)
+  }}), error = base::identity)
+  if (base::inherits(extraction, "error")) {{
+    safe_unlink(extract_dir, recursive = TRUE)
+    base::stop(.meta_trf(
+      "Could not extract archive %s: %s", archive, base::conditionMessage(extraction)
+    ), call. = FALSE)
+  }}
+  if (base::is.numeric(extraction) && base::length(extraction) == 1L && extraction != 0) {{
+    safe_unlink(extract_dir, recursive = TRUE)
+    base::stop(.meta_trf(
+      "Could not extract archive %s: extraction returned status %d.",
+      archive, extraction
+    ), call. = FALSE)
+  }}
+  extracted <- base::list.files(
+    extract_dir, recursive = TRUE, full.names = TRUE,
+    all.files = TRUE, include.dirs = TRUE, no.. = TRUE
+  )
+  if (base::length(extracted) > 0L && base::any(base::nzchar(base::Sys.readlink(extracted)))) {{
+    safe_unlink(extract_dir, recursive = TRUE)
+    base::stop(.meta_trf(
+      "Archive %s contains symbolic links, which are not supported.", archive
+    ), call. = FALSE)
+  }}
+  entry$extract_dir <- extract_dir
+  cache$extracted <- base::c(cache$extracted, extract_dir)
+  extract_dir
+}}
+
 resolve_component_spec <- function(package, ext = NULL) {{
   if (base::`%in%`(package, base::names(.component_specs))) return(.component_specs[[package]])
   by_stem <- base::vapply(.component_specs, function(spec) base::identical(spec$stem, package),
@@ -189,25 +275,30 @@ resolve_component_archive <- function(package, pkg_dir, ext = NULL) {{
 #\'
 #\' @return A list with declared package metadata and dependencies.
 #\' @keywords internal
-read_archive_metadata <- function(package, pkg_dir, ext = NULL) {{
+read_archive_metadata <- function(package, pkg_dir, ext = NULL, cache = NULL) {{
   resolved <- resolve_component_archive(package, pkg_dir, ext)
   archive <- resolved$path
   ext <- resolved$ext
 
-  temp_dir <- tempfile("bigbang-deps-")
-  if (!dir.create(temp_dir)) stop(.meta_trf(
-    "Could not extract archive %s: could not create temporary directory.",
-    archive
-  ), call. = FALSE)
-  on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
+  if (base::is.null(cache)) {{
+    temp_dir <- tempfile("bigbang-deps-")
+    if (!dir.create(temp_dir)) stop(.meta_trf(
+      "Could not extract archive %s: could not create temporary directory.",
+      archive
+    ), call. = FALSE)
+    on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
+  }}
 
   if (!identical(tolower(ext), ".zip") && !base::`%in%`(ext, base::c(".tar.gz", ".tar"))) {{
     stop(.meta_trf("Unsupported archive format: %s", ext), call. = FALSE)
   }}
-  listing <- tryCatch(suppressWarnings({{
-    if (identical(tolower(ext), ".zip")) utils::unzip(archive, list = TRUE)
-    else utils::untar(archive, list = TRUE)
-  }}), error = identity)
+  listing <- base::tryCatch(
+    if (base::is.null(cache)) base::suppressWarnings({{
+      if (base::identical(base::tolower(ext), ".zip")) utils::unzip(archive, list = TRUE)
+      else utils::untar(archive, list = TRUE)
+    }}) else .archive_cache_listing(cache, archive, ext),
+    error = base::identity
+  )
   if (inherits(listing, "error")) {{
     stop(.meta_trf(
       "Could not extract archive %s: %s", archive, conditionMessage(listing)
@@ -232,10 +323,11 @@ read_archive_metadata <- function(package, pkg_dir, ext = NULL) {{
       paste(utils::head(members[unsafe], 3L), collapse = ", ")
     ), call. = FALSE)
   }}
-  extraction <- tryCatch(suppressWarnings({{
-    if (identical(tolower(ext), ".zip")) utils::unzip(archive, exdir = temp_dir)
+  if (!base::is.null(cache)) temp_dir <- .archive_cache_extract(cache, archive, ext)
+  extraction <- if (base::is.null(cache)) base::tryCatch(base::suppressWarnings({{
+    if (base::identical(base::tolower(ext), ".zip")) utils::unzip(archive, exdir = temp_dir)
     else utils::untar(archive, exdir = temp_dir)
-  }}), error = identity)
+  }}), error = base::identity) else 0L
   if (inherits(extraction, "error")) {{
     stop(.meta_trf(
       "Could not extract archive %s: %s", archive, conditionMessage(extraction)
@@ -346,8 +438,8 @@ read_archive_metadata <- function(package, pkg_dir, ext = NULL) {{
   )
 }}
 
-read_archive_dependencies <- function(package, pkg_dir, ext = NULL) {{
-  read_archive_metadata(package, pkg_dir, ext)$dependencies
+read_archive_dependencies <- function(package, pkg_dir, ext = NULL, cache = NULL) {{
+  read_archive_metadata(package, pkg_dir, ext, cache = cache)$dependencies
 }}
 
 version_satisfies <- function(actual, op, required) {{
@@ -360,8 +452,10 @@ version_satisfies <- function(actual, op, required) {{
   }}, error = function(e) FALSE)
 }}
 
-validate_local_constraints <- function(packages, pkg_dir, ext = NULL) {{
-  metadata <- lapply(packages, read_archive_metadata, pkg_dir = pkg_dir, ext = ext)
+validate_local_constraints <- function(packages, pkg_dir, ext = NULL, cache = NULL) {{
+  metadata <- lapply(
+    packages, read_archive_metadata, pkg_dir = pkg_dir, ext = ext, cache = cache
+  )
   package_names <- vapply(metadata, function(item) item$package, character(1L))
   versions <- vapply(metadata, function(item) item$version, character(1L))
   names(versions) <- package_names
@@ -399,10 +493,12 @@ validate_local_constraints <- function(packages, pkg_dir, ext = NULL) {{
 #\'
 #\' @return One of `"source"`, `"source.zip"`, or `"win.binary"`.
 #\' @keywords internal
-classify_package_archive <- function(archive, ext) {{
+classify_package_archive <- function(archive, ext, cache = NULL) {{
   if (!identical(tolower(ext), ".zip")) return("source")
 
-  members <- utils::unzip(archive, list = TRUE)$Name
+  members <- if (is.null(cache)) utils::unzip(archive, list = TRUE)$Name else {{
+    .archive_cache_listing(cache, archive, ext)$Name
+  }}
   members <- gsub("\\\\", "/", members, fixed = TRUE)
   has_description <- any(grepl("(^|/)DESCRIPTION$", members))
   if (!has_description) {{
@@ -438,7 +534,8 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
                                    repos = getOption("repos"),
                                    cran_deps = c("skip", "error", "install"),
                                    upgrade = c("newer", "always", "never"),
-                                   lib = .libPaths()[[1L]], verbose = TRUE) {{
+                                   lib = .libPaths()[[1L]], verbose = TRUE,
+                                   cache = NULL) {{
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
   dependency_libraries <- unique(c(lib, .libPaths()))
@@ -452,7 +549,7 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
   archive <- resolved$path
   ext <- resolved$ext
   metadata <- tryCatch(
-    read_archive_metadata(package, pkg_dir, ext),
+    read_archive_metadata(package, pkg_dir, ext, cache = cache),
     error = function(e) e
   )
   if (inherits(metadata, "error")) {{
@@ -582,7 +679,7 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
   }}
 
   archive_type <- tryCatch(
-    classify_package_archive(archive, ext),
+    classify_package_archive(archive, ext, cache = cache),
     error = function(e) e
   )
   if (inherits(archive_type, "error")) {{
@@ -598,10 +695,13 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
   install_target <- archive
   install_type <- if (identical(archive_type, "win.binary")) "win.binary" else "source"
   if (identical(archive_type, "source.zip")) {{
-    source_dir <- tempfile("bigbang-source-zip-")
-    dir.create(source_dir)
-    on.exit(safe_unlink(source_dir, recursive = TRUE), add = TRUE)
-    utils::unzip(archive, exdir = source_dir)
+    source_dir <- if (is.null(cache)) tempfile("bigbang-source-zip-") else
+      .archive_cache_extract(cache, archive, ext)
+    if (is.null(cache)) {{
+      dir.create(source_dir)
+      on.exit(safe_unlink(source_dir, recursive = TRUE), add = TRUE)
+      utils::unzip(archive, exdir = source_dir)
+    }}
     roots <- list.files(source_dir, all.files = TRUE, no.. = TRUE, include.dirs = TRUE)
     if (length(roots) != 1L || !dir.exists(file.path(source_dir, roots[[1L]]))) {{
       return(list(success = FALSE,
@@ -755,7 +855,7 @@ detect_cycles <- function(adjacency) {{
 #\'   print(adj)
 #\' }}
 
-build_dependency_graph <- function(packages, pkg_dir, ext = NULL) {{
+build_dependency_graph <- function(packages, pkg_dir, ext = NULL, cache = NULL) {{
   package_count <- length(packages)
   adjacency <- base::matrix(0, nrow = package_count, ncol = package_count)
   rownames(adjacency) <- colnames(adjacency) <- packages
@@ -764,10 +864,10 @@ build_dependency_graph <- function(packages, pkg_dir, ext = NULL) {{
     function(package) resolve_component_spec(package, ext)$package,
     character(1L)
   )
-  validate_local_constraints(packages, pkg_dir, ext)
+  validate_local_constraints(packages, pkg_dir, ext, cache = cache)
 
   for (package in packages) {{
-    deps <- read_archive_dependencies(package, pkg_dir, ext)
+    deps <- read_archive_dependencies(package, pkg_dir, ext, cache = cache)
     local_deps <- intersect(deps, package_names)
     for (dep in local_deps) {{
       dependency_index <- which(package_names == dep)
@@ -880,6 +980,12 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
                                       lib = .libPaths()[[1L]]) {{
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
+  archive_cache <- .archive_cache_new()
+  on.exit({{
+    if (base::length(archive_cache$extracted) > 0L) {{
+      safe_unlink(base::unique(archive_cache$extracted), recursive = TRUE)
+    }}
+  }}, add = TRUE)
   .archive_warning_state$seen <- base::character()
   .archive_warning_state$active <- TRUE
   base::on.exit({{
@@ -913,7 +1019,8 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     selected <- unique(only)
     repeat {{
       dependencies <- unlist(lapply(selected, read_archive_dependencies,
-                                    pkg_dir = pkg_dir, ext = ext),
+                                    pkg_dir = pkg_dir, ext = ext,
+                                    cache = archive_cache),
                              use.names = FALSE)
       pulled <- setdiff(intersect(dependencies, .component_names), selected)
       if (length(pulled) == 0L) break
@@ -921,7 +1028,7 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     }}
     packages <- selected
   }}
-  adjacency <- build_dependency_graph(packages, pkg_dir, ext)
+  adjacency <- build_dependency_graph(packages, pkg_dir, ext, cache = archive_cache)
   install_order <- topological_order(adjacency)
   package_names <- base::vapply(
     packages,
@@ -949,7 +1056,9 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     package <- packages[idx]
 
     dependencies <- tryCatch(
-      read_archive_dependencies(package, pkg_dir, ext),
+      read_archive_dependencies(
+        package, pkg_dir, ext, cache = archive_cache
+      ),
       error = function(e) character()
     )
     local_dependencies <- intersect(dependencies, package_names)
@@ -978,7 +1087,8 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
       tryCatch(
         install_local_archive(
           package, pkg_dir, ext, repos = repos, cran_deps = cran_deps,
-          upgrade = upgrade, lib = lib, verbose = verbose
+          upgrade = upgrade, lib = lib, verbose = verbose,
+          cache = archive_cache
         ),
         error = function(e) list(success = FALSE, message = conditionMessage(e))
       )
@@ -1078,8 +1188,15 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
   parsed <- tryCatch(parse(text = content, keep.source = TRUE),
                      error = function(e) NULL)
   if (is.null(parsed)) return(content)
-  data <- utils::getParseData(parsed, includeText = TRUE)
+  # Text is needed only for terminal tokens and a few assignment targets;
+  # computing it for every node of a large generated file is very slow.
+  data <- utils::getParseData(parsed, includeText = NA)
   if (is.null(data) || nrow(data) == 0L) return(content)
+  node_text <- function(id) {
+    needed <- data[data$id == id, , drop = FALSE]
+    attr(needed, "srcfile") <- attr(data, "srcfile")
+    tryCatch(utils::getParseText(needed, id), error = function(e) "")
+  }
   defined_functions <- character()
   function_ids <- data$id[data$token == "FUNCTION"]
   function_nodes <- data$parent[data$id %in% function_ids]
@@ -1095,7 +1212,9 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
                   data$col1 < assignment$col1[[1L]], , drop = FALSE]
     if (nrow(lhs) == 0L) next
     lhs <- lhs[order(lhs$col1, lhs$id), , drop = FALSE][1L, , drop = FALSE]
-    name <- trimws(lhs$text[[1L]])
+    name <- lhs$text[[1L]]
+    if (is.na(name) || !nzchar(name)) name <- node_text(lhs$id[[1L]])
+    name <- trimws(name)
     if (grepl("^`?[A-Za-z.][A-Za-z0-9._]*`?$", name, perl = TRUE)) {
       defined_functions <- c(defined_functions, sub("^`|`$", "", name))
     }
@@ -1171,6 +1290,13 @@ write_metapackage_files <- function(
     pkg_dir_default = .archive_dir_default(name, include_archives),
     install_upgrade = install_upgrade,
     reexport = isTRUE(reexport),
+    attach_warn_conflicts = if (isTRUE(reexport)) "FALSE" else "TRUE",
+    attach_body = paste0(
+      "  attach_installed_packages(pkgs, warn_missing = TRUE, ",
+      "warn_conflicts = ",
+      if (isTRUE(reexport)) "FALSE" else "TRUE",
+      ")"
+    ),
     reexport_on_load = if (isTRUE(reexport)) {
       paste0(".install_reexport_bindings(pkgname)")
     } else {
@@ -1517,7 +1643,9 @@ utils::globalVariables(".pkgs")
 .component_names <- .pkgs
 
 attach_installed_packages <- function(pkgs, warn_missing = TRUE,
-                                      lib.loc = base::.libPaths()) {
+                                      lib.loc = base::.libPaths(),
+                                      attach_components = TRUE,
+                                      warn_conflicts = TRUE) {
   already_attached <- base::gsub("^package:", "", base::search())
   to_load <- base::setdiff(pkgs, already_attached)
   package_available <- function(package, seen = base::character()) {
@@ -1546,14 +1674,23 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
   available <- base::vapply(to_load, package_available, base::logical(1))
   missing <- to_load[!available]
   attached <- character()
-  to_attach <- base::setdiff(to_load, missing)
+  to_attach <- if (base::isTRUE(attach_components)) {
+    base::setdiff(to_load, missing)
+  } else {
+    base::character()
+  }
   for (package in to_attach) {
     loaded <- base::tryCatch({
       if (base::isNamespaceLoaded(package)) {
         base::attachNamespace(package)
       } else {
         base::suppressPackageStartupMessages(
-          base::library(package, character.only = TRUE, lib.loc = lib.loc)
+          base::library(
+            package,
+            character.only = TRUE,
+            lib.loc = lib.loc,
+            warn.conflicts = warn_conflicts
+          )
         )
       }
       TRUE
@@ -1589,13 +1726,13 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
 #\'   {{ name }}_attach()
 #\' }
 {{ name }}_attach <- function(pkgs = .pkgs) {
-  attach_installed_packages(pkgs, warn_missing = TRUE)
+{{{ attach_body }}}
 }
 
 #\' Install local metapackage components
 #\'
-#\' Installs local archives in topological order and then attaches them. Installation
-#\' is explicit and never occurs from a startup hook.
+#\' Installs local archives in topological order and then attaches them.
+#\' Installation is explicit and never occurs from a startup hook.
 #\'
 #\' @param pkg_dir Character vector of archive directories.
 #\' @param ext Character archive extension.
@@ -1701,7 +1838,8 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
   attach_installed_packages(
     attach_names,
     warn_missing = base::length(result$skipped) == 0L,
-    lib.loc = lib
+    lib.loc = lib,
+    warn_conflicts = {{{ attach_warn_conflicts }}}
   )
   base::invisible(result)
 }
@@ -1771,7 +1909,12 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
 #\'   {{ name }}_attach_all()
 #\' }
 {{ name }}_attach_all <- function() {
-  base::lapply(.pkgs, base::library, character.only = TRUE)
+  base::lapply(
+    .pkgs,
+    base::library,
+    character.only = TRUE,
+    warn.conflicts = {{{ attach_warn_conflicts }}}
+  )
   base::invisible()
 }
 
@@ -2109,9 +2252,19 @@ zzz = '
 .onAttach <- function(libname, pkgname) {
   # Safety fix 2026-07: no deletion and no installation from startup.
   pkg_base_names <- .component_names
+{{#reexport}}  # Intentional re-export conflicts are reported by *_conflicts().
+  base::assign(
+    ".conflicts.OK", TRUE,
+    envir = base::as.environment(base::paste0("package:", pkgname))
+  )
+{{/reexport}}
 
 {{^reexport}}  # Tidyverse-style startup hook: delegate search-path changes to a helper.
-  result <- attach_installed_packages(pkg_base_names, warn_missing = FALSE)
+  result <- attach_installed_packages(
+    pkg_base_names,
+    warn_missing = FALSE,
+    warn_conflicts = {{{ attach_warn_conflicts }}}
+  )
   missing <- result$missing
   installed <- setdiff(pkg_base_names, missing)
 {{/reexport}}{{#reexport}}  # Runtime re-exports stay lazy; do not attach components here.

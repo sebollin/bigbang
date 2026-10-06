@@ -1,4 +1,24 @@
-# bigbang (development version)
+# bigbang 0.5.1
+
+## Bug fixes
+
+- Each component archive is listed and extracted once per generation,
+  diagnostic, or local installation call, and re-export source evidence asks R
+  for the text of the parse tokens it needs only. Generating a re-export
+  meta-package for 11 components is about four times faster, with the same
+  plans and diagnostics.
+- Attaching the components of a re-export meta-package no longer evaluates its
+  re-export bindings, and `<meta>_conflicts()` and `<meta>_deps()` do not
+  evaluate them either. R's own load test at the end of `R CMD INSTALL` can
+  still evaluate them.
+- Re-export mode no longer prints R's "The following objects are masked..."
+  messages for deliberately re-exported symbols; use `<meta>_conflicts()` to
+  inspect those intentional conflicts.
+
+## Documentation
+
+- `install_local_pkg()` has an example that installs the bundled example
+  archive into a temporary library.
 
 # bigbang 0.5.0
 

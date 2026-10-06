@@ -20,6 +20,145 @@
 
 .untar_quiet <- function(...) utils::untar(..., tar = "internal")
 
+.archive_cache_new <- function() {
+  cache <- new.env(parent = emptyenv())
+  cache$entries <- new.env(hash = TRUE, parent = emptyenv())
+  cache$extracted <- character()
+  cache
+}
+
+# The cache lives for one call. An archive rewritten during that call with the
+# same size and timestamp keeps its first reading, so the call stays consistent.
+.archive_cache_signature <- function(archive) {
+  archive <- normalizePath(archive, winslash = "/", mustWork = TRUE)
+  info <- file.info(archive)
+  if (nrow(info) != 1L || is.na(info$size) || is.na(info$mtime)) {
+    stop(.bb_trf("Package archive does not exist: %s", archive), call. = FALSE)
+  }
+  paste(
+    archive, as.character(info$size), as.numeric(info$mtime), sep = "\u001f"
+  )
+}
+
+.archive_cache_entry <- function(cache, archive, ext) {
+  if (is.null(cache)) return(NULL)
+  key <- paste(.archive_cache_signature(archive), tolower(ext), sep = "\u001e")
+  if (exists(key, envir = cache$entries, inherits = FALSE)) {
+    return(get(key, envir = cache$entries, inherits = FALSE))
+  }
+  entry <- new.env(parent = emptyenv())
+  entry$archive <- normalizePath(archive, winslash = "/", mustWork = TRUE)
+  entry$ext <- ext
+  entry$key <- key
+  entry$listing_loaded <- FALSE
+  entry$listing <- NULL
+  entry$extract_dir <- NULL
+  assign(key, entry, envir = cache$entries)
+  entry
+}
+
+.archive_listing <- function(archive, ext) {
+  listing <- tryCatch(suppressWarnings({
+    if (identical(tolower(ext), ".zip")) {
+      utils::unzip(archive, list = TRUE)
+    } else {
+      .untar_quiet(archive, list = TRUE)
+    }
+  }), error = identity)
+  if (inherits(listing, "error")) {
+    stop(.bb_trf(
+      "Could not extract archive %s: %s", archive, conditionMessage(listing)
+    ), call. = FALSE)
+  }
+  listing_status <- attr(listing, "status")
+  if (is.numeric(listing_status) && length(listing_status) == 1L &&
+        listing_status != 0) {
+    stop(.bb_trf(
+      "Could not extract archive %s: extraction returned status %d.",
+      archive, listing_status
+    ), call. = FALSE)
+  }
+  listing
+}
+
+.archive_extract <- function(archive, ext, extract_dir) {
+  extraction <- tryCatch(suppressWarnings({
+    if (identical(tolower(ext), ".zip")) {
+      utils::unzip(archive, exdir = extract_dir)
+    } else {
+      .untar_quiet(archive, exdir = extract_dir)
+    }
+  }), error = identity)
+  if (inherits(extraction, "error")) {
+    stop(.bb_trf(
+      "Could not extract archive %s: %s", archive, conditionMessage(extraction)
+    ), call. = FALSE)
+  }
+  if (is.numeric(extraction) && length(extraction) == 1L && extraction != 0) {
+    stop(.bb_trf(
+      "Could not extract archive %s: extraction returned status %d.",
+      archive, extraction
+    ), call. = FALSE)
+  }
+  invisible(extraction)
+}
+
+.archive_cache_listing <- function(cache, archive, ext) {
+  if (is.null(cache)) return(.archive_listing(archive, ext))
+  entry <- .archive_cache_entry(cache, archive, ext)
+  if (!isTRUE(entry$listing_loaded)) {
+    entry$listing <- .archive_listing(entry$archive, ext)
+    entry$listing_loaded <- TRUE
+  }
+  entry$listing
+}
+
+.archive_cache_extract <- function(cache, archive, ext) {
+  if (is.null(cache)) {
+    extract_dir <- tempfile("bigbang-archive-")
+    if (!dir.create(extract_dir)) {
+      stop(.bb_trf("Could not create temporary directory for %s", archive),
+           call. = FALSE)
+    }
+    listing <- .archive_listing(archive, ext)
+    members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
+    .validate_archive_members(members)
+    .archive_extract(archive, ext, extract_dir)
+    .validate_extracted_links(extract_dir, archive)
+    return(extract_dir)
+  }
+  entry <- .archive_cache_entry(cache, archive, ext)
+  if (is.null(entry$extract_dir)) {
+    listing <- .archive_cache_listing(cache, archive, ext)
+    members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
+    .validate_archive_members(members)
+    extract_dir <- tempfile("bigbang-archive-cache-")
+    if (!dir.create(extract_dir)) {
+      stop(.bb_trf("Could not create temporary directory for %s", archive),
+           call. = FALSE)
+    }
+    extraction_error <- tryCatch(
+      .archive_extract(entry$archive, ext, extract_dir), error = identity
+    )
+    if (inherits(extraction_error, "error")) {
+      safe_unlink(extract_dir, recursive = TRUE)
+      stop(extraction_error)
+    }
+    .validate_extracted_links(extract_dir, entry$archive)
+    entry$extract_dir <- extract_dir
+    cache$extracted <- c(cache$extracted, extract_dir)
+  }
+  entry$extract_dir
+}
+
+.archive_cache_close <- function(cache) {
+  if (is.null(cache) || !is.environment(cache)) return(invisible(NULL))
+  paths <- unique(cache$extracted)
+  if (length(paths) > 0L) safe_unlink(paths, recursive = TRUE)
+  cache$extracted <- character()
+  invisible(NULL)
+}
+
 .archive_extension <- function(path) {
   path_lower <- tolower(path)
   match <- .archive_extensions[vapply(
@@ -146,7 +285,7 @@
   normalizePath(pkg_dir, winslash = "/", mustWork = TRUE)
 }
 
-.archives_for_package_identity <- function(package, dirs) {
+.archives_for_package_identity <- function(package, dirs, cache = NULL) {
   archives <- unique(unlist(lapply(dirs, function(dir) {
     files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
     files <- files[file.exists(files) & !dir.exists(files)]
@@ -156,7 +295,7 @@
   }), use.names = FALSE))
   identities <- lapply(archives, function(path) {
     tryCatch(
-      .read_archive_identity(path, .archive_extension(path)),
+      .read_archive_identity(path, .archive_extension(path), cache = cache),
       error = function(error) {
         warning(.bb_trf(
           "Could not read archive %s; excluding it from the archive inventory: %s",
@@ -172,7 +311,8 @@
   normalizePath(archives[matches], winslash = "/", mustWork = TRUE)
 }
 
-.resolve_archive_input <- function(input, pkg_dir = NULL, ext = ".tar.gz") {
+.resolve_archive_input <- function(input, pkg_dir = NULL, ext = ".tar.gz",
+                                   cache = NULL) {
   if (!is.character(input) || length(input) != 1L || is.na(input) || !nzchar(input)) {
     stop(.bb_tr("Each component must be one non-empty archive path or stem"), call. = FALSE)
   }
@@ -212,7 +352,7 @@
     # A bare package name is resolved by the Package field, never by a string
     # prefix. This also supports archives whose filenames are build labels or
     # omit their version while keeping traditional name_version stems intact.
-    discovered <- .archives_for_package_identity(input, dirs)
+    discovered <- .archives_for_package_identity(input, dirs, cache = cache)
     found <- discovered
   } else {
     candidates <- file.path(dirs, paste0(input, ext))
@@ -249,7 +389,7 @@
 
 .resolve_components <- function(packages, pkg_dir = NULL, ext = ".tar.gz",
                                 on_component_error = "abort",
-                                reexport = FALSE) {
+                                reexport = FALSE, cache = NULL) {
   if (!is.character(packages) || length(packages) < 1L) {
     stop(.bb_tr("'packages' must be a non-empty character vector"), call. = FALSE)
   }
@@ -274,19 +414,19 @@
       NULL
     }
     path_result <- tryCatch(
-      .resolve_archive_input(input, dirs, ext), error = identity
+      .resolve_archive_input(input, dirs, ext, cache = cache), error = identity
     )
     declared_identity <- NULL
     if (!inherits(path_result, "error")) {
       actual_ext <- .archive_extension(path_result)
       declared_identity <- tryCatch(
-        .read_archive_identity(path_result, actual_ext),
+        .read_archive_identity(path_result, actual_ext, cache = cache),
         error = function(e) NULL
       )
       resolved <- tryCatch({
         metadata <- .read_archive_metadata(
           path_result, ext = actual_ext, include_exports = isTRUE(reexport),
-          include_reexport_evidence = FALSE
+          include_reexport_evidence = FALSE, cache = cache
         )
         list(
           path = path_result,
@@ -402,7 +542,7 @@
     }
   }
   source_dirs <- unique(c(dirs, dirname(vapply(components, `[[`, character(1L), "path"))))
-  inventory <- .archive_inventory(source_dirs, known = components)
+  inventory <- .archive_inventory(source_dirs, known = components, cache = cache)
   list(
     components = components, inventory = inventory, source_dirs = source_dirs,
     omitted = omitted, packages = packages, pkg_dir = pkg_dir
@@ -411,24 +551,31 @@
 
 .read_archive_metadata <- function(package, pkg_dir = NULL, ext = NULL,
                                    include_exports = FALSE,
-                                   include_reexport_evidence = include_exports) {
+                                   include_reexport_evidence = include_exports,
+                                   cache = NULL) {
   archive <- if (file.exists(package) && !dir.exists(package)) {
     normalizePath(package, winslash = "/", mustWork = TRUE)
   } else {
-    .resolve_archive_input(package, pkg_dir, .or_null(ext, ".tar.gz"))
+    .resolve_archive_input(
+      package, pkg_dir, .or_null(ext, ".tar.gz"), cache = cache
+    )
   }
   ext <- .or_null(ext, .archive_extension(archive))
   if (!file.exists(archive)) {
     stop(.bb_trf("Package archive does not exist: %s", archive), call. = FALSE)
   }
 
-  temp_dir <- tempfile("bigbang-metadata-")
-  if (!dir.create(temp_dir)) {
-    stop(.bb_trf("Could not create temporary directory for %s", archive), call. = FALSE)
+  if (is.null(cache)) {
+    temp_dir <- tempfile("bigbang-metadata-")
+    if (!dir.create(temp_dir)) {
+      stop(.bb_trf("Could not create temporary directory for %s", archive),
+           call. = FALSE)
+    }
+    on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
+    .extract_archive_checked(archive, ext, temp_dir)
+  } else {
+    temp_dir <- .archive_cache_extract(cache, archive, ext)
   }
-  on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
-
-  .extract_archive_checked(archive, ext, temp_dir)
   allow_flat <- identical(tolower(ext), ".zip") &&
     file.exists(file.path(temp_dir, "Meta", "package.rds"))
   package_root <- .find_archive_root(temp_dir, archive, allow_flat = allow_flat)
@@ -556,14 +703,18 @@
   )
 }
 
-.read_reexport_evidence <- function(component) {
-  temp_dir <- tempfile("bigbang-reexport-")
-  if (!dir.create(temp_dir)) {
-    stop(.bb_trf("Could not create temporary directory for %s", component$path),
-         call. = FALSE)
+.read_reexport_evidence <- function(component, cache = NULL) {
+  if (is.null(cache)) {
+    temp_dir <- tempfile("bigbang-reexport-")
+    if (!dir.create(temp_dir)) {
+      stop(.bb_trf("Could not create temporary directory for %s", component$path),
+           call. = FALSE)
+    }
+    on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
+    .extract_archive_checked(component$path, component$ext, temp_dir)
+  } else {
+    temp_dir <- .archive_cache_extract(cache, component$path, component$ext)
   }
-  on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
-  .extract_archive_checked(component$path, component$ext, temp_dir)
   package_root <- .find_archive_root(temp_dir, component$path)
   evidence <- .reexport_source_evidence(
     package_root, package = component$package
@@ -576,33 +727,17 @@
 # dependency graph. This deliberately does not replace full generation-time
 # validation: an archive can expose Package and Version while still being
 # rejected for another invariant (for example, multiple package roots).
-.read_archive_identity <- function(archive, ext) {
-  temp_dir <- tempfile("bigbang-identity-")
-  if (!dir.create(temp_dir)) {
-    stop(.bb_trf("Could not create temporary directory for %s", archive),
-         call. = FALSE)
-  }
-  on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
-
-  listing <- tryCatch(suppressWarnings({
-    if (identical(tolower(ext), ".zip")) {
-      utils::unzip(archive, list = TRUE)
-    } else {
-      .untar_quiet(archive, list = TRUE)
+.read_archive_identity <- function(archive, ext, cache = NULL) {
+  if (is.null(cache)) {
+    temp_dir <- tempfile("bigbang-identity-")
+    if (!dir.create(temp_dir)) {
+      stop(.bb_trf("Could not create temporary directory for %s", archive),
+           call. = FALSE)
     }
-  }), error = identity)
-  if (inherits(listing, "error")) {
-    stop(.bb_trf(
-      "Could not extract archive %s: %s", archive, conditionMessage(listing)
-    ), call. = FALSE)
-  }
-  listing_status <- attr(listing, "status")
-  if (is.numeric(listing_status) && length(listing_status) == 1L &&
-        listing_status != 0) {
-    stop(.bb_trf(
-      "Could not extract archive %s: extraction returned status %d.",
-      archive, listing_status
-    ), call. = FALSE)
+    on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
+    listing <- .archive_listing(archive, ext)
+  } else {
+    listing <- .archive_cache_listing(cache, archive, ext)
   }
   members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
   members <- as.character(members)
@@ -624,26 +759,30 @@
     stop(.bb_trf("Archive %s must contain one package root directory.", archive),
          call. = FALSE)
   }
-  member <- members[[candidates[[1L]]]]
-  extraction <- tryCatch(suppressWarnings({
-    if (identical(tolower(ext), ".zip")) {
-      utils::unzip(archive, files = member, exdir = temp_dir)
-    } else {
-      .untar_quiet(archive, files = member, exdir = temp_dir)
+  if (is.null(cache)) {
+    member <- members[[candidates[[1L]]]]
+    extraction <- tryCatch(suppressWarnings({
+      if (identical(tolower(ext), ".zip")) {
+        utils::unzip(archive, files = member, exdir = temp_dir)
+      } else {
+        .untar_quiet(archive, files = member, exdir = temp_dir)
+      }
+    }), error = identity)
+    if (inherits(extraction, "error")) {
+      stop(.bb_trf(
+        "Could not extract archive %s: %s", archive, conditionMessage(extraction)
+      ), call. = FALSE)
     }
-  }), error = identity)
-  if (inherits(extraction, "error")) {
-    stop(.bb_trf(
-      "Could not extract archive %s: %s", archive, conditionMessage(extraction)
-    ), call. = FALSE)
+    if (is.numeric(extraction) && length(extraction) == 1L && extraction != 0) {
+      stop(.bb_trf(
+        "Could not extract archive %s: extraction returned status %d.",
+        archive, extraction
+      ), call. = FALSE)
+    }
+  } else {
+    temp_dir <- .archive_cache_extract(cache, archive, ext)
   }
-  if (is.numeric(extraction) && length(extraction) == 1L && extraction != 0) {
-    stop(.bb_trf(
-      "Could not extract archive %s: extraction returned status %d.",
-      archive, extraction
-    ), call. = FALSE)
-  }
-  .validate_extracted_links(temp_dir, archive)
+  if (is.null(cache)) .validate_extracted_links(temp_dir, archive)
   description_files <- list.files(
     temp_dir, pattern = "^DESCRIPTION$", recursive = TRUE,
     full.names = TRUE, all.files = TRUE
@@ -861,52 +1000,19 @@
   invisible(entries)
 }
 
-.extract_archive_checked <- function(archive, ext, extract_dir) {
+.extract_archive_checked <- function(archive, ext, extract_dir, cache = NULL) {
   if (!identical(tolower(ext), ".zip") && !ext %in% c(".tar.gz", ".tar")) {
     stop(.bb_trf("Unsupported archive format: %s", ext), call. = FALSE)
   }
-  listing <- tryCatch(suppressWarnings({
-    if (identical(tolower(ext), ".zip")) {
-      utils::unzip(archive, list = TRUE)
-    } else if (ext %in% c(".tar.gz", ".tar")) {
-      .untar_quiet(archive, list = TRUE)
-    }
-  }), error = identity)
-  if (inherits(listing, "error")) {
-    stop(.bb_trf(
-      "Could not extract archive %s: %s", archive, conditionMessage(listing)
-    ), call. = FALSE)
+  if (!is.null(cache)) {
+    return(invisible(.archive_cache_extract(cache, archive, ext)))
   }
-  listing_status <- attr(listing, "status")
-  if (is.numeric(listing_status) && length(listing_status) == 1L &&
-        listing_status != 0) {
-    stop(.bb_trf(
-      "Could not extract archive %s: extraction returned status %d.",
-      archive, listing_status
-    ), call. = FALSE)
-  }
+  listing <- .archive_listing(archive, ext)
   members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
   .validate_archive_members(members)
-  extraction <- tryCatch(suppressWarnings({
-    if (identical(tolower(ext), ".zip")) {
-      utils::unzip(archive, exdir = extract_dir)
-    } else {
-      .untar_quiet(archive, exdir = extract_dir)
-    }
-  }), error = identity)
-  if (inherits(extraction, "error")) {
-    stop(.bb_trf(
-      "Could not extract archive %s: %s", archive, conditionMessage(extraction)
-    ), call. = FALSE)
-  }
-  if (is.numeric(extraction) && length(extraction) == 1L && extraction != 0) {
-    stop(.bb_trf(
-      "Could not extract archive %s: extraction returned status %d.",
-      archive, extraction
-    ), call. = FALSE)
-  }
+  .archive_extract(archive, ext, extract_dir)
   .validate_extracted_links(extract_dir, archive)
-  invisible(extraction)
+  invisible(extract_dir)
 }
 
 .reexport_empty_evidence <- function() {
@@ -1081,8 +1187,9 @@
   arguments <- .reexport_call_children(data, call_id, open, index)
   if (nrow(arguments) == 0L) return(NULL)
   first <- arguments[1L, , drop = FALSE]
+  first_text <- .reexport_text_rows(data, ids = first$id)
   parsed <- tryCatch(
-    parse(text = paste0("f(", first$text[[1L]], ")"))[[1L]][[2L]],
+    parse(text = paste0("f(", first_text[[1L]], ")"))[[1L]][[2L]],
     error = function(e) NULL
   )
   if (is.call(parsed) && identical(as.character(parsed[[1L]]), "=")) {
@@ -1219,7 +1326,7 @@
   if (nrow(lhs) == 0L) return(NULL)
   lhs <- lhs[order(lhs$line1, lhs$col1, lhs$id), , drop = FALSE]
   lhs <- lhs[nrow(lhs), , drop = FALSE]
-  .reexport_parse_target(lhs$text[[1L]])
+  .reexport_parse_target(.reexport_text_rows(data, ids = lhs$id))
 }
 
 .reexport_parse_definitions <- function(data, index = NULL) {
@@ -1252,8 +1359,11 @@
   if (length(position) != 1L || is.na(position) || nrow(arguments) < position) {
     return(NULL)
   }
+  argument_text <- .reexport_text_rows(
+    data, ids = arguments$id[[position]]
+  )
   parsed <- tryCatch(
-    parse(text = paste0("f(", arguments$text[[position]], ")"))[[1L]][[2L]],
+    parse(text = paste0("f(", argument_text[[1L]], ")"))[[1L]][[2L]],
     error = function(e) NULL
   )
   if (is.call(parsed) && identical(as.character(parsed[[1L]]), "=")) {
@@ -1542,7 +1652,9 @@
       child_rows <- child_rows[order(
         data$line1[child_rows], data$col1[child_rows], data$id[child_rows]
       )]
-      target_text <- trimws(data$text[[child_rows[[length(child_rows)]]]])
+      target_text <- trimws(.reexport_text_rows(
+        data, rows = child_rows[[length(child_rows)]]
+      ))
       target_kind <- .reexport_call_target_kind(target_text)
       if (target_kind$kind %in% c("simple", "qualified")) next
       root <- .reexport_call_target_root(target_text)
@@ -1621,7 +1733,9 @@
       which(before)[sum(before)]
     }
     if (length(candidate_index) == 0L || is.na(candidate_index)) next
-    target_text <- data$text[[candidate_rows[[candidate_index]]]]
+    target_text <- .reexport_text_rows(
+      data, rows = candidate_rows[[candidate_index]]
+    )
     target <- .reexport_parse_target(target_text)
     if (!is.null(target)) {
       evidence$assignments[[length(evidence$assignments) + 1L]] <- list(
@@ -1695,7 +1809,11 @@
     } else {
       0L
     }
-    call_text <- if (call_row > 0L) data$text[[call_row]] else ""
+    call_text <- if (call_row > 0L) {
+      .reexport_text_rows(data, rows = call_row)
+    } else {
+      ""
+    }
     is_dynamic <- function_name %in% c(
       "list2env", "sys.source", "source", "load", "attach"
     ) ||
@@ -1826,6 +1944,31 @@
   utils::getParseData(...)
 }
 
+.reexport_text_rows <- function(data, ids = integer(), rows = NULL) {
+  rows <- if (is.null(rows)) {
+    match(ids, data$id)
+  } else {
+    as.integer(rows)
+  }
+  rows <- rows[!is.na(rows) & rows > 0L & rows <= nrow(data)]
+  if (length(rows) == 0L) return("")
+  text <- data$text[rows]
+  missing <- which(is.na(text) | !nzchar(text))
+  if (length(missing) > 0L) {
+    # getParseText() looks rows up by name in the whole parse table, which is
+    # quadratic over a file; hand it only the rows it needs, keeping the source.
+    wanted <- rows[missing]
+    needed <- data[wanted, , drop = FALSE]
+    attr(needed, "srcfile") <- attr(data, "srcfile")
+    fetched <- tryCatch(
+      utils::getParseText(needed, data$id[wanted]),
+      error = function(e) character()
+    )
+    if (length(fetched) == length(missing)) text[missing] <- fetched
+  }
+  text[[1L]]
+}
+
 .reexport_source_evidence <- function(package_root, package = NULL) {
   evidence <- .reexport_empty_evidence()
   r_dir <- file.path(package_root, "R")
@@ -1847,7 +1990,7 @@
         ))
       }
       data <- tryCatch(
-        .reexport_get_parse_data(source, includeText = TRUE),
+        .reexport_get_parse_data(source, includeText = NA),
         error = identity
       )
       if (inherits(data, "error")) {
@@ -2037,7 +2180,7 @@
   invisible(components)
 }
 
-.archive_inventory <- function(pkg_dir, ext = NULL, known = list()) {
+.archive_inventory <- function(pkg_dir, ext = NULL, known = list(), cache = NULL) {
   dirs <- .normalize_archive_dirs(pkg_dir)
   paths <- unique(unlist(lapply(dirs, function(dir) {
     files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
@@ -2060,7 +2203,7 @@
     } else {
       actual_ext <- .archive_extension(path)
       metadata <- tryCatch(
-        .read_archive_metadata(path, ext = actual_ext),
+        .read_archive_metadata(path, ext = actual_ext, cache = cache),
         error = identity
       )
       if (inherits(metadata, "error")) {
@@ -2623,7 +2766,7 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
 
 .resolve_reexport_plan <- function(components, prefer = character(),
                                    exclude = character(), omitted = NULL,
-                                   metapackage_name = NULL) {
+                                   metapackage_name = NULL, cache = NULL) {
   component_names <- vapply(components, `[[`, character(1L), "package")
   exports_by_component <- lapply(components, function(component) {
     unique(.or_null(component$exports, character()))
@@ -2800,7 +2943,7 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
         components[[index]]$reexport_evidence_loaded <- TRUE
       } else if (!isTRUE(evidence_loaded)) {
         components[[index]]$reexport_evidence <-
-          .read_reexport_evidence(components[[index]])
+          .read_reexport_evidence(components[[index]], cache = cache)
         components[[index]]$reexport_evidence_loaded <- TRUE
       }
     }
@@ -2981,7 +3124,7 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
 .validate_generation <- function(
   resolved, tolerate = character(), on_component_error = "abort",
   reexport = FALSE, metapackage_name = NULL,
-  reexport_prefer = character(), reexport_exclude = character()
+  reexport_prefer = character(), reexport_exclude = character(), cache = NULL
 ) {
   omitted <- resolved$omitted
   validation <- .validate_component_archives(resolved, tolerate = tolerate)
@@ -3009,7 +3152,7 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
     .resolve_reexport_plan(
       resolved$components, prefer = reexport_prefer,
       exclude = reexport_exclude, omitted = omitted,
-      metapackage_name = metapackage_name
+      metapackage_name = metapackage_name, cache = cache
     )
   } else {
     list(
@@ -3084,14 +3227,12 @@ extract_dependencies <- function(package, pkg_dir = NULL, ext = ".tar.gz") {
 #' lapply(res, function(x) x$matrix_refs)
 #' @export
 diagnose_dependencies <- function(packages, pkg_dir = NULL, ext = ".tar.gz") {
+  archive_cache <- .archive_cache_new()
+  on.exit(.archive_cache_close(archive_cache), add = TRUE)
   results <- list()
-  resolved <- .resolve_components(packages, pkg_dir, ext)
+  resolved <- .resolve_components(packages, pkg_dir, ext, cache = archive_cache)
 
   for (component in resolved$components) {
-    temp_dir <- tempfile()
-    dir.create(temp_dir)
-    on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
-
     archive <- component$path
     package <- component$input
 
@@ -3099,7 +3240,16 @@ diagnose_dependencies <- function(packages, pkg_dir = NULL, ext = ".tar.gz") {
     # generation. Without them a component carrying a symbolic link made the
     # scanner read a file outside the archive and return its contents in the
     # result, which is how an unrelated file ends up in a diagnostic report.
-    .extract_archive_checked(archive, component$ext, temp_dir)
+    if (is.null(archive_cache)) {
+      temp_dir <- tempfile()
+      dir.create(temp_dir)
+      on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
+    }
+    temp_dir <- .extract_archive_checked(
+      archive, component$ext,
+      if (is.null(archive_cache)) temp_dir else NULL,
+      cache = archive_cache
+    )
 
     # Locate references to Matrix and class APIs from the archive root rather
     # than assuming that the root directory has the package name.
@@ -3164,11 +3314,13 @@ diagnose_dependencies <- function(packages, pkg_dir = NULL, ext = ".tar.gz") {
 #' @return A sorted character vector of possible dependency names.
 #' @noRd
 detect_implicit_dependencies <- function(
-  packages, pkg_dir = NULL, ext = ".tar.gz", components = NULL
+  packages, pkg_dir = NULL, ext = ".tar.gz", components = NULL, cache = NULL
 ) {
   possible_deps <- character(0)
   if (is.null(components)) {
-    components <- .resolve_components(packages, pkg_dir, ext)$components
+    components <- .resolve_components(
+      packages, pkg_dir, ext, cache = cache
+    )$components
   }
 
   # Conservative patterns for common implicit dependencies.
@@ -3218,10 +3370,6 @@ detect_implicit_dependencies <- function(
   )
 
   for (component in components) {
-    temp_dir <- tempfile()
-    dir.create(temp_dir)
-    on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
-
     archive <- component$path
     package <- component$input
 
@@ -3230,7 +3378,16 @@ detect_implicit_dependencies <- function(
       # scanner, so a hostile archive cannot get here today. Extract through the
       # guarded path anyway: this is a helper that could be called from
       # somewhere else later, and the guard costs nothing.
-      .extract_archive_checked(archive, component$ext, temp_dir)
+      if (is.null(cache)) {
+        temp_dir <- tempfile()
+        dir.create(temp_dir)
+        on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
+      }
+      temp_dir <- .extract_archive_checked(
+        archive, component$ext,
+        if (is.null(cache)) temp_dir else NULL,
+        cache = cache
+      )
 
       package_root <- .find_archive_root(
         temp_dir, archive,

@@ -911,6 +911,8 @@ create_metapackage <- function(
   reexport_exclude = character(),
   recover = FALSE
 ) {
+  archive_cache <- .archive_cache_new()
+  on.exit(.archive_cache_close(archive_cache), add = TRUE)
   verbose <- isTRUE(verbose)
   debug <- isTRUE(debug)
   on_component_error <- match.arg(on_component_error)
@@ -1030,14 +1032,14 @@ create_metapackage <- function(
 
   resolved_components <- .resolve_components(
     packages, pkg_dir, ext, on_component_error = on_component_error,
-    reexport = isTRUE(reexport)
+    reexport = isTRUE(reexport), cache = archive_cache
   )
   validated <- .validate_generation(
     resolved_components, tolerate = tolerate,
     on_component_error = on_component_error,
     reexport = isTRUE(reexport), metapackage_name = name,
     reexport_prefer = reexport_prefer,
-    reexport_exclude = reexport_exclude
+    reexport_exclude = reexport_exclude, cache = archive_cache
   )
   resolved_components <- validated$resolved
   validation <- validated$validation
@@ -1092,7 +1094,7 @@ create_metapackage <- function(
   } else {
     detected_implicit_deps <- detect_implicit_dependencies(
       resolved_components$packages, resolved_components$pkg_dir, ext,
-      components = components
+      components = components, cache = archive_cache
     )
   }
   hard_implicit_deps <- unique(c(

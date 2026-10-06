@@ -173,6 +173,16 @@
 #' @return Invisibly, a list describing installed, unchanged, failed, and
 #'   skipped packages. Components that an upgrade policy left in place are
 #'   reported in `unchanged`, not in `installed`.
+#' @examples
+#' \donttest{
+#' archive <- system.file(
+#'   "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
+#' )
+#' example_library <- tempfile("bigbang-example-library-")
+#' dir.create(example_library)
+#' on.exit(unlink(example_library, recursive = TRUE), add = TRUE)
+#' install_local_pkg(archive, lib = example_library, verbose = FALSE)
+#' }
 #' @seealso [create_metapackage()] for generating a meta-package with an explicit
 #'   component installer.
 #' @export
