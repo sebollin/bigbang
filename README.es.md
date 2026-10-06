@@ -5,7 +5,13 @@
 [![R-CMD-check](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml)
 [![CRAN
 status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.org/package=bigbang)
+[![Descargas de
+CRAN](https://cranlogs.r-pkg.org/badges/grand-total/bigbang)](https://CRAN.R-project.org/package=bigbang)
+[![Descargas de CRAN por
+mes](https://cranlogs.r-pkg.org/badges/bigbang)](https://CRAN.R-project.org/package=bigbang)
 [![r-universe](https://sebollin.r-universe.dev/bigbang/badges/version)](https://sebollin.r-universe.dev/bigbang)
+[![Estado del proyecto:
+activo](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 [![Licencia: GPL
 v3](https://img.shields.io/badge/licencia-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Ciclo de vida:

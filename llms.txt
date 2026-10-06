@@ -2,17 +2,6 @@
 
 > **Create custom R metapackages from local packages.**
 
-[![R-CMD-check](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml)
-[![CRAN
-status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.org/package=bigbang)
-[![r-universe](https://sebollin.r-universe.dev/bigbang/badges/version)](https://sebollin.r-universe.dev/bigbang)
-[![License: GPL
-v3](https://img.shields.io/badge/license-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Lifecycle:
-stable](https://img.shields.io/badge/lifecycle-stable-0D9786.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
-[![docs:
-español](https://img.shields.io/badge/docs-espa%C3%B1ol-0D9786.svg)](https://github.com/sebollin/bigbang/blob/main/README.es.md)
-
 **bigbang** builds tidyverse-style metapackages from local package
 archives. Every metapackage ends in *-verse*—`tidyverse`, `teamverse`,
 yours. This package creates them: one function call, and a new *-verse*
