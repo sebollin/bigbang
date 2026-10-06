@@ -87,7 +87,8 @@ results; do not waive failures merely because another platform passed.
 
 ## 4. Submission
 
-1. Update `NEWS.md`, package version and release date.
+1. Update `NEWS.md`, the package version in `DESCRIPTION` and `CITATION.cff`,
+   and the release date.
 2. Update `cran-comments.md` with local, generated-metapackage, GitHub Actions,
    win-builder, R-hub, coverage, spelling, lint, PDF, and vignette results.
 3. Rebuild once from the final commit and verify the tarball contents.
@@ -97,5 +98,7 @@ results; do not waive failures merely because another platform passed.
    devtools::submit_cran()
    ```
 
-5. Tag the submitted commit. Announce the package only after the internal
-   remediation in step 0 is complete and the CRAN result is known.
+5. Tag the submitted commit. Once CRAN publishes it, publish the GitHub
+   release from that tag: Zenodo archives each release and mints its DOI.
+   Announce the package only after the internal remediation in step 0 is
+   complete and the CRAN result is known.
