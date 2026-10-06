@@ -1,15 +1,17 @@
 ## Update
 
 This is a patch update from 0.5.0, published on 2026-10-02. It does not change
-the API.
+the API. It follows 0.5.0 closely because, in 0.5.0, attaching the components
+of a re-export meta-package evaluated its re-export bindings, and
+`<meta>_attach_all()` printed R's masking messages for collisions that had
+already been resolved with `reexport_prefer`.
 
 - Each component archive is now listed and extracted once per call, and source
   evidence asks R for the text of the parse tokens it needs only. Generating a
   meta-package for a family of 11 components is about four times faster, with
   the same plans and diagnostics.
-- In re-export mode, attaching the components no longer evaluates re-export
-  bindings and no longer prints R's masking messages for symbols that are
-  re-exported on purpose. `<meta>_conflicts()` still reports them.
+- Attaching the components no longer evaluates re-export bindings or prints
+  those masking messages; `<meta>_conflicts()` still reports the collisions.
 - `install_local_pkg()`, the only exported function without an example, now
   has one. It is wrapped in `\donttest{}` because it installs the example
   archive shipped in `inst/extdata` into a temporary library.
@@ -26,12 +28,12 @@ Every result below refers to the source of this submission.
   `R CMD check --as-cran`: 0 errors, 0 warnings, 1 note (the same HTML Tidy
   note).
 - GitHub Actions (Ubuntu release, devel and oldrel-1; Windows release; macOS
-  release): all five passed (run 37389904593, commit eae6be3).
+  release): all five passed (run 37397441680, commit 3f70159).
 - win-builder: R-devel (2026-10-05 r90641 ucrt) and R 4.6.1, with check times
-  of 164 and 152 seconds. Both report 1 note, "Days since last update: 4",
+  of 152 and 147 seconds. Both report 1 note, "Days since last update: 4",
   because this update was checked four days after 0.5.0 was published.
 - R-hub v2 (Linux, Windows and macOS, R-devel): all three passed (GitHub
-  Actions run 37389907309).
+  Actions run 37397462876).
 
 With `NOT_CRAN=true` the suite runs 340 test blocks with 7026 expectations
 and 0 failures, warnings or skips, including the tests that install packages
