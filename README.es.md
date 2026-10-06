@@ -4,6 +4,7 @@
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml)
+[![Cobertura de tests en Codecov](https://codecov.io/gh/sebollin/bigbang/graph/badge.svg)](https://app.codecov.io/gh/sebollin/bigbang)
 [![CRAN status](https://www.r-pkg.org/badges/version/bigbang)](https://CRAN.R-project.org/package=bigbang)
 [![Descargas de CRAN](https://cranlogs.r-pkg.org/badges/grand-total/bigbang)](https://CRAN.R-project.org/package=bigbang)
 [![Descargas de CRAN por mes](https://cranlogs.r-pkg.org/badges/bigbang)](https://CRAN.R-project.org/package=bigbang)
