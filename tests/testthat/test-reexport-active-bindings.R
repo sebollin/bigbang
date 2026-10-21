@@ -842,7 +842,9 @@ test_that("generated installers create a new lib in both startup modes", {
     ), 0L)
     component_library <- file.path(sandbox, paste0(name, "-components"))
     withr::local_libpaths(c(meta_library, .libPaths()))
-    loadNamespace(name)
+    # getNamespace() loads it like loadNamespace(); R 4.1's check of the tests
+    # would read loadNamespace(name) as an undeclared package called 'name'.
+    getNamespace(name)
     installer <- getExportedValue(name, paste0(name, "_install"))
     result <- installer(lib = component_library, verbose = FALSE)
     expect_length(result$failed, 0L)
