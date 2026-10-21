@@ -40,7 +40,7 @@ Language: en
 Roxygen: list(markdown = TRUE)
 VignetteBuilder: knitr
 Depends:
-    R (>= 3.6.0)
+    R (>= 4.1.0)
 Imports:
     brio,
     glue,

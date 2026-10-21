@@ -109,7 +109,7 @@ install_source_component <- function(target, lib, verbose = TRUE) {{
     if (base::length(detail) == 0L) detail <- utils::tail(output, 5L)
     detail <- base::paste(detail, collapse = " | ")
     if (!base::nzchar(detail)) {{
-      detail <- base::sprintf("R CMD INSTALL exited with status %d", status)
+      detail <- .meta_trf("R CMD INSTALL exited with status %d", status)
     }}
     stop(detail, call. = FALSE)
   }}

@@ -17,7 +17,7 @@
 <!-- badges: end -->
 
 **bigbang** construye metapaquetes estilo tidyverse a partir de archivos locales.
-Todo metapaquete termina en *-verse*—`tidyverse`, `tuequipoverse`, el tuyo. Este
+Todo metapaquete termina en *-verse*—`tidyverse`, `equipoverse`, el tuyo. Este
 paquete es lo que los crea: una llamada, y un nuevo *-verse* existe.
 
 Su razón de ser es **distribuir un conjunto de paquetes como una sola unidad**.
@@ -40,15 +40,44 @@ pueda quedar desfasado.
 
 Eso incluye a los equipos que trabajan detrás de un firewall institucional y no
 mantienen un repositorio de paquetes, pero no se limita a ellos: sirve igual para
-entregar un conjunto con versiones fijas a cualquier destinatario.
+entregar un conjunto con sus versiones registradas a cualquier destinatario.
+
+## ✨ De un vistazo
+
+- 📦 **Una llamada, un -verse** — `create_metapackage()` arma, a partir de tus
+  propios archivos de paquetes, un metapaquete completo y documentado, listo
+  para los chequeos de CRAN.
+- 🗂️ **Tus paquetes donde los tengas** — los componentes pueden venir de varios
+  directorios, mezclar `.tar.gz`, `.tar` y `.zip`, no llevar la versión en el
+  nombre, estar listados en un archivo de manifiesto o ser directorios fuente
+  que bigbang construye por vos. La identidad y la versión se leen del
+  `DESCRIPTION` de cada archivo, no se adivinan por el nombre.
+- 🎯 **Un conjunto curado, distribuido como uno** — el metapaquete registra y
+  lleva las versiones exactas de los archivos con los que se construyó. Por
+  omisión, quien ya tiene una versión más nueva la conserva; generalo con
+  `install_upgrade = "always"` y cada instalación recibe la combinación que
+  probaste.
+- 📮 **Un solo artefacto para entregar** — los archivos de los componentes
+  viajan dentro del metapaquete generado, así que `<meta>_install()` funciona
+  sin argumentos y no hay rutas que acordar entre máquinas.
+- 🧭 **Resolución real de dependencias** — arma el grafo de dependencias
+  locales, ordena la instalación en forma topológica y rechaza los ciclos de
+  entrada. Nadie del otro lado tiene que averiguar qué instalar primero.
+- 🔌 **Sin repositorio** — cada componente se lee de archivos locales, así que
+  la instalación no necesita red; `cran_deps = "skip"` es el valor por omisión.
+  Eso es lo que hace que bigbang funcione detrás de un firewall institucional,
+  pero sirve igual para entregar un conjunto versionado a cualquier lado.
+- 🌐 **Bilingüe al ejecutar** — mensajes en inglés y en español mediante el
+  soporte nativo de gettext de R.
+- 🛡️ **Seguro por diseño** — los hooks de inicio nunca instalan paquetes ni
+  eliminan archivos, y un escáner de solo lectura audita los artefactos
+  generados por versiones viejas.
 
 La arquitectura separa dos acciones:
 
 - `library(<meta>)` adjunta los componentes ya instalados e informa los faltantes.
 - `<meta>_install()` instala explícitamente los archivos locales una sola vez, en
   orden topológico, y luego los adjunta.
-
-Los hooks de inicio nunca instalan paquetes ni eliminan archivos.
 
 ## 🚀 Instalación
 
@@ -58,8 +87,9 @@ La versión estable está en CRAN:
 install.packages("bigbang")
 ```
 
-La versión de desarrollo se publica como binario en r-universe, así que no
-requiere compilar nada:
+La versión de desarrollo está en r-universe. Este comando baja un binario en
+Windows y macOS y el paquete fuente en los demás sistemas; bigbang no tiene
+código compilado, así que en ningún caso hace falta un compilador:
 
 ```r
 install.packages("bigbang", repos = c("https://sebollin.r-universe.dev",
@@ -112,39 +142,6 @@ forma directa (por ejemplo, `informe()`) o mediante su propio espacio de nombres
 (`reportes::informe()`). No se copian al espacio de nombres del metapaquete, por
 lo que `equipoverse::informe()` no está disponible.
 
-`equipoverse` lleva sus componentes adentro, así que la llamada no necesita
-argumentos y eso es todo lo que tiene que hacer quien lo recibe: le pasás el
-`equipoverse_0.1.0.tar.gz` construido y nada más. Si preferís que los archivos
-queden en una ubicación compartida, generá con `include_archives = FALSE` y
-entonces `equipoverse_install()` va a pedir un `pkg_dir` explícito.
-
-### Actualizaciones interrumpidas y recuperación
-
-Un `update = TRUE` interrumpido deja un diario durable junto al proyecto. El
-update siguiente lo revisa antes de escribir; usá `dry_run = TRUE` para ver la
-acción prevista. Después de confirmar que no sigue corriendo otro update, pasá
-`recover = TRUE` para preservar bytes de usuario desconocidos y completar el
-rollback o la recuperación.
-
-`"skip"` es el modo predeterminado y nunca usa la red. `"error"` falla si falta
-una dependencia no local; `"install"` permite instalar desde un `repos`
-configurado explícitamente.
-
-Los instaladores generados también aceptan `upgrade = "newer"` (predeterminado),
-`"always"` o `"never"`; `force = TRUE` equivale a `upgrade = "always"`. Los
-metapaquetes usan un mensaje opcional de dos columnas mediante `cli` y vuelven
-al banner ASCII cuando `cli` no está disponible. Use
-`options(equipoverse.quiet = TRUE)` para silenciar el arranque y
-`equipoverse_conflicts()` para revisar conflictos de enmascaramiento.
-
-Para generar una guía de flujo ordenada, indique cada componente una vez:
-
-```r
-workflow = c("Importación" = "datos", "Informe" = "reportes")
-```
-
-## Validación y tolerancias explícitas
-
 Para exponer las exportaciones explícitas mediante bindings activos de solo
 lectura, usá `reexport = TRUE` al generar. Los componentes quedan fuera de
 `Imports` y `Depends`, así que el metapaquete se puede instalar y cargar sin
@@ -191,6 +188,26 @@ data frame de verificación como atributo. Leelo con
 `<meta>_reexport_verification(conflicts)`, de modo que un componente que exporte
 ese nombre siga visible en la lista de conflictos.
 
+El análisis de colisiones es una ayuda de diagnóstico. La garantía es la decisión
+explícita `reexport_prefer` o `reexport_exclude` más la verificación de
+`<meta>_install()`; `library(<meta>)` por sí sola no verifica los dueños instalados.
+El escáner es conservador y puede contar un `delayedAssign` que nunca se fuerza,
+una rama `if (FALSE)` o el cuerpo de un `reg.finalizer()`.
+
+`equipoverse` lleva sus componentes adentro, así que la llamada no necesita
+argumentos y eso es todo lo que tiene que hacer quien lo recibe: le pasás el
+`equipoverse_0.1.0.tar.gz` construido y nada más. Si preferís que los archivos
+queden en una ubicación compartida, generá con `include_archives = FALSE` y
+entonces `equipoverse_install()` va a pedir un `pkg_dir` explícito.
+
+### Actualizaciones interrumpidas y recuperación
+
+Un `update = TRUE` interrumpido deja un diario durable junto al proyecto. El
+update siguiente lo revisa antes de escribir; usá `dry_run = TRUE` para ver la
+acción prevista. Después de confirmar que no sigue corriendo otro update, pasá
+`recover = TRUE` para preservar bytes de usuario desconocidos y completar el
+rollback o la recuperación.
+
 En un update interrumpido, el lock se decide primero por el dueño y después por
 el reclamante. Un dueño vivo siempre bloquea. Un dueño incierto bloquea salvo
 con `recover = TRUE`; uno muerto se puede reclamar. Un lock descartado cuyo
@@ -229,16 +246,31 @@ La fuente se guarda junto con el token, por lo que nunca se compara un token de
 `/proc` con uno de `ps`. `LANGUAGE` y `LC_TIME` no pueden cambiar el token
 portable de `ps`.
 
-El análisis de colisiones es una ayuda de diagnóstico. La garantía es la decisión
-explícita `reexport_prefer` o `reexport_exclude` más la verificación de
-`<meta>_install()`; `library(<meta>)` por sí sola no verifica los dueños instalados.
-El escáner es conservador y puede contar un `delayedAssign` que nunca se fuerza,
-una rama `if (FALSE)` o el cuerpo de un `reg.finalizer()`.
+`"skip"` es el modo predeterminado y nunca usa la red. `"error"` falla si falta
+una dependencia no local; `"install"` permite instalar desde un `repos`
+configurado explícitamente.
 
-bigbang mantiene como errores duros todas las validaciones que protegen a quien
-recibe el metapaquete: archivos inseguros o malformados, metadatos inválidos,
-componentes duplicados, restricciones locales insatisfechas y ciclos. Esas
-validaciones no se pueden desactivar.
+Los instaladores generados también aceptan `upgrade = "newer"` (predeterminado),
+`"always"` o `"never"`; `force = TRUE` equivale a `upgrade = "always"`. Los
+metapaquetes usan un mensaje opcional de dos columnas mediante `cli` y vuelven
+al banner ASCII cuando `cli` no está disponible. Use
+`options(equipoverse.quiet = TRUE)` para silenciar el arranque y
+`equipoverse_conflicts()` para revisar conflictos de enmascaramiento.
+
+Para generar una guía de flujo ordenada, indique cada componente una vez:
+
+```r
+workflow = c("Importación" = "datos", "Informe" = "reportes")
+```
+
+## Validación y tolerancias explícitas
+
+Durante la generación, bigbang valida todo lo que protege al receptor del
+metapaquete generado. Los archivos inseguros o malformados, la metadata inválida,
+los componentes duplicados, las restricciones de versión locales insatisfechas y
+los ciclos de dependencias siempre son errores duros y no se pueden desactivar.
+La instalación es más tolerante: puede conservar un componente ya instalado si
+no puede leer un archivo que no va a usar, e informa el motivo.
 
 Las comprobaciones de prolijidad se relajan de forma individual y explícita:
 
@@ -257,13 +289,6 @@ el receptor debe proporcionarla mediante `pkg_dir` o un repositorio con
 `cran_deps = "install"`. Cada relajación aplicada queda en
 `result$tolerated`; los nombres desconocidos son un error. No existe un
 interruptor que desactive toda la validación.
-
-Durante la generación, bigbang valida todo lo que protege al receptor del
-metapaquete generado. Los archivos inseguros o malformados, la metadata inválida,
-los componentes duplicados, las restricciones de versión locales insatisfechas y
-los ciclos de dependencias siempre son errores duros. La instalación es más
-tolerante: puede conservar un componente ya instalado si no puede leer un archivo
-que no va a usar, e informa el motivo.
 
 bigbang **no** ejecuta `R CMD check` sobre los paquetes componentes. Un
 componente con warnings o notes puede incluirse: las validaciones se limitan a
@@ -435,7 +460,9 @@ La API usa inglés snake_case.
 Un ZIP con `Meta/package.rds` es un binario de Windows y solo se instala en
 Windows con `type = "win.binary"`. Los demás ZIP con DESCRIPTION se extraen a un
 temporal propio y se instalan como fuente. Todo texto generado se escribe en
-UTF-8 explícito y el CI incluye Linux, Windows y macOS.
+UTF-8 explícito. La CI comprueba R release en Windows y macOS, y release, devel,
+oldrel-1 y 4.1 en Ubuntu. El mínimo declarado es R 4.1.0, el que exige la
+versión de `glue` que se importa, y el trabajo en 4.1 lo comprueba.
 
 ## 🌎 Idioma
 
@@ -447,9 +474,10 @@ Sys.setLanguage("es")
 ```
 
 En versiones anteriores, defina `LANGUAGE=es` antes de iniciar R. La guía completa
-está en `vignette("bigbang-es", package = "bigbang")`. Cuando `rhelpi18n`
-madure y llegue a CRAN se podrá evaluar un módulo separado `bigbang.es` para la
-ayuda interactiva.
+está en `vignette("bigbang-es", package = "bigbang")`. La ayuda Rd queda en
+inglés porque R no tiene un mecanismo nativo estable para traducirla; cuando
+`rhelpi18n` madure y llegue a CRAN se podrá evaluar un módulo separado
+`bigbang.es` para la ayuda interactiva.
 
 ## 🔭 Proyectos relacionados
 
@@ -464,11 +492,15 @@ ayuda interactiva.
 
 ## 🧭 Diferencias con otras herramientas
 
-`bigbang` distribuye un conjunto curado de archivos, con versiones fijas, como
-una sola unidad instalable. `miniCRAN` y `drat` son preferibles cuando se necesita
+`bigbang` distribuye un conjunto curado de archivos, con sus versiones
+registradas, como una sola unidad instalable. `miniCRAN` y `drat` son preferibles cuando se necesita
 un repositorio convencional con índices, varias versiones y semántica de
 repositorio. `pkgverse` cubre el caso más pequeño de agrupar paquetes disponibles
 desde repositorios, sin el instalador de archivos locales de `bigbang`.
+
+`bigbang` no reemplaza a un gestor de repositorios: sirve cuando la unidad que se
+distribuye es un único metapaquete autosuficiente que lleva los archivos de sus
+componentes.
 
 ## 🛡️ Seguridad y artefactos antiguos
 
@@ -505,16 +537,26 @@ deliberadamente fuera de alcance.
 
 ## 📖 Citar el paquete
 
+Citá la versión que usaste, tal como la informa R:
+
 ```r
 citation("bigbang")
 ```
 
-```bibtex
-@Manual{bigbang2026,
-  title  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},
-  author = {Sebastián Lucas},
-  note   = {R package version 0.3.0},
-  year   = {2026},
-  url    = {https://sebollin.github.io/bigbang/},
-}
-```
+En una instalación desde CRAN, la entrada lleva el DOI que CRAN asigna al
+paquete,
+[10.32614/CRAN.package.bigbang](https://doi.org/10.32614/CRAN.package.bigbang).
+Cada versión publicada también se archiva en Zenodo:
+[10.5281/zenodo.23192961](https://doi.org/10.5281/zenodo.23192961) resuelve
+siempre a la última, y cada versión tiene ahí su propio DOI para citar una
+versión exacta.
+
+## 🔬 Estado del desarrollo
+
+La suite completa incluye tests unitarios, de portabilidad, de i18n, del
+escáner, de instalación y de regresión contra pérdida de datos. En cada push a
+`main` y en cada pull request, `R CMD check --as-cran` corre con el manual PDF
+en Ubuntu (R release, devel, oldrel-1 y 4.1, el mínimo declarado), Windows y
+macOS, y la suite construye y comprueba un metapaquete generado, manual PDF
+incluido. Antes de cada envío a CRAN se revisan los resultados de win-builder y
+de `rhub::rhub_check()`.

@@ -93,7 +93,6 @@ License: {license}
 Encoding: UTF-8
 Language: en
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
 Depends:
 {deps_section}
 Imports:

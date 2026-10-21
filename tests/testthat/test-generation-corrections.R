@@ -240,6 +240,38 @@ test_that("successful documentation restores the caller session", {
   }
 })
 
+test_that("generated DESCRIPTION records roxygen only after documentation runs", {
+  skip_on_cran()
+  skip_if_not_installed("devtools")
+  skip_if_not_installed("roxygen2")
+  sandbox <- tempfile("bigbang-roxygen-metadata-")
+  archives <- file.path(sandbox, "archives")
+  destination <- file.path(sandbox, "output")
+  dir.create(destination, recursive = TRUE)
+  copy_toy_archive(archives)
+
+  undocumented <- generate_toy_metapackage(
+    "undocumentedverse", archives, destination, document = FALSE
+  )
+  undocumented_description <- read.dcf(
+    file.path(undocumented$path, "DESCRIPTION")
+  )
+  expect_false("RoxygenNote" %in% colnames(undocumented_description))
+
+  documented <- suppressWarnings(generate_toy_metapackage(
+    "documentedverse", archives, destination, document = TRUE
+  ))
+  documented_description <- read.dcf(
+    file.path(documented$path, "DESCRIPTION")
+  )
+  expect_true(documented$documented)
+  expect_identical(
+    unname(documented_description[1L, "Config/roxygen2/version"]),
+    as.character(utils::packageVersion("roxygen2"))
+  )
+  expect_false("RoxygenNote" %in% colnames(documented_description))
+})
+
 test_that("failed documentation is reported and restores the caller session", {
   skip_if_not_installed("devtools")
   sandbox <- tempfile("bigbang-document-failure-")

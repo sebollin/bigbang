@@ -1,5 +1,46 @@
 # bigbang (development version)
 
+## Dependencies
+
+- bigbang now requires R >= 4.1.0. Its own code needs nothing newer than R
+  3.6.0, but the imported `glue` has required R 4.1 since glue 1.8.1, so
+  installing on an older R already failed unless an older glue was installed by
+  hand. CI now checks R 4.1.
+
+## Bug fixes
+
+- Generated meta-packages translate every message their code emits. The
+  warning about components skipped because a local dependency was skipped never
+  reached Spanish, and nine other messages had no catalog entry. Tests now fail
+  when generated code emits a message that is missing from its catalog, or
+  formats an untranslated sentence.
+- The printed results of `create_metapackage()`, `install_local_pkg()` and
+  `scan_bigbang_artifact()` are translated into Spanish too, and so is the
+  error `install_local_pkg()` gives when `R CMD INSTALL` fails without output.
+  The English output is unchanged.
+- A meta-package generated with `document = FALSE` no longer declares
+  `RoxygenNote: 7.3.2`, a roxygen run that never happened.
+- The Spanish catalog drops two messages that are no longer emitted and fixes
+  a conjunction in the collision diagnostic.
+- The test suite no longer fails when the bundled example component is already
+  installed in the user library.
+
+## Documentation
+
+- The README citation section no longer pastes a BibTeX entry, which had been
+  left at version 0.3.0. It points to `citation("bigbang")`, which reports the
+  installed version, and explains the CRAN and Zenodo DOIs.
+- The README no longer says that recipients always get the tested versions: by
+  default (`install_upgrade = "newer"`) a newer installed version is kept, and
+  `install_upgrade = "always"` makes every installation match the archives.
+- The vignettes call `<meta>_reexport_verification()` only for meta-packages
+  generated with `reexport = TRUE`, the only ones that have it, and the
+  `R CMD build` call in `vignette("getting-started")` quotes the path.
+- Smaller README corrections: the distributed unit is one self-contained
+  meta-package, the r-universe command gives a binary only on Windows and
+  macOS, and the CI description matches the workflow. The Spanish README gains the sections
+  it lacked, and `CONTRIBUTING.md` documents the test and lint commands.
+
 # bigbang 0.5.1
 
 ## Bug fixes
