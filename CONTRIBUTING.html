@@ -35,9 +35,17 @@
 <div id="contributing-to-bigbang" class="section level1">
 
 <div class="section level2">
+<h2 id="tests-and-lint">Tests and lint<a class="anchor" aria-label="anchor" href="#tests-and-lint"></a></h2>
+<p>Run the complete suite before opening a pull request. <code>NOT_CRAN=true</code> includes the tests that install packages and check generated metapackages:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="va">NOT_CRAN</span><span class="op">=</span>true <span class="ex">Rscript</span> <span class="at">--vanilla</span> <span class="at">-e</span> <span class="st">'testthat::test_local(reporter = "summary", stop_on_failure = TRUE)'</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">--vanilla</span> tests/integration/data-loss-verification.R</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">--vanilla</span> <span class="at">-e</span> <span class="st">'print(lintr::lint_package())'</span></span></code></pre></div>
+<p>A pull request should leave the suite without failures and <code>lintr</code> without new findings. New behavior comes with a test, and a fix with a test that fails without it. The complete release gates, including <code>R CMD check --as-cran</code>, are in <code>RELEASE.md</code>.</p>
+</div>
+<div class="section level2">
 <h2 id="reproducible-spelling-checks">Reproducible spelling checks<a class="anchor" aria-label="anchor" href="#reproducible-spelling-checks"></a></h2>
 <p>The package declares <code>Language: en</code>, while <code>vignettes/bigbang-es.Rmd</code> is intentionally written in Spanish. The high-level <code>spelling::spell_check_package()</code> function has no per-file exclusion argument, so run the English checks explicitly:</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">wordlist</span> <span class="op">&lt;-</span> <span class="fu">spelling</span><span class="fu">::</span><span class="fu">get_wordlist</span><span class="op">(</span><span class="st">"."</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># DESCRIPTION and generated Rd files.</span></span>
@@ -50,7 +58,7 @@
 <span>  lang <span class="op">=</span> <span class="st">"en_US"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p>Check the Spanish guide separately when the <code>es_ES</code> Hunspell dictionary is installed:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="st">"es_ES"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu">hunspell</span><span class="fu">::</span><span class="fu">list_dictionaries</span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu">spelling</span><span class="fu">::</span><span class="fu">spell_check_files</span><span class="op">(</span></span>
 <span>    <span class="st">"vignettes/bigbang-es.Rmd"</span>,</span>
@@ -65,7 +73,8 @@
 </div>
 </div>
 
-  </main></div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">

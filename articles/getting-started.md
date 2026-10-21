@@ -60,7 +60,7 @@ result <- create_metapackage(
 result
 #> <bigbang metapackage>
 #>   Package: toyverse
-#>   Path: /tmp/Rtmp9mkMDa/bigbang-vignette-1aa3a5029e7/generated/toyverse
+#>   Path: /tmp/Rtmpx7rwTz/bigbang-vignette-1d053d05e0c4/generated/toyverse
 #>   Components: toycomponent
 list.files(result$path)
 #>  [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           
@@ -75,7 +75,7 @@ The generated tree can be scanned without loading it:
 scan <- scan_bigbang_artifact(result$path)
 scan
 #> <bigbang artifact scan>
-#>   Path: /tmp/Rtmp9mkMDa/bigbang-vignette-1aa3a5029e7/generated/toyverse
+#>   Path: /tmp/Rtmpx7rwTz/bigbang-vignette-1d053d05e0c4/generated/toyverse
 #>   Type: source
 #>   Result: no deletion signatures found
 stopifnot(!scan$vulnerable)
@@ -88,7 +88,7 @@ standard R workflow. Loading the metapackage never installs components:
 
 ``` r
 
-system2(file.path(R.home("bin"), "R"), c("CMD", "build", result$path))
+system2(file.path(R.home("bin"), "R"), c("CMD", "build", shQuote(result$path)))
 install.packages("toyverse_0.1.0.tar.gz", repos = NULL, type = "source")
 library(toyverse)
 toyverse_install()
@@ -124,8 +124,9 @@ available. Use `upgrade = "always"` or `force = TRUE` for an explicit
 reinstall. Generated metapackages provide `<meta>_conflicts()` and honor
 `options(<meta>.quiet = TRUE)` for startup output. Their optional `cli`
 display falls back to a dependency-free ASCII banner.
-`<meta>_conflicts()` retains masking conflicts; inspect its installation
-check with `<meta>_reexport_verification(<meta>_conflicts())`.
+`<meta>_conflicts()` retains masking conflicts. In a metapackage
+generated with `reexport = TRUE`, inspect its installation check with
+`<meta>_reexport_verification(<meta>_conflicts())`.
 
 ## Interrupted updates and recovery
 

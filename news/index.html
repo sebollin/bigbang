@@ -34,6 +34,25 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="bigbang-development-version">bigbang (development version)<a class="anchor" aria-label="anchor" href="#bigbang-development-version"></a></h2>
+<div class="section level3">
+<h3 id="dependencies-development-version">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies-development-version"></a></h3>
+<ul><li>bigbang now requires R &gt;= 4.1.0. Its own code needs nothing newer than R 3.6.0, but the imported <code>glue</code> has required R 4.1 since glue 1.8.1, so installing on an older R already failed unless an older glue was installed by hand. CI now checks R 4.1.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-development-version">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-development-version"></a></h3>
+<ul><li>Generated meta-packages translate every message their code emits. The warning about components skipped because a local dependency was skipped never reached Spanish, and nine other messages had no catalog entry. Tests now fail when generated code emits a message that is missing from its catalog, or formats an untranslated sentence.</li>
+<li>The printed results of <code><a href="../reference/create_metapackage.html">create_metapackage()</a></code>, <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code> and <code><a href="../reference/scan_bigbang_artifact.html">scan_bigbang_artifact()</a></code> are translated into Spanish too, and so is the error <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code> gives when <code>R CMD INSTALL</code> fails without output. The English output is unchanged.</li>
+<li>A meta-package generated with <code>document = FALSE</code> no longer declares <code>RoxygenNote: 7.3.2</code>, a roxygen run that never happened.</li>
+<li>The Spanish catalog drops two messages that are no longer emitted and fixes a conjunction in the collision diagnostic.</li>
+<li>The test suite no longer fails when the bundled example component is already installed in the user library.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-development-version">Documentation<a class="anchor" aria-label="anchor" href="#documentation-development-version"></a></h3>
+<ul><li>The README citation section no longer pastes a BibTeX entry, which had been left at version 0.3.0. It points to <code>citation("bigbang")</code>, which reports the installed version, and explains the CRAN and Zenodo DOIs.</li>
+<li>The README no longer says that recipients always get the tested versions: by default (<code>install_upgrade = "newer"</code>) a newer installed version is kept, and <code>install_upgrade = "always"</code> makes every installation match the archives.</li>
+<li>The vignettes call <code>&lt;meta&gt;_reexport_verification()</code> only for meta-packages generated with <code>reexport = TRUE</code>, the only ones that have it, and the <code>R CMD build</code> call in <code><a href="../articles/getting-started.html">vignette("getting-started")</a></code> quotes the path.</li>
+<li>Smaller README corrections: the distributed unit is one self-contained meta-package, the r-universe command gives a binary only on Windows and macOS, and the CI description matches the workflow. The Spanish README gains the sections it lacked, and <code>CONTRIBUTING.md</code> documents the test and lint commands.</li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.5.1" id="bigbang-051">bigbang 0.5.1<a class="anchor" aria-label="anchor" href="#bigbang-051"></a></h2><p class="text-muted">CRAN release: 2026-10-06</p>

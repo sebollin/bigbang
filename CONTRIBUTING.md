@@ -1,5 +1,22 @@
 # Contributing to bigbang
 
+## Tests and lint
+
+Run the complete suite before opening a pull request. `NOT_CRAN=true`
+includes the tests that install packages and check generated
+metapackages:
+
+``` sh
+NOT_CRAN=true Rscript --vanilla -e 'testthat::test_local(reporter = "summary", stop_on_failure = TRUE)'
+Rscript --vanilla tests/integration/data-loss-verification.R
+Rscript --vanilla -e 'print(lintr::lint_package())'
+```
+
+A pull request should leave the suite without failures and `lintr`
+without new findings. New behavior comes with a test, and a fix with a
+test that fails without it. The complete release gates, including
+`R CMD check --as-cran`, are in `RELEASE.md`.
+
 ## Reproducible spelling checks
 
 The package declares `Language: en`, while `vignettes/bigbang-es.Rmd` is

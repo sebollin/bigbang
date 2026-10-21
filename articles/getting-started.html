@@ -119,7 +119,7 @@ separately.</p>
 <span><span class="va">result</span></span>
 <span><span class="co">#&gt; &lt;bigbang metapackage&gt;</span></span>
 <span><span class="co">#&gt;   Package: toyverse</span></span>
-<span><span class="co">#&gt;   Path: /tmp/Rtmp9mkMDa/bigbang-vignette-1aa3a5029e7/generated/toyverse</span></span>
+<span><span class="co">#&gt;   Path: /tmp/Rtmpx7rwTz/bigbang-vignette-1d053d05e0c4/generated/toyverse</span></span>
 <span><span class="co">#&gt;   Components: toycomponent</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">list.files</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span></span>
 <span><span class="co">#&gt;  [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           </span></span>
@@ -130,7 +130,7 @@ separately.</p>
 <code class="sourceCode R"><span><span class="va">scan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/scan_bigbang_artifact.html">scan_bigbang_artifact</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span></span>
 <span><span class="va">scan</span></span>
 <span><span class="co">#&gt; &lt;bigbang artifact scan&gt;</span></span>
-<span><span class="co">#&gt;   Path: /tmp/Rtmp9mkMDa/bigbang-vignette-1aa3a5029e7/generated/toyverse</span></span>
+<span><span class="co">#&gt;   Path: /tmp/Rtmpx7rwTz/bigbang-vignette-1d053d05e0c4/generated/toyverse</span></span>
 <span><span class="co">#&gt;   Type: source</span></span>
 <span><span class="co">#&gt;   Result: no deletion signatures found</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot</a></span><span class="op">(</span><span class="op">!</span><span class="va">scan</span><span class="op">$</span><span class="va">vulnerable</span><span class="op">)</span></span></code></pre></div>
@@ -142,7 +142,7 @@ separately.</p>
 standard R workflow. Loading the metapackage never installs
 components:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/system2.html" class="external-link">system2</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Rhome.html" class="external-link">R.home</a></span><span class="op">(</span><span class="st">"bin"</span><span class="op">)</span>, <span class="st">"R"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"CMD"</span>, <span class="st">"build"</span>, <span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/system2.html" class="external-link">system2</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Rhome.html" class="external-link">R.home</a></span><span class="op">(</span><span class="st">"bin"</span><span class="op">)</span>, <span class="st">"R"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"CMD"</span>, <span class="st">"build"</span>, <span class="fu"><a href="https://rdrr.io/r/base/shQuote.html" class="external-link">shQuote</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"toyverse_0.1.0.tar.gz"</span>, repos <span class="op">=</span> <span class="cn">NULL</span>, type <span class="op">=</span> <span class="st">"source"</span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">toyverse</span><span class="op">)</span></span>
 <span><span class="fu">toyverse_install</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
@@ -182,7 +182,8 @@ explicit reinstall. Generated metapackages provide
 <code>options(&lt;meta&gt;.quiet = TRUE)</code> for startup output.
 Their optional <code>cli</code> display falls back to a dependency-free
 ASCII banner. <code>&lt;meta&gt;_conflicts()</code> retains masking
-conflicts; inspect its installation check with
+conflicts. In a metapackage generated with <code>reexport = TRUE</code>,
+inspect its installation check with
 <code>&lt;meta&gt;_reexport_verification(&lt;meta&gt;_conflicts())</code>.</p>
 </div>
 <div class="section level2">

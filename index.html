@@ -76,7 +76,7 @@
 <ul>
 <li>📦 <strong>One call, one -verse</strong> — <code><a href="reference/create_metapackage.html">create_metapackage()</a></code> scaffolds a complete, documented, CRAN-checkable metapackage from your own package archives.</li>
 <li>🗂️ <strong>Your packages where you keep them</strong> — components can come from several directories, mix <code>.tar.gz</code>, <code>.tar</code> and <code>.zip</code>, carry no version in the filename, be listed in a manifest file, or be source directories that bigbang builds for you. Identity and version are read from each archive’s <code>DESCRIPTION</code>, not guessed from its name.</li>
-<li>🎯 <strong>A curated set, distributed as one</strong> — the metapackage records the exact archive versions it was built from, so the combination you tested is the combination that gets installed.</li>
+<li>🎯 <strong>A curated set, distributed as one</strong> — the metapackage records and ships the exact archive versions it was built from. By default a recipient who already has a newer version keeps it; generate with <code>install_upgrade = "always"</code> and every installation gets the combination you tested.</li>
 <li>📮 <strong>One artifact to hand over</strong> — the component archives travel inside the generated metapackage, so <code>&lt;meta&gt;_install()</code> works with no arguments and no path has to be agreed on between machines.</li>
 <li>🧭 <strong>Real dependency resolution</strong> — builds the local dependency graph, orders installation topologically, and refuses cycles up front. Nobody downstream has to work out what to install first.</li>
 <li>🔌 <strong>No repository required</strong> — every component is read from local files, so installation needs no network at all; <code>cran_deps = "skip"</code> is the default. This is what makes bigbang work behind an institutional firewall, but it is just as useful for shipping a versioned bundle anywhere.</li>
@@ -97,7 +97,7 @@
 <p>The stable version is on CRAN:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"bigbang"</span><span class="op">)</span></span></code></pre></div>
-<p>The development version is served as a binary from r-universe, so it needs no compilation:</p>
+<p>The development version is on r-universe. This command gets a binary on Windows and macOS and the source package elsewhere; bigbang has no compiled code, so neither needs a compiler:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"bigbang"</span>, repos <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"https://sebollin.r-universe.dev"</span>,</span>
 <span>                                      <span class="st">"https://cloud.r-project.org"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
@@ -274,7 +274,7 @@
 <h2 id="clamp-zip-files-and-portability">🗜️ ZIP files and portability<a class="anchor" aria-label="anchor" href="#clamp-zip-files-and-portability"></a>
 </h2>
 <p>ZIP archives are classified by content. A ZIP containing <code>Meta/package.rds</code> is a Windows binary and is installed with <code>type = "win.binary"</code> on Windows only. Other ZIPs containing DESCRIPTION are unpacked into an owned temporary directory and installed as source packages.</p>
-<p>All generated text is written explicitly as UTF-8. CI is prepared for R release on Windows and macOS and for release, devel, and oldrel on Ubuntu. The declared minimum is R 3.6.0, following the minimum of the imported <code>brio</code> release.</p>
+<p>All generated text is written explicitly as UTF-8. CI checks R release on Windows and macOS, and release, devel, oldrel-1 and 4.1 on Ubuntu. The declared minimum is R 4.1.0, the minimum of the imported <code>glue</code> release, and the 4.1 job checks it.</p>
 </div>
 <div class="section level2">
 <h2 id="earth_americas-english-and-spanish">🌎 English and Spanish<a class="anchor" aria-label="anchor" href="#earth_americas-english-and-spanish"></a>
@@ -308,7 +308,7 @@
 </tr></thead>
 <tbody>
 <tr>
-<td>Distribute one curated, version-pinned set of local archives as a single installable unit</td>
+<td>Distribute one curated set of local archives, with their versions recorded, as a single installable unit</td>
 <td><code>bigbang</code></td>
 </tr>
 <tr>
@@ -323,7 +323,7 @@
 </tr>
 </tbody>
 </table>
-<p><code>bigbang</code> deliberately does not replace a repository manager. If a team needs version retention, repository indexes, or dependency distribution to many projects, <code>miniCRAN</code>/<code>drat</code> is the stronger abstraction. <code>bigbang</code> is useful when the distributed unit is a curated metapackage plus a directory of archives.</p>
+<p><code>bigbang</code> deliberately does not replace a repository manager. If a team needs version retention, repository indexes, or dependency distribution to many projects, <code>miniCRAN</code>/<code>drat</code> is the stronger abstraction. <code>bigbang</code> is useful when the distributed unit is one self-contained metapackage that carries its component archives.</p>
 </div>
 <div class="section level2">
 <h2 id="shield-data-safety-history-and-old-artifacts">🛡️ Data-safety history and old artifacts<a class="anchor" aria-label="anchor" href="#shield-data-safety-history-and-old-artifacts"></a>
@@ -348,20 +348,15 @@
 <div class="section level2">
 <h2 id="open_book-citation">📖 Citation<a class="anchor" aria-label="anchor" href="#open_book-citation"></a>
 </h2>
+<p>Cite the version you used, as R reports it:</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"bigbang"</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb15"><pre class="sourceCode bibtex"><code class="sourceCode bibtex"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="va">@Manual</span>{<span class="ot">bigbang2026</span>,</span>
-<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>  <span class="dt">title</span>  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},</span>
-<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a>  <span class="dt">author</span> = {Sebastián Lucas},</span>
-<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a>  <span class="dt">note</span>   = {R package version 0.3.0},</span>
-<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a>  <span class="dt">year</span>   = {2026},</span>
-<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>  <span class="dt">url</span>    = {https://sebollin.github.io/bigbang/},</span>
-<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a>}</span></code></pre></div>
+<p>For a CRAN installation the entry carries the package DOI assigned by CRAN, <a href="https://doi.org/10.32614/CRAN.package.bigbang" class="external-link">10.32614/CRAN.package.bigbang</a>. Every release is also archived on Zenodo: <a href="https://doi.org/10.5281/zenodo.23192961" class="external-link">10.5281/zenodo.23192961</a> always resolves to the latest version, and each version has its own DOI there for citing an exact release.</p>
 </div>
 <div class="section level2">
 <h2 id="microscope-development-status">🔬 Development status<a class="anchor" aria-label="anchor" href="#microscope-development-status"></a>
 </h2>
-<p>The complete test suite includes unit, portability, i18n, scanner, installation, and data-loss regression tests. <code>R CMD check --as-cran</code> runs with the PDF manual enabled for both <code>bigbang</code> and a generated metapackage, on every push, across Ubuntu (release, devel, oldrel), Windows, and macOS. win-builder and <code>rhub::rhub_check()</code> results are reviewed before each CRAN submission.</p>
+<p>The complete test suite includes unit, portability, i18n, scanner, installation, and data-loss regression tests. On every push to <code>main</code> and on every pull request, <code>R CMD check --as-cran</code> runs with the PDF manual enabled on Ubuntu (R release, devel, oldrel-1, and 4.1, the declared minimum), Windows, and macOS, and the suite builds and checks a generated metapackage, PDF manual included. win-builder and <code>rhub::rhub_check()</code> results are reviewed before each CRAN submission.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">

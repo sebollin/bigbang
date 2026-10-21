@@ -37,9 +37,11 @@ set you curated is the set they install, in a single line.
   version in the filename, be listed in a manifest file, or be source
   directories that bigbang builds for you. Identity and version are read
   from each archive’s `DESCRIPTION`, not guessed from its name.
-- 🎯 **A curated set, distributed as one** — the metapackage records the
-  exact archive versions it was built from, so the combination you
-  tested is the combination that gets installed.
+- 🎯 **A curated set, distributed as one** — the metapackage records and
+  ships the exact archive versions it was built from. By default a
+  recipient who already has a newer version keeps it; generate with
+  `install_upgrade = "always"` and every installation gets the
+  combination you tested.
 - 📮 **One artifact to hand over** — the component archives travel
   inside the generated metapackage, so `<meta>_install()` works with no
   arguments and no path has to be agreed on between machines.
@@ -73,8 +75,9 @@ The stable version is on CRAN:
 install.packages("bigbang")
 ```
 
-The development version is served as a binary from r-universe, so it
-needs no compilation:
+The development version is on r-universe. This command gets a binary on
+Windows and macOS and the source package elsewhere; bigbang has no
+compiled code, so neither needs a compiler:
 
 ``` r
 
@@ -490,10 +493,10 @@ ZIP archives are classified by content. A ZIP containing
 are unpacked into an owned temporary directory and installed as source
 packages.
 
-All generated text is written explicitly as UTF-8. CI is prepared for R
-release on Windows and macOS and for release, devel, and oldrel on
-Ubuntu. The declared minimum is R 3.6.0, following the minimum of the
-imported `brio` release.
+All generated text is written explicitly as UTF-8. CI checks R release
+on Windows and macOS, and release, devel, oldrel-1 and 4.1 on Ubuntu.
+The declared minimum is R 4.1.0, the minimum of the imported `glue`
+release, and the 4.1 job checks it.
 
 ## 🌎 English and Spanish
 
@@ -531,15 +534,15 @@ translated help; a separate `bigbang.es` module can be considered if
 
 | Need | Best fit |
 |----|----|
-| Distribute one curated, version-pinned set of local archives as a single installable unit | `bigbang` |
+| Distribute one curated set of local archives, with their versions recorded, as a single installable unit | `bigbang` |
 | A conventional local repository with indexes, multiple packages, and repository semantics | `miniCRAN` or `drat` |
 | A small metapackage around packages already available from repositories | `pkgverse` |
 
 `bigbang` deliberately does not replace a repository manager. If a team
 needs version retention, repository indexes, or dependency distribution
 to many projects, `miniCRAN`/`drat` is the stronger abstraction.
-`bigbang` is useful when the distributed unit is a curated metapackage
-plus a directory of archives.
+`bigbang` is useful when the distributed unit is one self-contained
+metapackage that carries its component archives.
 
 ## 🛡️ Data-safety history and old artifacts
 
@@ -584,26 +587,27 @@ above for what deliberately stays out of scope.
 
 ## 📖 Citation
 
+Cite the version you used, as R reports it:
+
 ``` r
 
 citation("bigbang")
 ```
 
-``` bibtex
-@Manual{bigbang2026,
-  title  = {bigbang: Build 'Tidyverse'-Style Meta-Packages from Local Package Files},
-  author = {Sebastián Lucas},
-  note   = {R package version 0.3.0},
-  year   = {2026},
-  url    = {https://sebollin.github.io/bigbang/},
-}
-```
+For a CRAN installation the entry carries the package DOI assigned by
+CRAN,
+[10.32614/CRAN.package.bigbang](https://doi.org/10.32614/CRAN.package.bigbang).
+Every release is also archived on Zenodo:
+[10.5281/zenodo.23192961](https://doi.org/10.5281/zenodo.23192961)
+always resolves to the latest version, and each version has its own DOI
+there for citing an exact release.
 
 ## 🔬 Development status
 
 The complete test suite includes unit, portability, i18n, scanner,
-installation, and data-loss regression tests. `R CMD check --as-cran`
-runs with the PDF manual enabled for both `bigbang` and a generated
-metapackage, on every push, across Ubuntu (release, devel, oldrel),
-Windows, and macOS. win-builder and `rhub::rhub_check()` results are
-reviewed before each CRAN submission.
+installation, and data-loss regression tests. On every push to `main`
+and on every pull request, `R CMD check --as-cran` runs with the PDF
+manual enabled on Ubuntu (R release, devel, oldrel-1, and 4.1, the
+declared minimum), Windows, and macOS, and the suite builds and checks a
+generated metapackage, PDF manual included. win-builder and
+`rhub::rhub_check()` results are reviewed before each CRAN submission.

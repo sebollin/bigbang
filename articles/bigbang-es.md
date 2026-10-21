@@ -93,7 +93,8 @@ diagnóstico etiqueta las colisiones como `probable_same_object`,
 `distinct_definitions` o `undetermined`; una colisión probable elegida
 se verifica contra los dueños instalados mediante `<meta>_install()` y
 `<meta>_conflicts()`. `<meta>_conflicts()` conserva los conflictos de
-enmascaramiento; consulte la verificación de instalación con
+enmascaramiento. En un metapaquete generado con `reexport = TRUE`,
+consulte la verificación de instalación con
 `<meta>_reexport_verification(<meta>_conflicts())`.
 
 ## Actualizaciones interrumpidas y recuperación
@@ -167,6 +168,7 @@ política de actualización del instalador emitido.
 Los mensajes de ejecución tienen inglés como fuente y traducción
 completa al español mediante gettext. En R 4.2 o posterior puede usar
 `Sys.setLanguage("es")`; en versiones anteriores, defina `LANGUAGE=es`
-antes de iniciar R. La ayuda Rd se publica en inglés, como requiere
-CRAN. Cuando `rhelpi18n` madure y llegue a CRAN se evaluará publicar un
-módulo separado `bigbang.es` para traducir también la ayuda interactiva.
+antes de iniciar R. La ayuda Rd queda en inglés porque R no tiene un
+mecanismo nativo estable para traducirla. Cuando `rhelpi18n` madure y
+llegue a CRAN se evaluará publicar un módulo separado `bigbang.es` para
+traducir también la ayuda interactiva.

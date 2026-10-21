@@ -161,7 +161,9 @@ contra los dueños instalados mediante
 <code>&lt;meta&gt;_install()</code> y
 <code>&lt;meta&gt;_conflicts()</code>.
 <code>&lt;meta&gt;_conflicts()</code> conserva los conflictos de
-enmascaramiento; consulte la verificación de instalación con
+enmascaramiento. En un metapaquete generado con
+<code>reexport = TRUE</code>, consulte la verificación de instalación
+con
 <code>&lt;meta&gt;_reexport_verification(&lt;meta&gt;_conflicts())</code>.</p>
 </div>
 <div class="section level2">
@@ -229,10 +231,11 @@ fijar la política de actualización del instalador emitido.</p>
 <p>Los mensajes de ejecución tienen inglés como fuente y traducción
 completa al español mediante gettext. En R 4.2 o posterior puede usar
 <code>Sys.setLanguage("es")</code>; en versiones anteriores, defina
-<code>LANGUAGE=es</code> antes de iniciar R. La ayuda Rd se publica en
-inglés, como requiere CRAN. Cuando <code>rhelpi18n</code> madure y
-llegue a CRAN se evaluará publicar un módulo separado
-<code>bigbang.es</code> para traducir también la ayuda interactiva.</p>
+<code>LANGUAGE=es</code> antes de iniciar R. La ayuda Rd queda en inglés
+porque R no tiene un mecanismo nativo estable para traducirla. Cuando
+<code>rhelpi18n</code> madure y llegue a CRAN se evaluará publicar un
+módulo separado <code>bigbang.es</code> para traducir también la ayuda
+interactiva.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

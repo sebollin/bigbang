@@ -52,7 +52,7 @@
 <div class="section level2">
 <h2 id="id_1-local-gates">1. Local gates<a class="anchor" aria-label="anchor" href="#id_1-local-gates"></a></h2>
 <p>Make TinyTeX visible and run the complete suite, destructive sandbox integration, lint, spelling, and coverage checks:</p>
-<p><code>NOT_CRAN=true</code> is what makes this the complete suite: without it every <code>skip_on_cran()</code> test is skipped, which is exactly the set that installs packages, checks a generated meta-package, and verifies that a shipped meta-package installs its components on its own. The same variable belongs on the coverage run, otherwise the figure looks several points lower than the one CI reports.</p>
+<p><code>NOT_CRAN=true</code> is what makes this the complete suite: the <code>skip_on_cran()</code> tests are exactly the set that installs packages, checks a generated meta-package, and verifies that a shipped meta-package installs its components on its own. <code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_local()</a></code> sets the variable by itself when it is unset; it is set explicitly anyway, so the gate does not depend on that default. The same variable belongs on the coverage run, otherwise the figure looks several points lower than the one CI reports.</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span><span class="st">"</span><span class="va">$HOME</span><span class="st">/.TinyTeX/bin/x86_64-linux:</span><span class="va">$PATH</span><span class="st">"</span></span>
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="va">NOT_CRAN</span><span class="op">=</span>true <span class="ex">Rscript</span> <span class="at">--vanilla</span> <span class="at">-e</span> <span class="st">'testthat::test_local(reporter = "summary", stop_on_failure = TRUE)'</span></span>
 <span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">--vanilla</span> tests/integration/data-loss-verification.R</span>
@@ -61,15 +61,15 @@
 <span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="va">NOT_CRAN</span><span class="op">=</span>true <span class="ex">Rscript</span> <span class="at">--vanilla</span> <span class="at">-e</span> <span class="st">'print(covr::package_coverage(quiet = FALSE))'</span></span>
 <span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="ex">R</span> CMD build .</span>
 <span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="ex">R</span> CMD check <span class="at">--as-cran</span> bigbang_<span class="pp">*</span>.tar.gz</span></code></pre></div>
-<p>Confirm that the summary reports zero skips. A skip here means the variable did not reach the test process.</p>
+<p>Confirm that the summary reports zero skips, and read the reason of any skip: a missing <code>NOT_CRAN</code>, a missing suggested package, or LaTeX tools that are not on the <code>PATH</code> all produce one. Under covr, one test skips by design, because covr injects instrumented dependencies into child library paths.</p>
 <p>Run the English and Spanish prose checks exactly as documented in <code>CONTRIBUTING.md</code>. Confirm in each check log that the manual PDF and vignettes were actually built. The manual is enabled by default; <code>--manual</code> is not an <code>R CMD check</code> option (and <code>--no-manual</code> must not be used for this gate). Generate a representative metapackage in <code><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir()</a></code>, build it, scan its source and archive, and run the same <code>R CMD check --as-cran</code> gate on it.</p>
 </div>
 <div class="section level2">
 <h2 id="id_2-hosted-ci-and-coverage">2. Hosted CI and coverage<a class="anchor" aria-label="anchor" href="#id_2-hosted-ci-and-coverage"></a></h2>
 <ol style="list-style-type: decimal"><li>Confirm the release commit is published at <code>https://github.com/sebollin/bigbang</code>.</li>
-<li>Confirm that <code>.github/workflows/R-CMD-check.yaml</code> is green for <code>ubuntu-release</code>, <code>ubuntu-devel</code>, <code>ubuntu-oldrel</code>, <code>windows-release</code>, and <code>macos-release</code>.</li>
+<li>Confirm that <code>.github/workflows/R-CMD-check.yaml</code> is green for <code>ubuntu-release</code>, <code>ubuntu-devel</code>, <code>ubuntu-oldrel-1</code>, <code>ubuntu-4.1</code> (the declared minimum), <code>windows-release</code>, and <code>macos-release</code>.</li>
 <li>Record the CI commit SHA and the covr percentage produced from that exact SHA in <code>cran-comments.md</code>.</li>
-<li>Review the complete <code><a href="https://lintr.r-lib.org/reference/lint.html" class="external-link">lintr::lint_package()</a></code> result. Every remaining item must be either fixed or explicitly justified in the release notes.</li>
+<li>Review the complete <code>lintr::lint_package()</code> result. Every remaining item must be either fixed or explicitly justified in the release notes.</li>
 </ol></div>
 <div class="section level2">
 <h2 id="id_3-external-cran-like-gates">3. External CRAN-like gates<a class="anchor" aria-label="anchor" href="#id_3-external-cran-like-gates"></a></h2>
