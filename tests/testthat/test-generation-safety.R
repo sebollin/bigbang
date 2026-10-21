@@ -116,7 +116,7 @@ test_that("dependency constraints are validated and R requirements propagate", {
   build_safety_archive("aaa", "1.0.0", source_root, low_archives)
   build_safety_archive(
     "needv2", "1.0.0", source_root, low_archives,
-    imports = "aaa (>= 2.0.0)", depends = "R (>= 4.3.0)"
+    imports = "aaa (>= 2.0.0)", depends = "R (>= 4.1.0)"
   )
   expect_error(
     create_metapackage(
@@ -138,7 +138,7 @@ test_that("dependency constraints are validated and R requirements propagate", {
     dest_dir = destination, document = FALSE, verbose = FALSE
   )
   generated_description <- read.dcf(file.path(result$path, "DESCRIPTION"))
-  expect_match(generated_description[, "Depends"], "R \\(>= 4.3.0\\)")
+  expect_match(generated_description[, "Depends"], "R \\(>= 4.1.0\\)")
 
   skip_on_cran()
   withr::local_libpaths(c(library_dir, .libPaths()))
