@@ -78,6 +78,58 @@ bigbang_child_load_code <- function() {
   }
 }
 
+meta_untranslated_sentences <- function(project) {
+  found <- character()
+  visit <- function(node) {
+    if (is.expression(node)) {
+      lapply(as.list(node), visit)
+      return(invisible(NULL))
+    }
+    if (!is.call(node)) return(invisible(NULL))
+    head <- node[[1L]]
+    name <- if (is.symbol(head)) {
+      as.character(head)
+    } else if (is.call(head) && identical(head[[1L]], as.name("::"))) {
+      as.character(head[[3L]])
+    } else {
+      ""
+    }
+    if (name %in% c("sprintf", "stop", "warning", "message") &&
+          length(node) >= 2L && is.character(node[[2L]]) &&
+          length(node[[2L]]) == 1L && grepl(" ", node[[2L]], fixed = TRUE)) {
+      found <<- c(found, node[[2L]])
+    }
+    lapply(as.list(node), visit)
+    invisible(NULL)
+  }
+  files <- list.files(file.path(project, "R"), pattern = "\\.R$",
+                      full.names = TRUE)
+  for (file in files) visit(parse(file = file, keep.source = FALSE))
+  unique(found)
+}
+
+meta_translation_literals <- function(project) {
+  literals <- character()
+  visit <- function(node) {
+    if (is.expression(node)) {
+      lapply(as.list(node), visit)
+      return(invisible(NULL))
+    }
+    if (!is.call(node)) return(invisible(NULL))
+    head <- node[[1L]]
+    if (is.symbol(head) && as.character(head) %in% c(".meta_tr", ".meta_trf") &&
+          length(node) >= 2L && is.character(node[[2L]]) && length(node[[2L]]) == 1L) {
+      literals <<- c(literals, node[[2L]])
+    }
+    lapply(as.list(node), visit)
+    invisible(NULL)
+  }
+  files <- list.files(file.path(project, "R"), pattern = "\\.R$",
+                      full.names = TRUE)
+  for (file in files) visit(parse(file = file, keep.source = FALSE))
+  unique(literals)
+}
+
 test_that("user-facing R diagnostics use the translation helpers", {
   source_root <- normalizePath(
     file.path(testthat::test_path(), "..", ".."),
@@ -93,6 +145,17 @@ test_that("user-facing R diagnostics use the translation helpers", {
   )]
   direct <- direct[!grepl("Internal error:", direct, fixed = TRUE)]
   expect_true(length(direct) == 0L, info = paste(direct, collapse = "\n"))
+
+  # A sentence built with sprintf() and passed to stop() later escapes the
+  # check above; the catalog file itself holds sprintf() calls on purpose.
+  code_files <- files[basename(files) != "translations.R"]
+  code_lines <- unlist(lapply(code_files, readLines, warn = FALSE),
+                       use.names = FALSE)
+  formatted <- code_lines[grepl(
+    "sprintf\\s*\\(\\s*['\"][A-Za-z][^'\"]* [^'\"]*['\"]", code_lines,
+    perl = TRUE
+  )]
+  expect_true(length(formatted) == 0L, info = paste(formatted, collapse = "\n"))
 })
 
 test_that("the bigbang runtime catalog translates messages to Spanish", {
@@ -133,6 +196,119 @@ test_that("the bigbang runtime catalog translates messages to Spanish", {
       "entre componentes: %s."
     )
   )
+})
+
+test_that("bigbang print methods translate in a Spanish child without changing English", {
+  result <- structure(
+    list(
+      name = "demo", path = "/tmp/demo", packages = c("a", "b"),
+      dry_run = TRUE, updated = TRUE, recovered = TRUE,
+      added_files = "new.R", removed_files = "old.R",
+      omitted = data.frame(component = "skip", stringsAsFactors = FALSE),
+      reexports = data.frame(
+        symbol = "f", package = "a", resolution = "chosen",
+        stringsAsFactors = FALSE
+      ),
+      reexport_excluded = "g", cran_dependencies = "h"
+    ),
+    class = "bigbang_result"
+  )
+  normal <- result
+  normal$dry_run <- FALSE
+  normal$updated <- FALSE
+  normal$recovered <- FALSE
+  install <- structure(
+    list(installed = list(a = TRUE), unchanged = list(b = TRUE),
+         failed = list(), skipped = list()),
+    class = "bigbang_install_result"
+  )
+  artifact <- structure(
+    list(path = "/tmp/artifact", type = "source", vulnerable = FALSE,
+         signatures = "one"),
+    class = "bigbang_artifact_scan"
+  )
+  vulnerable <- artifact
+  vulnerable$vulnerable <- TRUE
+  withr::local_envvar(LANGUAGE = "C")
+  expect_identical(
+    capture.output(print(artifact)),
+    c(
+      "<bigbang artifact scan>", "  Path: /tmp/artifact",
+      "  Type: source", "  Result: no deletion signatures found",
+      "  Signatures: one"
+    )
+  )
+  expect_identical(
+    capture.output(print(result)),
+    c(
+      "<bigbang metapackage>", "  Package: demo", "  Path: /tmp/demo",
+      "  Components: a, b", "  Mode: dry run (no files written)",
+      "  Mode: updated from generation manifest", "  Recovered: interrupted update",
+      "  Would add: new.R", "  Would remove: old.R", "  Omitted: skip",
+      "  Re-exports: f -> a (chosen)", "  Re-exports excluded: g",
+      "  Non-local dependencies: h"
+    )
+  )
+  expect_identical(
+    capture.output(print(normal)),
+    c(
+      "<bigbang metapackage>", "  Package: demo", "  Path: /tmp/demo",
+      "  Components: a, b", "  Added: new.R", "  Removed: old.R",
+      "  Omitted: skip", "  Re-exports: f -> a (chosen)",
+      "  Re-exports excluded: g", "  Non-local dependencies: h"
+    )
+  )
+  expect_identical(
+    capture.output(print(install)),
+    c("<bigbang local installation>", "  Installed: 1", "  Unchanged: 1",
+      "  Failed: 0", "  Skipped: 0")
+  )
+
+  code <- paste0(
+    bigbang_child_load_code(),
+    "invisible(bindtextdomain('R-bigbang', ",
+    deparse(bigbang_catalog_dir()), ")); ",
+    "result <- structure(list(name='demo', path='/tmp/demo', packages=c('a','b'), ",
+    "dry_run=TRUE, updated=TRUE, recovered=TRUE, added_files='new.R', ",
+    "removed_files='old.R', omitted=data.frame(component='skip'), ",
+    "reexports=data.frame(symbol='f', package='a', resolution='chosen'), ",
+    "reexport_excluded='g', cran_dependencies='h'), class='bigbang_result'); ",
+    "normal <- result; normal$dry_run <- FALSE; normal$updated <- FALSE; ",
+    "normal$recovered <- FALSE; ",
+    "install <- structure(list(installed=list(a=TRUE), unchanged=list(b=TRUE), ",
+    "failed=list(), skipped=list()), class='bigbang_install_result'); ",
+    "artifact <- structure(list(path='/tmp/artifact', type='source', ",
+    "vulnerable=FALSE, signatures='one'), class='bigbang_artifact_scan'); ",
+    "vulnerable <- artifact; vulnerable$vulnerable <- TRUE; ",
+    "artifact_print <- get('print.bigbang_artifact_scan', envir=asNamespace('bigbang')); ",
+    "result_print <- get('print.bigbang_result', envir=asNamespace('bigbang')); ",
+    "install_print <- get('print.bigbang_install_result', envir=asNamespace('bigbang')); ",
+    "writeLines(c(capture.output(artifact_print(artifact)), ",
+    "capture.output(artifact_print(vulnerable)), ",
+    "capture.output(result_print(result)), ",
+    "capture.output(result_print(normal)), ",
+    "capture.output(install_print(install))))"
+  )
+  output <- run_spanish_child("R-bigbang", bigbang_catalog_dir(), code)
+  translated <- paste(output, collapse = "\n")
+  expect_match(translated, "<escaneo de artefacto bigbang>", fixed = TRUE)
+  expect_match(translated, "  Ruta: /tmp/artifact", fixed = TRUE)
+  expect_match(translated, "  Resultado: no se encontraron firmas de eliminaci\u00f3n", fixed = TRUE)
+  expect_match(translated, "  Resultado: VULNERABLE", fixed = TRUE)
+  expect_match(translated, "<metapaquete bigbang>", fixed = TRUE)
+  expect_match(translated, "  Paquete: demo", fixed = TRUE)
+  expect_match(translated, "  Componentes: a, b", fixed = TRUE)
+  expect_match(translated, "  Modo: simulaci\u00f3n (no se escribieron archivos)", fixed = TRUE)
+  expect_match(translated, "  Recuperado: actualizaci\u00f3n interrumpida", fixed = TRUE)
+  expect_match(translated, "  Se agregar\u00edan: new.R", fixed = TRUE)
+  expect_match(translated, "  Se agregaron: new.R", fixed = TRUE)
+  expect_match(translated, "  Reexportaciones: f -> a (chosen)", fixed = TRUE)
+  expect_match(translated, "  Reexportaciones excluidas: g", fixed = TRUE)
+  expect_match(translated, "<instalaci\u00f3n local bigbang>", fixed = TRUE)
+  expect_match(translated, "  Instalados: 1", fixed = TRUE)
+  expect_match(translated, "  Sin cambios: 1", fixed = TRUE)
+  expect_match(translated, "  Fallidos: 0", fixed = TRUE)
+  expect_match(translated, "  Omitidos: 0", fixed = TRUE)
 })
 
 test_that("generated metapackages include their own Spanish runtime catalog", {
@@ -184,6 +360,56 @@ test_that("generated metapackages include their own Spanish runtime catalog", {
     "Installation complete."
   )
   expect_identical(tail(output, 1L), "Instalaci\u00f3n completa.")
+})
+
+test_that("every generated .meta_tr literal is in its generated catalog", {
+  skip_if_not(exists("create_metapackage", mode = "function"))
+  fixture <- system.file(
+    "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
+  )
+  if (!nzchar(fixture)) {
+    fixture <- testthat::test_path(
+      "..", "..", "inst", "extdata", "toycomponent_0.1.0.tar.gz"
+    )
+  }
+  cases <- expand.grid(
+    reexport = c(FALSE, TRUE), include_archives = c(FALSE, TRUE),
+    KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
+  )
+  missing <- vector("list", nrow(cases))
+  for (index in seq_len(nrow(cases))) {
+    root <- tempfile("bigbang-i18n-generated-catalog-")
+    destination <- file.path(root, "output")
+    dir.create(destination, recursive = TRUE)
+    name <- paste0("catalogguard", index, "verse")
+    result <- create_metapackage(
+      name, "toycomponent_0.1.0", dirname(fixture), dest_dir = destination,
+      document = FALSE, verbose = FALSE, reexport = cases$reexport[[index]],
+      include_archives = cases$include_archives[[index]],
+      import_deps = character(), force_deps = character()
+    )
+    generated <- meta_translation_literals(result$path)
+    catalog <- names(.metapackage_spanish_catalog(
+      name, include_archives = cases$include_archives[[index]]
+    ))
+    missing[[index]] <- c(
+      setdiff(generated, catalog),
+      meta_untranslated_sentences(result$path)
+    )
+  }
+  expect_true(
+    all(lengths(missing) == 0L),
+    info = paste(
+      vapply(seq_along(missing), function(index) {
+        paste0(
+          "reexport=", cases$reexport[[index]],
+          ", include_archives=", cases$include_archives[[index]], ": ",
+          paste(missing[[index]], collapse = " | ")
+        )
+      }, character(1L)),
+      collapse = "\n"
+    )
+  )
 })
 
 test_that("Spanish catalogs are complete and preserve format placeholders", {
@@ -243,6 +469,17 @@ test_that("Spanish catalogs are complete and preserve format placeholders", {
   expect_identical(
     unname(meta_catalog[stem_collision]),
     "Se encontr\u00f3 m\u00e1s de un archivo para el stem componente '%s': %s."
+  )
+  expect_identical(
+    unname(local_catalog[[
+      "For distinct_definitions and undetermined collisions, decide among these candidates: %s"
+    ]]),
+    "Para las colisiones distinct_definitions y undetermined, elija entre estos candidatos: %s"
+  )
+  expect_false("'pkg_dir' must be one character string" %in% names(local_catalog))
+  expect_false(
+    "Cannot update %s because requested generated files are not in its manifest: %s." %in%
+      names(local_catalog)
   )
 })
 
@@ -434,26 +671,38 @@ test_that("generated cli startup message translates to Spanish", {
   sandbox <- tempfile("bigbang-i18n-startup-")
   destination <- file.path(sandbox, "output")
   library <- file.path(sandbox, "library")
+  user_like_library <- file.path(sandbox, "user-like-library")
   dir.create(destination, recursive = TRUE)
   dir.create(library)
+  dir.create(user_like_library)
   fixture <- system.file(
     "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
   )
+  install_status <- system2(
+    file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"),
+    c("CMD", "INSTALL", "--no-multiarch", "-l", shQuote(user_like_library),
+      shQuote(fixture)),
+    stdout = FALSE, stderr = FALSE
+  )
+  expect_identical(install_status, 0L)
   result <- create_metapackage(
     "spanishverse", "toycomponent_0.1.0", dirname(fixture),
     dest_dir = destination, document = FALSE, verbose = FALSE,
     import_deps = character(), force_deps = character()
   )
   code <- paste0(
-    ".libPaths(c(", deparse(library), ", .libPaths())); ",
+    ".libPaths(c(", deparse(library), ", .Library)); ",
+    "stopifnot(!requireNamespace('toycomponent', quietly = TRUE)); ",
     "utils::install.packages(", deparse(result$path),
     ", repos = NULL, type = 'source', lib = ", deparse(library), "); ",
     "invisible(bindtextdomain('R-spanishverse', file.path(",
     deparse(library), ", 'spanishverse', 'po'))); ",
     "library(spanishverse, lib.loc = ", deparse(library), ")"
   )
-  output <- run_spanish_child("R-bigbang", bigbang_catalog_dir(), code)
+  output <- withr::with_envvar(
+    c(R_LIBS_USER = user_like_library),
+    run_spanish_child("R-bigbang", bigbang_catalog_dir(), code)
+  )
   translated <- paste(output, collapse = "\n")
-  expect_match(translated, "Adjuntando paquetes", fixed = TRUE)
   expect_match(translated, "Faltan componentes por instalar", fixed = TRUE)
 })

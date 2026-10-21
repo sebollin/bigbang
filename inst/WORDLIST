@@ -2,6 +2,7 @@ bigbang
 bigbang's
 checkable
 CMD
+Codecov
 cryptographic
 CRAN
 cwd
@@ -63,6 +64,8 @@ VignetteIndexEntry
 Westgate
 win-builder
 ZIPs
+Zenodo
+zenodo
 ️
 subprocess
 Ctrl

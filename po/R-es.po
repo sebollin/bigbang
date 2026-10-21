@@ -13,9 +13,6 @@ msgstr "'name' debe ser una cadena de caracteres"
 msgid "'packages' must be a non-empty character vector"
 msgstr "'packages' debe ser un vector de caracteres no vacío"
 
-msgid "'pkg_dir' must be one character string"
-msgstr "'pkg_dir' debe ser una cadena de caracteres"
-
 msgid "'pkg_dir' must contain one or more non-empty paths"
 msgstr "'pkg_dir' debe contener una o más rutas no vacías"
 
@@ -442,9 +439,6 @@ msgstr "Se agregaron dependencias locales de los componentes seleccionados: %s"
 msgid "Source directory components require include_archives = TRUE because their temporary build archive cannot be reused."
 msgstr "Los componentes de directorio fuente requieren include_archives = TRUE porque su archivo temporal no se puede reutilizar."
 
-msgid "Cannot update %s because requested generated files are not in its manifest: %s."
-msgstr "No se puede actualizar %s porque los archivos generados solicitados no están en su manifiesto: %s."
-
 msgid "Cannot update %s because its manifest contains invalid paths: %s."
 msgstr "No se puede actualizar %s porque su manifiesto contiene rutas no válidas: %s."
 
@@ -869,7 +863,7 @@ msgid "For probable_same_object collisions, copy this: reexport_prefer = c(%s)"
 msgstr "Para las colisiones probable_same_object, copie esto: reexport_prefer = c(%s)"
 
 msgid "For distinct_definitions and undetermined collisions, decide among these candidates: %s"
-msgstr "Para las colisiones distinct_definitions e undetermined, elija entre estos candidatos: %s"
+msgstr "Para las colisiones distinct_definitions y undetermined, elija entre estos candidatos: %s"
 
 msgid "Cannot use reexport_prefer for omitted component(s): %s. The component was omitted by skip; repair it or choose an installed candidate."
 msgstr "No se puede usar reexport_prefer para componentes omitidos: %s. El componente fue omitido por skip; repárelo o elija un candidato instalado."
@@ -897,3 +891,84 @@ msgstr "Los dueños instalados del símbolo de reexportación '%s' son objetos d
 
 msgid "Installed owners for re-export symbol '%s' differ as distinct objects: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
 msgstr "Los dueños instalados del símbolo de reexportación '%s' difieren como objetos distintos: %s. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."
+
+msgid "<bigbang artifact scan>"
+msgstr "<escaneo de artefacto bigbang>"
+
+msgid "VULNERABLE"
+msgstr "VULNERABLE"
+
+msgid "no deletion signatures found"
+msgstr "no se encontraron firmas de eliminación"
+
+msgid "Path"
+msgstr "Ruta"
+
+msgid "Type"
+msgstr "Tipo"
+
+msgid "Result"
+msgstr "Resultado"
+
+msgid "Signatures"
+msgstr "Firmas"
+
+msgid "<bigbang metapackage>"
+msgstr "<metapaquete bigbang>"
+
+msgid "Package"
+msgstr "Paquete"
+
+msgid "Components"
+msgstr "Componentes"
+
+msgid "Mode: dry run (no files written)"
+msgstr "Modo: simulación (no se escribieron archivos)"
+
+msgid "Mode: updated from generation manifest"
+msgstr "Modo: actualizado desde el manifiesto de generación"
+
+msgid "Recovered: interrupted update"
+msgstr "Recuperado: actualización interrumpida"
+
+msgid "Would add"
+msgstr "Se agregarían"
+
+msgid "Added"
+msgstr "Se agregaron"
+
+msgid "Would remove"
+msgstr "Se quitarían"
+
+msgid "Removed"
+msgstr "Se quitaron"
+
+msgid "Omitted"
+msgstr "Omitidos"
+
+msgid "Re-exports"
+msgstr "Reexportaciones"
+
+msgid "Re-exports excluded"
+msgstr "Reexportaciones excluidas"
+
+msgid "Non-local dependencies"
+msgstr "Dependencias no locales"
+
+msgid "<bigbang local installation>"
+msgstr "<instalación local bigbang>"
+
+msgid "Installed"
+msgstr "Instalados"
+
+msgid "Unchanged"
+msgstr "Sin cambios"
+
+msgid "Failed"
+msgstr "Fallidos"
+
+msgid "Skipped"
+msgstr "Omitidos"
+
+msgid "R CMD INSTALL exited with status %d"
+msgstr "R CMD INSTALL terminó con el estado %d"

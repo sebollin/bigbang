@@ -32,12 +32,13 @@ Complete this before announcing or distributing `bigbang`.
 Make TinyTeX visible and run the complete suite, destructive sandbox integration,
 lint, spelling, and coverage checks:
 
-`NOT_CRAN=true` is what makes this the complete suite: without it every
-`skip_on_cran()` test is skipped, which is exactly the set that installs
-packages, checks a generated meta-package, and verifies that a shipped
-meta-package installs its components on its own. The same variable belongs on
-the coverage run, otherwise the figure looks several points lower than the one
-CI reports.
+`NOT_CRAN=true` is what makes this the complete suite: the `skip_on_cran()`
+tests are exactly the set that installs packages, checks a generated
+meta-package, and verifies that a shipped meta-package installs its components
+on its own. `testthat::test_local()` sets the variable by itself when it is
+unset; it is set explicitly anyway, so the gate does not depend on that default.
+The same variable belongs on the coverage run, otherwise the figure looks
+several points lower than the one CI reports.
 
 ```sh
 export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH"
@@ -50,8 +51,10 @@ R CMD build .
 R CMD check --as-cran bigbang_*.tar.gz
 ```
 
-Confirm that the summary reports zero skips. A skip here means the variable did
-not reach the test process.
+Confirm that the summary reports zero skips, and read the reason of any skip: a
+missing `NOT_CRAN`, a missing suggested package, or LaTeX tools that are not on
+the `PATH` all produce one. Under covr, one test skips by design, because covr
+injects instrumented dependencies into child library paths.
 
 Run the English and Spanish prose checks exactly as documented in
 `CONTRIBUTING.md`. Confirm in each check log that the manual PDF and vignettes
@@ -65,8 +68,8 @@ archive, and run the same `R CMD check --as-cran` gate on it.
 1. Confirm the release commit is published at
    `https://github.com/sebollin/bigbang`.
 2. Confirm that `.github/workflows/R-CMD-check.yaml` is green for
-   `ubuntu-release`, `ubuntu-devel`, `ubuntu-oldrel`, `windows-release`, and
-   `macos-release`.
+   `ubuntu-release`, `ubuntu-devel`, `ubuntu-oldrel-1`, `ubuntu-4.1` (the
+   declared minimum), `windows-release`, and `macos-release`.
 3. Record the CI commit SHA and the covr percentage produced from that exact SHA
    in `cran-comments.md`.
 4. Review the complete `lintr::lint_package()` result. Every remaining item must

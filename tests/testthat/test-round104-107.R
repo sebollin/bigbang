@@ -322,6 +322,10 @@ test_that("installer transcripts follow verbose and failures retain ERROR", {
                              collapse = "\n")
   expect_match(generated_install, "base::system2", fixed = TRUE)
   generated_runtime <- new.env(parent = baseenv())
+  # The installer formats its messages with .meta_trf(), which the generated
+  # package defines in utils.R; both files share one namespace at runtime.
+  sys.source(file.path(generated$path, "R", "utils.R"),
+             envir = generated_runtime, keep.source = FALSE)
   generated_install <- sub("base::system2", ".test_system2",
                            generated_install, fixed = TRUE)
   eval(parse(text = generated_install, keep.source = FALSE),

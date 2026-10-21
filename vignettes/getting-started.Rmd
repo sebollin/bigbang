@@ -84,7 +84,7 @@ In a real project, build and install the generated package using the standard R
 workflow. Loading the metapackage never installs components:
 
 ```{r, eval = FALSE}
-system2(file.path(R.home("bin"), "R"), c("CMD", "build", result$path))
+system2(file.path(R.home("bin"), "R"), c("CMD", "build", shQuote(result$path)))
 install.packages("toyverse_0.1.0.tar.gz", repos = NULL, type = "source")
 library(toyverse)
 toyverse_install()
@@ -118,8 +118,9 @@ Use `upgrade = "always"` or `force = TRUE` for an explicit reinstall. Generated
 metapackages provide `<meta>_conflicts()` and honor
 `options(<meta>.quiet = TRUE)` for startup output. Their optional `cli` display
 falls back to a dependency-free ASCII banner.
-`<meta>_conflicts()` retains masking conflicts; inspect its installation check
-with `<meta>_reexport_verification(<meta>_conflicts())`.
+`<meta>_conflicts()` retains masking conflicts. In a metapackage generated with
+`reexport = TRUE`, inspect its installation check with
+`<meta>_reexport_verification(<meta>_conflicts())`.
 
 ## Interrupted updates and recovery
 

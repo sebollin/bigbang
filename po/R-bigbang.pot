@@ -13,9 +13,6 @@ msgstr ""
 msgid "'packages' must be a non-empty character vector"
 msgstr ""
 
-msgid "'pkg_dir' must be one character string"
-msgstr ""
-
 msgid "'pkg_dir' must contain one or more non-empty paths"
 msgstr ""
 
@@ -440,9 +437,6 @@ msgid "Added local dependencies of selected components: %s"
 msgstr ""
 
 msgid "Source directory components require include_archives = TRUE because their temporary build archive cannot be reused."
-msgstr ""
-
-msgid "Cannot update %s because requested generated files are not in its manifest: %s."
 msgstr ""
 
 msgid "Cannot update %s because its manifest contains invalid paths: %s."
@@ -896,4 +890,85 @@ msgid "Installed owners for re-export symbol '%s' are distinct objects with equi
 msgstr ""
 
 msgid "Installed owners for re-export symbol '%s' differ as distinct objects: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
+msgstr ""
+
+msgid "<bigbang artifact scan>"
+msgstr ""
+
+msgid "VULNERABLE"
+msgstr ""
+
+msgid "no deletion signatures found"
+msgstr ""
+
+msgid "Path"
+msgstr ""
+
+msgid "Type"
+msgstr ""
+
+msgid "Result"
+msgstr ""
+
+msgid "Signatures"
+msgstr ""
+
+msgid "<bigbang metapackage>"
+msgstr ""
+
+msgid "Package"
+msgstr ""
+
+msgid "Components"
+msgstr ""
+
+msgid "Mode: dry run (no files written)"
+msgstr ""
+
+msgid "Mode: updated from generation manifest"
+msgstr ""
+
+msgid "Recovered: interrupted update"
+msgstr ""
+
+msgid "Would add"
+msgstr ""
+
+msgid "Added"
+msgstr ""
+
+msgid "Would remove"
+msgstr ""
+
+msgid "Removed"
+msgstr ""
+
+msgid "Omitted"
+msgstr ""
+
+msgid "Re-exports"
+msgstr ""
+
+msgid "Re-exports excluded"
+msgstr ""
+
+msgid "Non-local dependencies"
+msgstr ""
+
+msgid "<bigbang local installation>"
+msgstr ""
+
+msgid "Installed"
+msgstr ""
+
+msgid "Unchanged"
+msgstr ""
+
+msgid "Failed"
+msgstr ""
+
+msgid "Skipped"
+msgstr ""
+
+msgid "R CMD INSTALL exited with status %d"
 msgstr ""

@@ -110,7 +110,7 @@
     if (length(detail) == 0L) detail <- utils::tail(output, 5L)
     detail <- paste(detail, collapse = " | ")
     if (!nzchar(detail)) {
-      detail <- sprintf("R CMD INSTALL exited with status %d", status)
+      detail <- .bb_trf("R CMD INSTALL exited with status %d", status)
     }
     stop(detail, call. = FALSE)
   }
