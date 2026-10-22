@@ -35,7 +35,7 @@ test_that("archive work is reused within one source call", {
     archive, ".tar.gz", NULL, cache = cache
   )
 
-  expect_identical(calls$listing, 1L)
+  expect_identical(calls$listing, 0L)
   expect_identical(calls$extract, 1L)
 })
 

@@ -103,18 +103,18 @@ test_that("case folding covers every table range and the U+0149-U+014F gap", {
     }
   }
 
-  expect_identical(bigbang:::.archive_case_key("Ŋ"), "ŋ")
-  expect_identical(bigbang:::.archive_case_key("Ō"), "ō")
-  expect_identical(bigbang:::.archive_case_key("Ŏ"), "ŏ")
-  expect_identical(bigbang:::.archive_case_key("ŉ"), "ŉ")
-  expect_false(identical(bigbang:::.archive_case_key("Ŋ"),
-                         bigbang:::.archive_case_key("Ō")))
+  expect_identical(bigbang:::.archive_case_key("\u014a"), "\u014b")
+  expect_identical(bigbang:::.archive_case_key("\u014c"), "\u014d")
+  expect_identical(bigbang:::.archive_case_key("\u014e"), "\u014f")
+  expect_identical(bigbang:::.archive_case_key("\u0149"), "\u0149")
+  expect_false(identical(bigbang:::.archive_case_key("\u014a"),
+                         bigbang:::.archive_case_key("\u014c")))
 })
 
 test_that("all newly reserved Windows device spellings are rejected", {
   limits <- bigbang:::.archive_limit_options()
-  devices <- c("CONIN$", "CONOUT$", "COM0", "LPT0", "COM¹", "COM²",
-               "COM³", "LPT¹", "LPT²", "LPT³")
+  devices <- c("CONIN$", "CONOUT$", "COM0", "LPT0", "COM\u00b9", "COM\u00b2",
+               "COM\u00b3", "LPT\u00b9", "LPT\u00b2", "LPT\u00b3")
   for (device in devices) {
     expect_error(
       bigbang:::.archive_validate_name_text(paste0("pkg/", device, ".dat"), limits),
@@ -287,6 +287,7 @@ test_that("failed and skipped diamonds classify every reachable node in both ins
 })
 
 test_that("blank repositories, including NA, stay offline", {
+  withr::local_language("C")
   root <- tempfile("round074-r32-repos-")
   dir.create(root)
   withr::defer(unlink(root, recursive = TRUE, force = TRUE))

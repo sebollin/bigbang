@@ -349,6 +349,17 @@ all, so it is a safe way to see what a call would do before it does it. During
 an update it also plans reconciliation of every sibling journal folder and
 reports each path and action without mutating those folders.
 
+The generated `<meta>_deps(plan = TRUE)` is the recipient-side preflight. It
+reads archive `DESCRIPTION` files and installed package metadata without loading
+components, contacting a repository, installing, or writing outside its own
+temporary directory, which it removes on exit. Its `components`
+table reports archive and installed versions, library, action, and reason; its
+`external` table reports missing or unsatisfied external constraints. The
+default `plan = FALSE` return remains the historical dependency vector. Use
+`governance = TRUE` to add English `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and
+the package-inclusion issue template; these files are excluded from the built
+source package and are tracked by `update = TRUE`.
+
 - `on_component_error = "skip"` generates from the components that are valid
   instead of aborting, and reports the ones it left out. The exclusion is
   transitive: a component that depends on an excluded one is excluded too, and

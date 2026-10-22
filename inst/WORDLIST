@@ -36,6 +36,7 @@ pkgbuild
 overcount
 PID
 pre
+preflight
 repos
 README
 revalidate

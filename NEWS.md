@@ -1,5 +1,30 @@
 # bigbang (development version)
 
+## New features
+
+- Generated `<meta>_deps(plan = TRUE)` provides a read-only recipient-side
+  installation plan with archive and installed versions, libraries, actions,
+  reasons, and missing or unsatisfied external dependencies. Its default
+  dependency-vector return remains unchanged.
+- `create_metapackage(governance = TRUE)` optionally generates English
+  contribution, Contributor Covenant v2.1 attribution, and package-inclusion
+  issue-template files; `governance = FALSE` remains the default.
+- Generated `<meta>_deps(only = ...)` now previews the same local dependency
+  closure as `<meta>_install(only = ...)`.
+
+## Bug fixes
+
+- Generated dependency plans now use the same default upgrade policy as their
+  generated installers, and report repository availability consistently.
+- Matching archive filenames no longer produce false identity warnings. Intentional
+  filename and version mismatches remain covered by warning expectations.
+- Installation excerpts preserve the error-anchor line when long output is
+  truncated; governance updates remove only empty directories they created.
+- Gzip inspection validates the streamed TAR CRC-32 and ISIZE trailer without
+  allocating memory from the attacker-controlled ISIZE field. External
+  dependency restrictions are evaluated per component, and forced
+  reinstalls now report `forced_reinstall` exactly.
+
 ## Dependencies
 
 - bigbang now requires R >= 4.1.0. Its own code needs nothing newer than R

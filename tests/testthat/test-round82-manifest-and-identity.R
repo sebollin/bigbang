@@ -113,12 +113,27 @@ test_that("bigbang installation messages name declared identity and archive stem
   file.rename(archive, renamed)
 
   withr::local_libpaths(c(library_dir, .libPaths()))
-  messages <- suppressWarnings(capture.output(
-    install_local_pkg(
-      renamed, verbose = TRUE, upgrade = "always"
+  messages <- character()
+  first_warning <- character()
+  expect_warning(
+    withCallingHandlers(
+      install_local_pkg(renamed, verbose = TRUE, upgrade = "always"),
+      warning = function(condition) {
+        first_warning <<- c(first_warning, conditionMessage(condition))
+        if (length(first_warning) == 1L) invokeRestart("muffleWarning")
+      },
+      message = function(condition) {
+        messages <<- c(messages, conditionMessage(condition))
+        invokeRestart("muffleMessage")
+      }
     ),
-    type = "message"
-  ))
+    regexp = "declares version 1\\.0\\.0, but its filename suggests version 9\\.9"
+  )
+  expect_match(
+    first_warning[[1L]],
+    "declares package bbb, but its filename suggests wrong",
+    fixed = TRUE
+  )
   expect_true(any(grepl(
     "Installed local package: bbb from wrong_9.9", messages, fixed = TRUE
   )))

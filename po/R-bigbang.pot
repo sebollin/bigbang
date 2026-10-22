@@ -897,3 +897,21 @@ msgstr ""
 
 msgid "R CMD INSTALL exited with status %d"
 msgstr ""
+
+msgid "'governance' must be TRUE or FALSE"
+msgstr ""
+
+msgid "'plan' must be TRUE or FALSE"
+msgstr ""
+
+msgid "Bigbang dependency plan"
+msgstr ""
+
+msgid "Upgrade: %s; Force: %s"
+msgstr ""
+
+msgid "External dependency policy: %s"
+msgstr ""
+
+msgid "External dependencies"
+msgstr ""

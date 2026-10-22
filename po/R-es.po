@@ -653,10 +653,10 @@ msgid "Skipped because local dependency %s was skipped: %s"
 msgstr "Omitido porque la dependencia local %s fue omitida: %s"
 
 msgid "Skipped because local dependency %s was not installed: %s"
-msgstr "Omitido porque la dependencia local %s no se instaló: %s"
+msgstr "Omitido porque la dependencia local %s no se instal\\u00f3: %s"
 
 msgid "The local dependency did not reach a final installation state."
-msgstr "La dependencia local no alcanzó un estado final de instalación."
+msgstr "La dependencia local no alcanz\\u00f3 un estado final de instalaci\\u00f3n."
 
 msgid "Some components were skipped because local dependencies were skipped: %s."
 msgstr "Algunos componentes se omitieron porque se omitieron dependencias locales: %s."
@@ -897,3 +897,21 @@ msgstr "Instalado correctamente"
 
 msgid "R CMD INSTALL exited with status %d"
 msgstr "R CMD INSTALL terminó con el estado %d"
+
+msgid "'governance' must be TRUE or FALSE"
+msgstr "'governance' debe ser TRUE o FALSE"
+
+msgid "'plan' must be TRUE or FALSE"
+msgstr "'plan' debe ser TRUE o FALSE"
+
+msgid "Bigbang dependency plan"
+msgstr "Plan de dependencias de bigbang"
+
+msgid "Upgrade: %s; Force: %s"
+msgstr "Actualización: %s; Forzar: %s"
+
+msgid "External dependency policy: %s"
+msgstr "Política de dependencias externas: %s"
+
+msgid "External dependencies"
+msgstr "Dependencias externas"

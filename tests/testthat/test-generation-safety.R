@@ -799,22 +799,30 @@ test_that("already installed messages report the installed version", {
   runtime <- new.env(parent = baseenv())
   sys.source(file.path(result$path, "R", "utils.R"), runtime)
   sys.source(file.path(result$path, "R", "install_packages.R"), runtime)
-  output <- capture.output(
+  output <- character()
+  withCallingHandlers(
     unchanged <- runtime$install_local_archive(
       "versioned_1.0.0", archive_dir, ".tar.gz", upgrade = "newer"
     ),
-    type = "message"
+    message = function(condition) {
+      output <<- c(output, conditionMessage(condition))
+      invokeRestart("muffleMessage")
+    }
   )
   expect_true(isTRUE(unchanged$unchanged))
   expect_match(
     paste(output, collapse = "\n"),
     "installed version 9.9.9, newer than archive version 1.0.0"
   )
-  direct_output <- capture.output(
+  direct_output <- character()
+  withCallingHandlers(
     install_local_pkg(
       "versioned_1.0.0", archive_dir, verbose = TRUE, upgrade = "newer"
     ),
-    type = "message"
+    message = function(condition) {
+      direct_output <<- c(direct_output, conditionMessage(condition))
+      invokeRestart("muffleMessage")
+    }
   )
   expect_match(
     paste(direct_output, collapse = "\n"),

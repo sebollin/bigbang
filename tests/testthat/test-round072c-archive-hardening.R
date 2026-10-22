@@ -290,11 +290,11 @@ test_that("portable names accept UTF-8 and reject controls, case collisions, and
   t072c_write_tar(tar_trailing, list(list(name = "pkg/bad. ")))
   expect_false(t072c_verdict(reader, tar_trailing, ".tar")$ok)
   utf8 <- file.path(root, "utf8.tar")
-  t072c_write_tar(utf8, list(list(name = "pkg/población.csv")))
+  t072c_write_tar(utf8, list(list(name = "pkg/pobl\u00f3n.csv")))
   expect_true(t072c_verdict(reader, utf8, ".tar")$ok)
   utf8_zip <- file.path(root, "utf8.zip")
   t072c_zip_write(utf8_zip, list(list(
-    name = "pkg/naïve.csv", data = t072c_raw("ok")
+    name = "pkg/na\u00efve.csv", data = t072c_raw("ok")
   )))
   expect_true(t072c_verdict(reader, utf8_zip, ".zip")$ok)
   zip_bad_names <- file.path(root, "zip-bad-names.zip")

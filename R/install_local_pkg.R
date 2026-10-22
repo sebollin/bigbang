@@ -35,6 +35,36 @@
   upgrade
 }
 
+.component_upgrade_action <- function(installed_version, archive_version,
+                                      upgrade) {
+  if (is.null(installed_version)) {
+    return(list(action = "install", reason_code = "not_installed"))
+  }
+  if (identical(upgrade, "never")) {
+    return(list(action = "keep", reason_code = "upgrade_never"))
+  }
+  if (identical(upgrade, "newer") && tryCatch(
+    installed_version >= base::package_version(archive_version),
+    error = function(error) FALSE
+  )) {
+    return(list(action = "keep", reason_code = "installed_newer_or_equal"))
+  }
+  list(
+    action = "install",
+    reason_code = if (identical(upgrade, "always")) {
+      "forced_reinstall"
+    } else {
+      "archive_newer"
+    }
+  )
+}
+
+.repositories_configured <- function(repos) {
+  !is.null(repos) && length(repos) > 0L && !all(
+    is.na(repos) | !nzchar(trimws(repos)) | trimws(repos) == "@CRAN@"
+  )
+}
+
 # Explain, in the result itself, why a component was left alone. A bare
 # "Already installed" is false whenever the installed package merely shares the
 # component's name, and the result is the only thing a calling script can read.
@@ -84,10 +114,31 @@
   force(code)
 }
 
+.installed_package_info <- function(package, libraries) {
+  path <- tryCatch(
+    find.package(package, lib.loc = libraries, quiet = TRUE),
+    error = function(error) character()
+  )
+  if (length(path) == 0L || !dir.exists(path[[1L]])) {
+    return(list(version = NULL, path = NULL, library = NULL))
+  }
+  path <- normalizePath(path[[1L]], winslash = "/", mustWork = TRUE)
+  version <- tryCatch(
+    utils::packageVersion(package, lib.loc = dirname(path)),
+    error = function(error) NULL
+  )
+  list(
+    version = version,
+    path = path,
+    library = dirname(path)
+  )
+}
+
 .read_install_log <- function(log_file) {
   size <- file.info(log_file)$size
   if (is.na(size) || size <= 0) return(character())
   bytes <- readBin(log_file, "raw", n = as.integer(size))
+  bytes <- bytes[bytes != as.raw(0L)]
   text <- tryCatch(
     iconv(rawToChar(bytes), from = "UTF-8", to = "UTF-8", sub = "byte"),
     error = function(error) ""
@@ -106,23 +157,49 @@
   )
   output[is.na(output)] <- "<invalid installer output>"
   real_markers <- grep(
-    "(^|[[:space:]])(ERROR:|Error:|Error in|Execution halted$)",
-    output, perl = TRUE
+    "(^|[[:space:]])(ERROR:|Error:|Error in|fatal error:|error:|Execution halted$)",
+    output, ignore.case = TRUE, perl = TRUE
   )
   if (length(real_markers) > 0L) {
     anchor <- real_markers[[length(real_markers)]]
-    start <- max(1L, anchor - max_lines + 1L)
-    end <- anchor
+    end <- min(length(output), anchor + 3L)
+    start <- max(1L, end - max_lines + 1L)
   } else {
     start <- max(1L, length(output) - max_lines + 1L)
     end <- min(length(output), start + max_lines - 1L)
   }
   excerpt <- output[start:end]
-  text <- paste(excerpt, collapse = "\n")
-  if (nchar(text, type = "chars") > max_chars) {
-    text <- paste0(substr(text, 1L, max_chars - 3L), "...")
+  anchor_line <- if (length(real_markers) > 0L) anchor - start + 1L else NA_integer_
+  line_count <- length(excerpt)
+  line_limit <- max(
+    1L,
+    floor((max_chars - max(0L, line_count - 1L)) / line_count)
+  )
+  truncate_line <- function(line, limit, anchor = FALSE) {
+    length <- nchar(line, type = "chars")
+    if (length <= limit) return(line)
+    if (limit <= 3L || !isTRUE(anchor)) {
+      return(substr(line, 1L, limit))
+    }
+    marker <- regexpr(
+      "(ERROR:|Error:|Error in|fatal error:|error:|Execution halted$)",
+      line, ignore.case = TRUE, perl = TRUE
+    )
+    marker_start <- marker[[1L]]
+    marker_length <- attr(marker, "match.length")[[1L]]
+    if (marker_start < 1L || marker_length < 1L) {
+      return(substr(line, 1L, limit))
+    }
+    if (marker_start + marker_length - 1L <= limit - 3L) {
+      return(paste0(substr(line, 1L, limit - 3L), "..."))
+    }
+    paste0("...", substr(line, marker_start, marker_start + limit - 4L))
   }
-  text
+  excerpt <- Map(
+    function(line, index) truncate_line(line, line_limit, index == anchor_line),
+    excerpt, seq_along(excerpt)
+  )
+  paste(unlist(excerpt, use.names = FALSE), collapse = "\n")
 }
 
 .collect_install_components <- function(component, inventory) {
@@ -172,14 +249,9 @@
 }
 
 .external_dependency_status <- function(dependency, constraints, libraries) {
-  available <- tryCatch(
-    requireNamespace(dependency, quietly = TRUE, lib.loc = libraries),
-    error = function(e) FALSE
-  )
-  installed <- if (isTRUE(available)) tryCatch(
-    utils::packageVersion(dependency, lib.loc = libraries),
-    error = function(e) NULL
-  ) else NULL
+  installed_info <- .installed_package_info(dependency, libraries)
+  installed <- installed_info$version
+  available <- !is.null(installed)
   requirement_text <- paste(
     .dependency_constraint_text(constraints), collapse = ", "
   )
@@ -211,7 +283,8 @@
   }
   list(
     available = available, installed = installed, constraints = constraints,
-    satisfied = satisfied, detail = detail
+    satisfied = satisfied, detail = detail,
+    library = installed_info$library, path = installed_info$path
   )
 }
 
@@ -229,9 +302,7 @@
   unsatisfied <- names(status)[!vapply(status, `[[`, logical(1L), "satisfied")]
   no_repository <- FALSE
   if (length(unsatisfied) > 0L && identical(cran_deps, "install")) {
-    invalid_repos <- is.null(repos) || length(repos) == 0L ||
-      all(is.na(repos) | !nzchar(trimws(repos)) | trimws(repos) == "@CRAN@")
-    if (invalid_repos) {
+    if (!.repositories_configured(repos)) {
       no_repository <- TRUE
     } else {
       for (dependency in unsatisfied) {
@@ -429,10 +500,9 @@ install_local_pkg <- function(
   }
 
   candidate_name <- sub("_.*", "", candidate$stem)
-  installed_candidate <- tryCatch(
-    utils::packageVersion(candidate_name, lib.loc = component_libraries),
-    error = function(e) NULL
-  )
+  installed_candidate <- .installed_package_info(
+    candidate_name, component_libraries
+  )$version
   unchanged_result <- function(reason) {
     if (isTRUE(verbose)) message(.bb_trf(
       "Package %s is already installed; %s", candidate_name, reason
@@ -471,9 +541,11 @@ install_local_pkg <- function(
       return(unchanged_result(reason))
     }
     if (identical(candidate_metadata$package, candidate_name) &&
-      tryCatch(
-        installed_candidate >= base::package_version(candidate_metadata$version),
-        error = function(e) FALSE
+      identical(
+        .component_upgrade_action(
+          installed_candidate, candidate_metadata$version, upgrade
+        )$action,
+        "keep"
       )) {
       reason <- .unchanged_reason(
         installed_candidate, candidate_metadata$version, upgrade,
@@ -495,13 +567,6 @@ install_local_pkg <- function(
   component <- components[[1L]]
   .validate_archive_metadata(component)
   install_components <- .collect_install_components(component, inventory)
-  external_requirements <- .external_requirements(
-    install_components, inventory$packages
-  )
-  external_preparation <- .prepare_external_dependencies(
-    external_requirements, dependency_libraries, lib, cran_deps, repos
-  )
-  external_status <- external_preparation$status
   state <- new.env(parent = emptyenv())
   state$installed <- list()
   state$unchanged <- list()
@@ -555,14 +620,12 @@ install_local_pkg <- function(
     }
     # Metadata was read before installation, so the DESCRIPTION version remains
     # authoritative even when the filename has no version or disagrees with it.
-    installed_version <- tryCatch(
-      utils::packageVersion(base_name, lib.loc = component_libraries),
-      error = function(e) NULL
-    )
-    keep_installed <- !is.null(installed_version) && (
-      identical(upgrade, "never") ||
-        (identical(upgrade, "newer") &&
-           installed_version >= base::package_version(version_text))
+    installed_version <- .installed_package_info(
+      base_name, component_libraries
+    )$version
+    keep_installed <- identical(
+      .component_upgrade_action(installed_version, version_text, upgrade)$action,
+      "keep"
     )
     if (keep_installed) {
       newer <- installed_version > base::package_version(version_text)
@@ -697,6 +760,13 @@ install_local_pkg <- function(
       return(FALSE)
     }
 
+    external_requirements <- .external_requirements(
+      list(item), inventory$packages
+    )
+    external_preparation <- .prepare_external_dependencies(
+      external_requirements, dependency_libraries, lib, cran_deps, repos
+    )
+    external_status <- external_preparation$status
     external <- setdiff(dependencies, inventory$packages)
     unsatisfied_external <- external[!vapply(
       external,

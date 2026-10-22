@@ -320,7 +320,7 @@ test_that("reexport validates explicit namespace exports and helper plans", {
     .package = "bigbang"
   )
   expect_identical(bigbang:::.bb_generator_version(), "unknown")
-  expect_length(bigbang:::.planned_documentation_files("helperverse"), 20L)
+  expect_length(bigbang:::.planned_documentation_files("helperverse"), 21L)
   expect_error(
     bigbang::create_metapackage(
       "badreexport", system.file("extdata", "toycomponent_0.1.0.tar.gz",

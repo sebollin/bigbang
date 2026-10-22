@@ -33,7 +33,8 @@ create_metapackage(
   install_upgrade = c("newer", "always", "never"),
   reexport_prefer = character(),
   reexport_exclude = character(),
-  recover = FALSE
+  recover = FALSE,
+  governance = FALSE
 )
 }
 \arguments{
@@ -207,6 +208,9 @@ content is copied byte for byte to a new preserved directory beside the
 project before recovery; that directory is reported and is never removed
 automatically. A proven-live owner still blocks mutation; an uncertain
 owner can be reclaimed only with \code{recover = TRUE}. Defaults to \code{FALSE}.}
+
+\item{governance}{Logical. If \code{TRUE}, generate English contribution,
+conduct, and package-inclusion-request templates. Defaults to \code{FALSE}.}
 }
 \value{
 Invisibly, a \code{bigbang_result} containing the generated path,

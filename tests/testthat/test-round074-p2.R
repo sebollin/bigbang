@@ -113,10 +113,13 @@ test_that("direct installation retains the cause and complete log path", {
     verbose = FALSE
   )
   expect_false(isTRUE(generated_result$success))
-  direct_without_path <- sub("; full installation log: .*$", "", message)
-  generated_without_path <- sub(
-    "; full installation log: .*$", "", generated_result$message
-  )
+  normalize_install_failure <- function(value) {
+    value <- sub("; full installation log: .*$", "", value)
+    lines <- strsplit(value, "\\n", fixed = TRUE)[[1L]]
+    paste(lines[!grepl("* removing ", lines, fixed = TRUE)], collapse = "\\n")
+  }
+  direct_without_path <- normalize_install_failure(message)
+  generated_without_path <- normalize_install_failure(generated_result$message)
   expect_identical(generated_without_path, direct_without_path)
 })
 

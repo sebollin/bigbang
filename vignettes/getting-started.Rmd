@@ -122,6 +122,18 @@ falls back to a dependency-free ASCII banner.
 `reexport = TRUE`, inspect its installation check with
 `<meta>_reexport_verification(<meta>_conflicts())`.
 
+Before installing on a recipient machine, inspect the read-only plan:
+
+```{r, eval = FALSE}
+toyverse_deps(plan = TRUE, upgrade = "newer", cran_deps = "skip")
+```
+
+This reads the archive `DESCRIPTION` files and installed package metadata only.
+It reports the archive version, installed version and library, planned action,
+and missing or unsatisfied external constraints. It performs no loading,
+installation, network access, or disk write. The installer and this plan share
+the same version and upgrade policy evaluation.
+
 ## Interrupted updates and recovery
 
 An interrupted `update = TRUE` leaves a durable journal beside the project.

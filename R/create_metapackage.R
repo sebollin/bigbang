@@ -50,7 +50,8 @@
     "build_dependency_graph", "classify_package_archive", "detect_cycles",
     "format_cli_startup", "generate_ascii_banner", "install_local_archive",
     "install_packages_in_order", "is_path_inside", "read_archive_metadata",
-    "safe_unlink", "style_startup_text", "topological_order"
+    "safe_unlink", "style_startup_text", "topological_order",
+    "print.bigbang_dependency_plan"
   )
   public <- paste0(name, c(
     "_attach_all", "_attach", "_conflicts", "_deps", "_detach", "_install",
@@ -69,7 +70,8 @@
                                       license = "MIT + file LICENSE",
                                       document = FALSE,
                                       reexport = FALSE,
-                                      reexport_symbols = NULL) {
+                                      reexport_symbols = NULL,
+                                      governance = FALSE) {
   files <- c(
     "DESCRIPTION", "NAMESPACE", "README.md", ".Rbuildignore", ".gitignore",
     ".BBSoptions", paste0(name, ".Rproj"),
@@ -84,6 +86,13 @@
   )
   if (isTRUE(reexport)) {
     files <- c(files, file.path("R", "reexports.R"))
+  }
+  if (isTRUE(governance)) {
+    files <- c(
+      files,
+      "CONTRIBUTING.md", "CODE_OF_CONDUCT.md",
+      file.path(".github", "ISSUE_TEMPLATE", "package-inclusion-request.md")
+    )
   }
   if (grepl("file[[:space:]]+LICENSE", license, ignore.case = TRUE)) {
     files <- c(files, "LICENSE")
@@ -118,7 +127,8 @@
   unname(as.character(tools::md5sum(path)))
 }
 
-.manifest_records <- function(project_dir, files) {
+.manifest_records <- function(project_dir, files,
+                              governance_directories = character()) {
   files <- unique(setdiff(files, .generation_manifest_name))
   paths <- file.path(project_dir, files)
   missing <- files[!file.exists(paths) | dir.exists(paths)]
@@ -132,7 +142,10 @@
   root <- normalizePath(project_dir, winslash = "/", mustWork = TRUE)
   rel <- substring(paths, nchar(root) + 2L)
   hashes <- vapply(paths, .file_digest, character(1L))
-  list(schema = 2L, files = rel, hashes = stats::setNames(hashes, rel))
+  list(
+    schema = 2L, files = rel, hashes = stats::setNames(hashes, rel),
+    governance_directories = unique(governance_directories)
+  )
 }
 
 .legacy_owned_generation_files <- function(project_dir, files,
@@ -144,7 +157,7 @@
     .planned_generation_files(
       name, list(), workflow = stats::setNames(name, "stage"),
       include_archives = FALSE, license = "MIT + file LICENSE",
-      document = TRUE
+      document = TRUE, governance = TRUE
     ),
     .generation_manifest_name
   )
@@ -291,17 +304,47 @@
   invisible(NULL)
 }
 
+.prune_governance_dirs <- function(project_dir, directories) {
+  directories <- unique(directories)
+  if (length(directories) == 0L) return(invisible(NULL))
+  .validate_project_write_paths(project_dir, directories)
+  directories <- directories[order(nchar(directories), decreasing = TRUE)]
+  for (relative in directories) {
+    path <- file.path(project_dir, relative)
+    if (!dir.exists(path)) next
+    if (.path_is_symlink(path)) {
+      .bigbang_abort(
+        "bigbang_error_modified_generated_file",
+        .bb_trf(
+          "Cannot update %s because generated files were modified or removed: %s.",
+          project_dir, relative
+        ),
+        path = project_dir, files = relative
+      )
+    }
+    entries <- list.files(
+      path, all.files = TRUE, no.. = TRUE, include.dirs = TRUE
+    )
+    if (length(entries) > 0L) next
+    .record_update_delete(path)
+    if (unlink(path, recursive = TRUE, force = TRUE) != 0L) {
+      stop(.bb_trf("Could not remove completely: %s", path), call. = FALSE)
+    }
+  }
+  invisible(NULL)
+}
+
 .generation_metadata_findings <- function(components, tolerate = character()) {
   rows <- lapply(components, function(component) {
     stem <- component$stem
-    expected_name <- sub("_.*", "", stem)
+    expected_name <- unname(sub("_.*", "", stem))
     has_version <- grepl("_", stem, fixed = TRUE)
     expected_version <- if (has_version) {
-      sub("^[^_]+_", "", stem)
+      unname(sub("^[^_]+_", "", stem))
     } else {
       NA_character_
     }
-    mismatch <- !identical(component$package, expected_name) ||
+    mismatch <- !identical(unname(component$package), expected_name) ||
       (has_version && !.version_matches(component$version, expected_version))
     if (!mismatch) return(NULL)
     data.frame(
@@ -605,6 +648,8 @@
 #'   project before recovery; that directory is reported and is never removed
 #'   automatically. A proven-live owner still blocks mutation; an uncertain
 #'   owner can be reclaimed only with `recover = TRUE`. Defaults to `FALSE`.
+#' @param governance Logical. If `TRUE`, generate English contribution,
+#'   conduct, and package-inclusion-request templates. Defaults to `FALSE`.
 #' @param debug Logical. If `TRUE`, emits detailed debugging messages. Defaults
 #'   to `FALSE`.
 #'
@@ -909,7 +954,8 @@ create_metapackage <- function(
   install_upgrade = c("newer", "always", "never"),
   reexport_prefer = character(),
   reexport_exclude = character(),
-  recover = FALSE
+  recover = FALSE,
+  governance = FALSE
 ) {
   archive_cache <- .archive_cache_new()
   on.exit(.archive_cache_close(archive_cache), add = TRUE)
@@ -954,6 +1000,9 @@ create_metapackage <- function(
   }
   if (!is.logical(recover) || length(recover) != 1L || is.na(recover)) {
     stop(.bb_tr("'recover' must be TRUE or FALSE"), call. = FALSE)
+  }
+  if (!is.logical(governance) || length(governance) != 1L || is.na(governance)) {
+    stop(.bb_tr("'governance' must be TRUE or FALSE"), call. = FALSE)
   }
   if (isTRUE(recover) && !isTRUE(update)) {
     stop(.bb_tr("'recover' requires update = TRUE"), call. = FALSE)
@@ -1142,12 +1191,14 @@ create_metapackage <- function(
   added_files <- character()
   stale_files <- character()
   preserved_files <- character()
+  governance_directories <- character()
   requested_files <- setdiff(
     .planned_generation_files(
       name, resolved_components$components, workflow,
       include_archives, license = license, document = document,
       reexport = isTRUE(reexport),
-      reexport_symbols = reexport_plan$table$symbol
+      reexport_symbols = reexport_plan$table$symbol,
+      governance = isTRUE(governance)
     ),
     .generation_manifest_name
   )
@@ -1194,6 +1245,12 @@ create_metapackage <- function(
     stale_files <- setdiff(update_manifest$files, requested_files)
     preserved_files <- .preserve_omitted_archives(stale_files, omitted)
     stale_files <- setdiff(stale_files, preserved_files)
+    if (is.character(update_manifest$governance_directories)) {
+      governance_directories <- update_manifest$governance_directories
+    }
+    if (!isTRUE(governance)) {
+      governance_directories <- unique(governance_directories)
+    }
   }
   generation_findings <- list(
     metadata = .generation_metadata_findings(components, tolerate),
@@ -1213,7 +1270,8 @@ create_metapackage <- function(
       files = .planned_generation_files(
         name, components, workflow, include_archives,
         license = license, document = document, reexport = isTRUE(reexport),
-        reexport_symbols = reexport_plan$table$symbol
+        reexport_symbols = reexport_plan$table$symbol,
+        governance = isTRUE(governance)
       ),
       added_files = added_files,
       removed_files = stale_files,
@@ -1353,6 +1411,12 @@ create_metapackage <- function(
       ))
     }
     .remove_stale_generation_files(project_dir, stale_files)
+    if (isTRUE(update) && !isTRUE(governance)) {
+      .prune_governance_dirs(
+        project_dir, governance_directories
+      )
+      governance_directories <- character()
+    }
   }
 
   log_debug(glue::glue("New project path: {project_dir}"))
@@ -1475,9 +1539,15 @@ create_metapackage <- function(
     write_workflow_vignette(name, workflow, project_dir)
   }
   write_metapackage_readme(
-    name, project_dir, include_archives, reexport = isTRUE(reexport)
+    name, project_dir, include_archives, reexport = isTRUE(reexport),
+    governance = isTRUE(governance)
   )
   write_consistency_test(name, project_dir)
+  if (isTRUE(governance)) {
+    governance_directories <- unique(c(
+      governance_directories, write_governance_files(project_dir)
+    ))
+  }
   if (debug) {
     log_debug("Basic vignette created for R CMD check")
   }
@@ -1569,6 +1639,10 @@ create_metapackage <- function(
 
     # CI, version-control, and pkgdown files
     "^\\.github$",
+    if (isTRUE(governance)) c(
+      "^CONTRIBUTING\\.md$",
+      "^CODE_OF_CONDUCT\\.md$"
+    ) else character(),
     "^_pkgdown\\.yml$",
     "^pkgdown$",
     "^\\.travis\\.yml$",
@@ -1756,13 +1830,21 @@ StripTrailingWhitespace: Yes"
       .planned_generation_files(
         name, components, workflow, include_archives,
         license = license, document = doc_ok, reexport = isTRUE(reexport),
-        reexport_symbols = reexport_plan$table$symbol
+        reexport_symbols = reexport_plan$table$symbol,
+        governance = isTRUE(governance)
       ),
       .generation_manifest_name
     ),
     union(preserved_files, retained_documentation)
   )
-  manifest <- .manifest_records(project_dir, manifest_files)
+  manifest <- .manifest_records(
+    project_dir, manifest_files,
+    governance_directories = if (isTRUE(governance)) {
+      governance_directories
+    } else {
+      character()
+    }
+  )
   .atomic_save_rds(manifest, file.path(project_dir, .generation_manifest_name))
 
   if (!is.null(update_journal)) {

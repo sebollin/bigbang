@@ -194,12 +194,16 @@ test_that("unreadable unrelated archives are excluded with diagnostics", {
 })
 
 test_that("vector resolution failures retain the requested names", {
-  messages <- capture.output(
-    result <- install_local_pkg(
+  messages <- character()
+  result <- withCallingHandlers(
+    install_local_pkg(
       c("missing-round79-a", "missing-round79-b"), pkg_dir = tempdir(),
       verbose = TRUE
     ),
-    type = "message"
+    message = function(condition) {
+      messages <<- c(messages, conditionMessage(condition))
+      invokeRestart("muffleMessage")
+    }
   )
   expect_setequal(
     names(result$failed), c("missing-round79-a", "missing-round79-b")
@@ -235,26 +239,50 @@ test_that("generated installation reports the declared package identity", {
   sys.source(file.path(result$path, "R", "utils.R"), environment)
   sys.source(file.path(result$path, "R", "install_packages.R"), environment)
   withr::local_libpaths(c(library_dir, .libPaths()))
-  messages <- suppressWarnings(capture.output(
-    generated <- environment$install_packages_in_order(
-      result$archives, archive_dir, NULL, verbose = TRUE, upgrade = "always",
-      lib = library_dir
+  messages <- character()
+  generated <- expect_warning(
+    withCallingHandlers(
+      environment$install_packages_in_order(
+        result$archives, archive_dir, NULL, verbose = TRUE, upgrade = "always",
+        lib = library_dir
+      ),
+      message = function(condition) {
+        messages <<- c(messages, conditionMessage(condition))
+        invokeRestart("muffleMessage")
+      }
     ),
-    type = "message"
-  ))
+    regexp = "declares package declaredround81, but its filename suggests aliasround81"
+  )
   expect_length(generated$failed, 0L)
   expect_true(any(grepl(
     "Installed package declaredround81 from aliasround81_9.9 successfully.",
     messages, fixed = TRUE
   )))
   expect_false(any(grepl("Installed package aliasround81", messages, fixed = TRUE)))
-  stem_messages <- suppressWarnings(capture.output(
-    environment$install_local_archive(
-      "aliasround81_9.9", archive_dir, NULL, upgrade = "always",
-      lib = library_dir
+  stem_messages <- character()
+  first_warning <- character()
+  expect_warning(
+    withCallingHandlers(
+      environment$install_local_archive(
+        "aliasround81_9.9", archive_dir, NULL, upgrade = "always",
+        lib = library_dir
+      ),
+      warning = function(condition) {
+        first_warning <<- c(first_warning, conditionMessage(condition))
+        if (length(first_warning) == 1L) invokeRestart("muffleWarning")
+      },
+      message = function(condition) {
+        stem_messages <<- c(stem_messages, conditionMessage(condition))
+        invokeRestart("muffleMessage")
+      }
     ),
-    type = "message"
-  ))
+    regexp = "declares version 1\\.0\\.0, but its filename suggests version 9\\.9"
+  )
+  expect_match(
+    first_warning[[1L]],
+    "declares package declaredround81, but its filename suggests aliasround81",
+    fixed = TRUE
+  )
   expect_true(any(grepl(
     "Installed package declaredround81 from aliasround81_9.9 successfully.",
     stem_messages, fixed = TRUE

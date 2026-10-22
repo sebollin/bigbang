@@ -350,6 +350,18 @@ segura de ver qué haría una llamada antes de que la haga. Durante un update
 también planifica la reconciliación de cada diario hermano e informa su ruta y
 acción sin modificar esas carpetas.
 
+El `<meta>_deps(plan = TRUE)` generado es el diagnóstico previo del receptor.
+Lee los `DESCRIPTION` de los archivos y los metadatos de los paquetes
+instalados sin cargar componentes, contactar un repositorio, instalar ni
+escribir fuera de un temporal propio, que borra al terminar. Su tabla
+`components` informa versiones del archivo e instalada,
+biblioteca, acción y motivo; su tabla `external` informa restricciones externas
+faltantes o no satisfechas. El valor por omisión `plan = FALSE` conserva el
+vector histórico de dependencias. Use `governance = TRUE` para agregar los
+archivos en inglés `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` y la plantilla de
+issues para pedir la inclusión de un paquete; quedan fuera del paquete fuente
+construido y `update = TRUE` los sigue en el manifiesto.
+
 - `on_component_error = "skip"` genera con los componentes válidos en lugar de
   abortar, e informa los que dejó afuera. El descarte es transitivo: un
   componente que depende de uno excluido también queda excluido, y se informa la

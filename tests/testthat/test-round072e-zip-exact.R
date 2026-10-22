@@ -318,10 +318,10 @@ test_that("case folding is locale-independent and NFD names remain valid", {
   on.exit(Sys.setlocale("LC_CTYPE", old), add = TRUE)
   for (locale in c("C", "C.UTF-8")) {
     expect_false(is.na(Sys.setlocale("LC_CTYPE", locale)), info = locale)
-    expect_identical(key("pkg/Ä.txt"), key("pkg/ä.txt"), info = locale)
-    expect_identical(key("pkg/Ā.txt"), key("pkg/ā.txt"), info = locale)
-    expect_identical(key("pkg/Α.txt"), key("pkg/α.txt"), info = locale)
-    expect_identical(key("pkg/Ж.txt"), key("pkg/ж.txt"), info = locale)
+    expect_identical(key("pkg/\u00c4.txt"), key("pkg/\u00e4.txt"), info = locale)
+    expect_identical(key("pkg/\u0100.txt"), key("pkg/\u0101.txt"), info = locale)
+    expect_identical(key("pkg/\u0391.txt"), key("pkg/\u03b1.txt"), info = locale)
+    expect_identical(key("pkg/\u0416.txt"), key("pkg/\u0436.txt"), info = locale)
   }
   root <- tempfile("round072e-nfd-")
   dir.create(root)

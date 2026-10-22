@@ -394,6 +394,24 @@
   result
 }
 
+.archive_gzip_member_trailer <- function(archive) {
+  size <- file.info(archive)$size
+  if (is.na(size) || size < 18 || size > .Machine$integer.max) {
+    stop(.archive_parse_error("invalid gzip archive size"))
+  }
+  connection <- file(archive, open = "rb")
+  on.exit(try(close(connection), silent = TRUE), add = TRUE)
+  seek(connection, where = size - 8, origin = "start")
+  trailer <- readBin(connection, "raw", n = 8L)
+  if (length(trailer) != 8L) {
+    stop(.archive_parse_error("truncated gzip archive trailer"))
+  }
+  list(
+    crc = .archive_u32(trailer[1L:4L]),
+    size = .archive_u32(trailer[5L:8L])
+  )
+}
+
 .archive_tar_connection <- function(archive, ext) {
   ext <- tolower(ext)
   stream <- if (ext %in% c(".tar.bz2", ".tbz", ".tbz2")) {
@@ -405,19 +423,14 @@
     if (is.na(archive_size) || archive_size < 18) {
       stop(.archive_parse_error("invalid gzip archive size"))
     }
-    trailer_connection <- file(archive, open = "rb")
-    on.exit(try(close(trailer_connection), silent = TRUE), add = TRUE)
-    seek(trailer_connection, where = archive_size - 8, origin = "start")
-    trailer <- readBin(trailer_connection, "raw", n = 8L)
-    if (length(trailer) != 8L) {
-      stop(.archive_parse_error("truncated gzip trailer"))
-    }
     raw_input <- file(archive, open = "rb")
     gzip <- new.env(parent = emptyenv())
-    gzip$crc <- .archive_u32(trailer[1L:4L])
-    gzip$size <- .archive_u32(trailer[5L:8L])
-    gzip$sink <- .archive_crc32_sink()
+    # The trailer is checked after the streaming walk. The CRC sink receives
+    # each decompressed block, so validation never sizes a buffer from ISIZE.
+    gzip$archive <- normalizePath(archive, winslash = "/", mustWork = TRUE)
     gzip$bytes <- 0
+    gzip$checksum <- .archive_crc32_sink()
+    gzip$checksum_finished <- FALSE
     gzip$closed <- FALSE
     result <- list(stream = gzcon(raw_input), raw_input = raw_input, gzip = gzip)
     class(result) <- c("bigbang_tar_stream", "list")
@@ -434,9 +447,17 @@
   if (!inherits(connection, "bigbang_tar_stream")) {
     return(readBin(connection, "raw", n = as.integer(size)))
   }
+  value <- NULL
+  messages <- character()
   result <- tryCatch(
     withCallingHandlers(
-      readBin(connection$stream, "raw", n = as.integer(size)),
+      {
+        messages <- utils::capture.output(
+          value <- readBin(connection$stream, "raw", n = as.integer(size)),
+          type = "message"
+        )
+        value
+      },
       warning = function(w) {
         stop(.archive_parse_error(
           paste0("could not decompress TAR archive: ", conditionMessage(w))
@@ -451,9 +472,16 @@
       paste0("could not decompress TAR archive: ", conditionMessage(result))
     ))
   }
+  if (length(messages) > 0L) {
+    stop(.archive_parse_error(
+      paste0("could not decompress TAR archive: ",
+             paste(messages, collapse = "; "))
+    ))
+  }
+  result <- value
   if (!is.null(connection$gzip) && length(result) > 0L) {
-    connection$gzip$sink$write(result)
     connection$gzip$bytes <- connection$gzip$bytes + length(result)
+    connection$gzip$checksum$write(result)
   }
   result
 }
@@ -468,8 +496,11 @@
       try(close(connection$stream), silent = TRUE)
       connection$gzip$closed <- TRUE
     }
-    try(connection$gzip$sink$finish(), silent = TRUE)
-    unlink(connection$gzip$sink$path, force = TRUE)
+    if (!isTRUE(connection$gzip$checksum_finished)) {
+      try(connection$gzip$checksum$finish(), silent = TRUE)
+      connection$gzip$checksum_finished <- TRUE
+    }
+    try(unlink(connection$gzip$checksum$path, force = TRUE), silent = TRUE)
   } else {
     try(close(connection$stream), silent = TRUE)
   }
@@ -482,7 +513,7 @@
   }
   close_result <- tryCatch(
     withCallingHandlers(
-      close(connection$stream),
+      utils::capture.output(close(connection$stream), type = "message"),
       warning = function(w) {
         stop(.archive_parse_error(
           paste0("could not decompress TAR archive: ", conditionMessage(w))
@@ -498,10 +529,16 @@
       paste0("could not decompress TAR archive: ", conditionMessage(close_result))
     ))
   }
-  generated <- connection$gzip$sink$finish()
-  if (generated$crc != connection$gzip$crc ||
-        generated$size != connection$gzip$size ||
-        connection$gzip$bytes != connection$gzip$size) {
+  if (length(close_result) > 0L) {
+    stop(.archive_parse_error(
+      paste0("could not decompress TAR archive: ",
+             paste(close_result, collapse = "; "))
+    ))
+  }
+  generated <- connection$gzip$checksum$finish()
+  connection$gzip$checksum_finished <- TRUE
+  trailer <- .archive_gzip_member_trailer(connection$gzip$archive)
+  if (trailer$crc != generated$crc || trailer$size != generated$size) {
     stop(.archive_parse_error(
       "gzip trailer CRC-32 or ISIZE does not match the decompressed TAR stream"
     ))
@@ -896,7 +933,6 @@
 
 .archive_tar_extract <- function(archive, ext, extract_dir) {
   .archive_tar_walk(archive, ext, extract_dir = extract_dir)
-  invisible(NULL)
 }
 
 
@@ -1693,7 +1729,7 @@
     if (!dir.create(staging_dir, mode = "0700")) {
       stop(.archive_parse_error("could not create private archive directory"))
     }
-    if (.archive_is_zip(ext)) {
+    inspection <- if (.archive_is_zip(ext)) {
       .archive_zip_walk(archive, extract_dir = staging_dir)
     } else if (.archive_is_tar(ext)) {
       .archive_tar_extract(archive, ext, staging_dir)
@@ -1716,10 +1752,10 @@
     }
     .archive_cleanup_tree(staging_dir)
     committed <- TRUE
-    NULL
+    list(inspection = inspection)
   }, error = identity)
   if (inherits(result, "error")) .archive_format_wrap(archive, result)
-  invisible(NULL)
+  invisible(result)
 }
 
 .archive_inspect <- function(archive, ext) {

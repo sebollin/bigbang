@@ -298,7 +298,13 @@
     "Installation failed; error details: %s; full installation log: %s" = "Fall\u00f3 la instalaci\u00f3n; detalles del error: %s; registro completo de instalaci\u00f3n: %s",
     "Installation could not be verified" = "No se pudo verificar la instalaci\u00f3n",
     "Installed successfully" = "Instalado correctamente",
-    "R CMD INSTALL exited with status %d" = "R CMD INSTALL termin\u00f3 con el estado %d"
+    "R CMD INSTALL exited with status %d" = "R CMD INSTALL termin\u00f3 con el estado %d",
+    "'governance' must be TRUE or FALSE" = "'governance' debe ser TRUE o FALSE",
+    "'plan' must be TRUE or FALSE" = "'plan' debe ser TRUE o FALSE",
+    "Bigbang dependency plan" = "Plan de dependencias de bigbang",
+    "Upgrade: %s; Force: %s" = "Actualizaci\u00f3n: %s; Forzar: %s",
+    "External dependency policy: %s" = "Pol\u00edtica de dependencias externas: %s",
+    "External dependencies" = "Dependencias externas"
   )
 }
 
@@ -442,7 +448,12 @@
       "No se pudo cargar desde la ruta de b\u00fasqueda de bibliotecas a los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s': %s. Revise la instalaci\u00f3n antes de verificar.",
       "Los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' se cargaron desde otra biblioteca: %s. Reinicie R o use la ruta ordenada antes de verificar.",
       "No se pudo verificar a los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s': %s no lo exporta; %s no est\u00e1 instalado en la ruta de b\u00fasqueda de bibliotecas. Inst\u00e1lelo antes de verificar.",
-      "No se pudieron verificar los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' en un proceso limpio de R."
+      "No se pudieron verificar los due\u00f1os instalados del s\u00edmbolo de reexportaci\u00f3n '%s' en un proceso limpio de R.",
+      "Plan de dependencias de bigbang",
+      "Actualizaci\u00f3n: %s; Forzar: %s",
+      "Pol\u00edtica de dependencias externas: %s",
+      "Dependencias externas",
+      "'plan' debe ser TRUE o FALSE"
     ),
     c(
       "The component archives that ship with this package are not available. Reinstall it, or pass pkg_dir pointing at a directory holding the component archives.",
@@ -559,7 +570,12 @@
       "Installed owners for re-export symbol '%s' could not be loaded from the library search path: %s. Check the package installation before verifying.",
       "Installed owners for re-export symbol '%s' was loaded from another library: %s. Restart R or use the ordered library path before verifying.",
       "Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s; %s is not installed in the library search path. Install it before verifying.",
-      "Installed owners for re-export symbol '%s' could not be verified in a clean R process."
+      "Installed owners for re-export symbol '%s' could not be verified in a clean R process.",
+      "Bigbang dependency plan",
+      "Upgrade: %s; Force: %s",
+      "External dependency policy: %s",
+      "External dependencies",
+      "'plan' must be TRUE or FALSE"
     )
   )
 }
