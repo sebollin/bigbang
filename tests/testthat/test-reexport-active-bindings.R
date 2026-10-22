@@ -519,7 +519,7 @@ test_that("non-syntactic and Unicode exports remain installable bindings", {
     length(status), 1L, info = paste(check_output, collapse = "\n")
   )
   expect_false(
-    grepl("ERROR|WARNING", status),
+    round075_check_status(status, check_output),
     info = paste(check_output, collapse = "\n")
   )
   expect_identical(system2(

@@ -132,7 +132,7 @@ test_that("generation and installation results print all summary branches", {
 
   installation <- structure(
     list(
-      installed = list(aaa = "Installed successfully"),
+      installed = list(aaa = .bb_tr("Installed successfully")),
       unchanged = list(ddd = "Kept installed version 2.0, newer than archive version 1.0"),
       failed = list(bbb = "Installation failed"),
       skipped = list(ccc = "Offline policy")

@@ -13,13 +13,16 @@ test_that("archive work is reused within one source call", {
   calls <- new.env(parent = emptyenv())
   calls$listing <- 0L
   calls$extract <- 0L
-  original <- bigbang:::.untar_quiet
+  original_listing <- bigbang:::.archive_inspect
+  original_extract <- bigbang:::.archive_extract
   testthat::local_mocked_bindings(
-    .untar_quiet = function(...) {
-      arguments <- list(...)
-      if (isTRUE(arguments$list)) calls$listing <- calls$listing + 1L
-      if (!is.null(arguments$exdir)) calls$extract <- calls$extract + 1L
-      original(...)
+    .archive_inspect = function(...) {
+      calls$listing <- calls$listing + 1L
+      original_listing(...)
+    },
+    .archive_extract = function(...) {
+      calls$extract <- calls$extract + 1L
+      original_extract(...)
     },
     .package = "bigbang"
   )

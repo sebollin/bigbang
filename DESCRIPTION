@@ -49,6 +49,7 @@ Imports:
     whisker
 Suggests:
     devtools,
+    covr,
     knitr,
     pkgbuild,
     pkgload,

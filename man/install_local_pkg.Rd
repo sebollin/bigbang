@@ -8,7 +8,7 @@ install_local_pkg(
   package,
   pkg_dir = NULL,
   ext = ".tar.gz",
-  repos = getOption("repos"),
+  repos = NULL,
   cran_deps = c("skip", "error", "install"),
   verbose = getOption("bigbang.verbose", interactive()),
   force = FALSE,

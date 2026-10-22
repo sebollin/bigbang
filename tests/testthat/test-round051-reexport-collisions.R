@@ -1252,7 +1252,7 @@ test_that("round 053 poison component cannot mask generated runtime calls", {
   expect_true(length(check_status) == 1L,
               info = paste(check_output, collapse = "\n"))
   expect_false(
-    grepl("ERROR|WARNING", check_status),
+    round075_check_status(check_status, check_output),
     info = paste(check_output, collapse = "\n")
   )
   round051_install(tarball, meta_library)

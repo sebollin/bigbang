@@ -282,7 +282,11 @@ test_that("filesystem fallbacks and local archive policies are covered", {
     if (calls == 1L) FALSE else base::file.rename(from, to)
   }
   environment(atomic_replace) <- atomic_environment
-  expect_true(atomic_replace(source, destination))
+  if (identical(.Platform$OS.type, "windows")) {
+    expect_no_warning(atomic_replace(source, destination))
+  } else {
+    expect_silent(atomic_replace(source, destination))
+  }
   expect_identical(readLines(destination, warn = FALSE), "new")
   expect_identical(readLines(external, warn = FALSE), "old")
 

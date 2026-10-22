@@ -78,56 +78,214 @@ bigbang_child_load_code <- function() {
   }
 }
 
-meta_untranslated_sentences <- function(project) {
-  found <- character()
-  visit <- function(node) {
-    if (is.expression(node)) {
-      lapply(as.list(node), visit)
-      return(invisible(NULL))
-    }
-    if (!is.call(node)) return(invisible(NULL))
-    head <- node[[1L]]
-    name <- if (is.symbol(head)) {
-      as.character(head)
-    } else if (is.call(head) && identical(head[[1L]], as.name("::"))) {
-      as.character(head[[3L]])
-    } else {
-      ""
-    }
-    if (name %in% c("sprintf", "stop", "warning", "message") &&
-          length(node) >= 2L && is.character(node[[2L]]) &&
-          length(node[[2L]]) == 1L && grepl(" ", node[[2L]], fixed = TRUE)) {
-      found <<- c(found, node[[2L]])
-    }
-    lapply(as.list(node), visit)
-    invisible(NULL)
+ast_call_name <- function(node) {
+  if (!is.call(node)) return("")
+  head <- node[[1L]]
+  if (is.symbol(head)) return(as.character(head))
+  if (is.call(head) && as.character(head[[1L]]) %in% c("::", ":::")) {
+    return(as.character(head[[3L]]))
   }
-  files <- list.files(file.path(project, "R"), pattern = "\\.R$",
-                      full.names = TRUE)
-  for (file in files) visit(parse(file = file, keep.source = FALSE))
+  ""
+}
+
+ast_literal_text <- function(node) {
+  if (is.character(node) && length(node) == 1L) return(node)
+  if (!is.call(node) || !ast_call_name(node) %in% c("paste", "paste0")) {
+    return(NULL)
+  }
+  tags <- names(node)
+  if (is.null(tags)) tags <- rep("", length(node))
+  argument_positions <- if (length(node) > 1L) {
+    seq.int(2L, length(node))
+  } else {
+    integer()
+  }
+  argument_positions <- argument_positions[
+    !tags[argument_positions] %in% c("sep", "collapse")
+  ]
+  values <- lapply(as.list(node)[argument_positions], ast_literal_text)
+  if (!all(vapply(values, Negate(is.null), logical(1L)))) return(NULL)
+  if (identical(ast_call_name(node), "paste0")) {
+    return(paste0(unlist(values, use.names = FALSE), collapse = ""))
+  }
+  separator <- if ("sep" %in% tags) {
+    ast_literal_text(node[[which(tags == "sep")[[1L]]]])
+  } else {
+    " "
+  }
+  if (is.null(separator)) return(NULL)
+  paste(unlist(values, use.names = FALSE), collapse = separator)
+}
+
+ast_unknown_value <- function() {
+  list(raw = character(), translated = FALSE)
+}
+
+ast_safe_value <- function() {
+  list(raw = character(), translated = TRUE)
+}
+
+ast_raw_value <- function(text) {
+  if (!is.character(text) || length(text) != 1L ||
+        !nzchar(trimws(text)) || !grepl("[[:alpha:]]", text) ||
+        startsWith(text, "Internal error:")) {
+    return(ast_unknown_value())
+  }
+  list(raw = text, translated = FALSE)
+}
+
+ast_merge_values <- function(values) {
+  raw <- unique(unlist(lapply(values, function(value) value[["raw"]]),
+                       use.names = FALSE))
+  list(raw = raw, translated = length(raw) == 0L)
+}
+
+ast_message_value <- function(node, bindings) {
+  if (is.symbol(node)) {
+    value <- bindings[[as.character(node)]]
+    return(if (is.null(value)) ast_unknown_value() else value)
+  }
+  if (is.character(node) && length(node) == 1L) {
+    return(ast_raw_value(node))
+  }
+  if (!is.call(node)) return(ast_unknown_value())
+
+  name <- ast_call_name(node)
+  if (name %in% c(".bb_tr", ".bb_trf", ".meta_tr", ".meta_trf")) {
+    return(ast_safe_value())
+  }
+  if (name == "(" && length(node) >= 2L) {
+    return(ast_message_value(node[[2L]], bindings))
+  }
+  if (name == "sprintf") {
+    tags <- names(node)
+    if (is.null(tags)) tags <- rep("", length(node))
+    format_position <- which(tags == "fmt")
+    format_position <- if (length(format_position) > 0L) {
+      format_position[[1L]]
+    } else {
+      2L
+    }
+    if (length(node) < format_position) return(ast_unknown_value())
+    return(ast_message_value(node[[format_position]], bindings))
+  }
+  if (name %in% c("paste", "paste0")) {
+    literal <- ast_literal_text(node)
+    if (!is.null(literal)) return(ast_raw_value(literal))
+    tags <- names(node)
+    if (is.null(tags)) tags <- rep("", length(node))
+    positions <- if (length(node) > 1L) {
+      seq.int(2L, length(node))
+    } else {
+      integer()
+    }
+    positions <- positions[!tags[positions] %in% c("sep", "collapse")]
+    return(ast_merge_values(lapply(
+      as.list(node)[positions], ast_message_value, bindings = bindings
+    )))
+  }
+  ast_unknown_value()
+}
+
+ast_untranslated_messages <- function(expressions) {
+  found <- character()
+  is_missing_call_child <- function(child) {
+    if (missing(child)) return(TRUE)
+    is.symbol(child) && identical(as.character(child), "")
+  }
+  walk <- function(node, bindings = list()) {
+    if (is.expression(node)) {
+      children <- as.list(node)
+      for (index in seq_along(children)) {
+        child <- children[[index]]
+        if (!is_missing_call_child(child)) bindings <- walk(child, bindings)
+      }
+      return(bindings)
+    }
+    if (!is.call(node)) return(bindings)
+    name <- ast_call_name(node)
+
+    if (name %in% c("<-", "=") && length(node) >= 3L &&
+          is.symbol(node[[2L]])) {
+      bindings[[as.character(node[[2L]])]] <-
+        ast_message_value(node[[3L]], bindings)
+      return(walk(node[[3L]], bindings))
+    }
+    if (name == "function" && length(node) >= 3L) {
+      walk(node[[3L]], list())
+      return(bindings)
+    }
+
+    if (name %in% c("stop", "warning", "message")) {
+      arguments <- if (length(node) > 1L) as.list(node)[-1L] else list()
+      tags <- names(node)
+      if (is.null(tags)) tags <- rep("", length(node))
+      tags <- if (length(node) > 1L) tags[-1L] else character()
+      arguments <- arguments[!tags %in% c("call.", "immediate.", "appendLF")]
+      values <- lapply(arguments, ast_message_value, bindings = bindings)
+      found <<- c(
+        found,
+        unlist(lapply(values, function(value) value[["raw"]]), use.names = FALSE)
+      )
+    }
+
+    children <- if (length(node) > 1L) as.list(node)[-1L] else list()
+    for (index in seq_along(children)) {
+      child <- children[[index]]
+      if (!is_missing_call_child(child)) bindings <- walk(child, bindings)
+    }
+    bindings
+  }
+  bindings <- list()
+  for (expression in expressions) {
+    bindings <- walk(expression, bindings)
+  }
   unique(found)
 }
 
-meta_translation_literals <- function(project) {
+ast_project_expressions <- function(project) {
+  files <- list.files(file.path(project, "R"), pattern = "\\.R$",
+                      recursive = TRUE, full.names = TRUE)
+  lapply(files, parse, keep.source = FALSE)
+}
+
+meta_untranslated_sentences <- function(project) {
+  ast_untranslated_messages(ast_project_expressions(project))
+}
+
+ast_catalog_literals <- function(project, helpers) {
   literals <- character()
+  is_missing_call_child <- function(child) {
+    if (missing(child)) return(TRUE)
+    is.symbol(child) && identical(as.character(child), "")
+  }
   visit <- function(node) {
     if (is.expression(node)) {
-      lapply(as.list(node), visit)
+      children <- as.list(node)
+      for (index in seq_along(children)) {
+        child <- children[[index]]
+        if (!is_missing_call_child(child)) visit(child)
+      }
       return(invisible(NULL))
     }
     if (!is.call(node)) return(invisible(NULL))
-    head <- node[[1L]]
-    if (is.symbol(head) && as.character(head) %in% c(".meta_tr", ".meta_trf") &&
-          length(node) >= 2L && is.character(node[[2L]]) && length(node[[2L]]) == 1L) {
-      literals <<- c(literals, node[[2L]])
+    if (ast_call_name(node) %in% helpers && length(node) >= 2L) {
+      literal <- ast_literal_text(node[[2L]])
+      if (!is.null(literal)) literals <<- c(literals, literal)
     }
-    lapply(as.list(node), visit)
+    children <- if (length(node) > 1L) as.list(node)[-1L] else list()
+    for (index in seq_along(children)) {
+      child <- children[[index]]
+      if (!is_missing_call_child(child)) visit(child)
+    }
     invisible(NULL)
   }
-  files <- list.files(file.path(project, "R"), pattern = "\\.R$",
-                      full.names = TRUE)
-  for (file in files) visit(parse(file = file, keep.source = FALSE))
+  for (expression in ast_project_expressions(project)) visit(expression)
   unique(literals)
+}
+
+meta_translation_literals <- function(project) {
+  ast_catalog_literals(project, c(".meta_tr", ".meta_trf"))
 }
 
 test_that("user-facing R diagnostics use the translation helpers", {
@@ -135,37 +293,64 @@ test_that("user-facing R diagnostics use the translation helpers", {
     file.path(testthat::test_path(), "..", ".."),
     winslash = "/", mustWork = TRUE
   )
-  files <- list.files(
-    file.path(source_root, "R"), pattern = "\\.R$", recursive = TRUE,
-    full.names = TRUE
-  )
-  lines <- unlist(lapply(files, readLines, warn = FALSE), use.names = FALSE)
-  direct <- lines[grepl(
-    "(?:stop|warning|message)\\s*\\(\\s*['\"]", lines, perl = TRUE
-  )]
-  direct <- direct[!grepl("Internal error:", direct, fixed = TRUE)]
-  expect_true(length(direct) == 0L, info = paste(direct, collapse = "\n"))
+  found <- meta_untranslated_sentences(source_root)
+  expect_true(length(found) == 0L, info = paste(found, collapse = "\n"))
+})
 
-  # A sentence built with sprintf() and passed to stop() later escapes the
-  # check above; the catalog file itself holds sprintf() calls on purpose.
-  code_files <- files[basename(files) != "translations.R"]
-  code_lines <- unlist(lapply(code_files, readLines, warn = FALSE),
-                       use.names = FALSE)
-  formatted <- code_lines[grepl(
-    "sprintf\\s*\\(\\s*['\"][A-Za-z][^'\"]* [^'\"]*['\"]", code_lines,
-    perl = TRUE
-  )]
-  expect_true(length(formatted) == 0L, info = paste(formatted, collapse = "\n"))
+test_that("every .bb_tr literal in R is present in the bigbang catalog", {
+  source_root <- normalizePath(
+    file.path(testthat::test_path(), "..", ".."),
+    winslash = "/", mustWork = TRUE
+  )
+  literals <- ast_catalog_literals(
+    source_root, c(".bb_tr", ".bb_trf")
+  )
+  missing <- setdiff(literals, names(.bigbang_spanish_catalog()))
+  expect_true(length(missing) == 0L, info = paste(missing, collapse = "\n"))
+})
+
+test_that("the AST diagnostic guard covers message data flow without false positives", {
+  bad <- parse(text = c(
+    "stop('Failed')",
+    "base::warning(sprintf(",
+    "  fmt = '%s is missing', value",
+    "))",
+    "format <- '(failed: %s)'",
+    "base::message(sprintf(fmt = format, value))",
+    "quoted <- sprintf(\"'%s' must be TRUE\", value)",
+    "stop(quoted)",
+    "plain <- sprintf('plain words %d', count)",
+    "message(plain)",
+    "message(paste0('Missing ', value))",
+    "base::stop('FailedAgain')",
+    "base::message(paste('A', 'failure', sep = ' '))",
+    "message(paste0('Another', ' failure'))"
+  ), keep.source = FALSE)
+  found <- ast_untranslated_messages(list(bad))
+  expect_true(all(c(
+    "Failed", "%s is missing", "(failed: %s)", "'%s' must be TRUE",
+    "plain words %d", "Missing ", "FailedAgain", "A failure",
+    "Another failure"
+  ) %in% found))
+
+  good <- parse(text = c(
+    "internal <- sprintf('internal %s', value)",
+    "invisible(internal)",
+    "stop(.bb_tr('Already translated'))",
+    "warning(base::message(.meta_trf('Already %s', value)))",
+    "message(paste0(.bb_tr('Translated'), ' ', value))"
+  ), keep.source = FALSE)
+  expect_length(ast_untranslated_messages(list(good)), 0L)
 })
 
 test_that("the bigbang runtime catalog translates messages to Spanish", {
   bind_dir <- bigbang_catalog_dir()
   output <- translate_from_catalog(
-    "R-bigbang", bind_dir, "The directory specified by 'pkg_dir' does not exist"
+    "R-bigbang", bind_dir, "The archive directory does not exist: %s"
   )
   expect_identical(
     tail(output, 1L),
-    "El directorio indicado por 'pkg_dir' no existe"
+    "El directorio de archivos no existe: %s"
   )
 
   destination_message <- paste0(
@@ -184,7 +369,8 @@ test_that("the bigbang runtime catalog translates messages to Spanish", {
   )
 
   collision_message <- paste0(
-    "Cannot re-export symbol(s) %s because components collide: %s."
+    "Cannot resolve re-export collision(s): %s. Candidates, diagnoses, and ",
+    "proof details: %s. %s."
   )
   collision_output <- translate_from_catalog(
     "R-bigbang", bind_dir, collision_message
@@ -192,8 +378,8 @@ test_that("the bigbang runtime catalog translates messages to Spanish", {
   expect_identical(
     tail(collision_output, 1L),
     paste0(
-      "No se pueden reexportar los s\u00edmbolos %s porque hay colisiones ",
-      "entre componentes: %s."
+      "No se pueden resolver las colisiones de reexportaci\u00f3n: %s. ",
+      "Candidatos, diagn\u00f3sticos y detalles de la prueba: %s. %s."
     )
   )
 })
@@ -302,6 +488,7 @@ test_that("bigbang print methods translate in a Spanish child without changing E
   expect_match(translated, "  Recuperado: actualizaci\u00f3n interrumpida", fixed = TRUE)
   expect_match(translated, "  Se agregar\u00edan: new.R", fixed = TRUE)
   expect_match(translated, "  Se agregaron: new.R", fixed = TRUE)
+  expect_match(translated, "  Se quitaron: old.R", fixed = TRUE)
   expect_match(translated, "  Reexportaciones: f -> a (chosen)", fixed = TRUE)
   expect_match(translated, "  Reexportaciones excluidas: g", fixed = TRUE)
   expect_match(translated, "<instalaci\u00f3n local bigbang>", fixed = TRUE)
@@ -360,6 +547,11 @@ test_that("generated metapackages include their own Spanish runtime catalog", {
     "Installation complete."
   )
   expect_identical(tail(output, 1L), "Instalaci\u00f3n completa.")
+  output <- translate_from_catalog(
+    "R-i18nverse", file.path(result$path, "inst", "po"),
+    "Components available"
+  )
+  expect_identical(tail(output, 1L), "Componentes disponibles")
 })
 
 test_that("every generated .meta_tr literal is in its generated catalog", {
@@ -438,11 +630,8 @@ test_that("Spanish catalogs are complete and preserve format placeholders", {
       "export patterns are not supported for reexport."
     ),
     "Could not read explicit exports from NAMESPACE in archive %s.",
-    "Cannot re-export symbol(s) %s because components collide: %s.",
-    paste0(
-      "Cannot re-export symbol(s) %s because they belong to generated ",
-      "metapackage code."
-    )
+    "Cannot resolve re-export collision(s): %s. Candidates, diagnoses, and proof details: %s. %s.",
+    "Generated metapackage symbol(s) %s can only be resolved with reexport_exclude: %s."
   )
   expect_true(all(reexport_messages %in% names(local_catalog)))
   expect_false(any(grepl(
@@ -537,6 +726,8 @@ test_that("the source Spanish catalog and compiled MO catalog have the same keys
     po <- read_po(po_path)
     expect_setequal(names(pot), names(po))
     expect_setequal(names(pot), names(mo))
+    ids <- sort(names(po))
+    expect_identical(po[ids], mo[ids])
     expect_true(all(nzchar(unname(po))))
   } else {
     expect_setequal(names(.bigbang_spanish_catalog()), names(mo))
@@ -705,4 +896,51 @@ test_that("generated cli startup message translates to Spanish", {
   )
   translated <- paste(output, collapse = "\n")
   expect_match(translated, "Faltan componentes por instalar", fixed = TRUE)
+})
+
+test_that("nested check placeholder detection handles both library variables", {
+  sandbox <- tempfile("bigbang-nested-check-")
+  user_library <- file.path(sandbox, "user [library]*?")
+  package_dir <- file.path(user_library, "dummy[package]*?")
+  dir.create(package_dir, recursive = TRUE)
+  file.create(file.path(package_dir, "dummy_for_check"))
+
+  marker <- "_R_CHECK_RD_XREFS_"
+  before <- Sys.getenv(marker, unset = NA_character_)
+  before_r_libs <- Sys.getenv("R_LIBS", unset = NA_character_)
+  before_r_libs_user <- Sys.getenv("R_LIBS_USER", unset = NA_character_)
+  cleanup_env <- new.env(parent = emptyenv())
+  before_cleanup_env <- getOption("bigbang.nested_check_cleanup_env")
+  options(bigbang.nested_check_cleanup_env = cleanup_env)
+  on.exit({
+    restore <- function(name, value) {
+      if (is.na(value)) {
+        Sys.unsetenv(name)
+      } else {
+        do.call(Sys.setenv, stats::setNames(list(value), name))
+      }
+    }
+    restore(marker, before)
+    restore("R_LIBS", before_r_libs)
+    restore("R_LIBS_USER", before_r_libs_user)
+    withr::deferred_run(cleanup_env)
+    if (is.null(before_cleanup_env)) {
+      options(bigbang.nested_check_cleanup_env = NULL)
+    } else {
+      options(bigbang.nested_check_cleanup_env = before_cleanup_env)
+    }
+  }, add = TRUE)
+  on.exit(
+    expect_identical(Sys.getenv(marker, unset = NA_character_), before),
+    add = TRUE
+  )
+  Sys.setenv(
+    R_LIBS = paste(
+      c("", file.path(sandbox, "missing*"), ""),
+      collapse = .Platform$path.sep
+    ),
+    R_LIBS_USER = user_library
+  )
+  sys.source(testthat::test_path("setup-nested-check.R"), envir = environment())
+  expect_identical(Sys.getenv(marker), "false")
 })

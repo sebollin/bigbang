@@ -990,6 +990,18 @@ create_metapackage <- function(
     ), name), call. = FALSE)
   }
 
+  # Resolve component identities before an update lock, journal, or generated
+  # project can be touched. A component named like the metapackage would make
+  # the generated installer ambiguous, so this is a hard preflight error even
+  # when re-export analysis is disabled.
+  resolved_components <- .resolve_components(
+    packages, pkg_dir, ext, on_component_error = on_component_error,
+    reexport = isTRUE(reexport), cache = archive_cache
+  )
+  .validate_metapackage_name(
+    name, resolved_components$components, resolved_components$inventory
+  )
+
   project_path <- file.path(dest_dir, name)
   if (isTRUE(update)) .validate_project_root_path(project_path)
   project_dir <- normalizePath(project_path, winslash = "/", mustWork = FALSE)
@@ -1030,10 +1042,6 @@ create_metapackage <- function(
     }
   }
 
-  resolved_components <- .resolve_components(
-    packages, pkg_dir, ext, on_component_error = on_component_error,
-    reexport = isTRUE(reexport), cache = archive_cache
-  )
   validated <- .validate_generation(
     resolved_components, tolerate = tolerate,
     on_component_error = on_component_error,

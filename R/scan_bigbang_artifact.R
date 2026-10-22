@@ -16,6 +16,24 @@
 #' @param dry_run Logical. Must be TRUE, the default. Automatic mutation or
 #'   remediation is deliberately not implemented.
 #'
+#' @section Archive resource limits:
+#' Archive walks use `options()` values named
+#' `bigbang.archive.max_entries` (default 100,000),
+#' `bigbang.archive.max_total_bytes` (default 2 GiB),
+#' `bigbang.archive.max_metadata_bytes` (default 64 MiB), and
+#' `bigbang.archive.max_path_bytes` (default 4,096 bytes). The aliases
+#' `bigbang.archive.max_bytes`, `bigbang.archive.max_metadata_payload`, and
+#' `bigbang.archive.max_path_length` are accepted for compatibility. Limits
+#' apply during both inspection and extraction; the byte limit includes archive
+#' metadata and data discarded during inspection. Metadata includes ZIP local
+#' and central records, data descriptors, the EOCD comment, every TAR header,
+#' and PAX/GNU metadata payload. Implicit directories and PAX/GNU metadata
+#' headers count toward `bigbang.archive.max_entries`. The default metadata cap
+#' leaves room for the documented maximum of 65,534 entries in a classic ZIP
+#' (ZIP64 is not supported). Entry names are compared without locale dependence,
+#' but they are not Unicode-normalized: NFC and NFD spellings remain distinct;
+#' NFD names are accepted because macOS can produce them.
+#'
 #' @return A list with the artifact type, vulnerability flag, detected signatures,
 #'   evidence locations, provenance fields, and R version used for the scan.
 #'
@@ -66,12 +84,31 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
       result <- .scan_source_tree(path)
       type <- "source"
     }
-  } else if (grepl("\\.(tar\\.gz|tgz|tar|zip)$", path, ignore.case = TRUE)) {
-    result <- .scan_source_archive(path)
+  } else if (grepl("\\.(tar\\.(gz|bz2|xz)|tgz|tbz|tbz2|txz|tar|zip)$", path,
+                   ignore.case = TRUE)) {
+    result <- tryCatch(.scan_source_archive(path), error = identity)
+    if (inherits(result, "error")) {
+      result <- list(
+        signatures = character(), evidence = list(),
+        provenance = .read_provenance(""), archive_error = result,
+        archive_issue = NULL
+      )
+    }
     type <- "archive"
   } else {
     stop(.bb_trf("Unsupported artifact type: %s", original_path), call. = FALSE)
   }
+
+  archive_issue <- result$archive_issue
+  if (!is.null(archive_issue)) {
+    result$signatures <- "V8_archive_link"
+    result$evidence <- list(V8_archive_link = paste0(
+      archive_issue$entry, ": ", conditionMessage(archive_issue)
+    ))
+    result$provenance <- .read_provenance("")
+  }
+
+  archive_error <- result$archive_error
 
   structure(
     list(
@@ -81,6 +118,9 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
       signatures = result$signatures,
       evidence = result$evidence,
       provenance = result$provenance,
+      archive_error = if (is.null(archive_error)) NULL else list(
+        class = class(archive_error), message = conditionMessage(archive_error)
+      ),
       dry_run = TRUE,
       tested_r = "R 4.6.1",
       running_r = R.version.string
@@ -228,22 +268,21 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
 }
 
 .scan_source_archive <- function(archive) {
-  is_zip <- grepl("\\.zip$", archive, ignore.case = TRUE)
-  members <- if (is_zip) {
-    utils::unzip(archive, list = TRUE)$Name
-  } else {
-    utils::untar(archive, list = TRUE)
+  ext <- .archive_extension(archive)
+  cache <- .archive_cache_new()
+  on.exit(.archive_cache_close(cache), add = TRUE)
+  inspection <- tryCatch(
+    .archive_cache_listing(cache, archive, ext),
+    error = identity
+  )
+  if (inherits(inspection, "bigbang_error_archive_link")) {
+    return(list(archive_issue = inspection))
   }
+  if (inherits(inspection, "error")) stop(inspection)
+  members <- .archive_inspection_members(inspection, ext)
   .validate_archive_members(members)
 
-  extract_dir <- tempfile("bigbang-scan-archive-")
-  dir.create(extract_dir)
-  on.exit(safe_unlink(extract_dir, recursive = TRUE), add = TRUE)
-  if (is_zip) {
-    utils::unzip(archive, exdir = extract_dir)
-  } else {
-    utils::untar(archive, exdir = extract_dir)
-  }
+  extract_dir <- .archive_cache_extract(cache, archive, ext)
 
   extracted <- list.files(
     extract_dir, recursive = TRUE, full.names = TRUE,

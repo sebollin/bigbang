@@ -14,6 +14,10 @@ print.bigbang_artifact_scan <- function(x, ...) {
   cat("  ", .bb_tr("Path"), ": ", x$path, "\n", sep = "")
   cat("  ", .bb_tr("Type"), ": ", x$type, "\n", sep = "")
   cat("  ", .bb_tr("Result"), ": ", status, "\n", sep = "")
+  if (!is.null(x$archive_error)) {
+    cat("  ", .bb_tr("Archive error"), ": ",
+        x$archive_error$message, "\n", sep = "")
+  }
   if (length(x$signatures) > 0L) {
     cat("  ", .bb_tr("Signatures"), ": ",
         paste(x$signatures, collapse = ", "), "\n", sep = "")

@@ -9,6 +9,40 @@
 
 ## Bug fixes
 
+- Archive validation now streams Deflate through zlib, verifies ZIP CRC-32 and
+  gzip CRC-32/ISIZE trailers, charges compressed bytes before reading them, and
+  selects the structurally consistent ZIP end record. Tar padding and Windows
+  device-name variants are covered by the same resource and path checks.
+- Local installation now classifies every reachable component exactly once;
+  dependents of failed or skipped components are skipped in both installers.
+  Error excerpts are byte-safe and prefer the final real error block, while
+  metapackage name checks cover case folding, all visible local packages, and
+  embedded archive filenames.
+
+- ZIP inspection now requires local headers, compressed data, and any
+  12/16-byte data descriptors to cover the complete pre-central-directory
+  region without gaps or overlaps. The central directory and EOCD must reach
+  the exact end of the file, descriptor values are checked against the central
+  directory, and duplicate EOCD structures are rejected. Deflate and stored
+  payload CRCs are now verified by zlib through a gzip container; R no longer
+  computes a byte-at-a-time CRC. Archive metadata accounting includes TAR
+  headers, ZIP data descriptors, and EOCD comments. PAX/GNU metadata headers
+  count as entries, case folding is locale-independent for the supported
+  scripts, and the help documents the deliberate NFC/NFD limitation.
+- Archive inspection and extraction now share one stateful tar/ZIP walk. ZIP
+  entries are decoded by bigbang for stored and deflate data, with CRC-32
+  verification, resource limits, portable-name validation, and translated
+  format errors. Deflate output is bounded before it is materialized, ZIP
+  metadata is charged to the configured limits, and failed extraction rolls
+  back its private staging tree. Generated installers receive the same reader
+  and parity tests compare both verdicts and extracted trees.
+- Archive validation and tar extraction now share one streaming reader. Tar
+  extraction creates only regular files and directories, applies execution
+  permissions without special bits, honors PAX sizes and USTAR prefixes, and
+  rejects unsafe or contradictory stream geometry before writing outside the
+  extraction directory. ZIP central-directory records are parsed directly and
+  the end-of-central-directory record is found from the file tail without
+  loading the complete archive.
 - Generated meta-packages translate every message their code emits. The
   warning about components skipped because a local dependency was skipped never
   reached Spanish, and nine other messages had no catalog entry. Tests now fail

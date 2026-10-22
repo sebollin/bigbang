@@ -332,7 +332,7 @@
 }
 
 .validate_archive_members <- function(members) {
-  members <- gsub("\\\\", "/", members)
+  members <- gsub("\\", "/", members, fixed = TRUE)
   unsafe <- startsWith(members, "/") |
     grepl("^[A-Za-z]:", members) |
     grepl("(^|/)\\.\\.(/|$)", members, perl = TRUE)
