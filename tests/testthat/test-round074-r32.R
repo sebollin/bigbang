@@ -89,7 +89,8 @@ r32_generated_install <- function(generated, name, pkg_dir, lib, ...) {
 test_that("case folding covers every table range and the U+0149-U+014F gap", {
   old_locale <- Sys.getlocale("LC_CTYPE")
   withr::defer(Sys.setlocale("LC_CTYPE", old_locale))
-  locale <- Sys.setlocale("LC_CTYPE", "C.UTF-8")
+  locale_name <- if (identical(.Platform$OS.type, "windows")) "C" else "C.UTF-8"
+  locale <- Sys.setlocale("LC_CTYPE", locale_name)
   skip_if(identical(locale, ""), "no UTF-8 locale is available")
 
   table <- bigbang:::.archive_case_fold_table
@@ -98,7 +99,8 @@ test_that("case folding covers every table range and the U+0149-U+014F gap", {
     upper <- intToUtf8(as.integer(names(table)[[index]]))
     expected <- intToUtf8(unname(table[[index]]))
     expect_identical(bigbang:::.archive_case_key(upper), expected)
-    if (!(as.integer(names(table)[[index]]) %in% special)) {
+    if (!(as.integer(names(table)[[index]]) %in% special) &&
+          !(identical(.Platform$OS.type, "windows") && identical(locale, "C"))) {
       expect_identical(tolower(upper), expected)
     }
   }

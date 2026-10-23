@@ -186,6 +186,12 @@ t072d_bounded_h1 <- function(directory) {
 `%||%` <- function(value, fallback) if (is.null(value)) fallback else value
 
 test_that("ZIP deflate output is bounded for every false ISIZE", {
+  skip_on_cran()
+  skip_if(
+    !identical(unname(Sys.info()[["sysname"]]), "Linux"),
+    "this resource guard requires Linux sh, ulimit -v, and timeout"
+  )
+  skip_if(Sys.which("timeout") == "", "the timeout utility is unavailable")
   root <- tempfile("round072d-deflate-")
   dir.create(root)
   withr::defer(unlink(root, recursive = TRUE, force = TRUE))

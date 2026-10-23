@@ -21,6 +21,7 @@
 
 .archive_reader_template <- function() {
   reader_names <- c(
+    ".path_is_windows_reparse_point", ".path_is_symlink",
     ".archive_is_zip", ".archive_tar_extensions", ".archive_is_tar",
     ".archive_abort", ".archive_parse_error", ".archive_link_abort",
     ".archive_limit_options", ".archive_state_new", ".archive_limit_abort",
@@ -199,6 +200,32 @@ installed_package_info <- function(package, libraries) {{
     error = function(error) NULL
   )
   base::list(version = version, path = path, library = base::dirname(path))
+}}
+
+install_external_dependency <- function(dependency, libraries, lib, repos,
+                                        type = NULL) {{
+  diagnostics <- base::character()
+  install <- function() {{
+    args <- base::list(
+      pkgs = dependency, dependencies = NA, repos = repos, lib = lib
+    )
+    if (!base::is.null(type)) args$type <- type
+    base::do.call(utils::install.packages, args)
+  }}
+  base::tryCatch(
+    base::withCallingHandlers(
+      with_install_library_path(libraries, install()),
+      warning = function(condition) {{
+        diagnostics <<- base::c(diagnostics, base::conditionMessage(condition))
+        base::invokeRestart("muffleWarning")
+      }}
+    ),
+    error = function(condition) {{
+      diagnostics <<- base::c(diagnostics, base::conditionMessage(condition))
+      NULL
+    }}
+  )
+  base::list(diagnostics = base::unique(diagnostics))
 }}
 
 .read_install_log <- function(log_file) {{
@@ -425,25 +452,40 @@ prepare_external_dependencies <- function(requirements, libraries, lib,
       no_repository <- TRUE
     }} else {{
       for (dependency in unsatisfied) {{
-        base::tryCatch(
-          with_install_library_path(
-            libraries,
-            utils::install.packages(
-              dependency, dependencies = NA, repos = repos, lib = lib
-            )
-          ),
-          error = function(e) NULL
-        )
-      }}
-      status <- base::lapply(
-        base::names(requirements),
-        function(dependency) {{
-          external_dependency_status(
+        attempts <- base::character()
+        install_attempt <- function(type, label) {{
+          outcome <- install_external_dependency(
+            dependency, libraries, lib, repos, type = type
+          )
+          current <- external_dependency_status(
             dependency, requirements[[dependency]], libraries
           )
+          if (!base::isTRUE(current$satisfied)) {{
+            reason <- if (base::length(outcome$diagnostics) > 0L) {{
+              base::paste(outcome$diagnostics, collapse = "; ")
+            }} else {{
+              "the dependency remains unsatisfied"
+            }}
+            attempts <<- base::c(attempts, base::paste0(label, ": ", reason))
+          }}
+          current
         }}
-      )
-      base::names(status) <- base::names(requirements)
+        current <- install_attempt(NULL, "default package type")
+        if (!base::isTRUE(current$satisfied) &&
+            !base::identical(base::getOption("pkgType"), "source")) {{
+          current <- install_attempt("source", "source package type")
+        }}
+        status[[dependency]] <- current
+        if (!base::isTRUE(current$satisfied) && base::length(attempts) > 0L) {{
+          status[[dependency]]$detail <- base::paste(
+            status[[dependency]]$detail,
+            base::paste(
+              "Installation attempts:", base::paste(attempts, collapse = " | ")
+            ),
+            sep = "; "
+          )
+        }}
+      }}
     }}
   }}
   base::list(status = status, no_repository = no_repository)
@@ -561,7 +603,9 @@ install_source_component <- function(target, lib, verbose = TRUE) {{
     extract_dir, recursive = TRUE, full.names = TRUE,
     all.files = TRUE, include.dirs = TRUE, no.. = TRUE
   )
-  if (base::length(extracted) > 0L && base::any(base::nzchar(base::Sys.readlink(extracted)))) {{
+  if (base::length(extracted) > 0L && base::any(base::vapply(
+    extracted, .path_is_symlink, base::logical(1L)
+  ))) {{
     safe_unlink(extract_dir, recursive = TRUE)
     base::stop(.meta_trf(
       "Archive %s contains symbolic links, which are not supported.", archive
@@ -713,7 +757,9 @@ read_archive_metadata <- function(package, pkg_dir, ext = NULL, cache = NULL) {{
     temp_dir, recursive = TRUE, full.names = TRUE,
     all.files = TRUE, include.dirs = TRUE, no.. = TRUE
   )
-  if (length(extracted) > 0L && any(nzchar(Sys.readlink(extracted)))) {{
+  if (length(extracted) > 0L && any(vapply(
+    extracted, .path_is_symlink, logical(1L)
+  ))) {{
     stop(.meta_trf(
       "Archive %s contains symbolic links, which are not supported.", archive
     ), call. = FALSE)

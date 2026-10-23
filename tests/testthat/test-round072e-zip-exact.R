@@ -316,7 +316,12 @@ test_that("case folding is locale-independent and NFD names remain valid", {
   key <- bigbang:::.archive_case_key
   old <- Sys.getlocale("LC_CTYPE")
   on.exit(Sys.setlocale("LC_CTYPE", old), add = TRUE)
-  for (locale in c("C", "C.UTF-8")) {
+  locales <- if (identical(.Platform$OS.type, "windows")) {
+    "C"
+  } else {
+    c("C", "C.UTF-8")
+  }
+  for (locale in locales) {
     expect_false(is.na(Sys.setlocale("LC_CTYPE", locale)), info = locale)
     expect_identical(key("pkg/\u00c4.txt"), key("pkg/\u00e4.txt"), info = locale)
     expect_identical(key("pkg/\u0100.txt"), key("pkg/\u0101.txt"), info = locale)

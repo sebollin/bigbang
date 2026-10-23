@@ -305,6 +305,32 @@
   )
 }
 
+.install_external_dependency <- function(dependency, libraries, lib, repos,
+                                         type = NULL) {
+  diagnostics <- character()
+  install <- function() {
+    args <- list(
+      pkgs = dependency, dependencies = NA, repos = repos, lib = lib
+    )
+    if (!is.null(type)) args$type <- type
+    do.call(utils::install.packages, args)
+  }
+  tryCatch(
+    withCallingHandlers(
+      .with_install_library_path(libraries, install()),
+      warning = function(condition) {
+        diagnostics <<- c(diagnostics, conditionMessage(condition))
+        invokeRestart("muffleWarning")
+      }
+    ),
+    error = function(condition) {
+      diagnostics <<- c(diagnostics, conditionMessage(condition))
+      NULL
+    }
+  )
+  list(diagnostics = unique(diagnostics))
+}
+
 .prepare_external_dependencies <- function(requirements, libraries, lib,
                                            cran_deps, repos) {
   status <- lapply(
@@ -323,24 +349,38 @@
       no_repository <- TRUE
     } else {
       for (dependency in unsatisfied) {
-        tryCatch({
-          .with_install_library_path(
-            libraries,
-            utils::install.packages(
-              dependency, dependencies = NA, repos = repos, lib = lib
-            )
+        attempts <- character()
+        install_attempt <- function(type, label) {
+          outcome <- .install_external_dependency(
+            dependency, libraries, lib, repos, type = type
           )
-        }, error = function(e) NULL)
-      }
-      status <- lapply(
-        names(requirements),
-        function(dependency) {
-          .external_dependency_status(
+          current <- .external_dependency_status(
             dependency, requirements[[dependency]], libraries
           )
+          if (!isTRUE(current$satisfied)) {
+            reason <- if (length(outcome$diagnostics) > 0L) {
+              paste(outcome$diagnostics, collapse = "; ")
+            } else {
+              "the dependency remains unsatisfied"
+            }
+            attempts <<- c(attempts, paste0(label, ": ", reason))
+          }
+          current
         }
-      )
-      names(status) <- names(requirements)
+        current <- install_attempt(NULL, "default package type")
+        if (!isTRUE(current$satisfied) &&
+              !identical(getOption("pkgType"), "source")) {
+          current <- install_attempt("source", "source package type")
+        }
+        status[[dependency]] <- current
+        if (!isTRUE(current$satisfied) && length(attempts) > 0L) {
+          status[[dependency]]$detail <- paste(
+            status[[dependency]]$detail,
+            paste("Installation attempts:", paste(attempts, collapse = " | ")),
+            sep = "; "
+          )
+        }
+      }
     }
   }
   list(status = status, no_repository = no_repository)

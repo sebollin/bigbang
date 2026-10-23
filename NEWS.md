@@ -11,6 +11,8 @@
 
   The new reader:
   - creates only regular files and directories inside the destination;
+  - treats Windows junctions and symbolic links as links, so it never extracts
+    into them and its cleanup never deletes through them;
   - rejects links, devices, other special entries, non-portable or
     case-colliding names, and malformed, overlapping or trailing archive data;
   - verifies CRC-32 and sizes through zlib;
@@ -62,6 +64,12 @@
   checked for each component. With `cran_deps = "install"`, an unsatisfied
   dependency is updated from the explicit `repos`. Nothing uses the network
   without an explicit, non-empty `repos`.
+- **Source-only repositories.** On Windows and macOS, `cran_deps = "install"`
+  installed nothing from a repository that only has source packages, such as
+  an internal repository, and the reason was discarded. If the default
+  attempt leaves a dependency unsatisfied, `install_local_pkg()` and generated
+  installers now retry with `type = "source"`, so binaries are still preferred
+  where they exist. When both attempts fail, the result says why.
 - **Result categories.** Every component ends in exactly one result category.
   Dependents of a failed or skipped component are skipped without being built,
   and a shared dependency is installed only once.

@@ -900,8 +900,18 @@ test_that("generated cli startup message translates to Spanish", {
 
 test_that("nested check placeholder detection handles both library variables", {
   sandbox <- tempfile("bigbang-nested-check-")
-  user_library <- file.path(sandbox, "user [library]*?")
-  package_dir <- file.path(user_library, "dummy[package]*?")
+  wildcard_suffix <- if (identical(.Platform$OS.type, "windows")) {
+    " [library]"
+  } else {
+    " [library]*?"
+  }
+  package_suffix <- if (identical(.Platform$OS.type, "windows")) {
+    "[package]"
+  } else {
+    "[package]*?"
+  }
+  user_library <- file.path(sandbox, paste0("user", wildcard_suffix))
+  package_dir <- file.path(user_library, paste0("dummy", package_suffix))
   dir.create(package_dir, recursive = TRUE)
   file.create(file.path(package_dir, "dummy_for_check"))
 
@@ -936,7 +946,14 @@ test_that("nested check placeholder detection handles both library variables", {
   )
   Sys.setenv(
     R_LIBS = paste(
-      c("", file.path(sandbox, "missing*"), ""),
+      c(
+        "",
+        file.path(
+          sandbox,
+          if (identical(.Platform$OS.type, "windows")) "missing [library]" else "missing*"
+        ),
+        ""
+      ),
       collapse = .Platform$path.sep
     ),
     R_LIBS_USER = user_library

@@ -643,9 +643,13 @@
   normalized
 }
 
-.archive_tar_existing_kind <- function(path) {
-  link <- tryCatch(Sys.readlink(path), error = function(error) "")
-  if (length(link) == 1L && !is.na(link) && nzchar(link)) return("symbolic link")
+.archive_tar_existing_kind <- function(path, is_windows = NULL,
+                                       normalize = NULL, exists = NULL) {
+  if (isTRUE(.path_is_symlink(
+    path, is_windows = is_windows, normalize = normalize, exists = exists
+  ))) {
+    return("symbolic link")
+  }
   if (dir.exists(path)) return("directory")
   if (file.exists(path)) return("file")
   ""
@@ -1653,20 +1657,26 @@
   .archive_zip_walk(archive)
 }
 
-.archive_destination_is_empty <- function(path) {
-  link <- tryCatch(Sys.readlink(path), error = function(error) "")
-  if (length(link) == 1L && !is.na(link) && nzchar(link)) return(FALSE)
+.archive_destination_is_empty <- function(path, is_windows = NULL,
+                                          normalize = NULL, exists = NULL) {
+  if (isTRUE(.path_is_symlink(
+    path, is_windows = is_windows, normalize = normalize, exists = exists
+  ))) {
+    return(FALSE)
+  }
   length(list.files(
     path, all.files = TRUE, no.. = TRUE, include.dirs = TRUE
   )) == 0L
 }
 
-.archive_cleanup_tree <- function(path) {
+.archive_cleanup_tree <- function(path, is_windows = NULL,
+                                  normalize = NULL, exists = NULL) {
   if (length(path) != 1L || is.na(path) || !nzchar(path)) {
     return(invisible(NULL))
   }
-  link <- tryCatch(Sys.readlink(path), error = function(error) "")
-  if (length(link) == 1L && !is.na(link) && nzchar(link)) {
+  if (isTRUE(.path_is_symlink(
+    path, is_windows = is_windows, normalize = normalize, exists = exists
+  ))) {
     unlink(path, recursive = FALSE, force = TRUE)
     return(invisible(NULL))
   }
@@ -1676,7 +1686,11 @@
       path, all.files = TRUE, no.. = TRUE, include.dirs = TRUE,
       full.names = TRUE
     )
-    for (child in children) .archive_cleanup_tree(child)
+    for (child in children) {
+      .archive_cleanup_tree(
+        child, is_windows = is_windows, normalize = normalize, exists = exists
+      )
+    }
     try(Sys.chmod(path, mode = "0700", use_umask = FALSE), silent = TRUE)
   } else if (file.exists(path)) {
     try(Sys.chmod(path, mode = "0600", use_umask = FALSE), silent = TRUE)
@@ -1754,7 +1768,9 @@
 
 .archive_inspect <- function(archive, ext) {
   inspected <- tryCatch({
-    if (.archive_is_zip(ext)) .archive_zip_walk(archive) else if (.archive_is_tar(ext)) {
+    if (.archive_is_zip(ext)) {
+      .archive_zip_walk(archive)
+    } else if (.archive_is_tar(ext)) {
       .archive_tar_inspect(archive, ext)
     } else {
       stop(.archive_parse_error("unsupported archive format"))
@@ -1767,5 +1783,9 @@
 }
 
 .archive_inspection_members <- function(inspection, ext) {
-  if (.archive_is_zip(ext)) inspection$Name else inspection
+  if (.archive_is_zip(ext)) {
+    inspection$Name
+  } else {
+    inspection
+  }
 }

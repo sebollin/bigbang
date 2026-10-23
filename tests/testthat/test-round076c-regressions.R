@@ -34,7 +34,12 @@
 }
 
 test_that("gzip ISIZE lies are rejected under timeout and memory limits", {
-  skip_on_os("windows")
+  skip_on_cran()
+  skip_if(
+    !identical(unname(Sys.info()[["sysname"]]), "Linux"),
+    "this resource guard requires Linux sh, ulimit -v, and timeout"
+  )
+  skip_if(Sys.which("timeout") == "", "the timeout utility is unavailable")
   root <- tempfile("bigbang-r076c-isize-")
   dir.create(root)
   probe <- file.path(root, "probe.R")

@@ -25,7 +25,12 @@ round074_local_repo <- function(root, archive) {
   dir.create(contrib, recursive = TRUE)
   file.copy(archive, contrib)
   tools::write_PACKAGES(contrib, type = "source")
-  paste0("file://", root)
+  root <- normalizePath(root, winslash = "/", mustWork = TRUE)
+  if (identical(.Platform$OS.type, "windows")) {
+    paste0("file:///", root)
+  } else {
+    paste0("file://", root)
+  }
 }
 
 test_that("metapackage/component name collisions fail before writes", {
@@ -214,6 +219,101 @@ test_that("external version constraints use every operator and explicit repos", 
   expect_match(
     no_repo$failed[[1L]], "configured repository", ignore.case = TRUE
   )
+})
+
+test_that("external dependency installation retries from source in both runtimes", {
+  requirements <- stats::setNames(list(list()), "fakeexternal074")
+  libraries <- character()
+  lib <- tempfile("round074-retry-lib-")
+  dir.create(lib)
+  calls <- list()
+  status_calls <- 0L
+  testthat::local_mocked_bindings(
+    .install_external_dependency = function(dependency, libraries, lib, repos,
+                                            type = NULL) {
+      calls <<- c(calls, list(type))
+      list(diagnostics = "mocked installer left the dependency unsatisfied")
+    },
+    .external_dependency_status = function(dependency, constraints, libraries) {
+      status_calls <<- status_calls + 1L
+      satisfied <- status_calls >= 3L
+      list(satisfied = satisfied, detail = if (satisfied) character() else "missing")
+    },
+    .package = "bigbang"
+  )
+  withr::local_options(pkgType = "both")
+  prepared <- .prepare_external_dependencies(
+    requirements, libraries, lib, cran_deps = "install", repos = "https://repo.invalid"
+  )
+  expect_length(calls, 2L)
+  expect_null(calls[[1L]])
+  expect_identical(calls[[2L]], "source")
+  expect_true(prepared$status[[1L]]$satisfied)
+
+  calls <- list()
+  status_calls <- 0L
+  testthat::local_mocked_bindings(
+    .install_external_dependency = function(dependency, libraries, lib, repos,
+                                            type = NULL) {
+      calls <<- c(calls, list(type))
+      list(diagnostics = character())
+    },
+    .external_dependency_status = function(dependency, constraints, libraries) {
+      status_calls <<- status_calls + 1L
+      list(satisfied = TRUE, detail = character())
+    },
+    .package = "bigbang"
+  )
+  prepared <- .prepare_external_dependencies(
+    requirements, libraries, lib, cran_deps = "install", repos = "https://repo.invalid"
+  )
+  expect_length(calls, 0L)
+  expect_true(prepared$status[[1L]]$satisfied)
+
+  root <- tempfile("bigbang-round074-retry-generated-")
+  dir.create(root)
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  archive <- round074_archive(root, "retrycomponent074")
+  generated <- create_metapackage(
+    "retryverse074", archive, dest_dir = file.path(root, "destination"),
+    document = FALSE, verbose = FALSE, force_deps = character()
+  )
+  runtime <- new.env(parent = baseenv())
+  sys.source(file.path(generated$path, "R", "utils.R"), runtime)
+  sys.source(file.path(generated$path, "R", "install_packages.R"), runtime)
+  runtime_calls <- list()
+  runtime_status_calls <- 0L
+  runtime$install_external_dependency <- function(
+    dependency, libraries, lib, repos, type = NULL) {
+    runtime_calls <<- c(runtime_calls, list(type))
+    list(diagnostics = "mocked installer left the dependency unsatisfied")
+  }
+  runtime$external_dependency_status <- function(
+    dependency, constraints, libraries) {
+    runtime_status_calls <<- runtime_status_calls + 1L
+    satisfied <- runtime_status_calls >= 3L
+    list(satisfied = satisfied, detail = if (satisfied) character() else "missing")
+  }
+  prepared <- runtime$prepare_external_dependencies(
+    requirements, libraries, lib, cran_deps = "install", repos = "https://repo.invalid"
+  )
+  expect_length(runtime_calls, 2L)
+  expect_null(runtime_calls[[1L]])
+  expect_identical(runtime_calls[[2L]], "source")
+  expect_true(prepared$status[[1L]]$satisfied)
+
+  runtime_calls <- list()
+  runtime_status_calls <- 0L
+  runtime$external_dependency_status <- function(
+    dependency, constraints, libraries) {
+    runtime_status_calls <<- runtime_status_calls + 1L
+    list(satisfied = TRUE, detail = character())
+  }
+  prepared <- runtime$prepare_external_dependencies(
+    requirements, libraries, lib, cran_deps = "install", repos = "https://repo.invalid"
+  )
+  expect_length(runtime_calls, 0L)
+  expect_true(prepared$status[[1L]]$satisfied)
 })
 
 test_that("diamond installation has one final category per node", {

@@ -131,6 +131,26 @@ t072c_verdict <- function(fun, ...) {
   }
 }
 
+t072c_reparse_fixture <- function(root, label) {
+  target <- file.path(root, paste0(label, "-outside.txt"))
+  link <- file.path(root, paste0(label, "-link"))
+  writeLines("keep", target, useBytes = TRUE)
+  writeLines("link entry", link, useBytes = TRUE)
+  link_normalized <- gsub("\\\\", "/", link)
+  normalize <- function(path) {
+    path <- gsub("\\\\", "/", path)
+    if (identical(path, link_normalized)) target else normalizePath(
+      path, winslash = "/", mustWork = FALSE
+    )
+  }
+  list(
+    target = target,
+    link = link,
+    normalize = normalize,
+    exists = function(path) file.exists(path) || dir.exists(path)
+  )
+}
+
 test_that("R29 geometry traps use the same tar and ZIP walk", {
   root <- tempfile("round072c-geometry-")
   dir.create(root)
@@ -218,8 +238,85 @@ test_that("archive destinations must be empty and never clobber existing links",
   )
   expect_false(result$ok)
   expect_identical(rawToChar(readBin(outside, "raw", 100L)), "keep")
-  if (isTRUE(link)) expect_true(nzchar(Sys.readlink(file.path(destination, "pkg"))))
+  entry <- file.path(destination, "pkg")
+  if (isTRUE(link)) {
+    expect_true(file.exists(entry) || dir.exists(entry) || .path_is_symlink(entry))
+    expect_identical(rawToChar(readBin(entry, "raw", 100L)), "keep")
+    if (!identical(.Platform$OS.type, "windows")) {
+      expect_true(nzchar(Sys.readlink(entry)))
+    }
+  } else {
+    expect_identical(rawToChar(readBin(entry, "raw", 100L)), "existing")
+  }
 })
+
+test_that("archive cleanup and destination checks recognize simulated reparse points", {
+  root <- tempfile("round072c-reparse-")
+  dir.create(root)
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+
+  generated <- new.env(parent = baseenv())
+  generated$.bigbang_abort <- function(class, message, ...) {
+    stop(structure(c(list(message = message, call = NULL), list(...)),
+                   class = c(class, "bigbang_error", "error", "condition")))
+  }
+  generated$.meta_trf <- function(format, ...) sprintf(format, ...)
+  eval(parse(text = round075_archive_template()), generated)
+
+  readers <- list(
+    package = list(
+      cleanup = get(".archive_cleanup_tree", asNamespace("bigbang")),
+      empty = get(".archive_destination_is_empty", asNamespace("bigbang")),
+      kind = get(".archive_tar_existing_kind", asNamespace("bigbang"))
+    ),
+    generated = list(
+      cleanup = get(".archive_cleanup_tree", generated),
+      empty = get(".archive_destination_is_empty", generated),
+      kind = get(".archive_tar_existing_kind", generated)
+    )
+  )
+
+  for (label in names(readers)) {
+    reader <- readers[[label]]
+    fixture <- t072c_reparse_fixture(root, label)
+    expect_false(reader$empty(
+      fixture$link, is_windows = TRUE, normalize = fixture$normalize,
+      exists = fixture$exists
+    ))
+    expect_identical(reader$kind(
+      fixture$link, is_windows = TRUE, normalize = fixture$normalize,
+      exists = fixture$exists
+    ), "symbolic link")
+    reader$cleanup(
+      fixture$link, is_windows = TRUE, normalize = fixture$normalize,
+      exists = fixture$exists
+    )
+    expect_false(file.exists(fixture$link) || dir.exists(fixture$link))
+    expect_identical(readLines(fixture$target, warn = FALSE), "keep")
+  }
+})
+
+if (identical(.Platform$OS.type, "windows")) {
+  test_that("archive cleanup removes a Windows junction without touching its target", {
+    skip_on_os(c("mac", "linux", "solaris"))
+    skip_if_not(exists("Sys.junction", mode = "function"),
+                "Sys.junction is unavailable")
+    root <- tempfile("round072c-junction-")
+    dir.create(root)
+    withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+    target <- file.path(root, "target")
+    dir.create(target)
+    sentinel <- file.path(target, "sentinel.txt")
+    writeLines("keep", sentinel, useBytes = TRUE)
+    link <- file.path(root, "junction")
+    made <- isTRUE(suppressWarnings(Sys.junction(target, link)))
+    skip_if_not(made, "the platform cannot create a junction")
+
+    get(".archive_cleanup_tree", asNamespace("bigbang"))(link)
+    expect_false(file.exists(link) || dir.exists(link) || .path_is_symlink(link))
+    expect_identical(readLines(sentinel, warn = FALSE), "keep")
+  })
+}
 
 test_that("archive limits apply in inspection and extraction", {
   root <- tempfile("round072c-limits-")

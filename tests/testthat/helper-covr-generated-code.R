@@ -22,9 +22,15 @@ round075_untraced_code <- function(code) {
     "write_metapackage_files"
   )
   selected <- Filter(function(item) {
-    identical(item$env, asNamespace("bigbang")) &&
-      (as.character(item$name) %in% names ||
-         grepl("^\\.archive_", as.character(item$name)))
+    if (!identical(item$env, asNamespace("bigbang"))) return(FALSE)
+    item_name <- as.character(item$name)
+    if (!(item_name %in% names || grepl("^\\.archive_", item_name))) {
+      return(FALSE)
+    }
+    # A test may have mocked a package binding after covr installed its
+    # instrumented replacement.  Keep that mock active; replacing it with
+    # covr's original value would make the test exercise a different call.
+    identical(get(item_name, envir = item$env, inherits = FALSE), item$new_value)
   }, replacements)
   saved <- lapply(selected, function(item) {
     item_name <- as.character(item$name)

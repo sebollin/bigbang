@@ -82,10 +82,13 @@ test_that("the plan marks repository installation as pending and unverified", {
     class = "bigbang_error_install"
   ))
   installation_error <- captured$value
-  expect_warning_set(captured$warnings, c(
+  expect_length(captured$warnings, 1L)
+  expect_match(
+    captured$warnings[[1L]],
     "cannot open compressed file '.*r077-repository-does-not-exist/src/contrib/PACKAGES",
-    "Installation failed for r077repository_1.0.0"
-  ), fixed = FALSE)
+    fixed = FALSE
+  )
+  expect_match(captured$warnings[[1L]], "Installation failed for r077repository_1.0.0")
   expect_match(conditionMessage(installation_error),
                "Missing non-local dependencies", fixed = TRUE)
   expect_false(dir.exists(file.path(library_dir, "r077repository")))
