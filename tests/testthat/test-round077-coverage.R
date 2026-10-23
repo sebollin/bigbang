@@ -269,6 +269,11 @@ test_that("omitted lib has plan, generated, and direct-install parity", {
 
 test_that("generated installation attaches retained components from lib2", {
   skip_on_cran()
+  # Under R CMD check on Windows, callr's profiles would hijack .libPaths() in
+  # the child installers; see test-group-c-features.R for the full reason.
+  withr::local_envvar(c(
+    R_ENVIRON = "", R_ENVIRON_USER = "", R_PROFILE = "", R_PROFILE_USER = ""
+  ))
   root <- tempfile("bigbang-r077-library-attach-")
   source_root <- file.path(root, "sources")
   archives <- file.path(root, "archives")
