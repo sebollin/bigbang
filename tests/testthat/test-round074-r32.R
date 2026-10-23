@@ -198,14 +198,16 @@ test_that("metapackage names compare with archive case folding and visible local
   withr::defer(unlink(root, recursive = TRUE, force = TRUE))
   component <- r32_archive(root, "component074", package = "component074")
   expect_error(
-    create_metapackage("Component074", component, dest_dir = root,
-                       document = FALSE, verbose = FALSE, force_deps = character()),
+    round075_create_metapackage(
+      "Component074", component, dest_dir = root,
+      document = FALSE, verbose = FALSE, force_deps = character()
+    ),
     class = "bigbang_error_metapackage_component_collision"
   )
 
   local_dep <- r32_archive(root, "localdep074", package = "localdep074")
   expect_error(
-    create_metapackage(
+    round075_create_metapackage(
       "localdep074", component, pkg_dir = root, dest_dir = file.path(root, "dep-meta"),
       document = FALSE, verbose = FALSE, force_deps = character(),
       tolerate = "unincluded_local_dep"
@@ -215,8 +217,10 @@ test_that("metapackage names compare with archive case folding and visible local
 
   renamed <- r32_archive(root, "metaname074", package = "embedded074")
   expect_error(
-    create_metapackage("metaname074", renamed, dest_dir = file.path(root, "file-meta"),
-                       document = FALSE, verbose = FALSE, force_deps = character()),
+    round075_create_metapackage(
+      "metaname074", renamed, dest_dir = file.path(root, "file-meta"),
+      document = FALSE, verbose = FALSE, force_deps = character()
+    ),
     class = "bigbang_error_metapackage_component_collision"
   )
   expect_true(file.exists(local_dep))
@@ -242,7 +246,7 @@ test_that("failed and skipped diamonds classify every reachable node in both ins
   dir.create(root)
   withr::defer(unlink(root, recursive = TRUE, force = TRUE))
   archives <- make_diamond(root, broken = TRUE)
-  direct <- suppressWarnings(install_local_pkg(
+  direct <- expect_no_warning(install_local_pkg(
     archives[["top"]], pkg_dir = root, lib = file.path(root, "direct"),
     upgrade = "always", verbose = FALSE
   ))
@@ -253,14 +257,30 @@ test_that("failed and skipped diamonds classify every reachable node in both ins
   expect_length(categories(direct), 4L)
   expect_length(unique(categories(direct)), 4L)
 
-  generated <- create_metapackage(
+  generated <- round075_create_metapackage(
     "r32meta074", unname(archives), dest_dir = file.path(root, "generated"),
     document = FALSE, verbose = FALSE, force_deps = character()
   )
-  generated_error <- suppressWarnings(tryCatch(r32_generated_install(
-    generated, "r32meta074", root, file.path(root, "generated-lib"),
-    upgrade = "always"
-  ), error = identity))
+  generated_error <- NULL
+  warning_state <- new.env(parent = emptyenv())
+  warning_state$seen <- FALSE
+  expect_warning(
+    generated_error <- tryCatch(withCallingHandlers(
+      r32_generated_install(
+        generated, "r32meta074", root, file.path(root, "generated-lib"),
+        upgrade = "always"
+      ),
+      warning = function(condition) {
+        if (!grepl("Installation failed", conditionMessage(condition), fixed = TRUE) ||
+              warning_state$seen) {
+          invokeRestart("muffleWarning")
+        } else {
+          warning_state$seen <- TRUE
+        }
+      }
+    ), error = identity),
+    regexp = "Installation failed"
+  )
   expect_s3_class(generated_error, "bigbang_error_install")
   expect_setequal(names(generated_error$failures), "r32base074_0.1.0")
 
@@ -268,7 +288,7 @@ test_that("failed and skipped diamonds classify every reachable node in both ins
   dir.create(skipped_root)
   withr::defer(unlink(skipped_root, recursive = TRUE, force = TRUE))
   skipped_archives <- make_diamond(skipped_root, missing = TRUE)
-  skipped <- suppressWarnings(install_local_pkg(
+  skipped <- expect_no_warning(install_local_pkg(
     skipped_archives[["top"]], pkg_dir = skipped_root,
     lib = file.path(skipped_root, "lib"), cran_deps = "skip",
     upgrade = "always", verbose = FALSE
@@ -277,7 +297,7 @@ test_that("failed and skipped diamonds classify every reachable node in both ins
   expect_length(skipped$skipped, 4L)
   expect_length(unique(categories(skipped)), 4L)
 
-  only <- suppressWarnings(install_local_pkg(
+  only <- expect_no_warning(install_local_pkg(
     archives[["left"]], pkg_dir = root, lib = file.path(root, "only-lib"),
     upgrade = "always", verbose = FALSE
   ))

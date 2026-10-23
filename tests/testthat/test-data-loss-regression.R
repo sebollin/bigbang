@@ -146,7 +146,7 @@ make_functional_sandbox <- function() {
   files <- file.path(cwd, decoys, "sentinel.txt")
   hashes <- unname(tools::md5sum(files))
 
-  withr::with_dir(cwd, suppressWarnings(suppressMessages(
+  withr::with_dir(cwd, expect_no_warning(suppressMessages(
     create_metapackage(
       name = "functionalverse",
       packages = archive_stems,
@@ -172,10 +172,10 @@ test_that("_install installs each component once in dependency order and attache
   on.exit(.libPaths(old_libs), add = TRUE)
   .libPaths(c(s$lib, old_libs))
 
-  suppressWarnings(utils::install.packages(
+  expect_no_warning(utils::install.packages(
     s$project, repos = NULL, type = "source", lib = s$lib, quiet = TRUE
   ))
-  suppressWarnings(suppressMessages(
+  expect_no_warning(suppressMessages(
     library("functionalverse", character.only = TRUE, lib.loc = s$lib)
   ))
   expect_false(any(paste0("package:", s$packages) %in% search()))

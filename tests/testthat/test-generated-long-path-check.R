@@ -25,7 +25,7 @@ test_that("generated documentation keeps long archive paths out of usage", {
   }
   file.copy(fixture, archives)
 
-  result <- suppressWarnings(create_metapackage(
+  result <- expect_no_warning(create_metapackage(
     name = "longpathverse",
     packages = "toycomponent_0.1.0",
     pkg_dir = archives,

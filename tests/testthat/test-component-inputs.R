@@ -230,7 +230,7 @@ test_that("the local installer reports policy, constraint, and install failures"
     "brokeninput", "1.0.0", file.path(archives, "brokeninput_1.0.0.tar.gz"),
     source_root, r_code = "brokeninput_value <- function("
   )
-  broken_result <- suppressWarnings(
+  broken_result <- expect_no_warning(
     install_local_pkg(broken, verbose = FALSE, upgrade = "always")
   )
   expect_length(broken_result$failed, 1L)
@@ -513,10 +513,24 @@ test_that("DESCRIPTION identity accepts unversioned and mismatched filenames", {
     source_root, filename_root = "declared-source"
   )
 
-  result <- suppressWarnings(create_metapackage(
-    "identityverse", c(no_version, mismatch), dest_dir = destination,
-    document = FALSE, verbose = FALSE, force_deps = character()
-  ))
+  result <- NULL
+  first_warning <- TRUE
+  expect_warning(
+    result <- withCallingHandlers(
+      create_metapackage(
+        "identityverse", c(no_version, mismatch), dest_dir = destination,
+        document = FALSE, verbose = FALSE, force_deps = character()
+      ),
+      warning = function(condition) {
+        if (first_warning) {
+          first_warning <<- FALSE
+        } else {
+          invokeRestart("muffleWarning")
+        }
+      }
+    ),
+    regexp = "declares (package|version)"
+  )
   expect_identical(result$packages, c("noversionpkg", "declaredpkg"))
   withr::local_libpaths(c(library_dir, .libPaths()))
   direct <- install_local_pkg(no_version, verbose = FALSE, upgrade = "always")
@@ -539,14 +553,40 @@ test_that("DESCRIPTION identity accepts unversioned and mismatched filenames", {
   sys.source(file.path(result$path, "R", "utils.R"), generated)
   sys.source(file.path(result$path, "R", "install_packages.R"), generated)
   sys.source(file.path(result$path, "R", "attach.R"), generated)
-  generated_deps <- suppressWarnings(generated$identityverse_deps(
-    file.path(result$path, "inst", "archives")
-  ))
+  generated_deps <- NULL
+  first_warning <- TRUE
+  expect_warning(
+    generated_deps <- withCallingHandlers(
+      generated$identityverse_deps(file.path(result$path, "inst", "archives")),
+      warning = function(condition) {
+        if (first_warning) {
+          first_warning <<- FALSE
+        } else {
+          invokeRestart("muffleWarning")
+        }
+      }
+    ),
+    regexp = "declares (package|version)"
+  )
   expect_true("declaredpkg" %in% generated_deps)
-  generated_result <- suppressWarnings(generated$install_packages_in_order(
-    result$archives, file.path(result$path, "inst", "archives"), NULL,
-    verbose = FALSE, upgrade = "always"
-  ))
+  generated_result <- NULL
+  first_warning <- TRUE
+  expect_warning(
+    generated_result <- withCallingHandlers(
+      generated$install_packages_in_order(
+        result$archives, file.path(result$path, "inst", "archives"), NULL,
+        verbose = FALSE, upgrade = "always"
+      ),
+      warning = function(condition) {
+        if (first_warning) {
+          first_warning <<- FALSE
+        } else {
+          invokeRestart("muffleWarning")
+        }
+      }
+    ),
+    regexp = "declares (package|version)"
+  )
   expect_length(generated_result$failed, 0L)
   expect_true(requireNamespace("noversionpkg", quietly = TRUE))
 })
@@ -601,12 +641,26 @@ test_that("archive basenames from different sources cannot overwrite", {
   second <- make_input_archive(
     "collisiontwo", "1.0.0", file.path(second_dir, "same.tar.gz"), source_root
   )
-  condition <- expect_error(
-    suppressWarnings(create_metapackage(
-      "collisionverse", c(first, second), dest_dir = destination,
-      document = FALSE, verbose = FALSE, force_deps = character()
-    )),
-    class = "bigbang_error_archive_basename_collision"
+  condition <- NULL
+  first_warning <- TRUE
+  expect_warning(
+    condition <- expect_error(
+      withCallingHandlers(
+        create_metapackage(
+          "collisionverse", c(first, second), dest_dir = destination,
+          document = FALSE, verbose = FALSE, force_deps = character()
+        ),
+        warning = function(condition) {
+          if (first_warning) {
+            first_warning <<- FALSE
+          } else {
+            invokeRestart("muffleWarning")
+          }
+        }
+      ),
+      class = "bigbang_error_archive_basename_collision"
+    ),
+    regexp = "declares package"
   )
   message <- conditionMessage(condition)
   expect_true(grepl(
@@ -679,7 +733,7 @@ test_that("a failed installation reports the installer's own error", {
     source_root, r_code = "brokendetail_value <- function("
   )
 
-  direct <- suppressWarnings(install_local_pkg(
+  direct <- expect_no_warning(install_local_pkg(
     broken, verbose = FALSE, upgrade = "always", lib = direct_lib
   ))
   expect_length(direct$failed, 1L)
@@ -696,12 +750,16 @@ test_that("a failed installation reports the installer's own error", {
   sys.source(file.path(generated$path, "R", "utils.R"), runtime)
   sys.source(file.path(generated$path, "R", "install_packages.R"), runtime)
   sys.source(file.path(generated$path, "R", "attach.R"), runtime)
-  emitted <- tryCatch(
-    suppressWarnings(runtime$brokendetailverse_install(
-      pkg_dir = file.path(generated$path, "inst", "archives"),
-      cran_deps = "skip", verbose = FALSE, lib = emitted_lib
-    )),
-    error = identity
+  emitted <- NULL
+  expect_warning(
+    emitted <- tryCatch(
+      runtime$brokendetailverse_install(
+        pkg_dir = file.path(generated$path, "inst", "archives"),
+        cran_deps = "skip", verbose = FALSE, lib = emitted_lib
+      ),
+      error = identity
+    ),
+    regexp = "Installation failed"
   )
   expect_s3_class(emitted, "error")
   expect_match(conditionMessage(emitted), "unable to collate", fixed = TRUE)

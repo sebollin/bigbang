@@ -71,11 +71,25 @@ test_that("uppercase archive extensions are canonicalized end to end", {
     "zippkg", "1.0.0",
     file.path(archive_dir, "ZIPPKG_1.0.0.ZIP"), source_root
   )
-  result <- suppressWarnings(create_metapackage(
-    "caseverse", c(tar_archive, zip_archive), dest_dir = destination,
-    document = FALSE, verbose = FALSE, import_deps = character(),
-    force_deps = character()
-  ))
+  result <- NULL
+  expect_warning(
+    result <- withCallingHandlers(
+      create_metapackage(
+        "caseverse", c(tar_archive, zip_archive), dest_dir = destination,
+        document = FALSE, verbose = FALSE, import_deps = character(),
+        force_deps = character()
+      ),
+      warning = function(condition) {
+        if (!grepl(
+          "declares package upperpkg, but its filename suggests UPPERPKG",
+          conditionMessage(condition), fixed = TRUE
+        )) {
+          invokeRestart("muffleWarning")
+        }
+      }
+    ),
+    regexp = "declares package upperpkg, but its filename suggests UPPERPKG"
+  )
   expect_setequal(
     list.files(file.path(result$path, "inst", "archives")),
     c("UPPERPKG_1.0.0.tar.gz", "ZIPPKG_1.0.0.zip")
@@ -120,13 +134,27 @@ test_that("archive names that collide only by case are rejected", {
     "casesecond", "1.0.0", file.path(second_dir, "SAME_1.0.0.TAR.GZ"),
     second_source
   )
-  expect_error(
-    suppressWarnings(create_metapackage(
-      "casecollision", c(first, second), dest_dir = destination,
-      document = FALSE, verbose = FALSE, import_deps = character(),
-      force_deps = character()
-    )),
-    class = "bigbang_error_archive_basename_collision"
+  condition <- NULL
+  first_warning <- TRUE
+  expect_warning(
+    condition <- expect_error(
+      withCallingHandlers(
+        create_metapackage(
+          "casecollision", c(first, second), dest_dir = destination,
+          document = FALSE, verbose = FALSE, import_deps = character(),
+          force_deps = character()
+        ),
+        warning = function(condition) {
+          if (first_warning) {
+            first_warning <<- FALSE
+          } else {
+            invokeRestart("muffleWarning")
+          }
+        }
+      ),
+      class = "bigbang_error_archive_basename_collision"
+    ),
+    regexp = "declares package"
   )
 })
 
@@ -175,7 +203,7 @@ test_that("unreadable unrelated archives are excluded with diagnostics", {
   bytes <- readBin(missing, "raw", n = file.info(missing)$size)
   writeBin(bytes[seq_len(max(1L, length(bytes) %/% 2L))], missing)
   warnings <- character()
-  suppressWarnings(withCallingHandlers(
+  withCallingHandlers(
     create_metapackage(
       "inventorydependent", consumer, pkg_dir = archive_dir,
       dest_dir = file.path(sandbox, "dependent-destination"),
@@ -186,7 +214,7 @@ test_that("unreadable unrelated archives are excluded with diagnostics", {
       warnings <<- c(warnings, conditionMessage(condition))
       invokeRestart("muffleWarning")
     }
-  ))
+  )
   expect_true(any(grepl(
     "declares dependency inventorymissing", warnings, fixed = TRUE
   )))
@@ -230,18 +258,33 @@ test_that("generated installation reports the declared package identity", {
     "declaredround81", "1.0.0",
     file.path(archive_dir, "aliasround81_9.9.tar.gz"), source_root
   )
-  result <- suppressWarnings(create_metapackage(
-    "identityround81", archive, dest_dir = destination,
-    document = FALSE, verbose = FALSE, import_deps = character(),
-    force_deps = character()
-  ))
+  result <- NULL
+  first_warning <- TRUE
+  expect_warning(
+    result <- withCallingHandlers(
+      create_metapackage(
+        "identityround81", archive, dest_dir = destination,
+        document = FALSE, verbose = FALSE, import_deps = character(),
+        force_deps = character()
+      ),
+      warning = function(condition) {
+        if (!grepl("declares package declaredround81, but its filename suggests aliasround81",
+                   conditionMessage(condition), fixed = TRUE)) {
+          invokeRestart("muffleWarning")
+        }
+      }
+    ),
+    regexp = "declares package declaredround81, but its filename suggests aliasround81"
+  )
   environment <- new.env(parent = baseenv())
   sys.source(file.path(result$path, "R", "utils.R"), environment)
   sys.source(file.path(result$path, "R", "install_packages.R"), environment)
   withr::local_libpaths(c(library_dir, .libPaths()))
   messages <- character()
-  generated <- expect_warning(
-    withCallingHandlers(
+  first_warning <- TRUE
+  generated <- NULL
+  expect_warning(
+    generated <- withCallingHandlers(
       environment$install_packages_in_order(
         result$archives, archive_dir, NULL, verbose = TRUE, upgrade = "always",
         lib = library_dir
@@ -249,6 +292,13 @@ test_that("generated installation reports the declared package identity", {
       message = function(condition) {
         messages <<- c(messages, conditionMessage(condition))
         invokeRestart("muffleMessage")
+      },
+      warning = function(condition) {
+        if (first_warning) {
+          first_warning <<- FALSE
+        } else {
+          invokeRestart("muffleWarning")
+        }
       }
     ),
     regexp = "declares package declaredround81, but its filename suggests aliasround81"

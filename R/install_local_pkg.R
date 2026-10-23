@@ -65,6 +65,23 @@
   )
 }
 
+.validate_install_library <- function(lib) {
+  if (!is.character(lib) || length(lib) != 1L ||
+        is.na(lib) || !nzchar(lib)) {
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .bb_tr("The installation library must be one non-empty path.")
+    )
+  }
+  if (file.exists(lib) && !dir.exists(lib)) {
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .bb_trf("Could not create installation library: %s", lib)
+    )
+  }
+  invisible(lib)
+}
+
 # Explain, in the result itself, why a component was left alone. A bare
 # "Already installed" is false whenever the installed package merely shares the
 # component's name, and the result is the only thing a calling script can read.
@@ -452,13 +469,13 @@ install_local_pkg <- function(
   lib_was_missing <- missing(lib)
   cran_deps <- match.arg(cran_deps)
   upgrade <- .resolve_upgrade_policy(force, upgrade, missing(upgrade))
-  if (!is.character(lib) || length(lib) != 1L || is.na(lib) || !nzchar(lib)) {
-    stop(.bb_tr("The installation library must be one non-empty path."),
-         call. = FALSE)
-  }
-  if (!dir.exists(lib) && !dir.create(lib, recursive = TRUE)) {
-    stop(.bb_trf("Could not create installation library: %s", lib),
-         call. = FALSE)
+  .validate_install_library(lib)
+  if (!dir.exists(lib) && !dir.create(lib, recursive = TRUE,
+                                      showWarnings = FALSE)) {
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .bb_trf("Could not create installation library: %s", lib)
+    )
   }
   lib <- normalizePath(lib, winslash = "/", mustWork = TRUE)
   dependency_libraries <- unique(c(lib, .libPaths()))

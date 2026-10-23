@@ -195,7 +195,7 @@ test_that("an omitted update input cannot delete its shipped archive", {
   )
   unlink(victim)
 
-  updated <- suppressWarnings(round104_generate(
+  updated <- expect_no_warning(round104_generate(
     "omitverse", c(keep, "victi_1.0.0"), destination,
     update = TRUE, on_component_error = "skip"
   ))
@@ -230,7 +230,7 @@ test_that("identified omitted archives are preserved while deliberate removals p
   )
   unlink(c(drop, victim))
 
-  updated <- suppressWarnings(round104_generate(
+  updated <- expect_no_warning(round104_generate(
     "mixedverse", c(keep, missing_victim), destination,
     update = TRUE, on_component_error = "skip"
   ))

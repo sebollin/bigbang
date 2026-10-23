@@ -36,10 +36,8 @@ Archive walks use \code{options()} values named
 \code{bigbang.archive.max_entries} (default 100,000),
 \code{bigbang.archive.max_total_bytes} (default 2 GiB),
 \code{bigbang.archive.max_metadata_bytes} (default 64 MiB), and
-\code{bigbang.archive.max_path_bytes} (default 4,096 bytes). The aliases
-\code{bigbang.archive.max_bytes}, \code{bigbang.archive.max_metadata_payload}, and
-\code{bigbang.archive.max_path_length} are accepted for compatibility. Limits
-apply during both inspection and extraction; the byte limit includes archive
+\code{bigbang.archive.max_path_bytes} (default 4,096 bytes). Limits apply during
+both inspection and extraction; the byte limit includes archive
 metadata and data discarded during inspection. Metadata includes ZIP local
 and central records, data descriptors, the EOCD comment, every TAR header,
 and PAX/GNU metadata payload. Implicit directories and PAX/GNU metadata

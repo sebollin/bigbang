@@ -510,8 +510,12 @@ test_that("archive metadata mismatches warn but use DESCRIPTION identity", {
   expect_true(file.exists(file.path(result$path, "DESCRIPTION")))
 
   withr::local_libpaths(c(library_dir, .libPaths()))
-  direct <- suppressWarnings(
-    install_local_pkg("mismatchfixture_1.0.0", archive_dir, verbose = FALSE)
+  direct <- NULL
+  expect_warning(
+    direct <- install_local_pkg(
+      "mismatchfixture_1.0.0", archive_dir, verbose = FALSE
+    ),
+    regexp = "declares version 2\\.0\\.0"
   )
   expect_length(direct$failed, 0L)
   expect_named(direct$installed, "mismatchfixture_1.0.0")
@@ -753,7 +757,7 @@ test_that("generation tolerations cannot disable recipient protection invariants
                 .Platform$OS.type == "windows")
   for (label in names(checks)) {
     condition <- tryCatch(
-      suppressWarnings(checks[[label]]$run()),
+      expect_no_warning(checks[[label]]$run()),
       error = identity
     )
     expect_true(inherits(condition, "error"), info = label)

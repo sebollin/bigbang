@@ -47,7 +47,7 @@ test_that("the recipient plan is read-only and agrees with installation", {
     "planpkg", "1.0.0", file.path(archives, "planpkg_1.0.0.tar.gz"),
     source_root, imports = "r076_missing (>= 99.0.0)"
   )
-  result <- create_metapackage(
+  result <- round075_create_metapackage(
     "planverse", archive, dest_dir = destination, document = FALSE,
     verbose = FALSE, import_deps = character(), force_deps = character()
   )
@@ -66,9 +66,22 @@ test_that("the recipient plan is read-only and agrees with installation", {
   expect_setequal(before_namespaces[before_namespaces %in% loadedNamespaces()],
                   before_namespaces)
 
-  installed <- suppressWarnings(runtime$planverse_install(
-    pkg_dir = archives, cran_deps = "skip", verbose = FALSE, lib = library_dir
-  ))
+  installed <- NULL
+  expect_warning(
+    installed <- withCallingHandlers(
+      runtime$planverse_install(
+        pkg_dir = archives, cran_deps = "skip", verbose = FALSE,
+        lib = library_dir
+      ),
+      warning = function(condition) {
+        if (!grepl("Some components were skipped", conditionMessage(condition),
+                   fixed = TRUE)) {
+          invokeRestart("muffleWarning")
+        }
+      }
+    ),
+    regexp = "Some components were skipped"
+  )
   expect_true("planpkg_1.0.0" %in% names(installed$skipped))
   expect_identical(plan$components$action, "skip")
 })
@@ -91,7 +104,7 @@ test_that("the plan default follows the generated install upgrade policy", {
   )
   for (policy in c("newer", "always", "never")) {
     name <- paste0("upgrade", policy, "verse")
-    generated <- create_metapackage(
+    generated <- round075_create_metapackage(
       name, archive_new, dest_dir = destination, document = FALSE,
       verbose = FALSE, import_deps = character(), force_deps = character(),
       install_upgrade = policy
@@ -107,7 +120,7 @@ test_that("the plan default follows the generated install upgrade policy", {
     expect_identical(plan$upgrade, policy)
     expected_action <- if (identical(policy, "never")) "keep" else "install"
     expect_identical(plan$components$action, expected_action)
-    result <- suppressWarnings(runtime[[paste0(name, "_install")]](
+    result <- expect_no_warning(runtime[[paste0(name, "_install")]](
       pkg_dir = archives, cran_deps = "skip", verbose = FALSE, lib = lib
     ))
     result_field <- if (identical(expected_action, "keep")) {
@@ -138,7 +151,7 @@ test_that("matching archive identity is silent in both installers", {
   expect_no_warning(install_local_pkg(
     archive, lib = direct_lib, upgrade = "always", verbose = FALSE
   ))
-  generated <- create_metapackage(
+  generated <- round075_create_metapackage(
     "identityverse", archive, dest_dir = destination, document = FALSE,
     verbose = FALSE, import_deps = character(), force_deps = character()
   )
@@ -174,7 +187,7 @@ test_that("the plan reports repository availability like its external action", {
     file.path(archives, "repositorypkg_1.0.0.tar.gz"), source_root,
     imports = "r076_missing (>= 99.0.0)"
   )
-  generated <- create_metapackage(
+  generated <- round075_create_metapackage(
     "repositoryverse", archive, dest_dir = destination, document = FALSE,
     verbose = FALSE, import_deps = character(), force_deps = character()
   )
@@ -187,7 +200,10 @@ test_that("the plan reports repository availability like its external action", {
     )
     configured <- identical(label, "usable")
     expect_identical(plan$repositories_configured, configured)
-    expect_identical(plan$external$action, if (configured) "install" else "fail")
+    expect_identical(
+      plan$external$action,
+      if (configured) "install_unverified" else "fail"
+    )
   }
 })
 
@@ -211,12 +227,12 @@ test_that("generated installation sees a component in a secondary library", {
                               verbose = FALSE)
   expect_length(direct$failed, 0L)
   withr::local_libpaths(c(secondary, .libPaths()))
-  result <- create_metapackage(
+  result <- round075_create_metapackage(
     "secondaryverse", archive, dest_dir = destination, document = FALSE,
     verbose = FALSE, import_deps = character(), force_deps = character()
   )
   runtime <- .r076_source_runtime(result$path)
-  installed <- suppressWarnings(runtime$secondaryverse_install(
+  installed <- expect_no_warning(runtime$secondaryverse_install(
     pkg_dir = archives, upgrade = "never", verbose = FALSE, lib = target
   ))
   expect_true("secondarypkg_1.0.0" %in% names(installed$installed))
@@ -233,7 +249,7 @@ test_that("governance is opt-in and update tracks its files", {
     system.file("extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"),
     archives
   )
-  plain <- create_metapackage(
+  plain <- round075_create_metapackage(
     "plainverse", "toycomponent_0.1.0", pkg_dir = archives,
     dest_dir = destination, document = FALSE, verbose = FALSE,
     import_deps = character(), force_deps = character(), governance = FALSE
@@ -242,7 +258,7 @@ test_that("governance is opt-in and update tracks its files", {
                                  include.dirs = FALSE))
   expect_false(any(grepl("CONTRIBUTING|CODE_OF_CONDUCT|package-inclusion", plain_files)))
 
-  governed <- create_metapackage(
+  governed <- round075_create_metapackage(
     "governedverse", "toycomponent_0.1.0", pkg_dir = archives,
     dest_dir = destination, document = FALSE, verbose = FALSE,
     import_deps = character(), force_deps = character(), governance = TRUE
@@ -258,7 +274,7 @@ test_that("governance is opt-in and update tracks its files", {
   expect_true(any(grepl("Contributor Covenant", readLines(
     file.path(governed$path, "CODE_OF_CONDUCT.md")
   ), fixed = TRUE)))
-  update <- create_metapackage(
+  update <- round075_create_metapackage(
     "governedverse", "toycomponent_0.1.0", pkg_dir = archives,
     dest_dir = destination, document = FALSE, verbose = FALSE,
     import_deps = character(), force_deps = character(), governance = TRUE,
@@ -268,12 +284,12 @@ test_that("governance is opt-in and update tracks its files", {
   expect_true("CONTRIBUTING.md" %in% manifest$files)
   expect_true(file.exists(file.path(governed$path, "CONTRIBUTING.md")))
 
-  toggled <- create_metapackage(
+  toggled <- round075_create_metapackage(
     "toggledverse", "toycomponent_0.1.0", pkg_dir = archives,
     dest_dir = destination, document = FALSE, verbose = FALSE,
     import_deps = character(), force_deps = character(), governance = TRUE
   )
-  create_metapackage(
+  round075_create_metapackage(
     "toggledverse", "toycomponent_0.1.0", pkg_dir = archives,
     dest_dir = destination, document = FALSE, verbose = FALSE,
     import_deps = character(), force_deps = character(), governance = FALSE,
@@ -282,19 +298,19 @@ test_that("governance is opt-in and update tracks its files", {
   expect_false(dir.exists(file.path(toggled$path, ".github", "ISSUE_TEMPLATE")))
   expect_false(dir.exists(file.path(toggled$path, ".github")))
 
-  user_dirs <- create_metapackage(
+  user_dirs <- round075_create_metapackage(
     "userdirsverse", "toycomponent_0.1.0", pkg_dir = archives,
     dest_dir = destination, document = FALSE, verbose = FALSE,
     import_deps = character(), force_deps = character(), governance = FALSE
   )
   dir.create(file.path(user_dirs$path, ".github", "ISSUE_TEMPLATE"), recursive = TRUE)
-  create_metapackage(
+  round075_create_metapackage(
     "userdirsverse", "toycomponent_0.1.0", pkg_dir = archives,
     dest_dir = destination, document = FALSE, verbose = FALSE,
     import_deps = character(), force_deps = character(), governance = TRUE,
     update = TRUE
   )
-  create_metapackage(
+  round075_create_metapackage(
     "userdirsverse", "toycomponent_0.1.0", pkg_dir = archives,
     dest_dir = destination, document = FALSE, verbose = FALSE,
     import_deps = character(), force_deps = character(), governance = FALSE,

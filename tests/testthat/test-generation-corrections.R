@@ -225,7 +225,7 @@ test_that("successful documentation restores the caller session", {
   search_before <- search()
   namespaces_before <- loadedNamespaces()
   cwd_before <- getwd()
-  result <- suppressWarnings(generate_toy_metapackage(
+  result <- expect_no_warning(generate_toy_metapackage(
     "docverse", archives, destination, document = TRUE
   ))
 
@@ -258,7 +258,7 @@ test_that("generated DESCRIPTION records roxygen only after documentation runs",
   )
   expect_false("RoxygenNote" %in% colnames(undocumented_description))
 
-  documented <- suppressWarnings(generate_toy_metapackage(
+  documented <- expect_no_warning(generate_toy_metapackage(
     "documentedverse", archives, destination, document = TRUE
   ))
   documented_description <- read.dcf(

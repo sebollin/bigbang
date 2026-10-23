@@ -36,7 +36,8 @@
     ".archive_discard", ".archive_raw_text", ".archive_cstring",
     ".archive_number", ".archive_gzip_member_trailer",
     ".archive_tar_connection", ".archive_tar_read",
-    ".archive_tar_close", ".archive_tar_finish", ".archive_tar_checksum_ok",
+    ".archive_tar_close", ".archive_tar_finish", ".archive_gzip_trailer_message",
+    ".archive_tar_checksum_ok",
     ".archive_pax_records", ".archive_pax_validate_keys", ".archive_pax_number",
     ".archive_pax_time", ".archive_tar_normalize_path",
     ".archive_tar_existing_kind", ".archive_tar_prepare_parent",
@@ -145,7 +146,24 @@ external_dependency_action <- function(status, cran_deps, repos) {{
     base::identical(cran_deps, "skip")
   ) "skip" else if (base::identical(cran_deps, "error")) "fail" else if (
     !repositories_configured(repos)
-  ) "fail" else "install"
+  ) "fail" else "install_unverified"
+}}
+
+validate_install_library <- function(lib) {{
+  if (!base::is.character(lib) || base::length(lib) != 1L ||
+      base::is.na(lib) || !base::nzchar(lib)) {{
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .meta_tr("The installation library must be one non-empty path.")
+    )
+  }}
+  if (base::file.exists(lib) && !base::dir.exists(lib)) {{
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .meta_trf("Could not create installation library: %s", lib)
+    )
+  }}
+  base::invisible(lib)
 }}
 
 with_install_library_path <- function(libraries, code) {{
@@ -276,10 +294,13 @@ select_component_archives <- function(only, pkg_dir, ext, cache = NULL) {{
       selected = NULL, packages = NULL, pulled_in = base::character()
     ))
   }}
-  if (!base::is.character(only) || base::anyNA(only) ||
-      base::any(!base::nzchar(only))) {{
-    base::stop(.meta_tr("\'only\' must contain component package names."),
-               call. = FALSE)
+  if (!base::is.character(only) || base::length(only) < 1L ||
+      base::anyNA(only) || base::any(!base::nzchar(only)) ||
+      base::anyDuplicated(only) > 0L) {{
+    .bigbang_abort(
+      "bigbang_error_only",
+      .meta_tr("\'only\' must contain one or more unique component package names.")
+    )
   }}
   unknown <- base::setdiff(only, .component_names)
   if (base::length(unknown) > 0L) {{
@@ -600,7 +621,10 @@ resolve_component_archive <- function(package, pkg_dir, ext = NULL) {{
 .archive_warning_state$active <- FALSE
 .archive_warning_state$seen <- base::character()
 .warn_archive_filename_mismatch <- function(archive, message) {{
-  key <- base::normalizePath(archive, winslash = "/", mustWork = FALSE)
+  key <- base::paste0(
+    base::normalizePath(archive, winslash = "/", mustWork = FALSE),
+    "\n", message
+  )
   if (!base::isTRUE(.archive_warning_state$active)) {{
     base::warning(message, call. = FALSE)
     return(base::invisible(NULL))
@@ -627,6 +651,7 @@ read_archive_metadata <- function(package, pkg_dir, ext = NULL, cache = NULL) {{
   resolved <- resolve_component_archive(package, pkg_dir, ext)
   archive <- resolved$path
   ext <- resolved$ext
+  spec <- resolve_component_spec(package, ext)
 
   if (base::is.null(cache)) {{
     temp_dir <- tempfile("bigbang-deps-")
@@ -640,40 +665,44 @@ read_archive_metadata <- function(package, pkg_dir, ext = NULL, cache = NULL) {{
   if (!.archive_is_zip(ext) && !.archive_is_tar(ext)) {{
     stop(.meta_trf("Unsupported archive format: %s", ext), call. = FALSE)
   }}
-  listing <- base::tryCatch(
-    if (base::is.null(cache)) .archive_inspect(archive, ext)
-    else .archive_cache_listing(cache, archive, ext),
-    error = base::identity
-  )
-  if (inherits(listing, "error")) {{
-    stop(.meta_trf(
-      "Could not extract archive %s: %s", archive, conditionMessage(listing)
-    ), call. = FALSE)
-  }}
-  listing_status <- attr(listing, "status")
-  if (is.numeric(listing_status) && length(listing_status) == 1L &&
-      listing_status != 0) {{
-    stop(.meta_trf(
-      "Could not extract archive %s: extraction returned status %d.",
-      archive, listing_status
-    ), call. = FALSE)
-  }}
-  members <- .archive_inspection_members(listing, ext)
-  members <- gsub("\\\\", "/", members, fixed = TRUE)
-  unsafe <- startsWith(members, "/") |
-    grepl("^[A-Za-z]:", members) |
-    grepl("(^|/)\\\\.\\\\.(/|$)", members, perl = TRUE)
-  if (any(unsafe)) {{
-    stop(.meta_trf(
-      "Archive contains unsafe absolute or parent-traversal paths: %s",
-      paste(utils::head(members[unsafe], 3L), collapse = ", ")
-    ), call. = FALSE)
-  }}
-  extraction <- if (base::is.null(cache)) base::tryCatch(
-    .archive_extract(archive, ext, temp_dir), error = base::identity
-  ) else {{
+  if (base::is.null(cache)) {{
+    listing <- base::tryCatch(
+      .archive_inspect(archive, ext), error = base::identity
+    )
+    if (inherits(listing, "error")) {{
+      stop(.meta_trf(
+        "Could not extract archive %s: %s", archive, conditionMessage(listing)
+      ), call. = FALSE)
+    }}
+    listing_status <- attr(listing, "status")
+    if (is.numeric(listing_status) && length(listing_status) == 1L &&
+        listing_status != 0) {{
+      stop(.meta_trf(
+        "Could not extract archive %s: extraction returned status %d.",
+        archive, listing_status
+      ), call. = FALSE)
+    }}
+    members <- .archive_inspection_members(listing, ext)
+    members <- gsub("\\\\", "/", members, fixed = TRUE)
+    unsafe <- startsWith(members, "/") |
+      grepl("^[A-Za-z]:", members) |
+      grepl("(^|/)\\\\.\\\\.(/|$)", members, perl = TRUE)
+    if (any(unsafe)) {{
+      stop(.meta_trf(
+        "Archive contains unsafe absolute or parent-traversal paths: %s",
+        paste(utils::head(members[unsafe], 3L), collapse = ", ")
+      ), call. = FALSE)
+    }}
+    extraction <- base::tryCatch(
+      .archive_extract(archive, ext, temp_dir), error = base::identity
+    )
+  }} else {{
+    # Extraction already performs the guarded walk and stores its inspection
+    # in the cache entry. Reuse that listing instead of walking the archive
+    # once before and once during extraction.
     temp_dir <- .archive_cache_extract(cache, archive, ext)
-    NULL
+    extraction <- NULL
+    listing <- .archive_cache_listing(cache, archive, ext)
   }}
   if (base::inherits(extraction, "error")) {{
     stop(.meta_trf(
@@ -726,7 +755,18 @@ read_archive_metadata <- function(package, pkg_dir, ext = NULL, cache = NULL) {{
       "Archive %s must declare non-empty Package and Version fields.", archive
     ), call. = FALSE)
   }}
-  spec <- resolve_component_spec(package, ext)
+  if (!base::identical(declared_package, spec$package)) {{
+    .bigbang_abort(
+      "bigbang_error_generated_archive_changed",
+      .meta_trf(
+        "Archive %s changed after generation: its Package field is %s, but the generated spec expects %s.",
+        archive, declared_package, spec$package
+      ),
+      archive = archive,
+      declared_package = declared_package,
+      expected_package = spec$package
+    )
+  }}
   expected_package <- base::unname(base::sub("_.*", "", spec$stem))
   has_version <- grepl("_", spec$stem, fixed = TRUE)
   expected_version <- if (has_version) {{
@@ -880,7 +920,9 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
                                    upgrade = c("newer", "always", "never"),
                                    lib = .libPaths()[[1L]], verbose = TRUE,
                                    cache = NULL, external_status = NULL,
-                                   external_no_repository = FALSE) {{
+                                   external_no_repository = FALSE,
+                                   lib_was_missing = NULL) {{
+  if (base::is.null(lib_was_missing)) lib_was_missing <- base::missing(lib)
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
   dependency_libraries <- unique(c(lib, .libPaths()))
@@ -904,10 +946,12 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
   version <- metadata$version
   dependencies <- metadata$dependencies
   local_names <- .component_names
-  # An explicit `lib` is the component destination. Other library paths are
-  # searched for external dependencies, but a component found there is still
-  # installed into the requested destination, matching install_local_pkg().
-  component_libraries <- lib
+  # An explicit `lib` is the component destination. When it was omitted, an
+  # installed component in any active library counts as installed, while a
+  # component that needs installation still targets the first library.
+  component_libraries <- if (base::isTRUE(lib_was_missing)) {{
+    dependency_libraries
+  }} else lib
   if (is.null(external_status)) {{
     requirements <- external_requirements(
       list(metadata), local_names
@@ -1149,7 +1193,7 @@ detect_cycles <- function(adjacency) {{
     return(FALSE)
   }}
 
-  for (i in 1:package_count) {{
+  for (i in base::seq_len(package_count)) {{
     if (!visited[i]) dfs(i)
   }}
 
@@ -1284,8 +1328,11 @@ topological_order <- function(adjacency) {{
 #\' @return Invisibly, installation, failure, skip, and order information.
 #\' @param only Optional component names; local dependencies are added.
 #\' @param lib Character library in which components are installed and verified.
-#\'   A component found only in another library is installed into `lib`, while
-#\'   non-local dependencies may be available in `lib` or any `.libPaths()` entry.
+#\'   When supplied explicitly, a component found only in another library is
+#\'   installed into `lib`. When omitted, an installed component in any active
+#\'   `.libPaths()` entry counts as installed; a component that needs installation
+#\'   is installed into the first active library. Non-local dependencies may be
+#\'   available in `lib` or any `.libPaths()` entry.
 #\' @keywords internal
 #\'
 #\' @examples
@@ -1303,7 +1350,9 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
                                       cran_deps = c("skip", "error", "install"),
                                       upgrade = c("newer", "always", "never"),
                                       only = NULL,
-                                      lib = .libPaths()[[1L]]) {{
+                                      lib = .libPaths()[[1L]],
+                                      lib_was_missing = NULL) {{
+  if (base::is.null(lib_was_missing)) lib_was_missing <- base::missing(lib)
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
   archive_cache <- .archive_cache_new()
@@ -1318,13 +1367,13 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     .archive_warning_state$active <- FALSE
     .archive_warning_state$seen <- base::character()
   }}, add = TRUE)
-  if (!is.character(lib) || length(lib) != 1L || is.na(lib) || !nzchar(lib)) {{
-    stop(.meta_tr("The installation library must be one non-empty path."),
-         call. = FALSE)
-  }}
-  if (!dir.exists(lib) && !dir.create(lib, recursive = TRUE)) {{
-    stop(.meta_trf("Could not create installation library: %s", lib),
-         call. = FALSE)
+  validate_install_library(lib)
+  if (!dir.exists(lib) && !dir.create(lib, recursive = TRUE,
+                                      showWarnings = FALSE)) {{
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .meta_trf("Could not create installation library: %s", lib)
+    )
   }}
   lib <- normalizePath(lib, winslash = "/", mustWork = TRUE)
   selection <- select_component_archives(
@@ -1421,7 +1470,8 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
           package, pkg_dir, ext, repos = repos, cran_deps = cran_deps,
           upgrade = upgrade, lib = lib, verbose = verbose,
           cache = archive_cache, external_status = external_preparation$status,
-          external_no_repository = external_preparation$no_repository
+          external_no_repository = external_preparation$no_repository,
+          lib_was_missing = lib_was_missing
         ),
         error = function(e) list(success = FALSE, message = conditionMessage(e))
       )
@@ -1509,11 +1559,14 @@ print.bigbang_dependency_plan <- function(x, ...) {{
 #\' @param cran_deps Planned policy for missing external dependencies:
 #\'   `"skip"`, `"error"`, or `"install"`. Planning never contacts a repository.
 #\' @param repos Optional repository vector used only to report whether
-#\'   `cran_deps = "install"` has a usable repository.
+#\'   `cran_deps = "install"` has a configured repository. The plan never
+#\'   contacts it and does not verify that it exists or is reachable.
 #\' @param only Optional component package names; local dependencies are added
 #\'   using the same transitive closure as `{{ name }}_install()`.
 #\' @param lib Component library to inspect; external dependencies are also
-#\'   checked in the active `.libPaths()`.
+#\'   checked in the active `.libPaths()`. When omitted, an installed component
+#\'   in any active `.libPaths()` entry counts as installed; when supplied
+#\'   explicitly, only `lib` determines the component installation decision.
 #\' @return A sorted character vector, or a `bigbang_dependency_plan` with
 #\'   `components` and `external` data frames when `plan = TRUE`.
 #\' @export
@@ -1527,6 +1580,7 @@ print.bigbang_dependency_plan <- function(x, ...) {{
     repos = NULL,
     only = NULL,
     lib = .libPaths()[[1L]]) {{
+  lib_was_missing <- base::missing(lib)
   packages <- {.r_literal(packages)}
   if (!base::is.logical(plan) || base::length(plan) != 1L || base::is.na(plan)) {{
     .bigbang_abort("bigbang_error_install_policy",
@@ -1560,17 +1614,20 @@ print.bigbang_dependency_plan <- function(x, ...) {{
   }}
   upgrade <- resolve_upgrade_policy(force, upgrade, base::missing(upgrade))
   cran_deps <- base::match.arg(cran_deps)
-  if (!base::is.character(lib) || base::length(lib) != 1L || base::is.na(lib) ||
-      !base::nzchar(lib)) {{
-    .bigbang_abort("bigbang_error_install_policy",
-                   .meta_tr("The installation library must be one non-empty path."))
-  }}
+  validate_install_library(lib)
   libraries <- base::unique(base::c(lib, base::.libPaths()))
+  component_libraries <- if (base::isTRUE(lib_was_missing)) libraries else lib
   cache <- .archive_cache_new()
   on.exit({{
     if (base::length(cache$extracted) > 0L) safe_unlink(
       base::unique(cache$extracted), recursive = TRUE
     )
+  }}, add = TRUE)
+  .archive_warning_state$seen <- base::character()
+  .archive_warning_state$active <- TRUE
+  base::on.exit({{
+    .archive_warning_state$active <- FALSE
+    .archive_warning_state$seen <- base::character()
   }}, add = TRUE)
   selection <- select_component_archives(
     only, pkg_dir, ext, cache = cache
@@ -1580,7 +1637,11 @@ print.bigbang_dependency_plan <- function(x, ...) {{
     packages, read_archive_metadata, pkg_dir = pkg_dir, ext = ext, cache = cache
   )
   names(metadata) <- packages
-  package_names <- base::vapply(metadata, function(item) item$package, base::character(1L))
+  package_names <- base::vapply(
+    packages,
+    function(package) resolve_component_spec(package, ext)$package,
+    base::character(1L)
+  )
   graph <- build_dependency_graph(packages, pkg_dir, ext, cache = cache)
   order <- topological_order(graph)
   requirements <- external_requirements(metadata, package_names)
@@ -1615,7 +1676,7 @@ print.bigbang_dependency_plan <- function(x, ...) {{
   rows <- base::vector("list", base::length(packages))
   for (index in order) {{
     item <- metadata[[index]]
-    installed <- installed_package_info(item$package, lib)
+    installed <- installed_package_info(item$package, component_libraries)
     decision <- component_upgrade_action(installed$version, item$version, upgrade)
     component_requirements <- external_requirements(
       base::list(item), package_names
@@ -1659,6 +1720,8 @@ print.bigbang_dependency_plan <- function(x, ...) {{
       }} else if (base::any(external_actions == "fail")) {{
         action <- "fail"
         reason <- "external_dependency_unsatisfied"
+      }} else if (base::any(external_actions == "install_unverified")) {{
+        reason <- "external_dependency_install_pending"
       }}
     }}
     states[[packages[[index]]]] <- base::list(action = action)
@@ -1917,7 +1980,7 @@ write_metapackage_files <- function(
       "      \"load_target <- function(package) {\",",
       "        \"target_path <- target(package)\",",
       "        \"if (base::is.na(target_path)) return(base::list(status = 'not_installed', ok = FALSE, path = NA_character_, target = target_path))\",",
-      "        \"loaded <- base::tryCatch(base::requireNamespace(package, quietly = TRUE, lib.loc = base::.libPaths()), error = function(e) FALSE)\",",
+        "        \"loaded <- base::tryCatch(base::requireNamespace(package, quietly = TRUE, lib.loc = ordered_paths), error = function(e) FALSE)\",",
       "        \"if (!base::isTRUE(loaded)) return(base::list(status = 'not_loadable', ok = FALSE, path = NA_character_, target = target_path))\",",
       "        \"namespace <- base::getNamespace(package)\",",
       "        \"path <- base::normalizePath(base::getNamespaceInfo(namespace, 'path'), winslash = '/', mustWork = FALSE)\",",
@@ -2283,7 +2346,10 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
 #\' @param verbose Logical progress toggle.
 #\'
 #\' @param only Optional component names; local dependencies are added automatically.
-#\' @param lib Character library in which to install and verify components.
+#\' @param lib Character library in which to install and verify components. When
+#\'   omitted, an installed component in any active `.libPaths()` entry counts
+#\'   as installed and a missing component is installed into the first entry;
+#\'   when supplied explicitly, only `lib` determines the component decision.
 #\' @return Invisibly, structured installation results.
 #\' @export
 #\'
@@ -2300,6 +2366,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
                                upgrade = "{{ install_upgrade }}",
                                only = NULL,
                                lib = base::.libPaths()[[1L]]) {
+  lib_was_missing <- base::missing(lib)
   cran_deps <- base::match.arg(cran_deps)
   upgrade <- resolve_upgrade_policy(force, upgrade, base::missing(upgrade))
   # An empty pkg_dir means the shipped archive directory was not found, which
@@ -2321,7 +2388,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
   result <- install_packages_in_order(
     packages, pkg_dir, ext, verbose = verbose,
     repos = repos, cran_deps = cran_deps, upgrade = upgrade,
-    only = only, lib = lib
+    only = only, lib = lib, lib_was_missing = lib_was_missing
   )
   if (base::length(result$skipped_nonlocal) > 0L) {
     base::warning(.meta_trf(
@@ -2375,10 +2442,13 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
     function(item) resolve_component_spec(item, ext)$package,
     character(1L)
   )
+  attach_libraries <- if (base::isTRUE(lib_was_missing)) {
+    base::unique(base::c(lib, base::.libPaths()))
+  } else lib
   attach_installed_packages(
     attach_names,
     warn_missing = base::length(result$skipped) == 0L,
-    lib.loc = lib,
+    lib.loc = attach_libraries,
     warn_conflicts = {{{ attach_warn_conflicts }}}
   )
   base::invisible(result)

@@ -58,7 +58,7 @@ test_that("runtime call qualification keeps a real template byte-identical", {
   archive <- system.file(
     "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
   )
-  generated <- create_metapackage(
+  generated <- round075_create_metapackage(
     "fixtureverse068", archive, dest_dir = sandbox, document = FALSE,
     verbose = FALSE, import_deps = character(), force_deps = character()
   )
@@ -124,7 +124,7 @@ test_that("install and attachment keep re-export bindings unevaluated", {
     archive, "guardcomponent068", compression = "gzip"
   ))
 
-  generated <- create_metapackage(
+  generated <- round075_create_metapackage(
     "guardverse068", archive, dest_dir = destination,
     document = FALSE, verbose = FALSE, import_deps = character(),
     force_deps = character(), reexport = TRUE

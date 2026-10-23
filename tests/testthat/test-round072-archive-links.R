@@ -577,7 +577,7 @@ test_that("all archive entry points reject before untar or unzip", {
   safe <- system.file("extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang")
   generated_root <- tempfile("round072-generated-")
   dir.create(generated_root)
-  generated <- create_metapackage(
+  generated <- round075_create_metapackage(
     "round072verse", "toycomponent_0.1.0", pkg_dir = dirname(safe),
     dest_dir = generated_root, document = FALSE, verbose = FALSE,
     import_deps = character(),
@@ -602,7 +602,7 @@ test_that("all archive entry points reject before untar or unzip", {
   on.exit(untrace("unzip", where = asNamespace("utils")), add = TRUE)
 
   expect_error(
-    create_metapackage(
+    round075_create_metapackage(
       "round072unsafe", archive, dest_dir = tempfile(), document = FALSE,
       verbose = FALSE, import_deps = character(), force_deps = character(),
       dry_run = TRUE

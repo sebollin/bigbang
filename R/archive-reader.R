@@ -29,14 +29,8 @@
 }
 
 .archive_limit_options <- function() {
-  option <- function(name, default, aliases = character()) {
+  option <- function(name, default) {
     value <- getOption(name, NULL)
-    if (is.null(value) && length(aliases) > 0L) {
-      for (alias in aliases) {
-        value <- getOption(alias, NULL)
-        if (!is.null(value)) break
-      }
-    }
     if (is.null(value)) value <- default
     if (length(value) != 1L || is.na(value) || !is.numeric(value) ||
           !is.finite(value) || value <= 0) {
@@ -52,18 +46,9 @@
   }
   list(
     max_entries = option("bigbang.archive.max_entries", 100000),
-    max_total_bytes = option(
-      "bigbang.archive.max_total_bytes", 2 * 1024^3,
-      aliases = "bigbang.archive.max_bytes"
-    ),
-    max_metadata_bytes = option(
-      "bigbang.archive.max_metadata_bytes", 64 * 1024^2,
-      aliases = "bigbang.archive.max_metadata_payload"
-    ),
-    max_path_bytes = option(
-      "bigbang.archive.max_path_bytes", 4096,
-      aliases = "bigbang.archive.max_path_length"
-    )
+    max_total_bytes = option("bigbang.archive.max_total_bytes", 2 * 1024^3),
+    max_metadata_bytes = option("bigbang.archive.max_metadata_bytes", 64 * 1024^2),
+    max_path_bytes = option("bigbang.archive.max_path_bytes", 4096)
   )
 }
 
@@ -469,13 +454,12 @@
   if (inherits(result, "error")) {
     if (inherits(result, "bigbang_archive_parse_error")) stop(result)
     stop(.archive_parse_error(
-      paste0("could not decompress TAR archive: ", conditionMessage(result))
+      .archive_gzip_trailer_message(conditionMessage(result))
     ))
   }
   if (length(messages) > 0L) {
     stop(.archive_parse_error(
-      paste0("could not decompress TAR archive: ",
-             paste(messages, collapse = "; "))
+      .archive_gzip_trailer_message(paste(messages, collapse = "; "))
     ))
   }
   result <- value
@@ -526,13 +510,12 @@
   if (inherits(close_result, "error")) {
     if (inherits(close_result, "bigbang_archive_parse_error")) stop(close_result)
     stop(.archive_parse_error(
-      paste0("could not decompress TAR archive: ", conditionMessage(close_result))
+      .archive_gzip_trailer_message(conditionMessage(close_result))
     ))
   }
   if (length(close_result) > 0L) {
     stop(.archive_parse_error(
-      paste0("could not decompress TAR archive: ",
-             paste(close_result, collapse = "; "))
+      .archive_gzip_trailer_message(paste(close_result, collapse = "; "))
     ))
   }
   generated <- connection$gzip$checksum$finish()
@@ -544,6 +527,17 @@
     ))
   }
   invisible(NULL)
+}
+
+.archive_gzip_trailer_message <- function(detail) {
+  detail <- as.character(detail)
+  if (grepl(
+    "crc error|internal error|memdecompress", detail,
+    ignore.case = TRUE, perl = TRUE
+  )) {
+    return(.bb_trf("could not validate gzip member trailer"))
+  }
+  .bb_trf("could not decompress TAR archive: %s", detail)
 }
 
 .archive_tar_checksum_ok <- function(header) {

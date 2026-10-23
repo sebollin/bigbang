@@ -86,7 +86,7 @@ test_that("direct installation retains the cause and complete log path", {
     )
   )
   lib <- file.path(root, "library")
-  result <- suppressWarnings(install_local_pkg(
+  result <- expect_no_warning(install_local_pkg(
     archive, lib = lib, verbose = FALSE, upgrade = "always"
   ))
   message <- result$failed[[1L]]

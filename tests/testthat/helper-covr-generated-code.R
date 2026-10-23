@@ -1,5 +1,7 @@
 round075_archive_template <- function() {
-  round075_untraced_code(.archive_reader_template())
+  round075_untraced_code(
+    getFromNamespace(".archive_reader_template", "bigbang")()
+  )
 }
 
 round075_check_status <- function(status, output) {

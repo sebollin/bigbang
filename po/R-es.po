@@ -364,6 +364,12 @@ msgstr "El archivo %s contiene enlaces simbólicos u otra entrada especial no co
 msgid "Could not extract archive %s safely: %s"
 msgstr "No se pudo extraer el archivo %s de forma segura: %s"
 
+msgid "could not validate gzip member trailer"
+msgstr "no se pudo validar el tráiler del miembro gzip"
+
+msgid "could not decompress TAR archive: %s"
+msgstr "no se pudo descomprimir el archivo TAR: %s"
+
 msgid "Archive error"
 msgstr "Error del archivo"
 

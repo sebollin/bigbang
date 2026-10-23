@@ -364,6 +364,12 @@ msgstr ""
 msgid "Could not extract archive %s safely: %s"
 msgstr ""
 
+msgid "could not validate gzip member trailer"
+msgstr ""
+
+msgid "could not decompress TAR archive: %s"
+msgstr ""
+
 msgid "Archive error"
 msgstr ""
 

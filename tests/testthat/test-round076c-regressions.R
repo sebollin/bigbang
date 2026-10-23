@@ -41,7 +41,9 @@ test_that("gzip ISIZE lies are rejected under timeout and memory limits", {
   writeLines(c(
     "args <- commandArgs(TRUE)",
     "pkg <- args[[1L]]; d <- args[[2L]]",
-    "if (file.exists(file.path(pkg, 'DESCRIPTION'))) {",
+    "source_files <- list.files(file.path(pkg, 'R'), pattern = '[.]R$')",
+    "if (file.exists(file.path(pkg, 'DESCRIPTION')) &&",
+    "    length(source_files) > 0) {",
     "  suppressMessages(pkgload::load_all(pkg, quiet = TRUE))",
     "} else {",
     "  suppressMessages(library(bigbang))",
@@ -122,10 +124,10 @@ test_that("partial plans and installs agree on component external constraints", 
     "diaA", "1.0.0", file.path(archives, "diaA_1.0.0.tar.gz"), sources,
     imports = "diaB, diaC"
   )
-  expect_length(suppressWarnings(bigbang::install_local_pkg(
+  expect_length(expect_no_warning(bigbang::install_local_pkg(
     ext, lib = lib, upgrade = "always", verbose = FALSE
   ))$failed, 0L)
-  generated <- bigbang::create_metapackage(
+  generated <- round075_create_metapackage(
     "diamondverse", c(a, b, c), dest_dir = destination, document = FALSE,
     verbose = FALSE, import_deps = character(), force_deps = character()
   )
@@ -142,10 +144,26 @@ test_that("partial plans and installs agree on component external constraints", 
   expect_identical(plan_rows["diaA", "reason"], "local_dependency_failed")
   expect_setequal(plan$components$component, c("diaA", "diaB", "diaC"))
 
-  installed <- suppressWarnings(runtime$diamondverse_install(
-    pkg_dir = archives, only = "diaA", cran_deps = "skip",
-    upgrade = "always", verbose = FALSE, lib = lib
-  ))
+  installed <- NULL
+  warning_state <- new.env(parent = emptyenv())
+  warning_state$seen <- FALSE
+  expect_warning(
+    installed <- withCallingHandlers(
+      runtime$diamondverse_install(
+        pkg_dir = archives, only = "diaA", cran_deps = "skip",
+        upgrade = "always", verbose = FALSE, lib = lib
+      ),
+      warning = function(condition) {
+        if (!grepl("Some components were skipped", conditionMessage(condition),
+                   fixed = TRUE) || warning_state$seen) {
+          invokeRestart("muffleWarning")
+        } else {
+          warning_state$seen <- TRUE
+        }
+      }
+    ),
+    regexp = "Some components were skipped"
+  )
   expect_true("diaC_1.0.0" %in% names(installed$installed))
   expect_true("diaB_1.0.0" %in% names(installed$skipped))
   expect_true("diaA_1.0.0" %in% names(installed$skipped))
@@ -161,10 +179,10 @@ test_that("partial plans and installs agree on component external constraints", 
   after_c <- after$components[after$components$component == "diaC", , drop = FALSE]
   expect_identical(after_c$reason, "forced_reinstall")
 
-  expect_length(suppressWarnings(bigbang::install_local_pkg(
+  expect_length(expect_no_warning(bigbang::install_local_pkg(
     ext, lib = direct_lib, upgrade = "always", verbose = FALSE
   ))$failed, 0L)
-  direct <- suppressWarnings(bigbang::install_local_pkg(
+  direct <- expect_no_warning(bigbang::install_local_pkg(
     a, pkg_dir = archives, cran_deps = "skip", upgrade = "always",
     verbose = FALSE, lib = direct_lib
   ))
