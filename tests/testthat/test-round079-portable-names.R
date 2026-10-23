@@ -384,10 +384,16 @@ test_that("the generated runtime copies the same name policy", {
   withr::defer(unlink(root, recursive = TRUE, force = TRUE))
   archive <- r079_archive_with_names(root, "aux.R")
   withr::local_options(bigbang.archive.portable_names = FALSE)
-  expect_s3_class(
-    r079_capture_warnings(generated$.archive_inspect(archive, ".tar"))$warnings[[1L]],
-    "bigbang_warning_archive_nonportable_name"
-  )
+  if (identical(.Platform$OS.type, "windows")) {
+    # Windows cannot create aux.R, so the option never relaxes it there.
+    expect_error(generated$.archive_inspect(archive, ".tar"),
+                 class = "bigbang_error_archive_format")
+  } else {
+    expect_s3_class(
+      r079_capture_warnings(generated$.archive_inspect(archive, ".tar"))$warnings[[1L]],
+      "bigbang_warning_archive_nonportable_name"
+    )
+  }
   withr::local_options(bigbang.archive.portable_names = TRUE)
   expect_error(generated$.archive_inspect(archive, ".tar"),
                class = "bigbang_error_archive_format")
