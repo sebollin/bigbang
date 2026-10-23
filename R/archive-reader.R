@@ -21,11 +21,88 @@
   stop(condition)
 }
 
-.archive_parse_error <- function(message) {
+.archive_parse_error <- function(message, ...) {
   structure(
-    list(message = message, call = NULL),
+    c(list(message = message, call = NULL), list(...)),
     class = c("bigbang_archive_parse_error", "error", "condition")
   )
+}
+
+.archive_portable_names <- function() {
+  name <- "bigbang.archive.portable_names"
+  value <- getOption(name, TRUE)
+  if (length(value) != 1L || !is.logical(value) || is.na(value)) {
+    .archive_abort(
+      "bigbang_error_archive_portable_names",
+      .bb_trf("Option %s must be TRUE or FALSE.", name),
+      option = name, value = value
+    )
+  }
+  value
+}
+
+.archive_warning_state <- new.env(parent = emptyenv())
+.archive_warning_state$active <- FALSE
+.archive_warning_state$seen <- character()
+
+.archive_name_error <- function(name, reason, other = NULL) {
+  if (identical(reason, "case")) {
+    if (isFALSE(getOption("bigbang.archive.portable_names", TRUE))) {
+      message <- .bb_trf(
+        "The extraction destination does not distinguish case, so it cannot create both `%s` and `%s`.",
+        other, name
+      )
+    } else {
+      hint <- .bb_trf(
+        "If all recipients use Linux or macOS, you can use options(bigbang.archive.portable_names = FALSE)."
+      )
+      message <- .bb_trf(
+        "The extraction destination does not distinguish case, so it cannot create both `%s` and `%s`. %s",
+        other, name, hint
+      )
+    }
+  } else {
+    hint <- .bb_trf(
+      "If all recipients use Linux or macOS, you can use options(bigbang.archive.portable_names = FALSE)."
+    )
+    reason_text <- switch(
+      reason,
+      trailing = .bb_trf("it ends in a dot or space"),
+      invalid_character = .bb_trf("it contains a character invalid on Windows"),
+      device = .bb_trf("it is a reserved Windows device name"),
+      .bb_trf("it is not a portable Windows name")
+    )
+    message <- .bb_trf("Windows cannot create `%s`: %s. %s", name, reason_text, hint)
+  }
+  .archive_parse_error(message, entry = name, reason = reason)
+}
+
+.archive_fs_case_sensitive <- function(path, is_windows = NULL,
+                                       file_create = NULL, file_exists = NULL) {
+  if (is.null(is_windows)) is_windows <- identical(.Platform$OS.type, "windows")
+  if (isTRUE(is_windows) || length(path) != 1L || is.na(path) ||
+        !dir.exists(path)) {
+    return(FALSE)
+  }
+  token <- paste0(
+    basename(tempfile(".bigbang-case-probe-", tmpdir = path)), "-a"
+  )
+  lower <- file.path(path, token)
+  upper <- file.path(path, toupper(token))
+  on.exit(unlink(unique(c(lower, upper)), force = TRUE), add = TRUE)
+  if (is.null(file_create)) {
+    file_create <- function(path) suppressWarnings(file.create(path))
+  }
+  if (is.null(file_exists)) file_exists <- base::file.exists
+  created <- tryCatch(
+    file_create(lower), error = function(e) FALSE
+  )
+  if (!isTRUE(created)) {
+    return(FALSE)
+  }
+  lower_exists <- tryCatch(file_exists(lower), error = function(e) FALSE)
+  upper_exists <- tryCatch(file_exists(upper), error = function(e) TRUE)
+  isTRUE(lower_exists) && !isTRUE(upper_exists)
 }
 
 .archive_limit_options <- function() {
@@ -52,10 +129,31 @@
   )
 }
 
-.archive_state_new <- function(archive, extract_dir = NULL) {
+.archive_state_new <- function(archive, extract_dir = NULL, is_windows = NULL,
+                               case_sensitive = NULL) {
   state <- new.env(parent = emptyenv())
   state$archive <- archive
   state$extract_dir <- extract_dir
+  state$portable_names <- .archive_portable_names()
+  if (is.null(is_windows)) is_windows <- identical(.Platform$OS.type, "windows")
+  state$is_windows <- isTRUE(is_windows)
+  state$case_sensitive <- FALSE
+  if (!isTRUE(state$portable_names) && !isTRUE(state$is_windows) &&
+        !is.null(extract_dir)) {
+    state$case_sensitive <- if (is.null(case_sensitive)) {
+      .archive_fs_case_sensitive(extract_dir, is_windows = state$is_windows)
+    } else {
+      isTRUE(case_sensitive)
+    }
+  }
+  state$relax_case <- !isTRUE(state$portable_names) &&
+    !isTRUE(state$is_windows) && !is.null(extract_dir) &&
+    isTRUE(state$case_sensitive)
+  state$defer_case <- !isTRUE(state$portable_names) &&
+    !isTRUE(state$is_windows) && is.null(extract_dir)
+  state$relaxed_windows <- character()
+  state$relaxed_case <- character()
+  state$deferred_case <- character()
   state$limits <- .archive_limit_options()
   state$total_bytes <- 0
   state$metadata_bytes <- 0
@@ -153,6 +251,10 @@
     seq.int(0x0450, 0x045f), seq.int(0x0430, 0x044f),
     0x0073L, 0x006bL, 0x03c3L
   )
+  # NTFS and APFS fold capital sharp S (U+1E9E) with sharp S (U+00DF).
+  # They also fold dotless i (U+0131) with ASCII i/I in case-insensitive names.
+  upper <- c(upper, 0x1e9eL, 0x0131L)
+  lower <- c(lower, 0x00dfL, 0x0069L)
   stats::setNames(lower, as.character(upper))
 })
 
@@ -169,7 +271,11 @@
 }
 
 .archive_validate_name_text <- function(name, limits, allow_empty = FALSE,
-                                        allow_dots = FALSE) {
+                                        allow_dots = FALSE,
+                                        portable_names = NULL,
+                                        is_windows = NULL) {
+  if (is.null(portable_names)) portable_names <- .archive_portable_names()
+  if (is.null(is_windows)) is_windows <- identical(.Platform$OS.type, "windows")
   if (length(name) != 1L || is.na(name) || !nzchar(name) && !allow_empty ||
         !validUTF8(name)) {
     stop(.archive_parse_error("archive entry path is not valid UTF-8"))
@@ -196,13 +302,21 @@
         (!allow_dots && any(parts %in% c(".", "..")))) {
     stop(.archive_parse_error("archive entry path is not portable"))
   }
+  if (any(grepl("^[. ]+$", parts, perl = TRUE))) {
+    stop(.archive_parse_error("archive entry path is not portable"))
+  }
+  relaxed <- character()
   if (any(grepl("[. ]$", parts))) {
-    stop(.archive_parse_error("archive entry component ends with a dot or space"))
+    if (isTRUE(portable_names) || isTRUE(is_windows)) {
+      stop(.archive_name_error(name, "trailing"))
+    }
+    relaxed <- c(relaxed, "windows")
   }
   if (any(grepl("[<>:\"|?*]", parts, perl = TRUE))) {
-    stop(.archive_parse_error(
-      "archive entry component contains a character invalid on Windows"
-    ))
+    if (isTRUE(portable_names) || isTRUE(is_windows)) {
+      stop(.archive_name_error(name, "invalid_character"))
+    }
+    relaxed <- c(relaxed, "windows")
   }
   device_pattern <- paste0(
     "^(CON|PRN|AUX|NUL|COM(?:[0-9]|\\x{00B9}|\\x{00B2}|\\x{00B3})|",
@@ -210,7 +324,17 @@
     "(?:\\..*)?$"
   )
   if (any(grepl(device_pattern, parts, ignore.case = TRUE, perl = TRUE))) {
-    stop(.archive_parse_error("archive entry uses a reserved Windows device name"))
+    if (isTRUE(portable_names) || isTRUE(is_windows)) {
+      stop(.archive_name_error(name, "device"))
+    }
+    relaxed <- c(relaxed, "windows")
+  }
+  invisible(unique(relaxed))
+}
+
+.archive_state_note_relaxed <- function(state, name, rules) {
+  if ("windows" %in% rules) {
+    state$relaxed_windows <- unique(c(state$relaxed_windows, name))
   }
   invisible(NULL)
 }
@@ -223,15 +347,81 @@
     if (exists(key, envir = state$case_paths, inherits = FALSE)) {
       previous <- get(key, envir = state$case_paths, inherits = FALSE)
       if (!identical(previous, prefix)) {
-        stop(.archive_parse_error(
-          "archive contains entry paths that differ only in case"
-        ))
+        if (isTRUE(state$relax_case)) {
+          state$relaxed_case <- unique(c(
+            state$relaxed_case, previous, prefix
+          ))
+        } else if (isTRUE(state$defer_case)) {
+          state$deferred_case <- unique(c(
+            state$deferred_case, previous, prefix
+          ))
+        } else {
+          stop(.archive_name_error(prefix, "case", other = previous))
+        }
       }
     } else {
       assign(key, prefix, envir = state$case_paths)
     }
   }
   invisible(NULL)
+}
+
+.archive_warning <- function(message, rule, entries, archive) {
+  key <- paste(archive, rule, paste(entries, collapse = "\n"), sep = "\n")
+  if (isTRUE(.archive_warning_state$active) &&
+        key %in% .archive_warning_state$seen) {
+    return(invisible(NULL))
+  }
+  if (isTRUE(.archive_warning_state$active)) {
+    .archive_warning_state$seen <- c(.archive_warning_state$seen, key)
+  }
+  condition <- structure(
+    list(message = message, call = NULL, archive = archive,
+         rule = rule, entries = entries),
+    class = c("bigbang_warning_archive_nonportable_name", "warning", "condition")
+  )
+  warning(condition)
+  invisible(NULL)
+}
+
+.archive_state_warn <- function(state) {
+  if (isTRUE(state$portable_names)) return(invisible(NULL))
+  entries <- utils::head(state$relaxed_windows, 3L)
+  if (length(entries) > 0L) {
+    .archive_warning(
+      .bb_trf(
+        paste0(
+          "Archive %s contains entries accepted only because ",
+          "options(bigbang.archive.portable_names = FALSE): %s. ",
+          "This package will not be installable on Windows."
+        ),
+        state$archive, paste(paste0("`", entries, "`"), collapse = ", ")
+      ),
+      rule = "windows", entries = entries, archive = state$archive
+    )
+  }
+  entries <- utils::head(state$relaxed_case, 3L)
+  if (length(entries) > 0L) {
+    .archive_warning(
+      .bb_trf(
+        paste0(
+          "Archive %s contains entries accepted because the destination ",
+          "filesystem distinguishes case: %s. This package will not be ",
+          "installable on filesystems that do not distinguish case."
+        ),
+        state$archive, paste(paste0("`", entries, "`"), collapse = ", ")
+      ),
+      rule = "case", entries = entries, archive = state$archive
+    )
+  }
+  invisible(NULL)
+}
+
+.archive_state_relaxed_names <- function(state) {
+  list(
+    windows = state$relaxed_windows,
+    case = state$relaxed_case
+  )
 }
 
 .archive_state_count_path <- function(state, name) {
@@ -629,17 +819,26 @@
   result
 }
 
-.archive_tar_normalize_path <- function(name, limits = NULL) {
+.archive_tar_normalize_path <- function(name, limits = NULL,
+                                        portable_names = NULL,
+                                        is_windows = NULL) {
   if (is.null(limits)) limits <- .archive_limit_options()
-  .archive_validate_name_text(name, limits, allow_dots = TRUE)
+  first_rules <- .archive_validate_name_text(
+    name, limits, allow_dots = TRUE,
+    portable_names = portable_names, is_windows = is_windows
+  )
   trailing_slash <- endsWith(name, "/")
   parts <- strsplit(name, "/", fixed = TRUE)[[1L]]
   if (any(parts == "..")) stop(.archive_parse_error("tar entry has parent traversal"))
   parts <- parts[nzchar(parts) & parts != "."]
   if (length(parts) == 0L) stop(.archive_parse_error("tar entry has an empty path"))
   normalized <- paste(parts, collapse = "/")
-  .archive_validate_name_text(normalized, limits)
+  second_rules <- .archive_validate_name_text(
+    normalized, limits, portable_names = portable_names,
+    is_windows = is_windows
+  )
   attr(normalized, "archive_trailing_slash") <- trailing_slash
+  attr(normalized, "archive_relaxed_rules") <- unique(c(first_rules, second_rules))
   normalized
 }
 
@@ -733,10 +932,14 @@
   sub("\\n$", "", value, perl = TRUE)
 }
 
-.archive_tar_walk <- function(archive, ext, extract_dir = NULL) {
+.archive_tar_walk <- function(archive, ext, extract_dir = NULL,
+                              is_windows = NULL, case_sensitive = NULL) {
   connection <- .archive_tar_connection(archive, ext)
   on.exit(.archive_tar_close(connection), add = TRUE)
-  state <- .archive_state_new(archive, extract_dir)
+  state <- .archive_state_new(
+    archive, extract_dir, is_windows = is_windows,
+    case_sensitive = case_sensitive
+  )
   global_pax <- list()
   pending_pax <- list()
   long_name <- NULL
@@ -823,7 +1026,13 @@
     } else {
       combined_name
     }
-    name <- .archive_tar_normalize_path(raw_name, state$limits)
+    name <- .archive_tar_normalize_path(
+      raw_name, state$limits, portable_names = state$portable_names,
+      is_windows = state$is_windows
+    )
+    .archive_state_note_relaxed(
+      state, name, attr(name, "archive_relaxed_rules")
+    )
     if (!is.null(pax_name) && !is.null(long_name) && !identical(pax_name, long_name)) {
       stop(.archive_parse_error("contradictory tar entry names"))
     }
@@ -922,15 +1131,25 @@
       )
     }
   }
-  .archive_state_members(state)
+  .archive_state_warn(state)
+  result <- .archive_state_members(state)
+  attr(result, "archive_relaxed_names") <- .archive_state_relaxed_names(state)
+  result
 }
 
-.archive_tar_inspect <- function(archive, ext) {
-  .archive_tar_walk(archive, ext)
+.archive_tar_inspect <- function(archive, ext, is_windows = NULL,
+                                 case_sensitive = NULL) {
+  .archive_tar_walk(
+    archive, ext, is_windows = is_windows, case_sensitive = case_sensitive
+  )
 }
 
-.archive_tar_extract <- function(archive, ext, extract_dir) {
-  .archive_tar_walk(archive, ext, extract_dir = extract_dir)
+.archive_tar_extract <- function(archive, ext, extract_dir, is_windows = NULL,
+                                 case_sensitive = NULL) {
+  .archive_tar_walk(
+    archive, ext, extract_dir = extract_dir, is_windows = is_windows,
+    case_sensitive = case_sensitive
+  )
 }
 
 
@@ -1056,9 +1275,14 @@
   .archive_raw_text(bytes)
 }
 
-.archive_zip_normalize_name <- function(name, limits = NULL) {
+.archive_zip_normalize_name <- function(name, limits = NULL,
+                                        portable_names = NULL,
+                                        is_windows = NULL) {
   if (is.null(limits)) limits <- .archive_limit_options()
-  .archive_validate_name_text(name, limits)
+  rules <- .archive_validate_name_text(
+    name, limits, portable_names = portable_names, is_windows = is_windows
+  )
+  attr(name, "archive_relaxed_rules") <- rules
   name
 }
 
@@ -1300,14 +1524,18 @@
   invisible(NULL)
 }
 
-.archive_zip_walk <- function(archive, extract_dir = NULL) {
+.archive_zip_walk <- function(archive, extract_dir = NULL, is_windows = NULL,
+                              case_sensitive = NULL) {
   size <- file.info(archive)$size
   if (is.na(size) || size < 22) {
     stop(.archive_parse_error("invalid ZIP file size"))
   }
   connection <- file(archive, open = "rb")
   on.exit(try(close(connection), silent = TRUE), add = TRUE)
-  state <- .archive_state_new(archive, extract_dir)
+  state <- .archive_state_new(
+    archive, extract_dir, is_windows = is_windows,
+    case_sensitive = case_sensitive
+  )
   tail_start <- max(0, size - 65557)
   tail <- .archive_zip_read_at(connection, tail_start, size - tail_start)
   values <- as.integer(tail)
@@ -1449,7 +1677,9 @@
     extra_end <- extra_start + extra_size - 1L
     listed_name <- .archive_zip_normalize_name(.archive_zip_name(
       if (name_size > 0L) central[name_start:name_end] else raw()
-    ), state$limits)
+    ), state$limits, portable_names = state$portable_names,
+    is_windows = state$is_windows)
+    relaxed_rules <- attr(listed_name, "archive_relaxed_rules")
     name <- if (endsWith(listed_name, "/")) {
       substr(listed_name, 1L, nchar(listed_name) - 1L)
     } else {
@@ -1547,7 +1777,8 @@
     }
     local_name <- if (local_name_size > 0L) {
       .archive_zip_normalize_name(
-        .archive_zip_name(local_data[seq_len(local_name_size)]), state$limits
+        .archive_zip_name(local_data[seq_len(local_name_size)]), state$limits,
+        portable_names = state$portable_names, is_windows = state$is_windows
       )
     } else {
       ""
@@ -1567,7 +1798,8 @@
       name = name, method = method, crc = crc,
       compressed_size = compressed_size, uncompressed_size = uncompressed_size,
       local_data_start = data_start, directory = directory, mode = mode,
-      display = listed_name, descriptor_size = descriptor_size
+      display = listed_name, relaxed_rules = relaxed_rules,
+      descriptor_size = descriptor_size
     ), envir = entries)
     position <- end + 1L
   }
@@ -1577,6 +1809,9 @@
     for (entry_index in seq_len(total_entries)) {
       entry <- get(as.character(entry_index), envir = entries)
       name <- entry$name
+      .archive_state_note_relaxed(
+        state, entry$display, entry$relaxed_rules
+      )
       .archive_state_register_path(state, name)
       if (exists(name, envir = state$entries, inherits = FALSE)) {
         stop(.archive_parse_error("duplicate ZIP entry path"))
@@ -1646,15 +1881,21 @@
       .archive_zip_apply_mode(directory$path, directory$mode, TRUE)
     }
   }
-  data.frame(
+  .archive_state_warn(state)
+  result <- data.frame(
     Name = .archive_state_display(state),
     Length = .archive_state_lengths(state),
     stringsAsFactors = FALSE
   )
+  attr(result, "archive_relaxed_names") <- .archive_state_relaxed_names(state)
+  result
 }
 
-.archive_zip_inspect <- function(archive) {
-  .archive_zip_walk(archive)
+.archive_zip_inspect <- function(archive, is_windows = NULL,
+                                 case_sensitive = NULL) {
+  .archive_zip_walk(
+    archive, is_windows = is_windows, case_sensitive = case_sensitive
+  )
 }
 
 .archive_destination_is_empty <- function(path, is_windows = NULL,
@@ -1702,7 +1943,7 @@
 .archive_format_wrap <- function(archive, error) {
   if (inherits(error, c(
     "bigbang_error_archive_link", "bigbang_error_archive_limit",
-    "bigbang_error_archive_format"
+    "bigbang_error_archive_format", "bigbang_error_archive_portable_names"
   ))) {
     stop(error)
   }
@@ -1712,11 +1953,14 @@
       "Could not extract archive %s safely: %s", archive,
       conditionMessage(error)
     ),
-    archive = archive
+    archive = archive,
+    entry = if (is.null(error$entry)) NULL else error$entry,
+    reason = if (is.null(error$reason)) NULL else error$reason
   )
 }
 
-.archive_extract <- function(archive, ext, extract_dir) {
+.archive_extract <- function(archive, ext, extract_dir, is_windows = NULL,
+                             case_sensitive = NULL) {
   staging_dir <- NULL
   committed <- FALSE
   committed_paths <- character()
@@ -1738,9 +1982,15 @@
       stop(.archive_parse_error("could not create private archive directory"))
     }
     inspection <- if (.archive_is_zip(ext)) {
-      .archive_zip_walk(archive, extract_dir = staging_dir)
+      .archive_zip_walk(
+        archive, extract_dir = staging_dir, is_windows = is_windows,
+        case_sensitive = case_sensitive
+      )
     } else if (.archive_is_tar(ext)) {
-      .archive_tar_extract(archive, ext, staging_dir)
+      .archive_tar_extract(
+        archive, ext, staging_dir, is_windows = is_windows,
+        case_sensitive = case_sensitive
+      )
     } else {
       stop(.archive_parse_error("unsupported archive format"))
     }
@@ -1766,12 +2016,18 @@
   invisible(result)
 }
 
-.archive_inspect <- function(archive, ext) {
+.archive_inspect <- function(archive, ext, is_windows = NULL,
+                             case_sensitive = NULL) {
   inspected <- tryCatch({
     if (.archive_is_zip(ext)) {
-      .archive_zip_walk(archive)
+      .archive_zip_walk(
+        archive, is_windows = is_windows, case_sensitive = case_sensitive
+      )
     } else if (.archive_is_tar(ext)) {
-      .archive_tar_inspect(archive, ext)
+      .archive_tar_inspect(
+        archive, ext, is_windows = is_windows,
+        case_sensitive = case_sensitive
+      )
     } else {
       stop(.archive_parse_error("unsupported archive format"))
     }
@@ -1788,4 +2044,9 @@
   } else {
     inspection
   }
+}
+
+.archive_relaxed_names <- function(inspection) {
+  value <- attr(inspection, "archive_relaxed_names", exact = TRUE)
+  if (is.null(value)) list(windows = character(), case = character()) else value
 }

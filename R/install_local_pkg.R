@@ -432,6 +432,15 @@
 #' treated as Windows binaries, while other ZIP archives are unpacked and
 #' installed as source packages.
 #'
+#' Archive entry names follow the `bigbang.archive.portable_names` option
+#' described in [scan_bigbang_artifact()]. It is `TRUE` by default; set it to
+#' `FALSE` only when every recipient uses Linux or macOS. Relaxed names warn
+#' during installation and remain unavailable on Windows or on filesystems that
+#' do not distinguish case. Case-only collisions are decided when the archive
+#' is extracted; an earlier inspection without a destination defers that
+#' decision. Components made only of dots and spaces, Windows-specific rules,
+#' and security-critical path rules are never relaxed.
+#'
 #' @param package Character. An existing archive path, or a package stem such
 #'   as `"uspr_0.8.5"` to resolve in `pkg_dir`. An existing file is always
 #'   treated as a path; only a non-existing element is resolved as a stem. A
@@ -491,7 +500,7 @@
 #' install_local_pkg(archive, lib = example_library, verbose = FALSE)
 #' }
 #' @seealso [create_metapackage()] for generating a meta-package with an explicit
-#'   component installer.
+#'   component installer; [scan_bigbang_artifact()] for the archive-name policy.
 #' @export
 install_local_pkg <- function(
   package,
@@ -506,6 +515,13 @@ install_local_pkg <- function(
   upgrade = c("newer", "always", "never"),
   lib = .libPaths()[[1L]]
 ) {
+  .archive_portable_names()
+  .archive_warning_state$seen <- character()
+  .archive_warning_state$active <- TRUE
+  on.exit({
+    .archive_warning_state$active <- FALSE
+    .archive_warning_state$seen <- character()
+  }, add = TRUE)
   lib_was_missing <- missing(lib)
   cran_deps <- match.arg(cran_deps)
   upgrade <- .resolve_upgrade_policy(force, upgrade, missing(upgrade))

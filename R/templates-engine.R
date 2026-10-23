@@ -23,16 +23,20 @@
   reader_names <- c(
     ".path_is_windows_reparse_point", ".path_is_symlink",
     ".archive_is_zip", ".archive_tar_extensions", ".archive_is_tar",
-    ".archive_abort", ".archive_parse_error", ".archive_link_abort",
+    ".archive_abort", ".archive_parse_error", ".archive_portable_names",
+    ".archive_name_error", ".archive_fs_case_sensitive", ".archive_link_abort",
     ".archive_limit_options", ".archive_state_new", ".archive_limit_abort",
     ".archive_state_reserve", ".archive_state_reserve_meta",
     ".archive_case_fold_table", ".archive_case_key",
     ".archive_validate_name_text",
-    ".archive_state_register_path", ".archive_state_count_path",
+    ".archive_state_register_path", ".archive_state_note_relaxed",
+    ".archive_state_count_path",
     ".archive_state_count_entry",
     ".archive_state_add_member",
     ".archive_state_members", ".archive_state_lengths",
     ".archive_state_display", ".archive_state_add_directory",
+    ".archive_warning", ".archive_state_warn",
+    ".archive_state_relaxed_names",
     ".archive_read_exact",
     ".archive_discard", ".archive_raw_text", ".archive_cstring",
     ".archive_number", ".archive_gzip_member_trailer",
@@ -55,7 +59,8 @@
     ".archive_zip_walk", ".archive_zip_inspect",
     ".archive_destination_is_empty", ".archive_cleanup_tree",
     ".archive_format_wrap",
-    ".archive_extract", ".archive_inspect", ".archive_inspection_members"
+    ".archive_extract", ".archive_inspect", ".archive_inspection_members",
+    ".archive_relaxed_names"
   )
   reader_environment <- environment(.archive_inspect)
   source <- unlist(lapply(reader_names, function(name) {
@@ -63,6 +68,7 @@
     c(paste0(name, " <- "), deparse(object, width.cutoff = 500L))
   }), use.names = FALSE)
   source <- gsub(".bb_trf", ".meta_trf", source, fixed = TRUE)
+  source <- gsub(".bb_tr", ".meta_tr", source, fixed = TRUE)
   paste(source, collapse = "\n")
 }
 
@@ -1398,6 +1404,7 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
                                       only = NULL,
                                       lib = .libPaths()[[1L]],
                                       lib_was_missing = NULL) {{
+  .archive_portable_names()
   if (base::is.null(lib_was_missing)) lib_was_missing <- base::missing(lib)
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
@@ -1626,6 +1633,13 @@ print.bigbang_dependency_plan <- function(x, ...) {{
     repos = NULL,
     only = NULL,
     lib = .libPaths()[[1L]]) {{
+  .archive_portable_names()
+  .archive_warning_state$seen <- base::character()
+  .archive_warning_state$active <- TRUE
+  base::on.exit({{
+    .archive_warning_state$active <- FALSE
+    .archive_warning_state$seen <- base::character()
+  }}, add = TRUE)
   lib_was_missing <- base::missing(lib)
   packages <- {.r_literal(packages)}
   if (!base::is.logical(plan) || base::length(plan) != 1L || base::is.na(plan)) {{

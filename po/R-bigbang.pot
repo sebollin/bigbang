@@ -67,6 +67,42 @@ msgstr ""
 msgid "Archive option %s must be one finite positive number."
 msgstr ""
 
+msgid "Option %s must be TRUE or FALSE."
+msgstr ""
+
+msgid "If all recipients use Linux or macOS, you can use options(bigbang.archive.portable_names = FALSE)."
+msgstr ""
+
+msgid "The extraction destination does not distinguish case, so it cannot create both `%s` and `%s`."
+msgstr ""
+
+msgid "The extraction destination does not distinguish case, so it cannot create both `%s` and `%s`. %s"
+msgstr ""
+
+msgid "it ends in a dot or space"
+msgstr ""
+
+msgid "it contains a character invalid on Windows"
+msgstr ""
+
+msgid "it is a reserved Windows device name"
+msgstr ""
+
+msgid "it is not a portable Windows name"
+msgstr ""
+
+msgid "Windows cannot create `%s`: %s. %s"
+msgstr ""
+
+msgid "Archive %s contains entries accepted only because options(bigbang.archive.portable_names = FALSE): %s. This package will not be installable on Windows."
+msgstr ""
+
+msgid "Archive %s contains entries accepted because the destination filesystem distinguishes case: %s. This package will not be installable on filesystems that do not distinguish case."
+msgstr ""
+
+msgid "Non-portable names accepted"
+msgstr ""
+
 msgid "Archive %s exceeds its configured %s limit (%s > %s); raise options('%s') only for trusted input."
 msgstr ""
 

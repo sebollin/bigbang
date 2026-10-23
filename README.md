@@ -475,10 +475,19 @@ directory and installed as source packages.
 bigbang reads every tar and ZIP archive with its own validating reader, not with
 `untar()` or `unzip()`, wherever it opens one: generation, diagnostics, local
 installation, artifact scans and generated installers. The reader creates only
-regular files and directories inside the destination. It rejects links, devices,
-non-portable or case-colliding names and inconsistent layouts, checks CRC-32
-and sizes, and stops at the limits set by the `bigbang.archive.max_*` options
-documented in `?scan_bigbang_artifact`.
+regular files and directories inside the destination. It rejects links, devices
+and inconsistent layouts, checks CRC-32 and sizes, and stops at the limits set
+by the `bigbang.archive.max_*` options documented in `?scan_bigbang_artifact`.
+
+By default, bigbang also rejects file names that would stop a meta-package from
+installing on Windows: names Windows reserves, such as `aux.R` or `con.R`, names
+containing `< > : " | ? *`, names ending in a dot or a space, and two files whose
+names differ only in case. The error names the file. If every recipient uses
+Linux or macOS, `options(bigbang.archive.portable_names = FALSE)` accepts those
+names wherever the file system can store them, and bigbang warns that the
+package will not install on Windows. The option has no effect on Windows, and
+it never relaxes the safety checks: links, absolute paths, `..`, names made only
+of dots and spaces, control characters and invalid UTF-8 are always rejected.
 
 All generated text is written explicitly as UTF-8. CI checks R release on
 Windows and macOS, and release, devel, oldrel-1 and 4.1 on Ubuntu. The declared

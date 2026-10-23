@@ -94,7 +94,7 @@ test_that("case folding covers every table range and the U+0149-U+014F gap", {
   skip_if(identical(locale, ""), "no UTF-8 locale is available")
 
   table <- bigbang:::.archive_case_fold_table
-  special <- c(0x017fL, 0x03c2L)
+  special <- c(0x0131L, 0x017fL, 0x03c2L)
   for (index in seq_along(table)) {
     upper <- intToUtf8(as.integer(names(table)[[index]]))
     expected <- intToUtf8(unname(table[[index]]))

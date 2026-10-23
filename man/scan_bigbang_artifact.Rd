@@ -46,6 +46,19 @@ leaves room for the documented maximum of 65,534 entries in a classic ZIP
 (ZIP64 is not supported). Entry names are compared without locale dependence,
 but they are not Unicode-normalized: NFC and NFD spellings remain distinct;
 NFD names are accepted because macOS can produce them.
+
+The \code{bigbang.archive.portable_names} option defaults to \code{TRUE} and applies
+the strict Windows-compatible name policy. Set it to \code{FALSE} only when all
+recipients use Linux or macOS. Then Windows device names, Windows-invalid
+characters, and trailing dots or spaces may be accepted on non-Windows
+systems, while case-only collisions are accepted only after a real probe
+confirms that the extraction filesystem distinguishes case; an inspection
+without an extraction destination defers that decision until extraction.
+Components made only of dots and spaces are always rejected. Links, special
+entries, absolute or parent-traversal paths, empty components, backslashes,
+control characters, invalid UTF-8, and size limits are never relaxed. Windows
+remains strict regardless of the option. The result reports accepted relaxed
+names in \code{portable_name_warnings}.
 }
 
 \examples{

@@ -18,6 +18,12 @@ print.bigbang_artifact_scan <- function(x, ...) {
     cat("  ", .bb_tr("Archive error"), ": ",
         x$archive_error$message, "\n", sep = "")
   }
+  warnings <- x$portable_name_warnings
+  if (is.list(warnings) && any(lengths(warnings) > 0L)) {
+    accepted <- unique(unlist(warnings, use.names = FALSE))
+    cat("  ", .bb_tr("Non-portable names accepted"), ": ",
+        paste(accepted, collapse = ", "), "\n", sep = "")
+  }
   if (length(x$signatures) > 0L) {
     cat("  ", .bb_tr("Signatures"), ": ",
         paste(x$signatures, collapse = ", "), "\n", sep = "")

@@ -32,6 +32,19 @@
 #' but they are not Unicode-normalized: NFC and NFD spellings remain distinct;
 #' NFD names are accepted because macOS can produce them.
 #'
+#' The `bigbang.archive.portable_names` option defaults to `TRUE` and applies
+#' the strict Windows-compatible name policy. Set it to `FALSE` only when all
+#' recipients use Linux or macOS. Then Windows device names, Windows-invalid
+#' characters, and trailing dots or spaces may be accepted on non-Windows
+#' systems, while case-only collisions are accepted only after a real probe
+#' confirms that the extraction filesystem distinguishes case; an inspection
+#' without an extraction destination defers that decision until extraction.
+#' Components made only of dots and spaces are always rejected. Links, special
+#' entries, absolute or parent-traversal paths, empty components, backslashes,
+#' control characters, invalid UTF-8, and size limits are never relaxed. Windows
+#' remains strict regardless of the option. The result reports accepted relaxed
+#' names in `portable_name_warnings`.
+#'
 #' @return A list with the artifact type, vulnerability flag, detected signatures,
 #'   evidence locations, provenance fields, and R version used for the scan.
 #'
@@ -55,6 +68,13 @@
 #' unlink(destination, recursive = TRUE)
 #' @export
 scan_bigbang_artifact <- function(path, dry_run = TRUE) {
+  .archive_portable_names()
+  .archive_warning_state$seen <- character()
+  .archive_warning_state$active <- TRUE
+  on.exit({
+    .archive_warning_state$active <- FALSE
+    .archive_warning_state$seen <- character()
+  }, add = TRUE)
   if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
     stop(.bb_tr("'path' must be one non-empty character string."), call. = FALSE)
   }
@@ -80,6 +100,9 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
       type <- "installed"
     } else {
       result <- .scan_source_tree(path)
+      result$portable_name_warnings <- list(
+        windows = character(), case = character()
+      )
       type <- "source"
     }
   } else if (grepl("\\.(tar\\.(gz|bz2|xz)|tgz|tbz|tbz2|txz|tar|zip)$", path,
@@ -89,7 +112,8 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
       result <- list(
         signatures = character(), evidence = list(),
         provenance = .read_provenance(""), archive_error = result,
-        archive_issue = NULL
+        archive_issue = NULL,
+        portable_name_warnings = list(windows = character(), case = character())
       )
     }
     type <- "archive"
@@ -116,6 +140,11 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
       signatures = result$signatures,
       evidence = result$evidence,
       provenance = result$provenance,
+      portable_name_warnings = if (is.null(result$portable_name_warnings)) {
+        list(windows = character(), case = character())
+      } else {
+        result$portable_name_warnings
+      },
       archive_error = if (is.null(archive_error)) NULL else list(
         class = class(archive_error), message = conditionMessage(archive_error)
       ),
@@ -276,11 +305,29 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
   if (inherits(inspection, "bigbang_error_archive_link")) {
     return(list(archive_issue = inspection))
   }
-  if (inherits(inspection, "error")) stop(inspection)
+  if (inherits(inspection, "error")) {
+    case_collision <- inherits(inspection, "bigbang_error_archive_format") &&
+      identical(inspection$reason, "case") &&
+      identical(.archive_portable_names(), FALSE)
+    if (!isTRUE(case_collision)) stop(inspection)
+    extract_dir <- tryCatch(
+      .archive_cache_extract(cache, archive, ext),
+      error = identity
+    )
+    if (inherits(extract_dir, "bigbang_error_archive_link")) {
+      return(list(archive_issue = extract_dir))
+    }
+    if (inherits(extract_dir, "error")) stop(extract_dir)
+    inspection <- .archive_cache_listing(cache, archive, ext)
+  } else {
+    extract_dir <- .archive_cache_extract(cache, archive, ext)
+    # Extraction is the first operation that can decide case-only collisions;
+    # refresh the listing so its relaxed-name report reflects that real walk.
+    inspection <- .archive_cache_listing(cache, archive, ext)
+  }
+  portable_name_warnings <- .archive_relaxed_names(inspection)
   members <- .archive_inspection_members(inspection, ext)
   .validate_archive_members(members)
-
-  extract_dir <- .archive_cache_extract(cache, archive, ext)
 
   extracted <- list.files(
     extract_dir, recursive = TRUE, full.names = TRUE,
@@ -292,7 +339,9 @@ scan_bigbang_artifact <- function(path, dry_run = TRUE) {
          call. = FALSE)
   }
   package_root <- .find_archive_root(extract_dir, archive)
-  .scan_source_tree(package_root)
+  result <- .scan_source_tree(package_root)
+  result$portable_name_warnings <- portable_name_warnings
+  result
 }
 
 .scan_installed_lazydb <- function(root) {

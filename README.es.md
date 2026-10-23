@@ -481,10 +481,24 @@ bigbang lee todo archivo tar o ZIP con un lector propio que valida, no con
 `untar()` ni `unzip()`, en cada lugar donde abre uno: la generación, los
 diagnósticos, la instalación local, el examen de artefactos y los instaladores
 generados. El lector solo crea archivos regulares y directorios dentro del
-destino. Rechaza enlaces, dispositivos, nombres no portables o que chocan al
-ignorar mayúsculas y estructuras inconsistentes, verifica CRC-32 y tamaños, y se
-detiene en los topes de las opciones `bigbang.archive.max_*`, documentadas en
-`?scan_bigbang_artifact`.
+destino. Rechaza enlaces, dispositivos y estructuras inconsistentes, verifica
+CRC-32 y tamaños, y se detiene en los topes de las opciones
+`bigbang.archive.max_*`, documentadas en `?scan_bigbang_artifact`.
+
+Por defecto, bigbang también rechaza los nombres de archivo que impedirían
+instalar el metapaquete en Windows:
+- los que Windows reserva, como `aux.R` o `con.R`;
+- los que contienen `< > : " | ? *`;
+- los que terminan en punto o en espacio;
+- dos archivos cuyos nombres solo difieren en mayúsculas.
+
+El error dice qué archivo es. Si todos los destinatarios usan Linux o macOS,
+`options(bigbang.archive.portable_names = FALSE)` acepta esos nombres donde el
+sistema de archivos pueda guardarlos, y bigbang avisa que el paquete no se va a
+poder instalar en Windows. En Windows la opción no tiene efecto. Tampoco relaja
+nunca los controles de seguridad: los enlaces, las rutas absolutas, `..`, los
+nombres formados solo por puntos y espacios, los caracteres de control y el
+UTF-8 inválido se rechazan siempre.
 
 Todo texto generado se escribe en UTF-8 explícito. La CI comprueba R release en
 Windows y macOS, y release, devel, oldrel-1 y 4.1 en Ubuntu. El mínimo declarado

@@ -67,6 +67,42 @@ msgstr "No se pudo extraer el archivo %s: la extracción devolvió el estado %d.
 msgid "Archive option %s must be one finite positive number."
 msgstr "La opción de archivo %s debe ser un número finito positivo."
 
+msgid "Option %s must be TRUE or FALSE."
+msgstr "La opción %s debe ser TRUE o FALSE."
+
+msgid "If all recipients use Linux or macOS, you can use options(bigbang.archive.portable_names = FALSE)."
+msgstr "Si todos los destinatarios usan Linux o macOS, puede usar options(bigbang.archive.portable_names = FALSE)."
+
+msgid "The extraction destination does not distinguish case, so it cannot create both `%s` and `%s`."
+msgstr "El destino de extracción no distingue mayúsculas de minúsculas, por lo que no puede crear `%s` y `%s`."
+
+msgid "The extraction destination does not distinguish case, so it cannot create both `%s` and `%s`. %s"
+msgstr "El destino de extracción no distingue mayúsculas de minúsculas, por lo que no puede crear `%s` y `%s`. %s"
+
+msgid "it ends in a dot or space"
+msgstr "termina en punto o espacio"
+
+msgid "it contains a character invalid on Windows"
+msgstr "contiene un carácter no válido en Windows"
+
+msgid "it is a reserved Windows device name"
+msgstr "es un nombre de dispositivo reservado de Windows"
+
+msgid "it is not a portable Windows name"
+msgstr "no es un nombre portátil de Windows"
+
+msgid "Windows cannot create `%s`: %s. %s"
+msgstr "Windows no puede crear `%s`: %s. %s"
+
+msgid "Archive %s contains entries accepted only because options(bigbang.archive.portable_names = FALSE): %s. This package will not be installable on Windows."
+msgstr "El archivo %s contiene entradas aceptadas solo porque options(bigbang.archive.portable_names = FALSE): %s. Este paquete no se podrá instalar en Windows."
+
+msgid "Archive %s contains entries accepted because the destination filesystem distinguishes case: %s. This package will not be installable on filesystems that do not distinguish case."
+msgstr "El archivo %s contiene entradas aceptadas porque el sistema de archivos de destino distingue mayúsculas de minúsculas: %s. Este paquete no se podrá instalar en sistemas de archivos que no distinguen mayúsculas de minúsculas."
+
+msgid "Non-portable names accepted"
+msgstr "Nombres no portátiles aceptados"
+
 msgid "Archive %s exceeds its configured %s limit (%s > %s); raise options('%s') only for trusted input."
 msgstr "El archivo %s supera el límite configurado de %s (%s > %s); aumente options('%s') solo para entradas confiables."
 

@@ -697,6 +697,25 @@
 #' switch that disables validation as a whole. bigbang does not run
 #' `R CMD check` on component packages, so component warnings and notes do not
 #' prevent generation.
+#'
+#' @section Portable archive names:
+#' Archive entry names are validated strictly by default. The option
+#' `bigbang.archive.portable_names` defaults to `TRUE` and rejects Windows
+#' device names, Windows-invalid characters, trailing dots or spaces, and
+#' case-only collisions on every system. Set it to `FALSE` only when every
+#' recipient uses Linux or macOS. On non-Windows systems this relaxes only the
+#' Windows-specific rules; case-only collisions are relaxed only when a real
+#' probe of the extraction filesystem shows that it distinguishes case; an
+#' inspection without an extraction destination defers that decision until
+#' extraction. Components made only of dots and spaces are always rejected.
+#' Links, special entries, absolute or parent-traversal paths, empty
+#' components, backslashes, control characters, invalid UTF-8, and size limits
+#' are never relaxed. Windows always applies the strict Windows rules,
+#' regardless of the option. Relaxed entries produce warnings and the resulting
+#' package cannot be installed on Windows, or on a filesystem that does not
+#' distinguish case.
+#' See [scan_bigbang_artifact()] for the same archive-name policy and resource
+#' limits used by the reader.
 #' Component source directories are built in a temporary directory with the
 #' optional pkgbuild package; passing an already built archive avoids that
 #' optional dependency.
@@ -957,6 +976,13 @@ create_metapackage <- function(
   recover = FALSE,
   governance = FALSE
 ) {
+  .archive_portable_names()
+  .archive_warning_state$seen <- character()
+  .archive_warning_state$active <- TRUE
+  on.exit({
+    .archive_warning_state$active <- FALSE
+    .archive_warning_state$seen <- character()
+  }, add = TRUE)
   archive_cache <- .archive_cache_new()
   on.exit(.archive_cache_close(archive_cache), add = TRUE)
   verbose <- isTRUE(verbose)

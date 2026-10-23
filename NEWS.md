@@ -13,8 +13,16 @@
   - creates only regular files and directories inside the destination;
   - treats Windows junctions and symbolic links as links, so it never extracts
     into them and its cleanup never deletes through them;
-  - rejects links, devices, other special entries, non-portable or
-    case-colliding names, and malformed, overlapping or trailing archive data;
+  - rejects links, devices, other special entries, and malformed, overlapping
+    or trailing archive data;
+  - by default rejects names that Windows cannot create, such as `aux.R` or a
+    name containing `:` or `?`, names ending in a dot or a space, and names
+    that differ only in case. If every recipient uses Linux or macOS,
+    `options(bigbang.archive.portable_names = FALSE)` accepts them wherever
+    the file system can store them, which is never on Windows, and warns that
+    the package will not install there. Links, absolute paths, `..`, names
+    made only of dots and spaces, control characters and invalid UTF-8 are
+    always rejected;
   - verifies CRC-32 and sizes through zlib;
   - stops at configurable limits: `options(bigbang.archive.max_entries,
     bigbang.archive.max_total_bytes, bigbang.archive.max_metadata_bytes,
