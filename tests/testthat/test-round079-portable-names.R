@@ -448,6 +448,12 @@ test_that("case-only names install locally and through generated runtime", {
   root <- tempfile("round079-case-e2e-")
   dir.create(root)
   withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  # macOS defaults to a case-insensitive file system, where the collision is
+  # rejected even with the option; the injected-detection tests cover that.
+  skip_if_not(
+    bigbang:::.archive_fs_case_sensitive(root),
+    "The temporary file system does not distinguish case."
+  )
   archive <- file.path(root, "r079casecomponent_1.0.0.tar")
   r079_write_tar(archive, list(
     list(name = "r079casecomponent/DESCRIPTION",
