@@ -14,11 +14,12 @@
 #' @param ext Character archive extension, or `NULL` to infer it.
 #' @return A list containing `package`, `version`, and declared `dependencies`.
 #' @noRd
-.archive_extensions <- c(".tar.gz", ".zip", ".tar")
+.archive_extensions <- c(
+  ".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".tbz", ".tbz2", ".txz",
+  ".zip", ".tar"
+)
 
 .or_null <- function(x, y) if (is.null(x)) y else x
-
-.untar_quiet <- function(...) utils::untar(..., tar = "internal")
 
 .archive_cache_new <- function() {
   cache <- new.env(parent = emptyenv())
@@ -58,49 +59,11 @@
 }
 
 .archive_listing <- function(archive, ext) {
-  listing <- tryCatch(suppressWarnings({
-    if (identical(tolower(ext), ".zip")) {
-      utils::unzip(archive, list = TRUE)
-    } else {
-      .untar_quiet(archive, list = TRUE)
-    }
-  }), error = identity)
+  listing <- tryCatch(.archive_inspect(archive, ext), error = identity)
   if (inherits(listing, "error")) {
-    stop(.bb_trf(
-      "Could not extract archive %s: %s", archive, conditionMessage(listing)
-    ), call. = FALSE)
-  }
-  listing_status <- attr(listing, "status")
-  if (is.numeric(listing_status) && length(listing_status) == 1L &&
-        listing_status != 0) {
-    stop(.bb_trf(
-      "Could not extract archive %s: extraction returned status %d.",
-      archive, listing_status
-    ), call. = FALSE)
+    stop(listing)
   }
   listing
-}
-
-.archive_extract <- function(archive, ext, extract_dir) {
-  extraction <- tryCatch(suppressWarnings({
-    if (identical(tolower(ext), ".zip")) {
-      utils::unzip(archive, exdir = extract_dir)
-    } else {
-      .untar_quiet(archive, exdir = extract_dir)
-    }
-  }), error = identity)
-  if (inherits(extraction, "error")) {
-    stop(.bb_trf(
-      "Could not extract archive %s: %s", archive, conditionMessage(extraction)
-    ), call. = FALSE)
-  }
-  if (is.numeric(extraction) && length(extraction) == 1L && extraction != 0) {
-    stop(.bb_trf(
-      "Could not extract archive %s: extraction returned status %d.",
-      archive, extraction
-    ), call. = FALSE)
-  }
-  invisible(extraction)
 }
 
 .archive_cache_listing <- function(cache, archive, ext) {
@@ -120,8 +83,10 @@
       stop(.bb_trf("Could not create temporary directory for %s", archive),
            call. = FALSE)
     }
+    committed <- FALSE
+    on.exit(if (!committed) safe_unlink(extract_dir, recursive = TRUE), add = TRUE)
     listing <- .archive_listing(archive, ext)
-    members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
+    members <- .archive_inspection_members(listing, ext)
     .validate_archive_members(members)
     .archive_extract(archive, ext, extract_dir)
     .validate_extracted_links(extract_dir, archive)
@@ -129,24 +94,36 @@
   }
   entry <- .archive_cache_entry(cache, archive, ext)
   if (is.null(entry$extract_dir)) {
-    listing <- .archive_cache_listing(cache, archive, ext)
-    members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
-    .validate_archive_members(members)
     extract_dir <- tempfile("bigbang-archive-cache-")
     if (!dir.create(extract_dir)) {
       stop(.bb_trf("Could not create temporary directory for %s", archive),
            call. = FALSE)
     }
-    extraction_error <- tryCatch(
+    extraction <- tryCatch(
       .archive_extract(entry$archive, ext, extract_dir), error = identity
     )
+    extraction_error <- extraction
     if (inherits(extraction_error, "error")) {
       safe_unlink(extract_dir, recursive = TRUE)
       stop(extraction_error)
     }
+    inspection <- if (is.list(extraction) &&
+                        !is.null(extraction$inspection)) {
+      extraction$inspection
+    } else {
+      NULL
+    }
+    if (!is.null(inspection)) {
+      entry$listing <- inspection
+      entry$listing_loaded <- TRUE
+    }
+    listing <- .archive_cache_listing(cache, archive, ext)
+    members <- .archive_inspection_members(listing, ext)
+    .validate_archive_members(members)
     .validate_extracted_links(extract_dir, entry$archive)
     entry$extract_dir <- extract_dir
     cache$extracted <- c(cache$extracted, extract_dir)
+    committed <- TRUE
   }
   entry$extract_dir
 }
@@ -419,10 +396,6 @@
     declared_identity <- NULL
     if (!inherits(path_result, "error")) {
       actual_ext <- .archive_extension(path_result)
-      declared_identity <- tryCatch(
-        .read_archive_identity(path_result, actual_ext, cache = cache),
-        error = function(e) NULL
-      )
       resolved <- tryCatch({
         metadata <- .read_archive_metadata(
           path_result, ext = actual_ext, include_exports = isTRUE(reexport),
@@ -447,6 +420,15 @@
           reexport_native = isTRUE(metadata$reexport_native)
         )
       }, error = identity)
+      if (inherits(resolved, "error") && identical(on_component_error, "skip")) {
+        # The identity is needed only to label an omitted archive and propagate
+        # that omission. Reading it for every valid component duplicated the
+        # DESCRIPTION lookup after the cached extraction had already run.
+        declared_identity <- tryCatch(
+          .read_archive_identity(path_result, actual_ext, cache = cache),
+          error = function(e) NULL
+        )
+      }
     } else {
       resolved <- path_result
     }
@@ -737,9 +719,12 @@
     on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
     listing <- .archive_listing(archive, ext)
   } else {
+    # Extraction performs the same guarded walk and now returns its listing,
+    # so a first read does not traverse the archive twice.
+    temp_dir <- .archive_cache_extract(cache, archive, ext)
     listing <- .archive_cache_listing(cache, archive, ext)
   }
-  members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
+  members <- .archive_inspection_members(listing, ext)
   members <- as.character(members)
   if (length(members) == 0L) {
     stop(.bb_trf("Archive %s must contain one package root directory.", archive),
@@ -760,27 +745,7 @@
          call. = FALSE)
   }
   if (is.null(cache)) {
-    member <- members[[candidates[[1L]]]]
-    extraction <- tryCatch(suppressWarnings({
-      if (identical(tolower(ext), ".zip")) {
-        utils::unzip(archive, files = member, exdir = temp_dir)
-      } else {
-        .untar_quiet(archive, files = member, exdir = temp_dir)
-      }
-    }), error = identity)
-    if (inherits(extraction, "error")) {
-      stop(.bb_trf(
-        "Could not extract archive %s: %s", archive, conditionMessage(extraction)
-      ), call. = FALSE)
-    }
-    if (is.numeric(extraction) && length(extraction) == 1L && extraction != 0) {
-      stop(.bb_trf(
-        "Could not extract archive %s: extraction returned status %d.",
-        archive, extraction
-      ), call. = FALSE)
-    }
-  } else {
-    temp_dir <- .archive_cache_extract(cache, archive, ext)
+    .archive_extract(archive, ext, temp_dir)
   }
   if (is.null(cache)) .validate_extracted_links(temp_dir, archive)
   description_files <- list.files(
@@ -824,27 +789,11 @@
   }
   on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
 
-  listing <- tryCatch(suppressWarnings({
-    if (identical(tolower(ext), ".zip")) {
-      utils::unzip(archive, list = TRUE)
-    } else {
-      .untar_quiet(archive, list = TRUE)
-    }
-  }), error = identity)
+  listing <- tryCatch(.archive_listing(archive, ext), error = identity)
   if (inherits(listing, "error")) {
-    stop(.bb_trf(
-      "Could not extract archive %s: %s", archive, conditionMessage(listing)
-    ), call. = FALSE)
+    stop(listing)
   }
-  listing_status <- attr(listing, "status")
-  if (is.numeric(listing_status) && length(listing_status) == 1L &&
-        listing_status != 0) {
-    stop(.bb_trf(
-      "Could not extract archive %s: extraction returned status %d.",
-      archive, listing_status
-    ), call. = FALSE)
-  }
-  members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
+  members <- .archive_inspection_members(listing, ext)
   members <- as.character(members)
   .validate_archive_members(members)
   normalized_members <- sub("^\\./", "", gsub("\\\\", "/", members))
@@ -857,25 +806,7 @@
       "Archive %s has no DESCRIPTION at the package root.", archive
     ), call. = FALSE)
   }
-  member <- members[[candidate[[1L]]]]
-  extraction <- tryCatch(suppressWarnings({
-    if (identical(tolower(ext), ".zip")) {
-      utils::unzip(archive, files = member, exdir = temp_dir)
-    } else {
-      .untar_quiet(archive, files = member, exdir = temp_dir)
-    }
-  }), error = identity)
-  if (inherits(extraction, "error")) {
-    stop(.bb_trf(
-      "Could not extract archive %s: %s", archive, conditionMessage(extraction)
-    ), call. = FALSE)
-  }
-  if (is.numeric(extraction) && length(extraction) == 1L && extraction != 0) {
-    stop(.bb_trf(
-      "Could not extract archive %s: extraction returned status %d.",
-      archive, extraction
-    ), call. = FALSE)
-  }
+  .archive_extract(archive, ext, temp_dir)
   .validate_extracted_links(temp_dir, archive)
   description_files <- list.files(
     temp_dir, pattern = "^DESCRIPTION$", recursive = TRUE,
@@ -1001,14 +932,14 @@
 }
 
 .extract_archive_checked <- function(archive, ext, extract_dir, cache = NULL) {
-  if (!identical(tolower(ext), ".zip") && !ext %in% c(".tar.gz", ".tar")) {
+  if (!.archive_is_zip(ext) && !.archive_is_tar(ext)) {
     stop(.bb_trf("Unsupported archive format: %s", ext), call. = FALSE)
   }
   if (!is.null(cache)) {
     return(invisible(.archive_cache_extract(cache, archive, ext)))
   }
   listing <- .archive_listing(archive, ext)
-  members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
+  members <- .archive_inspection_members(listing, ext)
   .validate_archive_members(members)
   .archive_extract(archive, ext, extract_dir)
   .validate_extracted_links(extract_dir, archive)
@@ -2081,10 +2012,10 @@
 
 .validate_archive_metadata <- function(component, tolerate = character()) {
   stem <- component$stem
-  expected_name <- sub("_.*", "", stem)
+  expected_name <- unname(sub("_.*", "", stem))
   has_version <- grepl("_", stem, fixed = TRUE)
   expected_version <- if (has_version) {
-    sub("^[^_]+_", "", stem)
+    unname(sub("^[^_]+_", "", stem))
   } else {
     NA_character_
   }
@@ -2099,7 +2030,7 @@
       warning(reason, call. = FALSE)
     }
   }
-  if (!identical(component$package, expected_name)) {
+  if (!identical(unname(component$package), expected_name)) {
     report_mismatch(.bb_trf(
       "Archive %s declares package %s, but its filename suggests %s.",
       component$path, component$package, expected_name
@@ -2377,7 +2308,8 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
   components <- resolved$components
   inventory <- resolved$inventory
   names_only <- vapply(components, `[[`, character(1L), "package")
-  duplicates <- unique(names_only[duplicated(names_only)])
+  folded_names <- vapply(names_only, .archive_case_key, character(1L))
+  duplicates <- unique(names_only[duplicated(folded_names)])
   if (length(duplicates) > 0L) {
     .bigbang_abort(
       "bigbang_error_duplicate_component",
@@ -2414,6 +2346,40 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
       c(metadata_tolerated, list(dependency_tolerated))
     )
   )
+}
+
+.validate_metapackage_name <- function(name, components, inventory = NULL) {
+  component_names <- vapply(components, `[[`, character(1L), "package")
+  visible_names <- if (is.null(inventory)) {
+    component_names
+  } else {
+    unique(c(component_names, inventory$packages))
+  }
+  name_key <- .archive_case_key(name)
+  collisions <- unique(visible_names[vapply(
+    visible_names, function(value) identical(.archive_case_key(value), name_key),
+    logical(1L)
+  )])
+  archive_stems <- vapply(components, function(component) {
+    sub("_.*", "", component$stem)
+  }, character(1L))
+  filename_collisions <- unique(archive_stems[vapply(
+    archive_stems, function(value) identical(.archive_case_key(value), name_key),
+    logical(1L)
+  )])
+  collisions <- unique(c(collisions, filename_collisions))
+  if (length(collisions) > 0L) {
+    .bigbang_abort(
+      "bigbang_error_metapackage_component_collision",
+      .bb_trf(
+        "Cannot create metapackage '%s': component package '%s' has the same name.",
+        name, paste(collisions, collapse = ", ")
+      ),
+      metapackage = name,
+      components = collisions
+    )
+  }
+  invisible(components)
 }
 
 .component_topological_order <- function(components) {
@@ -3128,6 +3094,11 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
 ) {
   omitted <- resolved$omitted
   validation <- .validate_component_archives(resolved, tolerate = tolerate)
+  if (!is.null(metapackage_name)) {
+    .validate_metapackage_name(
+      metapackage_name, validation$components, resolved$inventory
+    )
+  }
   archive_paths <- vapply(
     resolved$components, function(x) x[["path"]], character(1L)
   )

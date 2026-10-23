@@ -143,6 +143,8 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
   c(public, paste0("print.", name, "_conflicts"),
     ".pkgs", ".component_names", ".component_specs",
     ".component_reexport_specs", ".reexport_state", ".reexport_library_paths",
+    "repositories_configured", "install_external_dependency", ".read_install_log",
+    ".path_is_windows_reparse_point", ".path_is_symlink",
     ".set_reexport_library", ".reexport_component_value",
     ".reexport_installed_version", ".reexport_loaded_version",
     ".reexport_version_text",
@@ -150,10 +152,52 @@ Config/bigbang/packages: {paste(component_packages, collapse = ", ")}
     ".reexport_verify_subprocess",
     ".archive_cache_new", ".archive_cache_entry", ".archive_cache_listing",
     ".archive_cache_extract", ".conflicts.OK",
+    ".archive_is_zip", ".archive_tar_extensions", ".archive_is_tar",
+    ".archive_abort", ".archive_parse_error", ".archive_portable_names",
+    ".archive_name_error", ".archive_fs_case_sensitive", ".archive_link_abort",
+    ".archive_limit_options", ".archive_state_new", ".archive_limit_abort",
+    ".archive_state_reserve", ".archive_state_reserve_meta",
+    ".archive_case_fold_table", ".archive_case_key", ".archive_validate_name_text",
+    ".archive_state_register_path", ".archive_state_note_relaxed",
+    ".archive_state_count_path",
+    ".archive_state_count_entry", ".archive_state_add_member",
+    ".archive_state_members", ".archive_state_lengths",
+    ".archive_state_display", ".archive_state_add_directory",
+    ".archive_warning", ".archive_state_warn",
+    ".archive_state_relaxed_names",
+    ".archive_read_exact", ".archive_discard", ".archive_raw_text",
+    ".archive_cstring", ".archive_number", ".archive_tar_connection",
+    ".archive_gzip_member_trailer", ".archive_gzip_trailer_message",
+    ".archive_tar_read", ".archive_tar_close", ".archive_tar_finish",
+    ".archive_tar_checksum_ok", ".archive_pax_records",
+    ".archive_pax_validate_keys", ".archive_pax_number", ".archive_pax_time",
+    ".archive_tar_normalize_path", ".archive_tar_existing_kind",
+    ".archive_tar_prepare_parent", ".archive_tar_payload",
+    ".archive_tar_copy_payload", ".archive_tar_apply_mode_time",
+    ".archive_tar_long_name", ".archive_tar_walk", ".archive_tar_inspect",
+    ".archive_tar_extract", ".archive_u16", ".archive_u32", ".archive_le32",
+    ".archive_crc32_table", ".archive_crc32", ".archive_crc32_unsigned",
+    ".archive_zip_extra", ".archive_zip_name", ".archive_zip_normalize_name",
+    ".archive_zip_read_at", ".archive_crc32_sink", ".archive_gzip_container",
+    ".archive_zip_error_message", ".archive_zip_descriptor",
+    ".archive_zip_intervals", ".archive_zip_payload", ".archive_zip_apply_mode",
+    ".archive_zip_walk", ".archive_zip_inspect",
+    ".archive_destination_is_empty", ".archive_cleanup_tree",
+    ".archive_format_wrap",
+    ".archive_extract",
+    ".archive_inspect", ".archive_inspection_members",
+    ".archive_relaxed_names",
     ".archive_warning_state", ".warn_archive_filename_mismatch",
     "attach_installed_packages", ".bigbang_abort",
-    "install_packages_in_order", "resolve_upgrade_policy",
-    "with_install_library_path", "install_source_component",
+    "install_packages_in_order", "validate_install_library",
+    "resolve_upgrade_policy",
+    "component_upgrade_action", "installed_package_info",
+    "print.bigbang_dependency_plan",
+    "with_install_library_path", "installation_error_excerpt",
+    "collect_install_components", "select_component_archives",
+    "external_requirements", "external_dependency_action",
+    "dependency_constraint_text", "external_dependency_status",
+    "prepare_external_dependencies", "install_source_component",
     "resolve_component_spec", "resolve_component_archive", "read_archive_metadata",
     "read_archive_dependencies", "version_satisfies",
     "validate_local_constraints", "classify_package_archive",
@@ -194,6 +238,7 @@ write_namespace_file <- function(name, namespace_path,
     "export(", name, "_deps)\n",
     "export(", name, "_conflicts)\n",
     "S3method(print,", name, "_conflicts)\n",
+    "S3method(print,bigbang_dependency_plan)\n",
     if (isTRUE(reexport)) {
       paste0("export(", name, "_reexport_verification)\n")
     } else {
@@ -297,6 +342,83 @@ write_namespace_file <- function(name, namespace_path,
   invisible(NULL)
 }
 
+#' Write optional governance templates for a generated metapackage
+#'
+#' The generated package is English by default (`Language: en`), so these
+#' community-facing templates are deliberately English. They are optional and
+#' are never created when `governance = FALSE`.
+#'
+#' @param project_dir Character generated project directory.
+#' @return Invisible character vector of directories newly created by governance.
+#' @noRd
+write_governance_files <- function(project_dir) {
+  github_dir <- file.path(project_dir, ".github")
+  issue_dir <- file.path(project_dir, ".github", "ISSUE_TEMPLATE")
+  directories <- c(github_dir, issue_dir)
+  existed <- dir.exists(directories)
+  dir.create(issue_dir, recursive = TRUE, showWarnings = FALSE)
+  .write_utf8(c(
+    "# Contributing",
+    "",
+    "Thank you for considering a contribution. Please open an issue first for",
+    "substantial changes so the scope and compatibility impact can be discussed.",
+    "",
+    "## Pull requests",
+    "",
+    "1. Keep changes focused and explain the user-visible behavior.",
+    "2. Add or update tests and documentation for changed behavior.",
+    "3. Run the package checks locally and report any environment-specific limits.",
+    "4. Use a clear pull-request description and link the relevant issue.",
+    "",
+    "By contributing, you agree that your contribution may be distributed under",
+    "the license declared in DESCRIPTION."
+  ), file.path(project_dir, "CONTRIBUTING.md"))
+  .write_utf8(c(
+    "# Code of Conduct",
+    "",
+    "We are committed to providing a welcoming and respectful community for",
+    "everyone. Participants are expected to be considerate, constructive, and",
+    "professional, and to avoid harassment, discrimination, and personal attacks.",
+    "",
+    "Project maintainers may clarify, moderate, or remove conduct that conflicts",
+    "with these expectations. Report a concern privately to the project maintainer",
+    "named in DESCRIPTION; urgent safety concerns should use appropriate local",
+    "authorities or services.",
+    "",
+    "This document is adapted from the Contributor Covenant, version 2.1.",
+    "The original is available at:",
+    "https://www.contributor-covenant.org/version/2/1/code_of_conduct.html",
+    "Copyright (c) 2014 Contributor Covenant contributors, licensed under CC BY 4.0."
+  ), file.path(project_dir, "CODE_OF_CONDUCT.md"))
+  .write_utf8(c(
+    "---",
+    "name: Package inclusion request",
+    "about: Propose adding a component package to this metapackage",
+    "title: \"[Inclusion] \"",
+    "labels: enhancement",
+    "---",
+    "",
+    "## Component",
+    "",
+    "What package and version should be considered? Include the archive source",
+    "or a reproducible way to obtain it.",
+    "",
+    "## Rationale",
+    "",
+    "Why should this component travel with the metapackage? Describe users,",
+    "dependencies, license/redistribution permission, and compatibility concerns.",
+    "",
+    "## Checklist",
+    "",
+    "- [ ] I checked that the component license permits redistribution.",
+    "- [ ] I included dependency and version information.",
+    "- [ ] I have removed secrets and personal or restricted data."
+  ), file.path(issue_dir, "package-inclusion-request.md"))
+  relative <- c(".github", file.path(".github", "ISSUE_TEMPLATE"))
+  created <- relative[!existed & dir.exists(directories)]
+  invisible(created)
+}
+
 #' Write a generated metapackage README
 #'
 #' @param name Character metapackage name.
@@ -308,7 +430,8 @@ write_namespace_file <- function(name, namespace_path,
 #' @noRd
 write_metapackage_readme <- function(name, project_dir,
                                      include_archives = FALSE,
-                                     reexport = FALSE) {
+                                     reexport = FALSE,
+                                     governance = FALSE) {
   readme_path <- file.path(project_dir, "README.md")
   content <- c(
     paste0("# ", name),
@@ -393,6 +516,19 @@ write_metapackage_readme <- function(name, project_dir,
     paste0("- `", name, "_detach()` detaches components."),
     "",
     "The install helper also accepts an 'only' component subset and an explicit 'lib' installation library.",
+    if (isTRUE(governance)) {
+      c(
+        "",
+        "## Governance",
+        "",
+        "This metapackage includes English `CONTRIBUTING.md`,",
+        "`CODE_OF_CONDUCT.md`, and a GitHub issue template for package inclusion requests.",
+        "The conduct document is adapted from the Contributor Covenant, version 2.1,",
+        "with attribution and its CC BY 4.0 license notice."
+      )
+    } else {
+      character()
+    },
     "",
     "## Adding a component",
     "",

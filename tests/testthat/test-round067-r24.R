@@ -165,7 +165,7 @@ test_that("archive filename mismatch is warned once per install call", {
   )
   renamed <- file.path(fixture$archives, "mismatch_0.2.0.tar.gz")
   expect_true(file.copy(original, renamed))
-  generated <- suppressWarnings(round067_generate(
+  generated <- expect_no_warning(round067_generate(
     "r24warnverse", "mismatch_0.2.0", fixture,
     tolerate = "filename_mismatch"
   ))

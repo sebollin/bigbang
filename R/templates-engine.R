@@ -19,6 +19,59 @@
 #' @noRd
 .archive_subdir <- "archives"
 
+.archive_reader_template <- function() {
+  reader_names <- c(
+    ".path_is_windows_reparse_point", ".path_is_symlink",
+    ".archive_is_zip", ".archive_tar_extensions", ".archive_is_tar",
+    ".archive_abort", ".archive_parse_error", ".archive_portable_names",
+    ".archive_name_error", ".archive_fs_case_sensitive", ".archive_link_abort",
+    ".archive_limit_options", ".archive_state_new", ".archive_limit_abort",
+    ".archive_state_reserve", ".archive_state_reserve_meta",
+    ".archive_case_fold_table", ".archive_case_key",
+    ".archive_validate_name_text",
+    ".archive_state_register_path", ".archive_state_note_relaxed",
+    ".archive_state_count_path",
+    ".archive_state_count_entry",
+    ".archive_state_add_member",
+    ".archive_state_members", ".archive_state_lengths",
+    ".archive_state_display", ".archive_state_add_directory",
+    ".archive_warning", ".archive_state_warn",
+    ".archive_state_relaxed_names",
+    ".archive_read_exact",
+    ".archive_discard", ".archive_raw_text", ".archive_cstring",
+    ".archive_number", ".archive_gzip_member_trailer",
+    ".archive_tar_connection", ".archive_tar_read",
+    ".archive_tar_close", ".archive_tar_finish", ".archive_gzip_trailer_message",
+    ".archive_tar_checksum_ok",
+    ".archive_pax_records", ".archive_pax_validate_keys", ".archive_pax_number",
+    ".archive_pax_time", ".archive_tar_normalize_path",
+    ".archive_tar_existing_kind", ".archive_tar_prepare_parent",
+    ".archive_tar_payload", ".archive_tar_copy_payload",
+    ".archive_tar_apply_mode_time", ".archive_tar_long_name",
+    ".archive_tar_walk", ".archive_tar_inspect", ".archive_tar_extract",
+    ".archive_u16", ".archive_u32", ".archive_le32",
+    ".archive_crc32_table", ".archive_crc32", ".archive_crc32_unsigned",
+    ".archive_zip_extra", ".archive_zip_name", ".archive_zip_normalize_name",
+    ".archive_zip_read_at", ".archive_crc32_sink", ".archive_gzip_container",
+    ".archive_zip_error_message",
+    ".archive_zip_descriptor", ".archive_zip_intervals",
+    ".archive_zip_payload", ".archive_zip_apply_mode",
+    ".archive_zip_walk", ".archive_zip_inspect",
+    ".archive_destination_is_empty", ".archive_cleanup_tree",
+    ".archive_format_wrap",
+    ".archive_extract", ".archive_inspect", ".archive_inspection_members",
+    ".archive_relaxed_names"
+  )
+  reader_environment <- environment(.archive_inspect)
+  source <- unlist(lapply(reader_names, function(name) {
+    object <- get(name, envir = reader_environment, inherits = TRUE)
+    c(paste0(name, " <- "), deparse(object, width.cutoff = 500L))
+  }), use.names = FALSE)
+  source <- gsub(".bb_trf", ".meta_trf", source, fixed = TRUE)
+  source <- gsub(".bb_tr", ".meta_tr", source, fixed = TRUE)
+  paste(source, collapse = "\n")
+}
+
 .render_install_engine <- function(name, components, pkg_dir_default = "",
                                    install_upgrade = "newer") {
   packages <- vapply(components, `[[`, character(1L), "package")
@@ -32,6 +85,7 @@
   }), packages)
   component_specs_literal <- .r_literal(component_specs)
   package_list_literal <- .r_literal(packages)
+  archive_reader <- .archive_reader_template()
   glue::glue('
 
 .bigbang_abort <- function(class, message, ...) {{
@@ -64,6 +118,61 @@ resolve_upgrade_policy <- function(force, upgrade, upgrade_missing) {{
   upgrade
 }}
 
+component_upgrade_action <- function(installed_version, archive_version,
+                                     upgrade) {{
+  if (base::is.null(installed_version)) {{
+    return(base::list(action = "install", reason_code = "not_installed"))
+  }}
+  if (base::identical(upgrade, "never")) {{
+    return(base::list(action = "keep", reason_code = "upgrade_never"))
+  }}
+  if (base::identical(upgrade, "newer") && base::tryCatch(
+      installed_version >= base::package_version(archive_version),
+      error = function(error) FALSE
+  )) {{
+    return(base::list(
+      action = "keep", reason_code = "installed_newer_or_equal"
+    ))
+  }}
+  base::list(
+    action = "install",
+    reason_code = if (base::identical(upgrade, "always"))
+      "forced_reinstall" else "archive_newer"
+  )
+}}
+
+repositories_configured <- function(repos) {{
+  !base::is.null(repos) && base::length(repos) > 0L && !base::all(
+    base::is.na(repos) | !base::nzchar(base::trimws(repos)) |
+      base::trimws(repos) == "@CRAN@"
+  )
+}}
+
+external_dependency_action <- function(status, cran_deps, repos) {{
+  if (base::isTRUE(status$satisfied)) "satisfied" else if (
+    base::identical(cran_deps, "skip")
+  ) "skip" else if (base::identical(cran_deps, "error")) "fail" else if (
+    !repositories_configured(repos)
+  ) "fail" else "install_unverified"
+}}
+
+validate_install_library <- function(lib) {{
+  if (!base::is.character(lib) || base::length(lib) != 1L ||
+      base::is.na(lib) || !base::nzchar(lib)) {{
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .meta_tr("The installation library must be one non-empty path.")
+    )
+  }}
+  if (base::file.exists(lib) && !base::dir.exists(lib)) {{
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .meta_trf("Could not create installation library: %s", lib)
+    )
+  }}
+  base::invisible(lib)
+}}
+
 with_install_library_path <- function(libraries, code) {{
   libraries <- base::unique(base::normalizePath(
     libraries[base::dir.exists(libraries)], winslash = "/", mustWork = TRUE
@@ -83,13 +192,319 @@ with_install_library_path <- function(libraries, code) {{
   base::force(code)
 }}
 
+installed_package_info <- function(package, libraries) {{
+  path <- base::tryCatch(
+    base::find.package(package, lib.loc = libraries, quiet = TRUE),
+    error = function(error) base::character()
+  )
+  if (base::length(path) == 0L || !base::dir.exists(path[[1L]])) {{
+    return(base::list(version = NULL, path = NULL, library = NULL))
+  }}
+  path <- base::normalizePath(path[[1L]], winslash = "/", mustWork = TRUE)
+  version <- base::tryCatch(
+    utils::packageVersion(package, lib.loc = base::dirname(path)),
+    error = function(error) NULL
+  )
+  base::list(version = version, path = path, library = base::dirname(path))
+}}
+
+install_external_dependency <- function(dependency, libraries, lib, repos,
+                                        type = NULL) {{
+  diagnostics <- base::character()
+  install <- function() {{
+    args <- base::list(
+      pkgs = dependency, dependencies = NA, repos = repos, lib = lib
+    )
+    if (!base::is.null(type)) args$type <- type
+    base::do.call(utils::install.packages, args)
+  }}
+  base::tryCatch(
+    base::withCallingHandlers(
+      with_install_library_path(libraries, install()),
+      warning = function(condition) {{
+        diagnostics <<- base::c(diagnostics, base::conditionMessage(condition))
+        base::invokeRestart("muffleWarning")
+      }}
+    ),
+    error = function(condition) {{
+      diagnostics <<- base::c(diagnostics, base::conditionMessage(condition))
+      NULL
+    }}
+  )
+  base::list(diagnostics = base::unique(diagnostics))
+}}
+
+.read_install_log <- function(log_file) {{
+  size <- base::file.info(log_file)$size
+  if (base::is.na(size) || size <= 0) return(base::character())
+  bytes <- base::readBin(log_file, "raw", n = base::as.integer(size))
+  bytes <- bytes[bytes != as.raw(0L)]
+  text <- base::tryCatch(
+    base::iconv(base::rawToChar(bytes), from = "UTF-8", to = "UTF-8", sub = "byte"),
+    error = function(error) ""
+  )
+  if (base::length(text) == 0L || !base::nzchar(text)) return(base::character())
+  if (base::endsWith(text, "\n")) text <- base::substr(text, 1L, base::nchar(text) - 1L)
+  base::strsplit(text, "\n", fixed = TRUE)[[1L]]
+}}
+
+installation_error_excerpt <- function(output, max_lines = 18L,
+                                       max_chars = 4000L) {{
+  if (base::length(output) == 0L) return(.meta_tr("No installer output was captured"))
+  output <- base::tryCatch(
+    base::iconv(base::as.character(output), from = "UTF-8", to = "UTF-8", sub = "byte"),
+    error = function(error) base::rep("<invalid installer output>", base::length(output))
+  )
+  output[base::is.na(output)] <- "<invalid installer output>"
+  real_markers <- base::grep(
+    "(^|[[:space:]])(ERROR:|Error:|Error in|fatal error:|error:|Execution halted$)",
+    output, ignore.case = TRUE, perl = TRUE
+  )
+  if (base::length(real_markers) > 0L) {{
+    anchor <- real_markers[[base::length(real_markers)]]
+    end <- base::min(base::length(output), anchor + 3L)
+    start <- base::max(1L, end - max_lines + 1L)
+  }} else {{
+    start <- base::max(1L, base::length(output) - max_lines + 1L)
+    end <- base::min(base::length(output), start + max_lines - 1L)
+  }}
+  excerpt <- output[start:end]
+  anchor_line <- if (base::length(real_markers) > 0L) anchor - start + 1L else NA_integer_
+  line_count <- base::length(excerpt)
+  line_limit <- base::max(
+    1L,
+    base::floor((max_chars - base::max(0L, line_count - 1L)) / line_count)
+  )
+  truncate_line <- function(line, limit, anchor = FALSE) {{
+    length <- base::nchar(line, type = "chars")
+    if (length <= limit) return(line)
+    if (limit <= 3L || !base::isTRUE(anchor)) {{
+      return(base::substr(line, 1L, limit))
+    }}
+    marker <- base::regexpr(
+      "(ERROR:|Error:|Error in|fatal error:|error:|Execution halted$)",
+      line, ignore.case = TRUE, perl = TRUE
+    )
+    marker_start <- marker[[1L]]
+    marker_length <- attr(marker, "match.length")[[1L]]
+    if (marker_start < 1L || marker_length < 1L) {{
+      return(base::substr(line, 1L, limit))
+    }}
+    if (marker_start + marker_length - 1L <= limit - 3L) {{
+      return(base::paste0(base::substr(line, 1L, limit - 3L), "..."))
+    }}
+    base::paste0(
+      "...", base::substr(line, marker_start, marker_start + limit - 4L)
+    )
+  }}
+  excerpt <- base::Map(
+    function(line, index) truncate_line(line, line_limit, index == anchor_line),
+    excerpt, base::seq_along(excerpt)
+  )
+  base::paste(base::unlist(excerpt, use.names = FALSE), collapse = "\n")
+}}
+
+collect_install_components <- function(component, inventory) {{
+  collected <- base::list()
+  seen <- base::character()
+  collect <- function(item) {{
+    if (item$package %in% seen) return(base::invisible(NULL))
+    seen <<- base::c(seen, item$package)
+    collected[[base::length(collected) + 1L]] <<- item
+    for (dependency in base::intersect(item$dependencies, inventory$packages)) {{
+      matches <- base::which(inventory$packages == dependency)
+      if (base::length(matches) == 1L) collect(inventory$entries[[matches[[1L]]]])
+    }}
+    base::invisible(NULL)
+  }}
+  collect(component)
+  collected
+}}
+
+select_component_archives <- function(only, pkg_dir, ext, cache = NULL) {{
+  if (base::is.null(only)) {{
+    return(base::list(
+      selected = NULL, packages = NULL, pulled_in = base::character()
+    ))
+  }}
+  if (!base::is.character(only) || base::length(only) < 1L ||
+      base::anyNA(only) || base::any(!base::nzchar(only)) ||
+      base::anyDuplicated(only) > 0L) {{
+    .bigbang_abort(
+      "bigbang_error_only",
+      .meta_tr("\'only\' must contain one or more unique component package names.")
+    )
+  }}
+  unknown <- base::setdiff(only, .component_names)
+  if (base::length(unknown) > 0L) {{
+    condition <- base::structure(
+      base::list(
+        message = .meta_trf("Unknown component(s) in \'only\': %s.",
+                            base::paste(unknown, collapse = ", ")),
+        call = NULL, unknown = unknown
+      ),
+      class = c("bigbang_error_only", "bigbang_error", "error", "condition")
+    )
+    base::stop(condition)
+  }}
+  selected <- base::unique(only)
+  repeat {{
+    dependencies <- base::unlist(base::lapply(
+      selected, read_archive_dependencies, pkg_dir = pkg_dir, ext = ext,
+      cache = cache
+    ), use.names = FALSE)
+    pulled <- base::setdiff(
+      base::intersect(dependencies, .component_names), selected
+    )
+    if (base::length(pulled) == 0L) break
+    selected <- base::c(selected, pulled)
+  }}
+  packages <- base::vapply(
+    selected, function(package) .component_specs[[package]]$stem,
+    base::character(1L)
+  )
+  base::list(
+    selected = selected,
+    packages = packages,
+    pulled_in = packages[selected %in% base::setdiff(selected, only)]
+  )
+}}
+
+external_requirements <- function(components, local_names) {{
+  dependencies <- base::unique(base::unlist(base::lapply(
+    components, function(item) item$dependencies
+  ), use.names = FALSE))
+  external <- base::setdiff(dependencies, local_names)
+  requirements <- stats::setNames(base::vector("list", base::length(external)), external)
+  for (dependency in external) {{
+    requirements[[dependency]] <- base::unlist(base::lapply(components, function(item) {{
+      Filter(
+        function(constraint) base::identical(constraint$package, dependency),
+        item$constraints
+      )
+    }}), recursive = FALSE)
+  }}
+  requirements
+}}
+
+dependency_constraint_text <- function(constraints) {{
+  if (base::length(constraints) == 0L) return(base::character())
+  base::vapply(
+    constraints,
+    function(constraint) base::paste(
+      constraint$package, constraint$op, constraint$version
+    ),
+    base::character(1L)
+  )
+}}
+
+external_dependency_status <- function(dependency, constraints, libraries) {{
+  installed_info <- installed_package_info(dependency, libraries)
+  installed <- installed_info$version
+  available <- !base::is.null(installed)
+  requirement_text <- base::paste(
+    dependency_constraint_text(constraints), collapse = ", "
+  )
+  satisfied <- base::isTRUE(available) && !base::is.null(installed) && (
+    base::length(constraints) == 0L || base::all(base::vapply(
+      constraints,
+      function(constraint) version_satisfies(
+        installed, constraint$op, constraint$version
+      ),
+      base::logical(1L)
+    ))
+  )
+  detail <- if (!base::isTRUE(available) || base::is.null(installed)) {{
+    if (base::nzchar(requirement_text)) {{
+      .meta_trf(
+        "Dependency %s is not installed; required constraint(s): %s",
+        dependency, requirement_text
+      )
+    }} else {{
+      dependency
+    }}
+  }} else if (!base::isTRUE(satisfied)) {{
+    .meta_trf(
+      "Dependency %s has installed version %s; required constraint(s): %s",
+      dependency, base::as.character(installed), requirement_text
+    )
+  }} else {{
+    base::character()
+  }}
+  base::list(
+    available = available, installed = installed, constraints = constraints,
+    satisfied = satisfied, detail = detail,
+    library = installed_info$library, path = installed_info$path
+  )
+}}
+
+prepare_external_dependencies <- function(requirements, libraries, lib,
+                                           cran_deps, repos) {{
+  status <- base::lapply(
+    base::names(requirements),
+    function(dependency) {{
+      external_dependency_status(
+        dependency, requirements[[dependency]], libraries
+      )
+    }}
+  )
+  base::names(status) <- base::names(requirements)
+  unsatisfied <- base::names(status)[!base::vapply(
+    status, `[[`, base::logical(1L), "satisfied"
+  )]
+  no_repository <- FALSE
+  if (base::length(unsatisfied) > 0L && base::identical(cran_deps, "install")) {{
+    if (!repositories_configured(repos)) {{
+      no_repository <- TRUE
+    }} else {{
+      for (dependency in unsatisfied) {{
+        attempts <- base::character()
+        install_attempt <- function(type, label) {{
+          outcome <- install_external_dependency(
+            dependency, libraries, lib, repos, type = type
+          )
+          current <- external_dependency_status(
+            dependency, requirements[[dependency]], libraries
+          )
+          if (!base::isTRUE(current$satisfied)) {{
+            reason <- if (base::length(outcome$diagnostics) > 0L) {{
+              base::paste(outcome$diagnostics, collapse = "; ")
+            }} else {{
+              "the dependency remains unsatisfied"
+            }}
+            attempts <<- base::c(attempts, base::paste0(label, ": ", reason))
+          }}
+          current
+        }}
+        current <- install_attempt(NULL, "default package type")
+        if (!base::isTRUE(current$satisfied) &&
+            !base::identical(base::getOption("pkgType"), "source")) {{
+          current <- install_attempt("source", "source package type")
+        }}
+        status[[dependency]] <- current
+        if (!base::isTRUE(current$satisfied) && base::length(attempts) > 0L) {{
+          status[[dependency]]$detail <- base::paste(
+            status[[dependency]]$detail,
+            base::paste(
+              "Installation attempts:", base::paste(attempts, collapse = " | ")
+            ),
+            sep = "; "
+          )
+        }}
+      }}
+    }}
+  }}
+  base::list(status = status, no_repository = no_repository)
+}}
+
 install_source_component <- function(target, lib, verbose = TRUE) {{
   # utils::install.packages() discards the output of the child installer for
   # local source packages, so a failure only reports a non-zero exit status.
   # Run the same R CMD INSTALL directly and keep the output: the ERROR lines
   # of the child become the failure message instead of a generic one.
   log_file <- base::tempfile("bigbang-install-log-")
-  on.exit(base::unlink(log_file, force = TRUE), add = TRUE)
+  keep_log <- FALSE
+  on.exit(if (!keep_log) base::unlink(log_file, force = TRUE), add = TRUE)
   target <- base::normalizePath(base::path.expand(target), winslash = "/", mustWork = FALSE)
   r_binary <- base::file.path(
     base::R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"
@@ -98,26 +513,32 @@ install_source_component <- function(target, lib, verbose = TRUE) {{
     r_binary, base::c("CMD", "INSTALL", "-l", base::shQuote(lib), base::shQuote(target)),
     stdout = log_file, stderr = log_file
   )
-  output <- if (base::file.exists(log_file)) {{
-    base::readLines(log_file, warn = FALSE)
-  }} else {{
-    base::character()
-  }}
+  output <- if (base::file.exists(log_file)) .read_install_log(log_file) else base::character()
   if (base::isTRUE(verbose) && base::length(output) > 0L) base::cat(output, sep = "\\n")
   if (!identical(status, 0L)) {{
-    detail <- base::grep("ERROR", output, value = TRUE, fixed = TRUE)
-    if (base::length(detail) == 0L) detail <- utils::tail(output, 5L)
-    detail <- base::paste(detail, collapse = " | ")
+    keep_log <- TRUE
+    detail <- installation_error_excerpt(output)
     if (!base::nzchar(detail)) {{
       detail <- .meta_trf("R CMD INSTALL exited with status %d", status)
+    }} else if (base::length(output) == 0L) {{
+      detail <- base::paste(
+        detail,
+        .meta_trf("R CMD INSTALL exited with status %d", status),
+        sep = "; "
+      )
     }}
-    stop(detail, call. = FALSE)
+    stop(.meta_trf(
+      "Installation failed; error details: %s; full installation log: %s",
+      detail, base::normalizePath(log_file, winslash = "/", mustWork = FALSE)
+    ), call. = FALSE)
   }}
   base::invisible(TRUE)
 }}
 
 .component_specs <- {component_specs_literal}
 .component_names <- {package_list_literal}
+
+{archive_reader}
 
 .archive_cache_new <- function() {{
   cache <- base::new.env(parent = base::emptyenv())
@@ -147,10 +568,7 @@ install_source_component <- function(target, lib, verbose = TRUE) {{
 .archive_cache_listing <- function(cache, archive, ext) {{
   entry <- .archive_cache_entry(cache, archive, ext)
   if (base::is.null(entry$listing)) {{
-    entry$listing <- base::suppressWarnings({{
-      if (base::identical(base::tolower(ext), ".zip")) utils::unzip(archive, list = TRUE)
-      else utils::untar(archive, list = TRUE)
-    }})
+    entry$listing <- .archive_inspect(archive, ext)
   }}
   entry$listing
 }}
@@ -158,43 +576,42 @@ install_source_component <- function(target, lib, verbose = TRUE) {{
 .archive_cache_extract <- function(cache, archive, ext) {{
   entry <- .archive_cache_entry(cache, archive, ext)
   if (!base::is.null(entry$extract_dir)) return(entry$extract_dir)
-  listing <- .archive_cache_listing(cache, archive, ext)
-  members <- if (base::identical(base::tolower(ext), ".zip")) listing$Name else listing
-  members <- base::gsub("\\\\", "/", members, fixed = TRUE)
-  unsafe <- base::startsWith(members, "/") |
-    base::grepl("^[A-Za-z]:", members) |
-    base::grepl("(^|/)\\\\.\\\\.(/|$)", members, perl = TRUE)
-  if (base::any(unsafe)) {{
-    base::stop(.meta_trf(
-      "Archive contains unsafe absolute or parent-traversal paths: %s",
-      base::paste(utils::head(members[unsafe], 3L), collapse = ", ")
-    ), call. = FALSE)
-  }}
   extract_dir <- base::tempfile("bigbang-archive-cache-")
   if (!base::dir.create(extract_dir)) base::stop(.meta_tr(
     "Could not create a temporary archive directory."), call. = FALSE)
-  extraction <- base::tryCatch(base::suppressWarnings({{
-    if (base::identical(base::tolower(ext), ".zip")) utils::unzip(archive, exdir = extract_dir)
-    else utils::untar(archive, exdir = extract_dir)
-  }}), error = base::identity)
+  committed <- FALSE
+  base::on.exit(if (!committed) safe_unlink(extract_dir, recursive = TRUE), add = TRUE)
+  extraction <- base::tryCatch(
+    .archive_extract(archive, ext, extract_dir), error = base::identity
+  )
   if (base::inherits(extraction, "error")) {{
     safe_unlink(extract_dir, recursive = TRUE)
     base::stop(.meta_trf(
       "Could not extract archive %s: %s", archive, base::conditionMessage(extraction)
     ), call. = FALSE)
   }}
-  if (base::is.numeric(extraction) && base::length(extraction) == 1L && extraction != 0) {{
+  if (base::is.list(extraction) && !base::is.null(extraction$inspection)) {{
+    entry$listing <- extraction$inspection
+  }}
+  listing <- .archive_cache_listing(cache, archive, ext)
+  members <- .archive_inspection_members(listing, ext)
+  unsafe <- base::startsWith(members, "/") |
+    base::grepl("^[A-Za-z]:", members) |
+    base::grepl("(^|/)\\\\.\\\\.(/|$)", members, perl = TRUE)
+  if (base::any(unsafe)) {{
     safe_unlink(extract_dir, recursive = TRUE)
     base::stop(.meta_trf(
-      "Could not extract archive %s: extraction returned status %d.",
-      archive, extraction
+      "Archive contains unsafe absolute or parent-traversal paths: %s",
+      base::paste(utils::head(members[unsafe], 3L), collapse = ", ")
     ), call. = FALSE)
   }}
   extracted <- base::list.files(
     extract_dir, recursive = TRUE, full.names = TRUE,
     all.files = TRUE, include.dirs = TRUE, no.. = TRUE
   )
-  if (base::length(extracted) > 0L && base::any(base::nzchar(base::Sys.readlink(extracted)))) {{
+  if (base::length(extracted) > 0L && base::any(base::vapply(
+    extracted, .path_is_symlink, base::logical(1L)
+  ))) {{
     safe_unlink(extract_dir, recursive = TRUE)
     base::stop(.meta_trf(
       "Archive %s contains symbolic links, which are not supported.", archive
@@ -202,10 +619,12 @@ install_source_component <- function(target, lib, verbose = TRUE) {{
   }}
   entry$extract_dir <- extract_dir
   cache$extracted <- base::c(cache$extracted, extract_dir)
+  committed <- TRUE
   extract_dir
 }}
 
 resolve_component_spec <- function(package, ext = NULL) {{
+  package <- base::unname(package)
   if (base::`%in%`(package, base::names(.component_specs))) return(.component_specs[[package]])
   by_stem <- base::vapply(.component_specs, function(spec) base::identical(spec$stem, package),
                     base::logical(1L))
@@ -252,7 +671,10 @@ resolve_component_archive <- function(package, pkg_dir, ext = NULL) {{
 .archive_warning_state$active <- FALSE
 .archive_warning_state$seen <- base::character()
 .warn_archive_filename_mismatch <- function(archive, message) {{
-  key <- base::normalizePath(archive, winslash = "/", mustWork = FALSE)
+  key <- base::paste0(
+    base::normalizePath(archive, winslash = "/", mustWork = FALSE),
+    "\n", message
+  )
   if (!base::isTRUE(.archive_warning_state$active)) {{
     base::warning(message, call. = FALSE)
     return(base::invisible(NULL))
@@ -279,6 +701,7 @@ read_archive_metadata <- function(package, pkg_dir, ext = NULL, cache = NULL) {{
   resolved <- resolve_component_archive(package, pkg_dir, ext)
   archive <- resolved$path
   ext <- resolved$ext
+  spec <- resolve_component_spec(package, ext)
 
   if (base::is.null(cache)) {{
     temp_dir <- tempfile("bigbang-deps-")
@@ -289,61 +712,60 @@ read_archive_metadata <- function(package, pkg_dir, ext = NULL, cache = NULL) {{
     on.exit(safe_unlink(temp_dir, recursive = TRUE), add = TRUE)
   }}
 
-  if (!identical(tolower(ext), ".zip") && !base::`%in%`(ext, base::c(".tar.gz", ".tar"))) {{
+  if (!.archive_is_zip(ext) && !.archive_is_tar(ext)) {{
     stop(.meta_trf("Unsupported archive format: %s", ext), call. = FALSE)
   }}
-  listing <- base::tryCatch(
-    if (base::is.null(cache)) base::suppressWarnings({{
-      if (base::identical(base::tolower(ext), ".zip")) utils::unzip(archive, list = TRUE)
-      else utils::untar(archive, list = TRUE)
-    }}) else .archive_cache_listing(cache, archive, ext),
-    error = base::identity
-  )
-  if (inherits(listing, "error")) {{
-    stop(.meta_trf(
-      "Could not extract archive %s: %s", archive, conditionMessage(listing)
-    ), call. = FALSE)
+  if (base::is.null(cache)) {{
+    listing <- base::tryCatch(
+      .archive_inspect(archive, ext), error = base::identity
+    )
+    if (inherits(listing, "error")) {{
+      stop(.meta_trf(
+        "Could not extract archive %s: %s", archive, conditionMessage(listing)
+      ), call. = FALSE)
+    }}
+    listing_status <- attr(listing, "status")
+    if (is.numeric(listing_status) && length(listing_status) == 1L &&
+        listing_status != 0) {{
+      stop(.meta_trf(
+        "Could not extract archive %s: extraction returned status %d.",
+        archive, listing_status
+      ), call. = FALSE)
+    }}
+    members <- .archive_inspection_members(listing, ext)
+    members <- gsub("\\\\", "/", members, fixed = TRUE)
+    unsafe <- startsWith(members, "/") |
+      grepl("^[A-Za-z]:", members) |
+      grepl("(^|/)\\\\.\\\\.(/|$)", members, perl = TRUE)
+    if (any(unsafe)) {{
+      stop(.meta_trf(
+        "Archive contains unsafe absolute or parent-traversal paths: %s",
+        paste(utils::head(members[unsafe], 3L), collapse = ", ")
+      ), call. = FALSE)
+    }}
+    extraction <- base::tryCatch(
+      .archive_extract(archive, ext, temp_dir), error = base::identity
+    )
+  }} else {{
+    # Extraction already performs the guarded walk and stores its inspection
+    # in the cache entry. Reuse that listing instead of walking the archive
+    # once before and once during extraction.
+    temp_dir <- .archive_cache_extract(cache, archive, ext)
+    extraction <- NULL
+    listing <- .archive_cache_listing(cache, archive, ext)
   }}
-  listing_status <- attr(listing, "status")
-  if (is.numeric(listing_status) && length(listing_status) == 1L &&
-      listing_status != 0) {{
+  if (base::inherits(extraction, "error")) {{
     stop(.meta_trf(
-      "Could not extract archive %s: extraction returned status %d.",
-      archive, listing_status
-    ), call. = FALSE)
-  }}
-  members <- if (identical(tolower(ext), ".zip")) listing$Name else listing
-  members <- gsub("\\\\", "/", members, fixed = TRUE)
-  unsafe <- startsWith(members, "/") |
-    grepl("^[A-Za-z]:", members) |
-    grepl("(^|/)\\\\.\\\\.(/|$)", members, perl = TRUE)
-  if (any(unsafe)) {{
-    stop(.meta_trf(
-      "Archive contains unsafe absolute or parent-traversal paths: %s",
-      paste(utils::head(members[unsafe], 3L), collapse = ", ")
-    ), call. = FALSE)
-  }}
-  if (!base::is.null(cache)) temp_dir <- .archive_cache_extract(cache, archive, ext)
-  extraction <- if (base::is.null(cache)) base::tryCatch(base::suppressWarnings({{
-    if (base::identical(base::tolower(ext), ".zip")) utils::unzip(archive, exdir = temp_dir)
-    else utils::untar(archive, exdir = temp_dir)
-  }}), error = base::identity) else 0L
-  if (inherits(extraction, "error")) {{
-    stop(.meta_trf(
-      "Could not extract archive %s: %s", archive, conditionMessage(extraction)
-    ), call. = FALSE)
-  }}
-  if (is.numeric(extraction) && length(extraction) == 1L && extraction != 0) {{
-    stop(.meta_trf(
-      "Could not extract archive %s: extraction returned status %d.",
-      archive, extraction
+      "Could not extract archive %s: %s", archive, base::conditionMessage(extraction)
     ), call. = FALSE)
   }}
   extracted <- list.files(
     temp_dir, recursive = TRUE, full.names = TRUE,
     all.files = TRUE, include.dirs = TRUE, no.. = TRUE
   )
-  if (length(extracted) > 0L && any(nzchar(Sys.readlink(extracted)))) {{
+  if (length(extracted) > 0L && any(vapply(
+    extracted, .path_is_symlink, logical(1L)
+  ))) {{
     stop(.meta_trf(
       "Archive %s contains symbolic links, which are not supported.", archive
     ), call. = FALSE)
@@ -385,10 +807,23 @@ read_archive_metadata <- function(package, pkg_dir, ext = NULL, cache = NULL) {{
       "Archive %s must declare non-empty Package and Version fields.", archive
     ), call. = FALSE)
   }}
-  spec <- resolve_component_spec(package, ext)
-  expected_package <- sub("_.*", "", spec$stem)
+  if (!base::identical(declared_package, spec$package)) {{
+    .bigbang_abort(
+      "bigbang_error_generated_archive_changed",
+      .meta_trf(
+        "Archive %s changed after generation: its Package field is %s, but the generated spec expects %s.",
+        archive, declared_package, spec$package
+      ),
+      archive = archive,
+      declared_package = declared_package,
+      expected_package = spec$package
+    )
+  }}
+  expected_package <- base::unname(base::sub("_.*", "", spec$stem))
   has_version <- grepl("_", spec$stem, fixed = TRUE)
-  expected_version <- if (has_version) sub("^[^_]+_", "", spec$stem) else NA_character_
+  expected_version <- if (has_version) {{
+    base::unname(base::sub("^[^_]+_", "", spec$stem))
+  }} else NA_character_
   if (!identical(declared_package, expected_package)) {{
     .warn_archive_filename_mismatch(archive, .meta_trf(
       "Archive %s declares package %s, but its filename suggests %s.",
@@ -496,9 +931,10 @@ validate_local_constraints <- function(packages, pkg_dir, ext = NULL, cache = NU
 classify_package_archive <- function(archive, ext, cache = NULL) {{
   if (!identical(tolower(ext), ".zip")) return("source")
 
-  members <- if (is.null(cache)) utils::unzip(archive, list = TRUE)$Name else {{
-    .archive_cache_listing(cache, archive, ext)$Name
-  }}
+  members <- .archive_inspection_members(
+    if (is.null(cache)) .archive_inspect(archive, ext)
+    else .archive_cache_listing(cache, archive, ext), ext
+  )
   members <- gsub("\\\\", "/", members, fixed = TRUE)
   has_description <- any(grepl("(^|/)DESCRIPTION$", members))
   if (!has_description) {{
@@ -531,11 +967,14 @@ classify_package_archive <- function(archive, ext, cache = NULL) {{
 #\' @param verbose Logical; print the installation subprocess transcript.
 #\' @keywords internal
 install_local_archive <- function(package, pkg_dir, ext = NULL,
-                                   repos = getOption("repos"),
+                                   repos = NULL,
                                    cran_deps = c("skip", "error", "install"),
                                    upgrade = c("newer", "always", "never"),
                                    lib = .libPaths()[[1L]], verbose = TRUE,
-                                   cache = NULL) {{
+                                   cache = NULL, external_status = NULL,
+                                   external_no_repository = FALSE,
+                                   lib_was_missing = NULL) {{
+  if (base::is.null(lib_was_missing)) lib_was_missing <- base::missing(lib)
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
   dependency_libraries <- unique(c(lib, .libPaths()))
@@ -558,14 +997,30 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
   base_name <- metadata$package
   version <- metadata$version
   dependencies <- metadata$dependencies
+  local_names <- .component_names
+  # An explicit `lib` is the component destination. When it was omitted, an
+  # installed component in any active library counts as installed, while a
+  # component that needs installation still targets the first library.
+  component_libraries <- if (base::isTRUE(lib_was_missing)) {{
+    dependency_libraries
+  }} else lib
+  if (is.null(external_status)) {{
+    requirements <- external_requirements(
+      list(metadata), local_names
+    )
+    prepared <- prepare_external_dependencies(
+      requirements, dependency_libraries, lib, cran_deps, repos
+    )
+    external_status <- prepared$status
+    external_no_repository <- prepared$no_repository
+  }}
 
-  installed_version <- tryCatch(
-    utils::packageVersion(base_name, lib.loc = lib), error = function(e) NULL
-  )
-  keep_installed <- !is.null(installed_version) && (
-    identical(upgrade, "never") ||
-      (identical(upgrade, "newer") &&
-         installed_version >= base::package_version(version))
+  installed_version <- installed_package_info(
+    base_name, component_libraries
+  )$version
+  keep_installed <- base::identical(
+    component_upgrade_action(installed_version, version, upgrade)$action,
+    "keep"
   )
   if (keep_installed) {{
     newer <- installed_version > base::package_version(version)
@@ -606,74 +1061,41 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
     ))
   }}
 
-  local_names <- .component_names
-
   # Local dependencies are installed once by the outer topological loop. This
   # branch resolves only dependencies not provided by local archives.
-  missing_nonlocal <- setdiff(dependencies, local_names)
-  missing_nonlocal <- missing_nonlocal[!vapply(
-    missing_nonlocal, requireNamespace, logical(1), quietly = TRUE,
-    lib.loc = dependency_libraries
+  nonlocal <- setdiff(dependencies, local_names)
+  unsatisfied_nonlocal <- nonlocal[!base::vapply(
+    nonlocal,
+    function(dependency) base::isTRUE(external_status[[dependency]]$satisfied),
+    base::logical(1L)
   )]
-  if (length(missing_nonlocal) > 0L && cran_deps != "install") {{
-    detail <- paste(missing_nonlocal, collapse = ", ")
+  if (base::length(unsatisfied_nonlocal) > 0L) {{
+    detail <- base::paste(base::vapply(
+      unsatisfied_nonlocal,
+      function(dependency) external_status[[dependency]]$detail,
+      base::character(1L)
+    ), collapse = "; ")
+    if (base::isTRUE(external_no_repository)) {{
+      return(list(
+        success = FALSE,
+        message = .meta_tr("Cannot install dependencies without a configured repository"),
+        missing_dependencies = unsatisfied_nonlocal,
+        dependencies = dependencies
+      ))
+    }}
     if (cran_deps == "skip") {{
       return(list(
         success = FALSE,
         skipped = TRUE,
         message = .meta_trf("Skipped because non-local dependencies are missing: %s", detail),
-        missing_dependencies = missing_nonlocal,
+        missing_dependencies = unsatisfied_nonlocal,
         dependencies = dependencies
       ))
     }}
     return(list(
       success = FALSE,
       message = .meta_trf("Missing non-local dependencies: %s", detail),
-      missing_dependencies = missing_nonlocal,
-      dependencies = dependencies
-    ))
-  }}
-
-  if (length(missing_nonlocal) > 0L && cran_deps == "install") {{
-    invalid_repos <- is.null(repos) || length(repos) == 0L ||
-      all(is.na(repos) | !nzchar(repos) | repos == "@CRAN@")
-    if (invalid_repos) {{
-      detail <- paste(missing_nonlocal, collapse = ", ")
-      return(list(
-        success = FALSE,
-        message = .meta_trf(
-          "Cannot install non-local dependencies without a configured repository: %s",
-          detail
-        ),
-        missing_dependencies = missing_nonlocal,
-        dependencies = dependencies
-      ))
-    }}
-    for (dep in missing_nonlocal) {{
-      message(.meta_trf("Installing non-local dependency: %s", dep))
-      tryCatch(with_install_library_path(
-        dependency_libraries,
-        # NA is what is needed to use the package: Depends, Imports and
-        # LinkingTo. TRUE would add Suggests, pulling development tooling
-        # into environments that asked for one dependency.
-        utils::install.packages(dep, dependencies = NA, repos = repos, lib = lib)
-      ),
-        error = function(e) warning(conditionMessage(e), call. = FALSE)
-      )
-    }}
-  }}
-
-  missing <- dependencies[!vapply(
-    dependencies, requireNamespace, logical(1), quietly = TRUE,
-    lib.loc = dependency_libraries
-  )]
-  if (length(missing) > 0L) {{
-    return(list(
-      success = FALSE,
-      message = .meta_trf(
-        "Dependencies are not installed: %s", paste(missing, collapse = ", ")
-      ),
-      missing_dependencies = missing,
+      missing_dependencies = unsatisfied_nonlocal,
       dependencies = dependencies
     ))
   }}
@@ -700,7 +1122,7 @@ install_local_archive <- function(package, pkg_dir, ext = NULL,
     if (is.null(cache)) {{
       dir.create(source_dir)
       on.exit(safe_unlink(source_dir, recursive = TRUE), add = TRUE)
-      utils::unzip(archive, exdir = source_dir)
+      .archive_extract(archive, ext, source_dir)
     }}
     roots <- list.files(source_dir, all.files = TRUE, no.. = TRUE, include.dirs = TRUE)
     if (length(roots) != 1L || !dir.exists(file.path(source_dir, roots[[1L]]))) {{
@@ -823,7 +1245,7 @@ detect_cycles <- function(adjacency) {{
     return(FALSE)
   }}
 
-  for (i in 1:package_count) {{
+  for (i in base::seq_len(package_count)) {{
     if (!visited[i]) dfs(i)
   }}
 
@@ -958,8 +1380,11 @@ topological_order <- function(adjacency) {{
 #\' @return Invisibly, installation, failure, skip, and order information.
 #\' @param only Optional component names; local dependencies are added.
 #\' @param lib Character library in which components are installed and verified.
-#\'   A component found only in another library is installed into `lib`, while
-#\'   non-local dependencies may be available in `lib` or any `.libPaths()` entry.
+#\'   When supplied explicitly, a component found only in another library is
+#\'   installed into `lib`. When omitted, an installed component in any active
+#\'   `.libPaths()` entry counts as installed; a component that needs installation
+#\'   is installed into the first active library. Non-local dependencies may be
+#\'   available in `lib` or any `.libPaths()` entry.
 #\' @keywords internal
 #\'
 #\' @examples
@@ -973,11 +1398,14 @@ topological_order <- function(adjacency) {{
 
 install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
                                       verbose = TRUE,
-                                      repos = getOption("repos"),
+                                      repos = NULL,
                                       cran_deps = c("skip", "error", "install"),
                                       upgrade = c("newer", "always", "never"),
                                       only = NULL,
-                                      lib = .libPaths()[[1L]]) {{
+                                      lib = .libPaths()[[1L]],
+                                      lib_was_missing = NULL) {{
+  .archive_portable_names()
+  if (base::is.null(lib_was_missing)) lib_was_missing <- base::missing(lib)
   cran_deps <- match.arg(cran_deps)
   upgrade <- match.arg(upgrade)
   archive_cache <- .archive_cache_new()
@@ -992,42 +1420,20 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     .archive_warning_state$active <- FALSE
     .archive_warning_state$seen <- base::character()
   }}, add = TRUE)
-  if (!is.character(lib) || length(lib) != 1L || is.na(lib) || !nzchar(lib)) {{
-    stop(.meta_tr("The installation library must be one non-empty path."),
-         call. = FALSE)
-  }}
-  if (!dir.exists(lib) && !dir.create(lib, recursive = TRUE)) {{
-    stop(.meta_trf("Could not create installation library: %s", lib),
-         call. = FALSE)
+  validate_install_library(lib)
+  if (!dir.exists(lib) && !dir.create(lib, recursive = TRUE,
+                                      showWarnings = FALSE)) {{
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .meta_trf("Could not create installation library: %s", lib)
+    )
   }}
   lib <- normalizePath(lib, winslash = "/", mustWork = TRUE)
-  if (!is.null(only)) {{
-    if (!is.character(only) || anyNA(only) || any(!nzchar(only))) {{
-      stop(.meta_tr("\'only\' must contain component package names."),
-           call. = FALSE)
-    }}
-    unknown <- setdiff(only, .component_names)
-    if (length(unknown) > 0L) {{
-      condition <- structure(
-        list(message = .meta_trf("Unknown component(s) in \'only\': %s.",
-                                 paste(unknown, collapse = ", ")),
-             call = NULL, unknown = unknown),
-        class = c("bigbang_error_only", "bigbang_error", "error", "condition")
-      )
-      stop(condition)
-    }}
-    selected <- unique(only)
-    repeat {{
-      dependencies <- unlist(lapply(selected, read_archive_dependencies,
-                                    pkg_dir = pkg_dir, ext = ext,
-                                    cache = archive_cache),
-                             use.names = FALSE)
-      pulled <- setdiff(intersect(dependencies, .component_names), selected)
-      if (length(pulled) == 0L) break
-      selected <- c(selected, pulled)
-    }}
-    packages <- selected
-  }}
+  selection <- select_component_archives(
+    only, pkg_dir, ext, cache = archive_cache
+  )
+  selected_names <- selection$selected
+  if (!base::is.null(only)) packages <- selection$packages
   adjacency <- build_dependency_graph(packages, pkg_dir, ext, cache = archive_cache)
   install_order <- topological_order(adjacency)
   package_names <- base::vapply(
@@ -1035,13 +1441,17 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     function(package) resolve_component_spec(package, ext)$package,
     character(1L)
   )
-
+  metadata <- base::lapply(
+    packages, read_archive_metadata, pkg_dir = pkg_dir, ext = ext,
+    cache = archive_cache
+  )
   installed_packages <- list()
   unchanged_packages <- list()
   failed_packages <- list()
   skipped_packages <- list()
   skipped_local_packages <- list()
   skipped_nonlocal_packages <- list()
+  final_states <- base::new.env(parent = base::emptyenv())
   pb <- NULL
 
   total_pkgs <- length(packages)
@@ -1055,6 +1465,8 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     idx <- install_order[i]
     package <- packages[idx]
 
+    if (base::exists(package, envir = final_states, inherits = FALSE)) next
+
     dependencies <- tryCatch(
       read_archive_dependencies(
         package, pkg_dir, ext, cache = archive_cache
@@ -1062,6 +1474,15 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
       error = function(e) character()
     )
     local_dependencies <- intersect(dependencies, package_names)
+    failed_dependencies <- local_dependencies[vapply(
+      local_dependencies,
+      function(dependency) {{
+        dependency_index <- which(package_names == dependency)
+        length(dependency_index) == 1L &&
+          !is.null(failed_packages[[packages[[dependency_index]]]])
+      }},
+      logical(1L)
+    )]
     skipped_dependencies <- local_dependencies[vapply(
       local_dependencies,
       function(dependency) {{
@@ -1071,24 +1492,39 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
       }},
       logical(1L)
     )]
-    result <- if (length(skipped_dependencies) > 0L) {{
-      dependency <- skipped_dependencies[[1L]]
+    blocked_dependencies <- unique(c(failed_dependencies, skipped_dependencies))
+    result <- if (length(blocked_dependencies) > 0L) {{
+      dependency <- blocked_dependencies[[1L]]
       dependency_index <- which(package_names == dependency)[[1L]]
+      dependency_message <- if (dependency %in% failed_dependencies) {{
+        failed_packages[[packages[[dependency_index]]]]
+      }} else {{
+        skipped_packages[[packages[[dependency_index]]]]
+      }}
       list(
         success = FALSE,
         skipped = TRUE,
         skip_kind = "local",
         message = .meta_trf(
-          "Skipped because local dependency %s was skipped: %s",
-          dependency, skipped_packages[[packages[[dependency_index]]]]
+          "Skipped because local dependency %s was not installed: %s",
+          dependency, dependency_message
         )
       )
     }} else {{
+      component_requirements <- external_requirements(
+        list(metadata[[idx]]), package_names
+      )
+      external_preparation <- prepare_external_dependencies(
+        component_requirements,
+        base::unique(c(lib, .libPaths())), lib, cran_deps, repos
+      )
       tryCatch(
         install_local_archive(
           package, pkg_dir, ext, repos = repos, cran_deps = cran_deps,
           upgrade = upgrade, lib = lib, verbose = verbose,
-          cache = archive_cache
+          cache = archive_cache, external_status = external_preparation$status,
+          external_no_repository = external_preparation$no_repository,
+          lib_was_missing = lib_was_missing
         ),
         error = function(e) list(success = FALSE, message = conditionMessage(e))
       )
@@ -1096,8 +1532,10 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
 
     if (isTRUE(result$success) && isTRUE(result$unchanged)) {{
       unchanged_packages[[package]] <- result$message
+      final_states[[package]] <- "unchanged"
     }} else if (isTRUE(result$success)) {{
       installed_packages[[package]] <- result$message
+      final_states[[package]] <- "installed"
     }} else if (isTRUE(result$skipped)) {{
       skipped_packages[[package]] <- result$message
       if (identical(result$skip_kind, "local")) {{
@@ -1105,9 +1543,11 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
       }} else {{
         skipped_nonlocal_packages[[package]] <- result$message
       }}
+      final_states[[package]] <- "skipped"
       warning(.meta_trf("Skipped %s: %s", package, result$message), call. = FALSE)
     }} else {{
       failed_packages[[package]] <- result$message
+      final_states[[package]] <- "failed"
       warning(.meta_trf("Installation failed for %s: %s", package, result$message),
               call. = FALSE, immediate. = TRUE)
     }}
@@ -1128,33 +1568,249 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
     skipped_nonlocal = skipped_nonlocal_packages,
     order = packages[install_order],
     selected = packages,
-    pulled_in = if (is.null(only)) character() else setdiff(packages, only)
+    pulled_in = if (is.null(only)) {{
+      character()
+    }} else {{
+      selection$pulled_in
+    }}
   ))
 }}
 
 # The historical duplicate load-all definition was removed.
 
-#\' List all metapackage dependencies
+#\' Print a generated dependency plan
 #\'
-#\' Returns component names and dependencies read from their archives.
+#\' @param x A `bigbang_dependency_plan` object.
+#\' @param ... Ignored; reserved for compatibility with `print()`.
+#\' @export
+print.bigbang_dependency_plan <- function(x, ...) {{
+  base::cat(.meta_tr("Bigbang dependency plan"), "\\n", sep = "")
+  base::cat(.meta_trf("Upgrade: %s; Force: %s", x$upgrade, x$force), "\\n", sep = "")
+  base::cat(.meta_trf("External dependency policy: %s", x$cran_deps), "\\n\\n", sep = "")
+  base::print(x$components, row.names = FALSE)
+  if (base::nrow(x$external) > 0L) {{
+    base::cat("\\n", .meta_tr("External dependencies"), "\\n", sep = "")
+    base::print(x$external, row.names = FALSE)
+  }}
+  base::invisible(x)
+}}
+
+#\' List all metapackage dependencies or inspect the installation plan
+#\'
+#\' The default return value is the historical sorted character vector. With
+#\' `plan = TRUE`, this function reads archive metadata and installed package
+#\' metadata only; it does not load components, contact a repository, install,
+#\' or write outside its own temporary directory, which it removes on exit.
 #\'
 #\' @param pkg_dir Character vector of archive directories.
 #\' @param ext Character archive extension.
-#\' @return A sorted character vector of dependency names.
+#\' @param plan Logical; return a read-only `bigbang_dependency_plan` instead of
+#\'   the historical dependency vector.
+#\' @param force Logical; when planning, force means `upgrade = "always"`.
+#\' @param upgrade Planned upgrade policy: `"newer"`, `"always"`, or
+#\'   `"never"`.
+#\' @param cran_deps Planned policy for missing external dependencies:
+#\'   `"skip"`, `"error"`, or `"install"`. Planning never contacts a repository.
+#\' @param repos Optional repository vector used only to report whether
+#\'   `cran_deps = "install"` has a configured repository. The plan never
+#\'   contacts it and does not verify that it exists or is reachable.
+#\' @param only Optional component package names; local dependencies are added
+#\'   using the same transitive closure as `{{ name }}_install()`.
+#\' @param lib Component library to inspect; external dependencies are also
+#\'   checked in the active `.libPaths()`. When omitted, an installed component
+#\'   in any active `.libPaths()` entry counts as installed; when supplied
+#\'   explicitly, only `lib` determines the component installation decision.
+#\' @return A sorted character vector, or a `bigbang_dependency_plan` with
+#\'   `components` and `external` data frames when `plan = TRUE`.
 #\' @export
 {name}_deps <- function(
     pkg_dir{pkg_dir_default},
-    ext = NULL) {{
-    packages <- {.r_literal(packages)}
-  deps <- unlist(lapply(
-    packages, read_archive_dependencies,
-    pkg_dir = pkg_dir, ext = ext
-  ), use.names = FALSE)
-  # DESCRIPTION is the authority for component identity.  The archive stem
-  # can be unversioned or can deliberately differ from the declared package
-  # name, so deriving names with sub("_.*", ...) would report a filename
-  # rather than the component users actually receive.
-  sort(unique(c(.component_names, deps)))
+    ext = NULL,
+    plan = FALSE,
+    force = FALSE,
+    upgrade = "{install_upgrade}",
+    cran_deps = c("skip", "error", "install"),
+    repos = NULL,
+    only = NULL,
+    lib = .libPaths()[[1L]]) {{
+  .archive_portable_names()
+  .archive_warning_state$seen <- base::character()
+  .archive_warning_state$active <- TRUE
+  base::on.exit({{
+    .archive_warning_state$active <- FALSE
+    .archive_warning_state$seen <- base::character()
+  }}, add = TRUE)
+  lib_was_missing <- base::missing(lib)
+  packages <- {.r_literal(packages)}
+  if (!base::is.logical(plan) || base::length(plan) != 1L || base::is.na(plan)) {{
+    .bigbang_abort("bigbang_error_install_policy",
+                   .meta_tr("\'plan\' must be TRUE or FALSE"))
+  }}
+  if (!base::isTRUE(plan)) {{
+    cache <- if (base::is.null(only)) NULL else .archive_cache_new()
+    if (!base::is.null(cache)) base::on.exit({{
+      if (base::length(cache$extracted) > 0L) safe_unlink(
+        base::unique(cache$extracted), recursive = TRUE
+      )
+    }}, add = TRUE)
+    selection <- select_component_archives(
+      only, pkg_dir, ext, cache = cache
+    )
+    selected_packages <- if (base::is.null(only)) packages else selection$packages
+    deps <- base::unlist(base::lapply(
+      selected_packages, read_archive_dependencies,
+      pkg_dir = pkg_dir, ext = ext, cache = cache
+    ), use.names = FALSE)
+    # DESCRIPTION is the authority for component identity. The archive stem
+    # can be unversioned or can deliberately differ from the declared package
+    # name, so deriving names with sub("_.*", ...) would report a filename
+    # rather than the component users actually receive.
+    selected_names <- if (base::is.null(only)) .component_names else selection$selected
+    return(base::sort(base::unique(base::c(selected_names, deps))))
+  }}
+  if (!base::is.logical(force) || base::length(force) != 1L || base::is.na(force)) {{
+    .bigbang_abort("bigbang_error_install_policy",
+                   .meta_tr("\'force\' must be TRUE or FALSE"))
+  }}
+  upgrade <- resolve_upgrade_policy(force, upgrade, base::missing(upgrade))
+  cran_deps <- base::match.arg(cran_deps)
+  validate_install_library(lib)
+  libraries <- base::unique(base::c(lib, base::.libPaths()))
+  component_libraries <- if (base::isTRUE(lib_was_missing)) libraries else lib
+  cache <- .archive_cache_new()
+  on.exit({{
+    if (base::length(cache$extracted) > 0L) safe_unlink(
+      base::unique(cache$extracted), recursive = TRUE
+    )
+  }}, add = TRUE)
+  .archive_warning_state$seen <- base::character()
+  .archive_warning_state$active <- TRUE
+  base::on.exit({{
+    .archive_warning_state$active <- FALSE
+    .archive_warning_state$seen <- base::character()
+  }}, add = TRUE)
+  selection <- select_component_archives(
+    only, pkg_dir, ext, cache = cache
+  )
+  if (!base::is.null(only)) packages <- selection$packages
+  metadata <- base::lapply(
+    packages, read_archive_metadata, pkg_dir = pkg_dir, ext = ext, cache = cache
+  )
+  names(metadata) <- packages
+  package_names <- base::vapply(
+    packages,
+    function(package) resolve_component_spec(package, ext)$package,
+    base::character(1L)
+  )
+  graph <- build_dependency_graph(packages, pkg_dir, ext, cache = cache)
+  order <- topological_order(graph)
+  requirements <- external_requirements(metadata, package_names)
+  external <- base::lapply(base::names(requirements), function(dependency) {{
+    status <- external_dependency_status(
+      dependency, requirements[[dependency]], libraries
+    )
+    required <- base::paste(dependency_constraint_text(status$constraints), collapse = ", ")
+    external_action <- external_dependency_action(status, cran_deps, repos)
+    base::data.frame(
+      dependency = dependency,
+      required = required,
+      installed_version = if (base::is.null(status$installed)) NA_character_ else
+        base::as.character(status$installed),
+      installed_library = if (base::is.null(status$library)) NA_character_ else
+        status$library,
+      satisfied = base::isTRUE(status$satisfied),
+      action = external_action,
+      detail = if (base::length(status$detail) == 0L) "" else status$detail,
+      stringsAsFactors = FALSE
+    )
+  }})
+  external_table <- if (base::length(external) == 0L) {{
+    base::data.frame(
+      dependency = base::character(), required = base::character(),
+      installed_version = base::character(), installed_library = base::character(),
+      satisfied = base::logical(), action = base::character(), detail = base::character(),
+      stringsAsFactors = FALSE
+    )
+  }} else base::do.call(base::rbind, external)
+  states <- stats::setNames(base::vector("list", base::length(packages)), packages)
+  rows <- base::vector("list", base::length(packages))
+  for (index in order) {{
+    item <- metadata[[index]]
+    installed <- installed_package_info(item$package, component_libraries)
+    decision <- component_upgrade_action(installed$version, item$version, upgrade)
+    component_requirements <- external_requirements(
+      base::list(item), package_names
+    )
+    component_status <- base::lapply(
+      base::names(component_requirements),
+      function(dependency) external_dependency_status(
+        dependency, component_requirements[[dependency]], libraries
+      )
+    )
+    base::names(component_status) <- base::names(component_requirements)
+    external_missing <- base::names(component_status)[!base::vapply(
+      component_status, `[[`, base::logical(1L), "satisfied"
+    )]
+    external_actions <- if (base::length(external_missing) == 0L) {{
+      base::character()
+    }} else {{
+      base::vapply(
+        component_status[external_missing], external_dependency_action,
+        base::character(1L), cran_deps = cran_deps, repos = repos
+      )
+    }}
+    blocked <- base::character()
+    local <- base::intersect(item$dependencies, package_names)
+    if (base::length(local) > 0L) {{
+      blocked <- local[base::vapply(local, function(dependency) {{
+        dependency_index <- base::match(dependency, package_names)
+        states[[packages[[dependency_index]]]]$action %in% base::c("skip", "fail")
+      }}, base::logical(1L))]
+    }}
+    action <- decision$action
+    reason <- decision$reason_code
+    if (base::length(blocked) > 0L) {{
+      action <- "skip"
+      reason <- "local_dependency_failed"
+    }} else if (base::identical(action, "install") &&
+               base::length(external_missing) > 0L) {{
+      if (base::any(external_actions == "skip")) {{
+        action <- "skip"
+        reason <- "external_dependency_missing"
+      }} else if (base::any(external_actions == "fail")) {{
+        action <- "fail"
+        reason <- "external_dependency_unsatisfied"
+      }} else if (base::any(external_actions == "install_unverified")) {{
+        reason <- "external_dependency_install_pending"
+      }}
+    }}
+    states[[packages[[index]]]] <- base::list(action = action)
+    rows[[index]] <- base::data.frame(
+      component = item$package,
+      archive = item$stem,
+      archive_version = item$version,
+      installed_version = if (base::is.null(installed$version)) NA_character_ else
+        base::as.character(installed$version),
+      installed_library = if (base::is.null(installed$library)) NA_character_ else
+        installed$library,
+      action = action,
+      reason = reason,
+      external_missing = base::paste(external_missing, collapse = ", "),
+      stringsAsFactors = FALSE
+    )
+  }}
+  result <- base::list(
+    components = base::do.call(base::rbind, rows),
+    external = external_table,
+    order = package_names[order],
+    upgrade = upgrade,
+    force = force,
+    cran_deps = cran_deps,
+    repositories_configured = repositories_configured(repos),
+    libraries = libraries
+  )
+  base::class(result) <- "bigbang_dependency_plan"
+  result
 }}
 ')
 }
@@ -1192,49 +1848,53 @@ install_packages_in_order <- function(packages, pkg_dir, ext = NULL,
   # computing it for every node of a large generated file is very slow.
   data <- utils::getParseData(parsed, includeText = NA)
   if (is.null(data) || nrow(data) == 0L) return(content)
+  ids <- data$id
+  parents <- data$parent
+  tokens <- data$token
+  texts <- data$text
+  columns <- data$col1
+  lines_number <- data$line1
   node_text <- function(id) {
-    needed <- data[data$id == id, , drop = FALSE]
+    needed <- data[ids == id, , drop = FALSE]
     attr(needed, "srcfile") <- attr(data, "srcfile")
     tryCatch(utils::getParseText(needed, id), error = function(e) "")
   }
   defined_functions <- character()
-  function_ids <- data$id[data$token == "FUNCTION"]
-  function_nodes <- data$parent[data$id %in% function_ids]
+  function_ids <- ids[tokens == "FUNCTION"]
+  function_nodes <- parents[ids %in% function_ids]
   for (function_node in function_nodes) {
-    root <- data$parent[data$id == function_node]
+    root <- parents[ids == function_node]
     if (length(root) != 1L) next
-    assignment <- data[data$parent == root & data$token %in%
-                          c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2"),
-                        , drop = FALSE]
-    if (nrow(assignment) != 1L) next
-    lhs <- data[data$parent == root & data$token %in%
+    assignment <- which(parents == root & tokens %in%
+                          c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "RIGHT_ASSIGN2"))
+    if (length(assignment) != 1L) next
+    lhs <- which(parents == root & tokens %in%
                   c("expr", "expr_or_assign_or_help") &
-                  data$col1 < assignment$col1[[1L]], , drop = FALSE]
-    if (nrow(lhs) == 0L) next
-    lhs <- lhs[order(lhs$col1, lhs$id), , drop = FALSE][1L, , drop = FALSE]
-    name <- lhs$text[[1L]]
-    if (is.na(name) || !nzchar(name)) name <- node_text(lhs$id[[1L]])
+                  columns < columns[[assignment[[1L]]]])
+    if (length(lhs) == 0L) next
+    lhs <- lhs[order(columns[lhs], ids[lhs])][[1L]]
+    name <- texts[[lhs]]
+    if (is.na(name) || !nzchar(name)) name <- node_text(ids[[lhs]])
     name <- trimws(name)
     if (grepl("^`?[A-Za-z.][A-Za-z0-9._]*`?$", name, perl = TRUE)) {
       defined_functions <- c(defined_functions, sub("^`|`$", "", name))
     }
   }
   defined_functions <- unique(defined_functions)
-  calls <- data[data$token == "SYMBOL_FUNCTION_CALL" &
-                  data$text %in% setdiff(names(owners), defined_functions),
-                , drop = FALSE]
-  if (nrow(calls) == 0L) return(content)
+  owner_names <- setdiff(names(owners), defined_functions)
+  call_rows <- which(tokens == "SYMBOL_FUNCTION_CALL" &
+                       !is.na(match(texts, owner_names)))
+  if (length(call_rows) == 0L) return(content)
   lines <- strsplit(content, "\n", fixed = TRUE)[[1L]]
-  edits <- lapply(seq_len(nrow(calls)), function(index) {
-    row <- calls[index, , drop = FALSE]
-    line <- lines[[row$line1[[1L]]]]
-    prefix <- if (row$col1[[1L]] <= 1L) "" else {
-      substr(line, 1L, row$col1[[1L]] - 1L)
+  edits <- lapply(call_rows, function(row) {
+    line <- lines[[lines_number[[row]]]]
+    prefix <- if (columns[[row]] <= 1L) "" else {
+      substr(line, 1L, columns[[row]] - 1L)
     }
     if (grepl("::[[:space:]]*$", prefix, perl = TRUE)) return(NULL)
     list(
-      line = row$line1[[1L]], col = row$col1[[1L]],
-      text = paste0(owners[[row$text[[1L]]]], "::")
+      line = lines_number[[row]], col = columns[[row]],
+      text = paste0(owners[[texts[[row]]]], "::")
     )
   })
   edits <- Filter(Negate(is.null), edits)
@@ -1356,71 +2016,6 @@ write_metapackage_files <- function(
 
   if (isTRUE(reexport)) {
     template_data$conflicts_function <- paste(c(
-      "  .reexport_verify_subprocess <- function(specs, library) {",
-      "    input <- output <- script <- stdout <- stderr <- NA_character_",
-      "    base::on.exit(base::unlink(base::Filter(function(path) !base::is.na(path), base::c(input, output, script, stdout, stderr)), force = TRUE), add = TRUE)",
-      "    prepared <- base::tryCatch({",
-      "      input <- base::tempfile(\"bigbang-reexport-verify-input-\")",
-      "      output <- base::tempfile(\"bigbang-reexport-verify-output-\")",
-      "      script <- base::tempfile(\"bigbang-reexport-verify-script-\", fileext = \".R\")",
-      "      stdout <- base::tempfile(\"bigbang-reexport-verify-stdout-\")",
-      "      stderr <- base::tempfile(\"bigbang-reexport-verify-stderr-\")",
-      "      base::saveRDS(base::list(specs = specs, library = library, paths = base::.libPaths()), input)",
-      "      input_literal <- base::deparse(input)",
-      "      output_literal <- base::deparse(output)",
-      "      script_lines <- base::c(",
-      "        base::paste0(\"payload <- base::readRDS(\", input_literal, \")\"),",
-      "      \"ordered_paths <- base::unique(base::c(payload$library[base::dir.exists(payload$library)], payload$paths[base::dir.exists(payload$paths)]))\",",
-      "      \"base::.libPaths(base::unique(base::c(ordered_paths, base::.libPaths())))\",",
-      "      \"target <- function(package) {\",",
-      "        \"candidate <- base::find.package(package, lib.loc = ordered_paths, quiet = TRUE)\",",
-      "        \"if (base::length(candidate) == 0L) return(NA_character_)\",",
-      "        \"base::normalizePath(candidate[[1L]], winslash = '/', mustWork = FALSE)\",",
-      "      \"}\",",
-      "      \"load_target <- function(package) {\",",
-      "        \"target_path <- target(package)\",",
-      "        \"if (base::is.na(target_path)) return(base::list(status = 'not_installed', ok = FALSE, path = NA_character_, target = target_path))\",",
-      "        \"loaded <- base::tryCatch(base::requireNamespace(package, quietly = TRUE, lib.loc = base::.libPaths()), error = function(e) FALSE)\",",
-      "        \"if (!base::isTRUE(loaded)) return(base::list(status = 'not_loadable', ok = FALSE, path = NA_character_, target = target_path))\",",
-      "        \"namespace <- base::getNamespace(package)\",",
-      "        \"path <- base::normalizePath(base::getNamespaceInfo(namespace, 'path'), winslash = '/', mustWork = FALSE)\",",
-      "        \"same_path <- base::identical(path, target_path)\",",
-      "        \"base::list(status = if (same_path) 'installed' else 'foreign', ok = same_path, path = path, target = target_path)\",",
-      "      \"}\",",
-      "      \"rows <- base::lapply(payload$specs, function(spec) {\",",
-      "        \"loaded <- base::lapply(spec$candidates, load_target)\",",
-      "        \"installed <- base::vapply(loaded, function(item) item$status %in% base::c('installed', 'foreign'), base::logical(1))\",",
-      "        \"values <- base::lapply(base::seq_along(spec$candidates), function(index) {\",",
-      "          \"if (!installed[[index]]) return(base::list(ok = FALSE))\",",
-      "          \"base::tryCatch(base::list(ok = TRUE, value = base::getExportedValue(spec$candidates[[index]], spec$symbol)), error = function(e) base::list(ok = FALSE))\",",
-      "        \"})\",",
-      "        \"available <- base::vapply(values, function(value) base::isTRUE(value$ok), base::logical(1))\",",
-      "        \"not_installed <- spec$candidates[base::vapply(loaded, function(item) base::identical(item$status, 'not_installed'), base::logical(1))]\",",
-      "        \"not_loadable <- spec$candidates[base::vapply(loaded, function(item) base::identical(item$status, 'not_loadable'), base::logical(1))]\",",
-      "        \"not_exported <- spec$candidates[installed & !available]\",",
-      "        \"foreign <- spec$candidates[base::vapply(loaded, function(item) base::identical(item$status, 'foreign'), base::logical(1))]\",",
-      "        \"missing <- spec$candidates[!available]\",",
-      "        \"same <- NA\",",
-      "        \"equivalent <- FALSE\",",
-      "        \"if (base::all(available)) {\",",
-      "          \"objects <- base::lapply(values, function(value) value[['value']])\",",
-      "          \"same <- base::all(base::vapply(objects[-1L], base::identical, base::logical(1), y = objects[[1L]]))\",",
-      "          \"if (base::length(objects) > 1L && base::identical(same, FALSE)) equivalent <- base::all(base::vapply(objects[-1L], function(value) base::is.function(value) && base::is.function(objects[[1L]]) && base::identical(base::body(value), base::body(objects[[1L]])) && base::identical(base::formals(value), base::formals(objects[[1L]])), base::logical(1)))\",",
-      "        \"}\",",
-      "        \"base::data.frame(symbol = spec$symbol, package = spec$package, resolution = spec$resolution, diagnosis = spec$diagnosis, candidates = base::paste(spec$candidates, collapse = ', '), installed = base::paste(spec$candidates[installed], collapse = ', '), missing = base::paste(missing, collapse = ', '), not_installed = base::paste(not_installed, collapse = ', '), not_loadable = base::paste(not_loadable, collapse = ', '), not_exported = base::paste(not_exported, collapse = ', '), loaded_from_other_library = base::paste(foreign, collapse = ', '), identical = same, equivalent = equivalent, stringsAsFactors = FALSE)\",",
-      "      \"})\",",
-      "      base::paste0(\"base::saveRDS(rows, \", output_literal, \")\")",
-      "    )",
-      "      base::writeLines(script_lines, script, useBytes = TRUE)",
-      "      TRUE",
-      "    }, error = function(e) FALSE)",
-      "    if (!base::isTRUE(prepared)) return(NULL)",
-      "    r_binary <- base::file.path(base::R.home(\"bin\"), if (base::.Platform$OS.type == \"windows\") \"R.exe\" else \"R\")",
-      "    status <- base::tryCatch(base::system2(r_binary, base::c(\"--vanilla\", \"-f\", base::shQuote(script)), stdout = stdout, stderr = stderr), error = base::identity)",
-      "    if (base::inherits(status, \"error\") || !base::identical(status, 0L) || !base::file.exists(output)) return(NULL)",
-      "    base::tryCatch(base::readRDS(output), error = function(e) NULL)",
-      "  }",
-      "",
       "  .reexport_verify_subprocess <- function(specs, library) {",
       "    input <- output <- script <- stdout <- stderr <- NA_character_",
       "    base::on.exit(base::unlink(base::Filter(function(path) !base::is.na(path), base::c(input, output, script, stdout, stderr)), force = TRUE), add = TRUE)",
@@ -1746,7 +2341,10 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
 #\' @param verbose Logical progress toggle.
 #\'
 #\' @param only Optional component names; local dependencies are added automatically.
-#\' @param lib Character library in which to install and verify components.
+#\' @param lib Character library in which to install and verify components. When
+#\'   omitted, an installed component in any active `.libPaths()` entry counts
+#\'   as installed and a missing component is installed into the first entry;
+#\'   when supplied explicitly, only `lib` determines the component decision.
 #\' @return Invisibly, structured installation results.
 #\' @export
 #\'
@@ -1757,12 +2355,13 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
 {{ name }}_install <- function(pkg_dir{{{ pkg_dir_default }}},
                                ext = NULL,
                                cran_deps = base::c("skip", "error", "install"),
-                               repos = base::getOption("repos"),
+                               repos = NULL,
                                verbose = base::getOption("bigbang.verbose", base::interactive()),
                                force = FALSE,
                                upgrade = "{{ install_upgrade }}",
                                only = NULL,
                                lib = base::.libPaths()[[1L]]) {
+  lib_was_missing <- base::missing(lib)
   cran_deps <- base::match.arg(cran_deps)
   upgrade <- resolve_upgrade_policy(force, upgrade, base::missing(upgrade))
   # An empty pkg_dir means the shipped archive directory was not found, which
@@ -1784,7 +2383,7 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
   result <- install_packages_in_order(
     packages, pkg_dir, ext, verbose = verbose,
     repos = repos, cran_deps = cran_deps, upgrade = upgrade,
-    only = only, lib = lib
+    only = only, lib = lib, lib_was_missing = lib_was_missing
   )
   if (base::length(result$skipped_nonlocal) > 0L) {
     base::warning(.meta_trf(
@@ -1809,7 +2408,10 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
           base::paste(details, collapse = "; ")
         ),
         call = NULL,
-        failures = result$failed
+        failures = result$failed,
+        skipped = result$skipped,
+        skipped_local = result$skipped_local,
+        skipped_nonlocal = result$skipped_nonlocal
       ),
       class = c("bigbang_error_install", "bigbang_error", "error", "condition")
     )
@@ -1835,10 +2437,13 @@ attach_installed_packages <- function(pkgs, warn_missing = TRUE,
     function(item) resolve_component_spec(item, ext)$package,
     character(1L)
   )
+  attach_libraries <- if (base::isTRUE(lib_was_missing)) {
+    base::unique(base::c(lib, base::.libPaths()))
+  } else lib
   attach_installed_packages(
     attach_names,
     warn_missing = base::length(result$skipped) == 0L,
-    lib.loc = lib,
+    lib.loc = attach_libraries,
     warn_conflicts = {{{ attach_warn_conflicts }}}
   )
   base::invisible(result)
@@ -1957,9 +2562,11 @@ startup_message <- function(...) {
 #\'
 #\' @param name Character metapackage name.
 #\' @param packages Character component names.
+#\' @param reexport Whether the components are available through re-exports
+#\'   rather than attached to the search path.
 #\' @return The generated banner.
 #\' @keywords internal
-generate_ascii_banner <- function(name, packages = NULL) {
+generate_ascii_banner <- function(name, packages = NULL, reexport = FALSE) {
   width <- 60
   border <- paste0(rep("=", width), collapse = "")
 
@@ -1980,17 +2587,19 @@ generate_ascii_banner <- function(name, packages = NULL) {
   # Add component information
   if (!is.null(packages) && length(packages) > 0) {
     banner <- c(banner, "")
-    banner <- c(banner, .meta_tr("Included packages:"))
+    section <- if (isTRUE(reexport)) {
+      paste0(.meta_tr("Components available"), ":")
+    } else {
+      .meta_tr("Included packages:")
+    }
+    banner <- c(banner, section)
 
     for (pkg in packages) {
       # Read the version when available
-      version_text <- ""
-      if (requireNamespace(pkg, quietly = TRUE)) {
-        tryCatch({
-          version <- utils::packageVersion(pkg)
-          version_text <- paste0(" (v", version, ")")
-        }, error = function(e) {})
-      }
+      version_text <- tryCatch(
+        paste0(" (v", utils::packageVersion(pkg), ")"),
+        error = function(e) ""
+      )
 
       banner <- c(banner, paste0("  * ", pkg, version_text))
     }
@@ -2010,13 +2619,15 @@ generate_ascii_banner <- function(name, packages = NULL) {
 #\' @param packages Character installed component names.
 #\' @return A character scalar or `NULL`.
 #\' @keywords internal
-format_cli_startup <- function(name, packages) {
+format_cli_startup <- function(name, packages, reexport = FALSE) {
   if (!requireNamespace("cli", quietly = TRUE)) return(NULL)
 
   meta_version <- tryCatch(.meta_package_version(name), error = function(e) "")
   right <- trimws(paste(name, meta_version))
   heading <- cli::rule(
-    left = .meta_tr("Attaching packages"),
+    left = .meta_tr(
+      if (isTRUE(reexport)) "Components available" else "Attaching packages"
+    ),
     right = right
   )
   if (length(packages) == 0L) return(heading)
@@ -2278,11 +2889,15 @@ zzz = '
 
   if (isTRUE(getOption("{{ name }}.quiet", FALSE))) return(invisible())
 
-  formatted <- format_cli_startup("{{{ name }}}", installed)
+  formatted <- format_cli_startup(
+    "{{{ name }}}", installed, reexport = {{{ reexport }}}
+  )
   if (!is.null(formatted)) {
     startup_message(paste0("\\n", formatted, "\\n"))
   } else {
-    banner <- generate_ascii_banner("{{{ name }}}", pkg_base_names)
+    banner <- generate_ascii_banner(
+      "{{{ name }}}", pkg_base_names, reexport = {{{ reexport }}}
+    )
     startup_message(paste0("\\n", banner, "\\n"))
     if (length(installed) > 0) {
       startup_message(.meta_trf(
@@ -2332,69 +2947,6 @@ zzz = '
   )
 
   if (isTRUE(reexport)) {
-    templates$reexports <- paste0(
-      templates$reexports,
-      paste(c(
-        "",
-        "# The installed version is read only to explain a failure: reading it",
-        "# on every access made each use of a re-exported symbol ~50 times slower.",
-        ".reexport_installed_version <- function(package, libraries) {",
-        "  base::tryCatch(",
-        "    base::as.character(utils::packageVersion(package, lib.loc = libraries)),",
-        "    error = function(e) .meta_tr(\"component is not installed\")",
-        "  )",
-        "}",
-        "",
-        "if (FALSE) { .reexport_component_value <- function(package, symbol) {",
-        "  # Fast path for the common case: the component is loaded and exports it.",
-        "  if (base::isNamespaceLoaded(package) && base::exists(",
-        "    symbol, envir = base::getNamespaceInfo(package, \"exports\"),",
-        "    inherits = FALSE",
-        "  )) {",
-        "    value <- base::tryCatch(",
-        "      base::getExportedValue(package, symbol),",
-        "      error = base::identity",
-        "    )",
-        "    if (!base::inherits(value, \"error\")) return(value)",
-        "  }",
-        "  libraries <- .reexport_library_paths()",
-        "  loaded <- base::tryCatch(",
-        "    base::requireNamespace(package, quietly = TRUE, lib.loc = libraries),",
-        "    error = base::identity",
-        "  )",
-        "  if (!base::isTRUE(loaded)) {",
-        "    reason <- if (base::inherits(loaded, \"error\")) {",
-        "      .meta_trf(\"component could not be loaded: %s\", base::conditionMessage(loaded))",
-        "    } else {",
-        "      .meta_trf(\"Component package '%s' is not installed\", package)",
-        "    }",
-        "    message <- .meta_trf(",
-        "      \"Re-exported symbol '%s' from component package '%s' (installed version: %s) is unavailable: %s. Run %s to install the required component version.\",",
-        "      symbol, package, .reexport_installed_version(package, libraries), reason, \"{{ name }}_install()\"",
-        "    )",
-        "    return(function(...) base::stop(message, call. = FALSE))",
-        "  }",
-        "  value <- base::tryCatch(",
-        "    base::getExportedValue(package, symbol),",
-        "    error = base::identity",
-        "  )",
-        "  if (base::inherits(value, \"error\")) {",
-        "    reason <- .meta_trf(",
-        "      \"component does not export '%s': %s\", symbol,",
-        "      base::conditionMessage(value)",
-        "    )",
-        "    message <- .meta_trf(",
-        "      \"Re-exported symbol '%s' from component package '%s' (installed version: %s) is unavailable: %s. Run %s to install the required component version.\",",
-        "      symbol, package, .reexport_installed_version(package, libraries), reason, \"{{ name }}_install()\"",
-        "    )",
-        "    return(function(...) base::stop(message, call. = FALSE))",
-        "  }",
-        "  value",
-        "}",
-        "}",
-        ""
-      ), collapse = "\n")
-    )
     templates$reexports <- paste0(
       templates$reexports,
       paste(c(

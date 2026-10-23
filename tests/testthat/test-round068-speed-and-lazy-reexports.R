@@ -13,13 +13,16 @@ test_that("archive work is reused within one source call", {
   calls <- new.env(parent = emptyenv())
   calls$listing <- 0L
   calls$extract <- 0L
-  original <- bigbang:::.untar_quiet
+  original_listing <- bigbang:::.archive_inspect
+  original_extract <- bigbang:::.archive_extract
   testthat::local_mocked_bindings(
-    .untar_quiet = function(...) {
-      arguments <- list(...)
-      if (isTRUE(arguments$list)) calls$listing <- calls$listing + 1L
-      if (!is.null(arguments$exdir)) calls$extract <- calls$extract + 1L
-      original(...)
+    .archive_inspect = function(...) {
+      calls$listing <- calls$listing + 1L
+      original_listing(...)
+    },
+    .archive_extract = function(...) {
+      calls$extract <- calls$extract + 1L
+      original_extract(...)
     },
     .package = "bigbang"
   )
@@ -32,7 +35,7 @@ test_that("archive work is reused within one source call", {
     archive, ".tar.gz", NULL, cache = cache
   )
 
-  expect_identical(calls$listing, 1L)
+  expect_identical(calls$listing, 0L)
   expect_identical(calls$extract, 1L)
 })
 
@@ -55,7 +58,7 @@ test_that("runtime call qualification keeps a real template byte-identical", {
   archive <- system.file(
     "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
   )
-  generated <- create_metapackage(
+  generated <- round075_create_metapackage(
     "fixtureverse068", archive, dest_dir = sandbox, document = FALSE,
     verbose = FALSE, import_deps = character(), force_deps = character()
   )
@@ -121,7 +124,7 @@ test_that("install and attachment keep re-export bindings unevaluated", {
     archive, "guardcomponent068", compression = "gzip"
   ))
 
-  generated <- create_metapackage(
+  generated <- round075_create_metapackage(
     "guardverse068", archive, dest_dir = destination,
     document = FALSE, verbose = FALSE, import_deps = character(),
     force_deps = character(), reexport = TRUE

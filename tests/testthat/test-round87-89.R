@@ -45,7 +45,7 @@ test_that("update reconciles legacy re-exports and removed component archives", 
   first <- round87_make_component(source_root, archives, "rounda")
   second <- round87_make_component(source_root, archives, "roundb")
 
-  initial <- create_metapackage(
+  initial <- round075_create_metapackage(
     "reconcileverse", c("rounda_1.0.0", "roundb_1.0.0"),
     pkg_dir = archives, dest_dir = destination,
     document = TRUE, verbose = FALSE, import_deps = character(),
@@ -68,7 +68,7 @@ test_that("update reconciles legacy re-exports and removed component archives", 
     initial$path, "inst", "archives", "roundb_1.0.0.tar.gz"
   )))
 
-  updated <- create_metapackage(
+  updated <- round075_create_metapackage(
     "reconcileverse", "rounda_1.0.0", pkg_dir = archives,
     dest_dir = destination, document = TRUE,
     verbose = FALSE, import_deps = character(), force_deps = character(),
@@ -101,7 +101,11 @@ test_that("update reconciles legacy re-exports and removed component archives", 
   status_line <- check_output[grepl("^Status:", check_output)]
   expect_equal(length(status_line), 1L,
                info = paste(check_output, collapse = "\n"))
-  expect_false(grepl("ERROR|WARNING", status_line),
+  covr_instrumentation_warning <- identical(Sys.getenv("R_COVR"), "true") &&
+    any(grepl("covr:::", check_output, fixed = TRUE))
+  unexpected_status <- grepl("ERROR", status_line) ||
+    (grepl("WARNING", status_line) && !covr_instrumentation_warning)
+  expect_false(unexpected_status,
                paste(check_output, collapse = "\n"))
 
   install_status <- system2(
@@ -152,7 +156,7 @@ test_that("generated artifact option combinations pass R CMD check", {
     } else {
       NULL
     }
-    generated <- create_metapackage(
+    generated <- round075_create_metapackage(
       name, "matrixa_1.0.0", pkg_dir = archives, dest_dir = destination,
       document = TRUE, verbose = FALSE, import_deps = character(),
       force_deps = character(), workflow = workflow,
@@ -166,8 +170,12 @@ test_that("generated artifact option combinations pass R CMD check", {
     ))
     status <- output[grepl("^Status:", output)]
     expect_equal(length(status), 1L, info = paste(output, collapse = "\n"))
+    covr_instrumentation_warning <- identical(Sys.getenv("R_COVR"), "true") &&
+      any(grepl("covr:::", output, fixed = TRUE))
+    unexpected_status <- grepl("ERROR", status) ||
+      (grepl("WARNING", status) && !covr_instrumentation_warning)
     expect_false(
-      grepl("ERROR|WARNING", status),
+      unexpected_status,
       info = paste(name, paste(output, collapse = "\n"), sep = "\n")
     )
   }
@@ -182,7 +190,7 @@ test_that("atomic writer leftovers are excluded from generated tarballs", {
   dir.create(destination)
   toy <- system.file("extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang")
   file.copy(toy, archives)
-  result <- create_metapackage(
+  result <- round075_create_metapackage(
     "temporaryverse", "toycomponent_0.1.0", pkg_dir = archives,
     dest_dir = destination, document = FALSE, verbose = FALSE,
     import_deps = character(), force_deps = character()

@@ -37,9 +37,6 @@ msgstr "value debe ser una cadena de caracteres no NA"
 msgid "symbol must be one non-NA character string"
 msgstr "symbol debe ser una cadena de caracteres no NA"
 
-msgid "The directory specified by 'pkg_dir' does not exist"
-msgstr "El directorio indicado por 'pkg_dir' no existe"
-
 msgid "'dest_dir' must be supplied as one non-empty path: the meta-package is written inside it. Use tempdir() for disposable output."
 msgstr "'dest_dir' debe proporcionarse como una ruta no vacía: el metapaquete se escribe dentro de ella. Use tempdir() para una salida descartable."
 
@@ -51,9 +48,6 @@ msgstr "'tolerate' debe ser un vector de caracteres de relajaciones con nombre"
 
 msgid "Unknown tolerance(s): %s. Supported values are: %s."
 msgstr "Tolerancias desconocidas: %s. Los valores admitidos son: %s."
-
-msgid "Unsupported archive extension: %s"
-msgstr "Extensión de archivo no compatible: %s"
 
 msgid "Package archive does not exist: %s"
 msgstr "El archivo del paquete no existe: %s"
@@ -69,6 +63,48 @@ msgstr "No se pudo extraer el archivo %s: no se pudo crear el directorio tempora
 
 msgid "Could not extract archive %s: extraction returned status %d."
 msgstr "No se pudo extraer el archivo %s: la extracción devolvió el estado %d."
+
+msgid "Archive option %s must be one finite positive number."
+msgstr "La opción de archivo %s debe ser un número finito positivo."
+
+msgid "Option %s must be TRUE or FALSE."
+msgstr "La opción %s debe ser TRUE o FALSE."
+
+msgid "If all recipients use Linux or macOS, you can use options(bigbang.archive.portable_names = FALSE)."
+msgstr "Si todos los destinatarios usan Linux o macOS, puede usar options(bigbang.archive.portable_names = FALSE)."
+
+msgid "The extraction destination does not distinguish case, so it cannot create both `%s` and `%s`."
+msgstr "El destino de extracción no distingue mayúsculas de minúsculas, por lo que no puede crear `%s` y `%s`."
+
+msgid "The extraction destination does not distinguish case, so it cannot create both `%s` and `%s`. %s"
+msgstr "El destino de extracción no distingue mayúsculas de minúsculas, por lo que no puede crear `%s` y `%s`. %s"
+
+msgid "it ends in a dot or space"
+msgstr "termina en punto o espacio"
+
+msgid "it contains a character invalid on Windows"
+msgstr "contiene un carácter no válido en Windows"
+
+msgid "it is a reserved Windows device name"
+msgstr "es un nombre de dispositivo reservado de Windows"
+
+msgid "it is not a portable Windows name"
+msgstr "no es un nombre portátil de Windows"
+
+msgid "Windows cannot create `%s`: %s. %s"
+msgstr "Windows no puede crear `%s`: %s. %s"
+
+msgid "Archive %s contains entries accepted only because options(bigbang.archive.portable_names = FALSE): %s. This package will not be installable on Windows."
+msgstr "El archivo %s contiene entradas aceptadas solo porque options(bigbang.archive.portable_names = FALSE): %s. Este paquete no se podrá instalar en Windows."
+
+msgid "Archive %s contains entries accepted because the destination filesystem distinguishes case: %s. This package will not be installable on filesystems that do not distinguish case."
+msgstr "El archivo %s contiene entradas aceptadas porque el sistema de archivos de destino distingue mayúsculas de minúsculas: %s. Este paquete no se podrá instalar en sistemas de archivos que no distinguen mayúsculas de minúsculas."
+
+msgid "Non-portable names accepted"
+msgstr "Nombres no portátiles aceptados"
+
+msgid "Archive %s exceeds its configured %s limit (%s > %s); raise options('%s') only for trusted input."
+msgstr "El archivo %s supera el límite configurado de %s (%s > %s); aumente options('%s') solo para entradas confiables."
 
 msgid "Could not read archive %s; excluding it from the archive inventory: %s"
 msgstr "No se pudo leer el archivo %s; se excluye del inventario de archivos: %s"
@@ -88,9 +124,6 @@ msgstr "El archivo %s contiene enlaces simbólicos, que no son compatibles."
 msgid "Component %s requires %s %s %s, but the included archive provides version %s."
 msgstr "El componente %s requiere %s %s %s, pero el archivo incluido proporciona la versión %s."
 
-msgid "Component %s declares dependency %s, available as %s in pkg_dir but not included. Add it to packages or remove the dependency."
-msgstr "El componente %s declara la dependencia %s, disponible como %s en pkg_dir pero no incluida. Agréguela a packages o quite la dependencia."
-
 msgid "Component %s declares R constraint %s %s; only >= and > constraints are propagated."
 msgstr "El componente %s declara la restricción de R %s %s; solo se propagan las restricciones >= y >."
 
@@ -100,17 +133,8 @@ msgstr "El componente %s declara una restricción de versión de R no válida: %
 msgid "Could not parse R source file: %s"
 msgstr "No se pudo analizar el archivo fuente R: %s"
 
-msgid "Expected one DESCRIPTION in %s; found %d."
-msgstr "Se esperaba un DESCRIPTION en %s; se encontraron %d."
-
 msgid "Archive %s must declare non-empty Package and Version fields."
 msgstr "El archivo %s debe declarar campos Package y Version no vacíos."
-
-msgid "Archive %s declares package %s, but its filename names %s."
-msgstr "El archivo %s declara el paquete %s, pero su nombre indica %s."
-
-msgid "Archive %s declares version %s, but its filename names version %s."
-msgstr "El archivo %s declara la versión %s, pero su nombre indica la versión %s."
 
 msgid "Archive %s declares package %s, but its filename suggests %s."
 msgstr "El archivo %s declara el paquete %s, pero su nombre sugiere %s."
@@ -130,9 +154,6 @@ msgstr "Se encontró más de un archivo para el stem componente '%s': %s."
 msgid "Circular dependencies detected: %s. A clean installation has no valid topological order."
 msgstr "Dependencias circulares detectadas: %s. Una instalación limpia no tiene un orden topológico válido."
 
-msgid "No DESCRIPTION file found in package %s"
-msgstr "No se encontró DESCRIPTION en el paquete %s"
-
 msgid "DEBUG: DESCRIPTION file created"
 msgstr "DEBUG: archivo DESCRIPTION creado"
 
@@ -141,9 +162,6 @@ msgstr "DEBUG: %s"
 
 msgid "DEBUG: NAMESPACE file created"
 msgstr "DEBUG: archivo NAMESPACE creado"
-
-msgid "Package archive not found: %s"
-msgstr "No se encontró el archivo del paquete: %s"
 
 msgid "No R directory found for package: %s"
 msgstr "No se encontró el directorio R del paquete: %s"
@@ -165,12 +183,6 @@ msgstr "No se pudieron determinar las exportaciones explícitas en NAMESPACE del
 
 msgid "Could not read explicit exports from NAMESPACE in archive %s."
 msgstr "No se pudieron leer las exportaciones explícitas de NAMESPACE en el archivo %s."
-
-msgid "Cannot re-export symbol(s) %s because components collide: %s."
-msgstr "No se pueden reexportar los símbolos %s porque hay colisiones entre componentes: %s."
-
-msgid "Cannot re-export symbol(s) %s because they belong to generated metapackage code."
-msgstr "No se pueden reexportar los símbolos %s porque pertenecen al código generado del metapaquete."
 
 msgid "Cannot re-export R syntax symbol(s) %s: generated code must retain R syntax and cannot be shadowed. Use reexport_exclude = %s."
 msgstr "No se pueden reexportar símbolos de sintaxis de R (%s): el código generado debe conservar la sintaxis de R y no se puede ocultar. Use reexport_exclude = %s."
@@ -222,9 +234,6 @@ msgstr "No se pudo crear el directorio del proyecto: %s"
 
 msgid "Could not create directory: %s"
 msgstr "No se pudo crear el directorio: %s"
-
-msgid "The following package archives were not found: %s"
-msgstr "No se encontraron los siguientes archivos de paquete: %s"
 
 msgid "Creating metapackage '%s' for %d local packages..."
 msgstr "Creando el metapaquete '%s' para %d paquetes locales..."
@@ -319,6 +328,9 @@ msgstr "Archivos de los componentes copiados dentro del metapaquete: %s (%.1f MB
 msgid "Package name '%s' belongs to R itself and cannot be reused."
 msgstr "El nombre de paquete '%s' pertenece a R y no puede reutilizarse."
 
+msgid "Cannot create metapackage '%s': component package '%s' has the same name."
+msgstr "No se puede crear el metapaquete '%s': el paquete componente '%s' tiene el mismo nombre."
+
 msgid "Could not copy the component archives into the meta-package: %s"
 msgstr "No se pudieron copiar los archivos de los componentes dentro del metapaquete: %s"
 
@@ -382,14 +394,23 @@ msgstr "Se rechaza escanear enlaces simbólicos en el directorio R de la fuente.
 msgid "Archive contains unsafe absolute or parent-traversal paths: %s"
 msgstr "El archivo contiene rutas absolutas o recorridos al directorio padre inseguros: %s"
 
+msgid "Archive %s contains symbolic links or another unsupported special entry: %s"
+msgstr "El archivo %s contiene enlaces simbólicos u otra entrada especial no compatible: %s"
+
+msgid "Could not extract archive %s safely: %s"
+msgstr "No se pudo extraer el archivo %s de forma segura: %s"
+
+msgid "could not validate gzip member trailer"
+msgstr "no se pudo validar el tráiler del miembro gzip"
+
+msgid "could not decompress TAR archive: %s"
+msgstr "no se pudo descomprimir el archivo TAR: %s"
+
+msgid "Archive error"
+msgstr "Error del archivo"
+
 msgid "Refusing to scan an archive containing symbolic links."
 msgstr "Se rechaza escanear un archivo que contiene enlaces simbólicos."
-
-msgid "No DESCRIPTION found in source archive."
-msgstr "No se encontró DESCRIPTION en el archivo fuente."
-
-msgid "Source archive has multiple candidate package roots."
-msgstr "El archivo fuente tiene varias raíces de paquete candidatas."
 
 msgid "Installed package has no valid Package field."
 msgstr "El paquete instalado no tiene un campo Package válido."
@@ -508,9 +529,6 @@ msgstr "No contiene un respaldo reconocido."
 msgid "Cannot update %s because %s is an %s update-journal folder. %s %s Next step: %s"
 msgstr "No se puede actualizar %s porque %s es una carpeta de diario de actualización %s. %s %s Siguiente paso: %s"
 
-msgid "Cannot update %s because %s is not a recognized bigbang update journal. It has no recognized backup. Next step: leave it intact, preserve its contents, and inspect or move it aside before retrying."
-msgstr "No se puede actualizar %s porque %s no es un diario de actualización de bigbang reconocido. No tiene un respaldo reconocido. Siguiente paso: déjelo intacto, preserve su contenido e inspecciónelo o muévalo a otro lugar antes de volver a intentar."
-
 msgid "Cannot update %s because journal %s belongs to project '%s', not project '%s'. Rename the project and its journal back to '%s'."
 msgstr "No se puede actualizar %s porque el diario %s pertenece al proyecto '%s', no al proyecto '%s'. Renombre el proyecto y su diario de vuelta a '%s'."
 
@@ -538,9 +556,6 @@ msgstr "No se pudo escribir la lápida del diario de actualización: %s"
 msgid "Could not set aside the update-journal entry: %s"
 msgstr "No se pudo apartar la entrada del diario de actualización: %s"
 
-msgid "Set aside unverified update-journal content at %s; no bytes were deleted and the update continues."
-msgstr "Se apartó contenido no verificable del diario de actualización en %s; no se eliminó ningún byte y el update continúa."
-
 msgid "Set aside unverified update-journal content at %s; no bytes from the set-aside entry were deleted and the update continues."
 msgstr "Se apartó contenido no verificable del diario de actualización en %s; no se eliminaron bytes de lo apartado y el update continúa."
 
@@ -565,18 +580,6 @@ msgstr "No se pudo apartar la entrada del lock de actualización: %s"
 msgid "Did not adopt update journal %s because project %s still exists beside it; it is a copy, so the journal was left untouched."
 msgstr "No se adoptó el diario de actualización %s porque el proyecto %s todavía existe a su lado; es una copia y el diario quedó intacto."
 
-msgid "Its tombstone belongs to project '%s' with manifest hash %s, not project '%s' with manifest hash %s; nothing was deleted."
-msgstr "Su lápida pertenece al proyecto '%s' con hash de manifiesto %s, no al proyecto '%s' con hash de manifiesto %s; no se eliminó nada."
-
-msgid "leave the folder intact, preserve the backup, and move it back beside its project before retrying."
-msgstr "deje la carpeta intacta, preserve el respaldo y muévala junto a su proyecto antes de volver a intentar."
-
-msgid "It contains entries outside its discard inventory; nothing was deleted. Preserved: %s."
-msgstr "Contiene entradas fuera de su inventario de descarte; no se eliminó nada. Se preservaron: %s."
-
-msgid "leave the folder intact, preserve the backup, remove only the reported user entries, and retry."
-msgstr "deje la carpeta intacta, preserve el respaldo, quite solo las entradas de usuario informadas y vuelva a intentar."
-
 msgid "Completed the interrupted discard at %s."
 msgstr "Se completó el descarte interrumpido en %s."
 
@@ -589,32 +592,8 @@ msgstr "conserve la carpeta intacta, preserve su contenido e inspecciónelo ante
 msgid "Could not move the update journal to its discarded state: %s"
 msgstr "No se pudo mover el diario de actualización a su estado descartado: %s"
 
-msgid "It is not a directory with a valid marker."
-msgstr "No es un directorio con un marcador válido."
-
-msgid "leave it intact, inspect it, and remove or move it only after preserving its contents."
-msgstr "déjela intacta, inspecciónela y elimínela o muévala solo después de preservar su contenido."
-
-msgid "It has no marker but is not empty; nothing was deleted."
-msgstr "No tiene marcador pero no está vacía; no se eliminó nada."
-
-msgid "leave it intact, preserve its contents, and inspect the failed preparation before retrying."
-msgstr "déjela intacta, preserve su contenido e inspeccione la preparación fallida antes de volver a intentar."
-
 msgid "Discarded an orphaned armed-update folder at %s."
 msgstr "Se descartó una carpeta de armado huérfana en %s."
-
-msgid "It is not a directory with a valid tombstone."
-msgstr "No es un directorio con una lápida válida."
-
-msgid "leave it intact, preserve its contents, and inspect it before retrying."
-msgstr "déjela intacta, preserve su contenido e inspeccione antes de volver a intentar."
-
-msgid "It has no valid tombstone; nothing was deleted."
-msgstr "No tiene una lápida válida; no se eliminó nada."
-
-msgid "leave the folder intact, preserve its contents, and inspect it before retrying."
-msgstr "deje la carpeta intacta, preserve su contenido e inspeccione antes de volver a intentar."
 
 msgid "It contains unexpected files; nothing was deleted."
 msgstr "Contiene archivos inesperados; no se eliminó nada."
@@ -661,9 +640,6 @@ msgstr "el directorio padre del lock no permite escribir"
 msgid "the lock parent rejected creation or has no available space"
 msgstr "el directorio padre del lock rechazó la creación o no tiene espacio disponible"
 
-msgid "Could not acquire the update lock at %s because its state made no progress after %s retries; inspect the lock entry before retrying."
-msgstr "No se pudo adquirir el lock de actualización en %s porque su estado no avanzó después de %s reintentos; inspeccione la entrada del lock antes de volver a intentar."
-
 msgid "Could not acquire the update lock at %s because %s made no progress after %s consecutive retries; inspect entry %s before retrying."
 msgstr "No se pudo adquirir el lock de actualización en %s porque %s no avanzó después de %s reintentos consecutivos; inspeccione la entrada %s antes de volver a intentar."
 
@@ -682,32 +658,11 @@ msgstr "El diario de actualización se conservó para recuperación en: %s. Cont
 msgid "The interrupted update left files in an unknown state: %s. Journal: %s. The journal contains a backup at %s. Use recover = TRUE to preserve them and recover."
 msgstr "El update interrumpido dejó archivos en un estado desconocido: %s. Diario: %s. El diario contiene un respaldo en %s. Use recover = TRUE para preservarlos y recuperar."
 
-msgid "The update journal at %s has an invalid intention log."
-msgstr "El diario de actualización en %s tiene un registro de intenciones no válido."
-
-msgid "The unarmed update journal at %s contains unexpected files."
-msgstr "El diario de actualización sin armar en %s contiene archivos inesperados."
-
 msgid "Discarded an unarmed update journal at %s."
 msgstr "Se descartó un diario de actualización sin armar en %s."
 
-msgid "The update journal at %s has invalid armed state."
-msgstr "El diario de actualización en %s tiene un estado armado no válido."
-
-msgid "The armed update journal at %s contains unexpected files."
-msgstr "El diario de actualización armado en %s contiene archivos inesperados."
-
-msgid "The update journal at %s contains unexpected files."
-msgstr "El diario de actualización en %s contiene archivos inesperados."
-
 msgid "The previous update had completed; discarded its journal at %s."
 msgstr "El update anterior había terminado; se descartó su diario en %s."
-
-msgid "An update may still be running for %s (journal: %s). If no other update is running, call again with recover = TRUE."
-msgstr "Puede haber un update todavía en ejecución para %s (diario: %s). Si no hay otro update ejecutándose, vuelva a llamar con recover = TRUE."
-
-msgid "The interrupted update left files in an unknown state: %s. Journal: %s. Use recover = TRUE to preserve them and recover."
-msgstr "El update interrumpido dejó archivos en un estado desconocido: %s. Diario: %s. Use recover = TRUE para preservarlos y recuperar."
 
 msgid "Preserved unknown files from the interrupted update at %s."
 msgstr "Se preservaron los archivos desconocidos del update interrumpido en %s."
@@ -736,11 +691,14 @@ msgstr "Eliminando archivos generados que ya no están en el plan: %s"
 msgid "Component archive %s could not be read; skip propagation uses filename-derived name '%s'; dependents may fail on the recipient if that name differs from Package."
 msgstr "No se pudo leer el archivo del componente %s; el arrastre del descarte usa el nombre derivado del archivo '%s'; los dependientes pueden fallar en el receptor si ese nombre difiere de Package."
 
-msgid "Component package '%s' is not installed."
-msgstr "El componente '%s' no está instalado."
-
 msgid "Skipped because local dependency %s was skipped: %s"
 msgstr "Omitido porque la dependencia local %s fue omitida: %s"
+
+msgid "Skipped because local dependency %s was not installed: %s"
+msgstr "Omitido porque la dependencia local %s no se instal\\u00f3: %s"
+
+msgid "The local dependency did not reach a final installation state."
+msgstr "La dependencia local no alcanz\\u00f3 un estado final de instalaci\\u00f3n."
 
 msgid "Some components were skipped because local dependencies were skipped: %s."
 msgstr "Algunos componentes se omitieron porque se omitieron dependencias locales: %s."
@@ -784,18 +742,6 @@ msgstr "Definición local del símbolo de reexportación '%s' en %s:%d."
 msgid "Binder or namespace mutation via %s in %s:%d; it is not known whether it changes '%s'."
 msgstr "Binder o mutación del namespace mediante %s en %s:%d; no se sabe si cambia '%s'."
 
-msgid "Assignment to re-export symbol '%s' in %s:%d."
-msgstr "Asignación al símbolo de reexportación '%s' en %s:%d."
-
-msgid "Call %s targets re-export symbol '%s' in %s:%d."
-msgstr "La llamada %s apunta al símbolo de reexportación '%s' en %s:%d."
-
-msgid "Call %s has a non-literal first argument in %s:%d."
-msgstr "La llamada %s tiene un primer argumento no literal en %s:%d."
-
-msgid "Dynamic namespace mutation via %s in %s:%d."
-msgstr "Mutación dinámica del namespace mediante %s en %s:%d."
-
 msgid "Could not parse R file %s: %s"
 msgstr "No se pudo analizar el archivo R %s: %s"
 
@@ -819,15 +765,6 @@ msgstr "NAMESPACE importa '%s' desde el paquete externo '%s'."
 
 msgid "NAMESPACE imports '%s' from component '%s'."
 msgstr "NAMESPACE importa '%s' desde el componente '%s'."
-
-msgid "NAMESPACE does not declare a unique import source for '%s'."
-msgstr "NAMESPACE no declara una fuente de importación única para '%s'."
-
-msgid "NAMESPACE imports '%s' from external package '%s' with import()."
-msgstr "NAMESPACE importa '%s' desde el paquete externo '%s' con import()."
-
-msgid "NAMESPACE imports '%s' from component '%s', which was skipped."
-msgstr "NAMESPACE importa '%s' desde el componente '%s', que fue omitido."
 
 msgid "NAMESPACE imports '%s' from component '%s', which is not in this generation."
 msgstr "NAMESPACE importa '%s' desde el componente '%s', que no está en esta generación."
@@ -879,9 +816,6 @@ msgstr "No se pueden resolver los símbolos de reexportación porque se necesita
 
 msgid "Cannot resolve re-export collision(s): %s. Candidates, diagnoses, and proof details: %s. %s."
 msgstr "No se pueden resolver las colisiones de reexportación: %s. Candidatos, diagnósticos y detalles de la prueba: %s. %s."
-
-msgid "Installed owners for re-export symbol '%s' differ: %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
-msgstr "Los dueños instalados del símbolo de reexportación '%s' difieren: %s. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."
 
 msgid "Installed owners for re-export symbol '%s' could not be verified: it is not exported by %s. Choose a provider with reexport_prefer or omit it with reexport_exclude."
 msgstr "No se pudo verificar a los dueños instalados del símbolo de reexportación '%s': %s no lo exporta. Elija un proveedor con reexport_prefer u omítalo con reexport_exclude."
@@ -970,5 +904,56 @@ msgstr "Fallidos"
 msgid "Skipped"
 msgstr "Omitidos"
 
+msgid "Circular local dependency"
+msgstr "Dependencia local circular"
+
+msgid "Windows binary ZIP packages can only be installed on Windows"
+msgstr "Los ZIP binarios de Windows solo se pueden instalar en Windows."
+
+msgid "Missing non-local dependencies: %s"
+msgstr "Faltan dependencias no locales: %s"
+
+msgid "Cannot install dependencies without a configured repository"
+msgstr "No se pueden instalar dependencias sin un repositorio configurado"
+
+msgid "Could not install non-local dependencies: %s"
+msgstr "No se pudieron instalar dependencias no locales: %s"
+
+msgid "Dependency %s is not installed; required constraint(s): %s"
+msgstr "La dependencia %s no está instalada; restricción(es) requerida(s): %s"
+
+msgid "Dependency %s has installed version %s; required constraint(s): %s"
+msgstr "La dependencia %s tiene instalada la versión %s; restricción(es) requerida(s): %s"
+
+msgid "No installer output was captured"
+msgstr "No se capturó salida del instalador"
+
+msgid "Installation failed; error details: %s; full installation log: %s"
+msgstr "Falló la instalación; detalles del error: %s; registro completo de instalación: %s"
+
+msgid "Installation could not be verified"
+msgstr "No se pudo verificar la instalación"
+
+msgid "Installed successfully"
+msgstr "Instalado correctamente"
+
 msgid "R CMD INSTALL exited with status %d"
 msgstr "R CMD INSTALL terminó con el estado %d"
+
+msgid "'governance' must be TRUE or FALSE"
+msgstr "'governance' debe ser TRUE o FALSE"
+
+msgid "'plan' must be TRUE or FALSE"
+msgstr "'plan' debe ser TRUE o FALSE"
+
+msgid "Bigbang dependency plan"
+msgstr "Plan de dependencias de bigbang"
+
+msgid "Upgrade: %s; Force: %s"
+msgstr "Actualización: %s; Forzar: %s"
+
+msgid "External dependency policy: %s"
+msgstr "Política de dependencias externas: %s"
+
+msgid "External dependencies"
+msgstr "Dependencias externas"

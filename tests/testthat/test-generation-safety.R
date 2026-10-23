@@ -388,20 +388,14 @@ test_that("malformed R source is reported during heuristic scanning", {
     "badparse", "1.0.0", source_root, archives,
     code = "badparse_value <- function(x) {{{"
   )
-  warning_message <- NULL
-  withCallingHandlers(
+  captured <- capture_warnings(
     create_metapackage(
       "parseverse", "badparse_1.0.0", archives,
       dest_dir = destination, document = FALSE, verbose = FALSE
-    ),
-    warning = function(w) {
-      if (grepl("Could not parse R source file", conditionMessage(w))) {
-        warning_message <<- conditionMessage(w)
-      }
-      invokeRestart("muffleWarning")
-    }
+    )
   )
-  expect_false(is.null(warning_message))
+  expect_warning_set(captured$warnings, "Could not parse R source file: ")
+  warning_message <- captured$warnings[[1L]]
   # Name the component archive and the path inside it. The extraction directory
   # is a temporary that no longer exists when the reader sees the warning, so
   # reporting it would leave nothing to act on.
@@ -510,8 +504,12 @@ test_that("archive metadata mismatches warn but use DESCRIPTION identity", {
   expect_true(file.exists(file.path(result$path, "DESCRIPTION")))
 
   withr::local_libpaths(c(library_dir, .libPaths()))
-  direct <- suppressWarnings(
-    install_local_pkg("mismatchfixture_1.0.0", archive_dir, verbose = FALSE)
+  direct <- NULL
+  expect_warning(
+    direct <- install_local_pkg(
+      "mismatchfixture_1.0.0", archive_dir, verbose = FALSE
+    ),
+    regexp = "declares version 2\\.0\\.0"
   )
   expect_length(direct$failed, 0L)
   expect_named(direct$installed, "mismatchfixture_1.0.0")
@@ -752,10 +750,18 @@ test_that("generation tolerations cannot disable recipient protection invariants
   expect_true("symbolic_link" %in% names(checks) ||
                 .Platform$OS.type == "windows")
   for (label in names(checks)) {
+    warnings <- character()
     condition <- tryCatch(
-      suppressWarnings(checks[[label]]$run()),
+      withCallingHandlers(
+        checks[[label]]$run(),
+        warning = function(warning_condition) {
+          warnings <<- c(warnings, conditionMessage(warning_condition))
+          invokeRestart("muffleWarning")
+        }
+      ),
       error = identity
     )
+    expect_equal(length(warnings), 0L, info = label)
     expect_true(inherits(condition, "error"), info = label)
     expected_class <- checks[[label]]$class
     if (!is.null(expected_class)) {
@@ -799,22 +805,30 @@ test_that("already installed messages report the installed version", {
   runtime <- new.env(parent = baseenv())
   sys.source(file.path(result$path, "R", "utils.R"), runtime)
   sys.source(file.path(result$path, "R", "install_packages.R"), runtime)
-  output <- capture.output(
+  output <- character()
+  withCallingHandlers(
     unchanged <- runtime$install_local_archive(
       "versioned_1.0.0", archive_dir, ".tar.gz", upgrade = "newer"
     ),
-    type = "message"
+    message = function(condition) {
+      output <<- c(output, conditionMessage(condition))
+      invokeRestart("muffleMessage")
+    }
   )
   expect_true(isTRUE(unchanged$unchanged))
   expect_match(
     paste(output, collapse = "\n"),
     "installed version 9.9.9, newer than archive version 1.0.0"
   )
-  direct_output <- capture.output(
+  direct_output <- character()
+  withCallingHandlers(
     install_local_pkg(
       "versioned_1.0.0", archive_dir, verbose = TRUE, upgrade = "newer"
     ),
-    type = "message"
+    message = function(condition) {
+      direct_output <<- c(direct_output, conditionMessage(condition))
+      invokeRestart("muffleMessage")
+    }
   )
   expect_match(
     paste(direct_output, collapse = "\n"),

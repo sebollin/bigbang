@@ -230,7 +230,7 @@ test_that("the local installer reports policy, constraint, and install failures"
     "brokeninput", "1.0.0", file.path(archives, "brokeninput_1.0.0.tar.gz"),
     source_root, r_code = "brokeninput_value <- function("
   )
-  broken_result <- suppressWarnings(
+  broken_result <- expect_no_warning(
     install_local_pkg(broken, verbose = FALSE, upgrade = "always")
   )
   expect_length(broken_result$failed, 1L)
@@ -513,25 +513,28 @@ test_that("DESCRIPTION identity accepts unversioned and mismatched filenames", {
     source_root, filename_root = "declared-source"
   )
 
-  result <- suppressWarnings(create_metapackage(
+  captured <- capture_warnings(create_metapackage(
     "identityverse", c(no_version, mismatch), dest_dir = destination,
     document = FALSE, verbose = FALSE, force_deps = character()
+  ))
+  result <- captured$value
+  expect_warning_set(captured$warnings, c(
+    "declares package declaredpkg, but its filename suggests alias",
+    "declares version 2.0.0, but its filename suggests version 1.0.0"
   ))
   expect_identical(result$packages, c("noversionpkg", "declaredpkg"))
   withr::local_libpaths(c(library_dir, .libPaths()))
   direct <- install_local_pkg(no_version, verbose = FALSE, upgrade = "always")
   expect_length(direct$failed, 0L)
   expect_true(requireNamespace("noversionpkg", quietly = TRUE))
-  mismatch_warnings <- character()
-  direct_mismatch <- withCallingHandlers(
-    install_local_pkg(mismatch, verbose = FALSE, upgrade = "always"),
-    warning = function(condition) {
-      mismatch_warnings <<- c(mismatch_warnings, conditionMessage(condition))
-      invokeRestart("muffleWarning")
-    }
+  captured <- capture_warnings(
+    install_local_pkg(mismatch, verbose = FALSE, upgrade = "always")
   )
-  expect_true(any(grepl("filename suggests version 1.0.0", mismatch_warnings,
-                        fixed = TRUE)))
+  direct_mismatch <- captured$value
+  expect_warning_set(captured$warnings, c(
+    "declares package declaredpkg, but its filename suggests alias",
+    "declares version 2.0.0, but its filename suggests version 1.0.0"
+  ))
   expect_length(direct_mismatch$failed, 0L)
   expect_true(requireNamespace("declaredpkg", quietly = TRUE))
 
@@ -539,13 +542,23 @@ test_that("DESCRIPTION identity accepts unversioned and mismatched filenames", {
   sys.source(file.path(result$path, "R", "utils.R"), generated)
   sys.source(file.path(result$path, "R", "install_packages.R"), generated)
   sys.source(file.path(result$path, "R", "attach.R"), generated)
-  generated_deps <- suppressWarnings(generated$identityverse_deps(
+  captured <- capture_warnings(generated$identityverse_deps(
     file.path(result$path, "inst", "archives")
   ))
+  generated_deps <- captured$value
+  expect_warning_set(captured$warnings, c(
+    "declares package declaredpkg, but its filename suggests alias",
+    "declares version 2.0.0, but its filename suggests version 1.0.0"
+  ))
   expect_true("declaredpkg" %in% generated_deps)
-  generated_result <- suppressWarnings(generated$install_packages_in_order(
+  captured <- capture_warnings(generated$install_packages_in_order(
     result$archives, file.path(result$path, "inst", "archives"), NULL,
     verbose = FALSE, upgrade = "always"
+  ))
+  generated_result <- captured$value
+  expect_warning_set(captured$warnings, c(
+    "declares package declaredpkg, but its filename suggests alias",
+    "declares version 2.0.0, but its filename suggests version 1.0.0"
   ))
   expect_length(generated_result$failed, 0L)
   expect_true(requireNamespace("noversionpkg", quietly = TRUE))
@@ -596,18 +609,32 @@ test_that("archive basenames from different sources cannot overwrite", {
   dir.create(second_dir)
   dir.create(destination)
   first <- make_input_archive(
-    "collisionone", "1.0.0", file.path(first_dir, "same.tar.gz"), source_root
+    "collisionone", "1.0.0", file.path(first_dir, "same_9.9.tar.gz"),
+    source_root
   )
   second <- make_input_archive(
-    "collisiontwo", "1.0.0", file.path(second_dir, "same.tar.gz"), source_root
+    "collisiontwo", "1.0.0", file.path(second_dir, "same_9.9.tar.gz"),
+    source_root
   )
-  condition <- expect_error(
-    suppressWarnings(create_metapackage(
+  condition <- NULL
+  captured <- capture_warnings(expect_error(
+    create_metapackage(
       "collisionverse", c(first, second), dest_dir = destination,
       document = FALSE, verbose = FALSE, force_deps = character()
-    )),
+    ),
     class = "bigbang_error_archive_basename_collision"
-  )
+  ))
+  condition <- captured$value
+  expect_warning_set(captured$warnings, c(
+    paste0("Archive ", normalizePath(first, winslash = "/"),
+           " declares package collisionone, but its filename suggests same"),
+    paste0("Archive ", normalizePath(first, winslash = "/"),
+           " declares version 1.0.0, but its filename suggests version 9.9"),
+    paste0("Archive ", normalizePath(second, winslash = "/"),
+           " declares package collisiontwo, but its filename suggests same"),
+    paste0("Archive ", normalizePath(second, winslash = "/"),
+           " declares version 1.0.0, but its filename suggests version 9.9")
+  ))
   message <- conditionMessage(condition)
   expect_true(grepl(
     normalizePath(first, winslash = "/"), message, fixed = TRUE
@@ -679,7 +706,7 @@ test_that("a failed installation reports the installer's own error", {
     source_root, r_code = "brokendetail_value <- function("
   )
 
-  direct <- suppressWarnings(install_local_pkg(
+  direct <- expect_no_warning(install_local_pkg(
     broken, verbose = FALSE, upgrade = "always", lib = direct_lib
   ))
   expect_length(direct$failed, 1L)
@@ -696,12 +723,16 @@ test_that("a failed installation reports the installer's own error", {
   sys.source(file.path(generated$path, "R", "utils.R"), runtime)
   sys.source(file.path(generated$path, "R", "install_packages.R"), runtime)
   sys.source(file.path(generated$path, "R", "attach.R"), runtime)
-  emitted <- tryCatch(
-    suppressWarnings(runtime$brokendetailverse_install(
-      pkg_dir = file.path(generated$path, "inst", "archives"),
-      cran_deps = "skip", verbose = FALSE, lib = emitted_lib
-    )),
-    error = identity
+  emitted <- NULL
+  expect_warning(
+    emitted <- tryCatch(
+      runtime$brokendetailverse_install(
+        pkg_dir = file.path(generated$path, "inst", "archives"),
+        cran_deps = "skip", verbose = FALSE, lib = emitted_lib
+      ),
+      error = identity
+    ),
+    regexp = "Installation failed"
   )
   expect_s3_class(emitted, "error")
   expect_match(conditionMessage(emitted), "unable to collate", fixed = TRUE)

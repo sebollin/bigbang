@@ -349,6 +349,17 @@ all, so it is a safe way to see what a call would do before it does it. During
 an update it also plans reconciliation of every sibling journal folder and
 reports each path and action without mutating those folders.
 
+The generated `<meta>_deps(plan = TRUE)` is the recipient-side preflight. It
+reads archive `DESCRIPTION` files and installed package metadata without loading
+components, contacting a repository, installing, or writing outside its own
+temporary directory, which it removes on exit. Its `components`
+table reports archive and installed versions, library, action, and reason; its
+`external` table reports missing or unsatisfied external constraints. The
+default `plan = FALSE` return remains the historical dependency vector. Use
+`governance = TRUE` to add English `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and
+the package-inclusion issue template; these files are excluded from the built
+source package and are tracked by `update = TRUE`.
+
 - `on_component_error = "skip"` generates from the components that are valid
   instead of aborting, and reports the ones it left out. The exclusion is
   transitive: a component that depends on an excluded one is excluded too, and
@@ -439,7 +450,11 @@ reports each path and action without mutating those folders.
 
 The generated installer also takes `only` to install a subset — local
 dependencies of the selection are added automatically — and `lib` to choose the
-library it installs into.
+library it installs into. When `lib` is omitted, a component already installed
+in any library on `.libPaths()` counts as installed, and a missing one goes into
+the first library. With an explicit `lib`, only that library counts for the
+components, and every component installation goes there.
+`<meta>_deps(plan = TRUE)` and `install_local_pkg()` follow the same rule.
 
 ## 🧰 Main API
 
@@ -450,12 +465,29 @@ library it installs into.
   packages for historical deletion signatures without loading them.
 
 
-## 🗜️ ZIP files and portability
+## 🗜️ Archives and portability
 
 ZIP archives are classified by content. A ZIP containing `Meta/package.rds` is
 a Windows binary and is installed with `type = "win.binary"` on Windows only.
 Other ZIPs containing DESCRIPTION are unpacked into an owned temporary
 directory and installed as source packages.
+
+bigbang reads every tar and ZIP archive with its own validating reader, not with
+`untar()` or `unzip()`, wherever it opens one: generation, diagnostics, local
+installation, artifact scans and generated installers. The reader creates only
+regular files and directories inside the destination. It rejects links, devices
+and inconsistent layouts, checks CRC-32 and sizes, and stops at the limits set
+by the `bigbang.archive.max_*` options documented in `?scan_bigbang_artifact`.
+
+By default, bigbang also rejects file names that would stop a meta-package from
+installing on Windows: names Windows reserves, such as `aux.R` or `con.R`, names
+containing `< > : " | ? *`, names ending in a dot or a space, and two files whose
+names differ only in case. The error names the file. If every recipient uses
+Linux or macOS, `options(bigbang.archive.portable_names = FALSE)` accepts those
+names wherever the file system can store them, and bigbang warns that the
+package will not install on Windows. The option has no effect on Windows, and
+it never relaxes the safety checks: links, absolute paths, `..`, names made only
+of dots and spaces, control characters and invalid UTF-8 are always rejected.
 
 All generated text is written explicitly as UTF-8. CI checks R release on
 Windows and macOS, and release, devel, oldrel-1 and 4.1 on Ubuntu. The declared

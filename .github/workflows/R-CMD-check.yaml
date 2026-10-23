@@ -79,9 +79,19 @@ jobs:
         if: matrix.config.os == 'ubuntu-latest' && matrix.config.r == 'release'
         shell: Rscript {0}
         run: |
-          coverage <- covr::package_coverage(quiet = FALSE)
+          install_path <- file.path(Sys.getenv("RUNNER_TEMP"), "bigbang-covr")
+          coverage <- covr::package_coverage(
+            quiet = FALSE, clean = FALSE, install_path = install_path
+          )
           print(coverage)
           covr::to_cobertura(coverage, filename = "cobertura.xml")
+
+      - name: Diagnose test coverage failure
+        if: failure() && matrix.config.os == 'ubuntu-latest' && matrix.config.r == 'release'
+        shell: bash
+        run: |
+          find "${{ runner.temp }}/bigbang-covr" -name 'testthat.Rout.fail' -type f \
+            -exec sh -c 'echo "=== $1 ==="; cat "$1"' _ {} \;
 
       - name: Upload test coverage to Codecov
         if: matrix.config.os == 'ubuntu-latest' && matrix.config.r == 'release'

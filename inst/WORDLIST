@@ -13,6 +13,7 @@ Egeler
 español
 gettext
 gz
+GiB
 hexSticker
 html
 installable
@@ -22,6 +23,7 @@ liveness
 Lifecycle
 macOS
 md
+MiB
 metapackage
 metapackages
 metaverse
@@ -34,6 +36,7 @@ pkgbuild
 overcount
 PID
 pre
+preflight
 repos
 README
 revalidate
@@ -66,8 +69,15 @@ win-builder
 ZIPs
 Zenodo
 zenodo
+zlib
 ️
 subprocess
 Ctrl
 fsync
 untracked
+EOCD
+NFD
+PAX
+CRC
+filesystem
+filesystems

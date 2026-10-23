@@ -8,7 +8,7 @@ install_local_pkg(
   package,
   pkg_dir = NULL,
   ext = ".tar.gz",
-  repos = getOption("repos"),
+  repos = NULL,
   cran_deps = c("skip", "error", "install"),
   verbose = getOption("bigbang.verbose", interactive()),
   force = FALSE,
@@ -65,6 +65,16 @@ explicit \code{cran_deps} policy. ZIP archives containing \code{Meta/package.rds
 treated as Windows binaries, while other ZIP archives are unpacked and
 installed as source packages.
 }
+\details{
+Archive entry names follow the \code{bigbang.archive.portable_names} option
+described in \code{\link[=scan_bigbang_artifact]{scan_bigbang_artifact()}}. It is \code{TRUE} by default; set it to
+\code{FALSE} only when every recipient uses Linux or macOS. Relaxed names warn
+during installation and remain unavailable on Windows or on filesystems that
+do not distinguish case. Case-only collisions are decided when the archive
+is extracted; an earlier inspection without a destination defers that
+decision. Components made only of dots and spaces, Windows-specific rules,
+and security-critical path rules are never relaxed.
+}
 \section{Installation}{
 
 This function installs packages into \code{lib}, which defaults to the user's
@@ -97,5 +107,5 @@ install_local_pkg(archive, lib = example_library, verbose = FALSE)
 }
 \seealso{
 \code{\link[=create_metapackage]{create_metapackage()}} for generating a meta-package with an explicit
-component installer.
+component installer; \code{\link[=scan_bigbang_artifact]{scan_bigbang_artifact()}} for the archive-name policy.
 }

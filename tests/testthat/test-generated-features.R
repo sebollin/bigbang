@@ -1,4 +1,6 @@
-generate_feature_metapackage <- function(name = "featureverse", workflow = NULL) {
+generate_feature_metapackage <- function(
+  name = "featureverse", workflow = NULL, reexport = FALSE
+) {
   root <- tempfile("bigbang-generated-features-")
   destination <- file.path(root, "output")
   dir.create(destination, recursive = TRUE)
@@ -17,6 +19,7 @@ generate_feature_metapackage <- function(name = "featureverse", workflow = NULL)
     dest_dir = destination,
     document = FALSE,
     verbose = FALSE,
+    reexport = reexport,
     import_deps = character(),
     force_deps = character(),
     workflow = workflow
@@ -85,6 +88,91 @@ test_that("generated startup supports cli formatting, fallback, and quiet mode",
     collapse = "\n"
   )
   expect_match(generated_attach, "base::find.package", fixed = TRUE)
+})
+
+test_that("generated banners are lazy, byte-stable, and label reexports", {
+  fake_library <- tempfile("bigbang-banner-library-")
+  fake_package <- file.path(fake_library, "bannercomponent")
+  dir.create(fake_package, recursive = TRUE)
+  writeLines(c(
+    "Package: bannercomponent",
+    "Version: 0.1.0",
+    "Title: Banner Component",
+    "Description: A temporary package description.",
+    "License: MIT"
+  ), file.path(fake_package, "DESCRIPTION"))
+  old_paths <- .libPaths()
+  .libPaths(c(fake_library, old_paths))
+  on.exit(.libPaths(old_paths), add = TRUE)
+
+  for (reexport in c(FALSE, TRUE)) {
+    result <- generate_feature_metapackage(
+      paste0("banner", if (reexport) "reexport" else "attach"),
+      reexport = reexport
+    )
+    runtime <- new.env(parent = baseenv())
+    sys.source(file.path(result$path, "R", "utils.R"), envir = runtime)
+
+    before <- loadedNamespaces()
+    banner <- runtime$generate_ascii_banner(
+      "bannerverse", "bannercomponent", reexport = reexport
+    )
+    after <- loadedNamespaces()
+    expect_false("bannercomponent" %in% setdiff(after, before))
+
+    width <- 60L
+    border <- paste0(rep("=", width), collapse = "")
+    title <- " bannerverse "
+    left <- paste0(rep("-", floor((width - nchar(title)) / 2L)), collapse = "")
+    right <- paste0(
+      rep("-", width - nchar(left) - nchar(title)), collapse = ""
+    )
+    label <- if (reexport) "Components available:" else "Included packages:"
+    expected <- paste(c(
+      border, paste0(left, title, right), border, "",
+      label, "  * bannercomponent (v0.1.0)", "", border
+    ), collapse = "\n")
+    expect_identical(banner, expected)
+    expect_identical(
+      banner,
+      runtime$generate_ascii_banner(
+        "bannerverse", "bannercomponent", reexport = reexport
+      )
+    )
+
+    cli_output <- runtime$format_cli_startup(
+      "bannerverse", character(), reexport = reexport
+    )
+    expect_match(
+      cli_output,
+      if (reexport) "Components available" else "Attaching packages",
+      fixed = TRUE
+    )
+
+    fallback <- new.env(parent = baseenv())
+    fallback$requireNamespace <- function(package, ...) {
+      if (identical(package, "cli")) FALSE else
+        base::requireNamespace(package, ...)
+    }
+    utils_source <- paste(
+      readLines(file.path(result$path, "R", "utils.R"), warn = FALSE),
+      collapse = "\n"
+    )
+    utils_source <- gsub(
+      "base::requireNamespace", "requireNamespace", utils_source, fixed = TRUE
+    )
+    eval(parse(text = utils_source, keep.source = FALSE), envir = fallback)
+    expect_null(fallback$format_cli_startup(
+      "bannerverse", character(), reexport = reexport
+    ))
+    expect_match(
+      fallback$generate_ascii_banner(
+        "bannerverse", "bannercomponent", reexport = reexport
+      ),
+      label,
+      fixed = TRUE
+    )
+  }
 })
 
 test_that("generated conflict reports inspect package namespace exports", {

@@ -300,7 +300,7 @@ test_that("generated install_upgrade, only, and lib are functional", {
   )
   expect_true(dir.exists(file.path(library_dir, "basec")))
   expect_true(dir.exists(file.path(library_dir, "topc")))
-  expect_identical(installed$pulled_in, "basec")
+  expect_identical(unname(installed$pulled_in), "basec_0.1.0")
   expect_error(
     environment$installverse_install(
       pkg_dir = file.path(result$path, "inst", "archives"),

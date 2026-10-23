@@ -253,11 +253,11 @@ configurado explícitamente.
 Los instaladores generados también aceptan `upgrade = "newer"` (predeterminado),
 `"always"` o `"never"`; `force = TRUE` equivale a `upgrade = "always"`. Los
 metapaquetes usan un mensaje opcional de dos columnas mediante `cli` y vuelven
-al banner ASCII cuando `cli` no está disponible. Use
+al banner ASCII cuando `cli` no está disponible. Usá
 `options(equipoverse.quiet = TRUE)` para silenciar el arranque y
 `equipoverse_conflicts()` para revisar conflictos de enmascaramiento.
 
-Para generar una guía de flujo ordenada, indique cada componente una vez:
+Para generar una guía de flujo ordenada, indicá cada componente una vez:
 
 ```r
 workflow = c("Importación" = "datos", "Informe" = "reportes")
@@ -349,6 +349,18 @@ plan$findings                                    # todos los hallazgos
 segura de ver qué haría una llamada antes de que la haga. Durante un update
 también planifica la reconciliación de cada diario hermano e informa su ruta y
 acción sin modificar esas carpetas.
+
+El `<meta>_deps(plan = TRUE)` generado es el diagnóstico previo del receptor.
+Lee los `DESCRIPTION` de los archivos y los metadatos de los paquetes
+instalados sin cargar componentes, contactar un repositorio, instalar ni
+escribir fuera de un temporal propio, que borra al terminar. Su tabla
+`components` informa versiones del archivo e instalada,
+biblioteca, acción y motivo; su tabla `external` informa restricciones externas
+faltantes o no satisfechas. El valor por omisión `plan = FALSE` conserva el
+vector histórico de dependencias. Usá `governance = TRUE` para agregar los
+archivos en inglés `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` y la plantilla de
+issues para pedir la inclusión de un paquete; quedan fuera del paquete fuente
+construido y `update = TRUE` los sigue en el manifiesto.
 
 - `on_component_error = "skip"` genera con los componentes válidos en lugar de
   abortar, e informa los que dejó afuera. El descarte es transitivo: un
@@ -444,7 +456,11 @@ acción sin modificar esas carpetas.
 
 El instalador generado también acepta `only` para instalar un subconjunto —las
 dependencias locales de lo elegido se agregan solas— y `lib` para elegir la
-biblioteca donde instala.
+biblioteca donde instala. Sin `lib`, un componente instalado en cualquier
+biblioteca de `.libPaths()` cuenta como instalado, y uno que falta va a la
+primera. Con `lib` explícito, solo esa biblioteca cuenta para los componentes y
+todas sus instalaciones van ahí. `<meta>_deps(plan = TRUE)` e
+`install_local_pkg()` siguen la misma regla.
 
 ## 🧰 API
 
@@ -455,14 +471,39 @@ biblioteca donde instala.
 
 La API usa inglés snake_case.
 
-## 🗜️ ZIP y portabilidad
+## 🗜️ Archivos comprimidos y portabilidad
 
 Un ZIP con `Meta/package.rds` es un binario de Windows y solo se instala en
 Windows con `type = "win.binary"`. Los demás ZIP con DESCRIPTION se extraen a un
-temporal propio y se instalan como fuente. Todo texto generado se escribe en
-UTF-8 explícito. La CI comprueba R release en Windows y macOS, y release, devel,
-oldrel-1 y 4.1 en Ubuntu. El mínimo declarado es R 4.1.0, el que exige la
-versión de `glue` que se importa, y el trabajo en 4.1 lo comprueba.
+temporal propio y se instalan como fuente.
+
+bigbang lee todo archivo tar o ZIP con un lector propio que valida, no con
+`untar()` ni `unzip()`, en cada lugar donde abre uno: la generación, los
+diagnósticos, la instalación local, el examen de artefactos y los instaladores
+generados. El lector solo crea archivos regulares y directorios dentro del
+destino. Rechaza enlaces, dispositivos y estructuras inconsistentes, verifica
+CRC-32 y tamaños, y se detiene en los topes de las opciones
+`bigbang.archive.max_*`, documentadas en `?scan_bigbang_artifact`.
+
+Por defecto, bigbang también rechaza los nombres de archivo que impedirían
+instalar el metapaquete en Windows:
+- los que Windows reserva, como `aux.R` o `con.R`;
+- los que contienen `< > : " | ? *`;
+- los que terminan en punto o en espacio;
+- dos archivos cuyos nombres solo difieren en mayúsculas.
+
+El error dice qué archivo es. Si todos los destinatarios usan Linux o macOS,
+`options(bigbang.archive.portable_names = FALSE)` acepta esos nombres donde el
+sistema de archivos pueda guardarlos, y bigbang avisa que el paquete no se va a
+poder instalar en Windows. En Windows la opción no tiene efecto. Tampoco relaja
+nunca los controles de seguridad: los enlaces, las rutas absolutas, `..`, los
+nombres formados solo por puntos y espacios, los caracteres de control y el
+UTF-8 inválido se rechazan siempre.
+
+Todo texto generado se escribe en UTF-8 explícito. La CI comprueba R release en
+Windows y macOS, y release, devel, oldrel-1 y 4.1 en Ubuntu. El mínimo declarado
+es R 4.1.0, el que exige la versión de `glue` que se importa, y el trabajo en
+4.1 lo comprueba.
 
 ## 🌎 Idioma
 
@@ -473,7 +514,7 @@ tienen traducción completa al español mediante gettext. En R 4.2 o posterior:
 Sys.setLanguage("es")
 ```
 
-En versiones anteriores, defina `LANGUAGE=es` antes de iniciar R. La guía completa
+En versiones anteriores, definí `LANGUAGE=es` antes de iniciar R. La guía completa
 está en `vignette("bigbang-es", package = "bigbang")`. La ayuda Rd queda en
 inglés porque R no tiene un mecanismo nativo estable para traducirla; cuando
 `rhelpi18n` madure y llegue a CRAN se podrá evaluar un módulo separado
@@ -514,8 +555,8 @@ No cargue ni documente una fuente antigua antes de escanearla:
 scan_bigbang_artifact("ruta/al/artefacto", dry_run = TRUE)
 ```
 
-Si resulta vulnerable, póngala en cuarentena y genere una versión nueva en una
-ruta nueva y vacía. Nunca regenere in-place una fuente no clasificada.
+Si resulta vulnerable, ponela en cuarentena y generá una versión nueva en una
+ruta nueva y vacía. Nunca regeneres in-place una fuente no clasificada.
 
 ## 🙏 Agradecimientos
 

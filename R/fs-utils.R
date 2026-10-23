@@ -37,8 +37,9 @@
   if (is.null(normalize)) {
     normalize <- function(x) normalizePath(x, winslash = "/", mustWork = FALSE)
   }
-  if (is.null(exists)) {
-    exists <- function(x) file.exists(x) || dir.exists(x)
+  exists_fun <- exists
+  if (is.null(exists_fun)) {
+    exists_fun <- function(x) file.exists(x) || dir.exists(x)
   }
   canonical <- function(x) {
     value <- tryCatch(normalize(x), error = function(e) NA_character_)
@@ -52,7 +53,7 @@
     entry <- sub("[/\\\\]+$", "", entry)
     component <- basename(entry)
     if (!nzchar(component) || component %in% c(".", "..")) return(FALSE)
-    if (!isTRUE(exists(entry))) return(FALSE)
+    if (!isTRUE(exists_fun(entry))) return(FALSE)
     resolved <- canonical(entry)
     parent <- canonical(dirname(entry))
     if (is.na(resolved) || is.na(parent)) return(FALSE)
@@ -61,7 +62,8 @@
   vapply(as.character(path), one, logical(1L), USE.NAMES = FALSE)
 }
 
-.path_is_symlink <- function(path) {
+.path_is_symlink <- function(path, is_windows = NULL, normalize = NULL,
+                             exists = NULL) {
   readlink <- function(entry) {
     target <- tryCatch(Sys.readlink(entry), error = function(e) "")
     is.character(target) && length(target) == 1L && !is.na(target) &&
@@ -69,7 +71,9 @@
   }
   linked <- vapply(as.character(path), readlink, logical(1L),
                    USE.NAMES = FALSE)
-  linked | .path_is_windows_reparse_point(path)
+  linked | .path_is_windows_reparse_point(
+    path, is_windows = is_windows, normalize = normalize, exists = exists
+  )
 }
 
 .validate_project_root_path <- function(project_dir) {
@@ -332,7 +336,7 @@
 }
 
 .validate_archive_members <- function(members) {
-  members <- gsub("\\\\", "/", members)
+  members <- gsub("\\", "/", members, fixed = TRUE)
   unsafe <- startsWith(members, "/") |
     grepl("^[A-Za-z]:", members) |
     grepl("(^|/)\\.\\.(/|$)", members, perl = TRUE)
