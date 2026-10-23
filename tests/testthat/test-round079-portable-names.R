@@ -134,17 +134,22 @@ r079_write_tar <- function(path, entries) {
   invisible(path)
 }
 
+# The archive is written byte by byte: on older Windows, writing R/aux.R to
+# disk reaches the AUX device, so a tar built from files would lack the entry.
 r079_archive_with_names <- function(root, names, package = "r079pkg") {
-  source <- file.path(root, package)
-  dir.create(file.path(source, "R"), recursive = TRUE)
-  writeLines(
-    c(paste0("Package: ", package), "Version: 1.0.0"),
-    file.path(source, "DESCRIPTION")
-  )
-  writeLines("export(aux_value)", file.path(source, "NAMESPACE"))
-  for (name in names) writeLines("aux_value <- function() 079", file.path(source, "R", name))
   archive <- file.path(root, paste0(package, ".tar"))
-  withr::with_dir(root, utils::tar(archive, files = package, compression = "none", tar = "internal"))
+  member <- function(path, text) {
+    list(name = paste0(package, "/", path), data = r079_raw(text))
+  }
+  r079_write_tar(archive, c(
+    list(
+      member("DESCRIPTION", paste0("Package: ", package, "\nVersion: 1.0.0\n")),
+      member("NAMESPACE", "export(aux_value)\n")
+    ),
+    lapply(names, function(name) {
+      member(paste0("R/", name), "aux_value <- function() 079\n")
+    })
+  ))
   archive
 }
 
