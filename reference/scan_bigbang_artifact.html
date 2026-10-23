@@ -15,7 +15,7 @@ pre-rename fields so development artifacts remain classifiable."><meta property=
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -80,6 +80,37 @@ That code is isolated in .scan_installed_lazydb() and has been exercised with
 R 4.6.1. Because this is an internal R format, callers should re-run the scanner
 tests when adopting a new R minor release.</p>
     </div>
+    <div class="section level2">
+    <h2 id="archive-resource-limits">Archive resource limits<a class="anchor" aria-label="anchor" href="#archive-resource-limits"></a></h2>
+
+
+<p>Archive walks use <code><a href="https://rdrr.io/r/base/options.html" class="external-link">options()</a></code> values named
+<code>bigbang.archive.max_entries</code> (default 100,000),
+<code>bigbang.archive.max_total_bytes</code> (default 2 GiB),
+<code>bigbang.archive.max_metadata_bytes</code> (default 64 MiB), and
+<code>bigbang.archive.max_path_bytes</code> (default 4,096 bytes). Limits apply during
+both inspection and extraction; the byte limit includes archive
+metadata and data discarded during inspection. Metadata includes ZIP local
+and central records, data descriptors, the EOCD comment, every TAR header,
+and PAX/GNU metadata payload. Implicit directories and PAX/GNU metadata
+headers count toward <code>bigbang.archive.max_entries</code>. The default metadata cap
+leaves room for the documented maximum of 65,534 entries in a classic ZIP
+(ZIP64 is not supported). Entry names are compared without locale dependence,
+but they are not Unicode-normalized: NFC and NFD spellings remain distinct;
+NFD names are accepted because macOS can produce them.</p>
+<p>The <code>bigbang.archive.portable_names</code> option defaults to <code>TRUE</code> and applies
+the strict Windows-compatible name policy. Set it to <code>FALSE</code> only when all
+recipients use Linux or macOS. Then Windows device names, Windows-invalid
+characters, and trailing dots or spaces may be accepted on non-Windows
+systems, while case-only collisions are accepted only after a real probe
+confirms that the extraction filesystem distinguishes case; an inspection
+without an extraction destination defers that decision until extraction.
+Components made only of dots and spaces are always rejected. Links, special
+entries, absolute or parent-traversal paths, empty components, backslashes,
+control characters, invalid UTF-8, and size limits are never relaxed. Windows
+remains strict regardless of the option. The result reports accepted relaxed
+names in <code>portable_name_warnings</code>.</p>
+    </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
@@ -99,7 +130,7 @@ tests when adopting a new R minor release.</p>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">scan_bigbang_artifact</span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> &lt;bigbang artifact scan&gt;</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   Path: /tmp/RtmpP7uuIS/bigbang-scan-example-1b4af174fa1/toyverse</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Path: /tmp/RtmpADNPyW/bigbang-scan-example-1a39589babb9/toyverse</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   Type: source</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   Result: no deletion signatures found</span>
 <span class="r-in"><span></span></span>

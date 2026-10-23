@@ -82,6 +82,21 @@ reinstala y `"never"` conserva cualquier versión instalada.
 no está disponible, el mensaje de arranque vuelve al banner ASCII sin
 fallar.
 
+Antes de instalar en la máquina receptora, consulte el plan de solo
+lectura:
+
+``` r
+
+equipoverse_deps(plan = TRUE, upgrade = "newer", cran_deps = "skip")
+```
+
+Lee únicamente los `DESCRIPTION` de los archivos y los metadatos de los
+paquetes instalados. Informa la versión del archivo, la versión y
+biblioteca instaladas, la acción prevista y las restricciones externas
+faltantes o no satisfechas. No carga, instala, usa la red ni escribe en
+disco. El instalador y este diagnóstico comparten la misma evaluación de
+versiones y de la política `upgrade`.
+
 ## Colisiones de reexportación
 
 Cuando varios componentes exportan el mismo símbolo, indique
@@ -102,7 +117,7 @@ consulte la verificación de instalación con
 Una actualización con `update = TRUE` interrumpida deja un diario
 durable junto al proyecto. La actualización siguiente lo revisa antes de
 escribir y `dry_run = TRUE` muestra la acción pendiente. Después de
-confirmar que no sigue corriendo otra actualización, usá
+confirmar que no sigue corriendo otra actualización, use
 `recover = TRUE` para preservar bytes de usuario desconocidos y
 completar la recuperación.
 

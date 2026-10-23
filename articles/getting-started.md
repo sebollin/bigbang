@@ -60,7 +60,7 @@ result <- create_metapackage(
 result
 #> <bigbang metapackage>
 #>   Package: toyverse
-#>   Path: /tmp/Rtmpx7rwTz/bigbang-vignette-1d053d05e0c4/generated/toyverse
+#>   Path: /tmp/RtmpYOMofW/bigbang-vignette-1bf513fcb2f4/generated/toyverse
 #>   Components: toycomponent
 list.files(result$path)
 #>  [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           
@@ -75,7 +75,7 @@ The generated tree can be scanned without loading it:
 scan <- scan_bigbang_artifact(result$path)
 scan
 #> <bigbang artifact scan>
-#>   Path: /tmp/Rtmpx7rwTz/bigbang-vignette-1d053d05e0c4/generated/toyverse
+#>   Path: /tmp/RtmpYOMofW/bigbang-vignette-1bf513fcb2f4/generated/toyverse
 #>   Type: source
 #>   Result: no deletion signatures found
 stopifnot(!scan$vulnerable)
@@ -127,6 +127,20 @@ display falls back to a dependency-free ASCII banner.
 `<meta>_conflicts()` retains masking conflicts. In a metapackage
 generated with `reexport = TRUE`, inspect its installation check with
 `<meta>_reexport_verification(<meta>_conflicts())`.
+
+Before installing on a recipient machine, inspect the read-only plan:
+
+``` r
+
+toyverse_deps(plan = TRUE, upgrade = "newer", cran_deps = "skip")
+```
+
+This reads the archive `DESCRIPTION` files and installed package
+metadata only. It reports the archive version, installed version and
+library, planned action, and missing or unsatisfied external
+constraints. It performs no loading, installation, network access, or
+disk write. The installer and this plan share the same version and
+upgrade policy evaluation.
 
 ## Interrupted updates and recovery
 

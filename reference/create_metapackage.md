@@ -37,7 +37,8 @@ create_metapackage(
   install_upgrade = c("newer", "always", "never"),
   reexport_prefer = character(),
   reexport_exclude = character(),
-  recover = FALSE
+  recover = FALSE,
+  governance = FALSE
 )
 ```
 
@@ -277,6 +278,11 @@ create_metapackage(
   mutation; an uncertain owner can be reclaimed only with
   `recover = TRUE`. Defaults to `FALSE`.
 
+- governance:
+
+  Logical. If `TRUE`, generate English contribution, conduct, and
+  package-inclusion-request templates. Defaults to `FALSE`.
+
 ## Value
 
 Invisibly, a `bigbang_result` containing the generated path, component
@@ -341,6 +347,26 @@ remain hard errors. Checks about project tidiness can be relaxed
 individually through `tolerate`; there is no switch that disables
 validation as a whole. bigbang does not run `R CMD check` on component
 packages, so component warnings and notes do not prevent generation.
+
+## Portable archive names
+
+Archive entry names are validated strictly by default. The option
+`bigbang.archive.portable_names` defaults to `TRUE` and rejects Windows
+device names, Windows-invalid characters, trailing dots or spaces, and
+case-only collisions on every system. Set it to `FALSE` only when every
+recipient uses Linux or macOS. On non-Windows systems this relaxes only
+the Windows-specific rules; case-only collisions are relaxed only when a
+real probe of the extraction filesystem shows that it distinguishes
+case; an inspection without an extraction destination defers that
+decision until extraction. Components made only of dots and spaces are
+always rejected. Links, special entries, absolute or parent-traversal
+paths, empty components, backslashes, control characters, invalid UTF-8,
+and size limits are never relaxed. Windows always applies the strict
+Windows rules, regardless of the option. Relaxed entries produce
+warnings and the resulting package cannot be installed on Windows, or on
+a filesystem that does not distinguish case. See
+[`scan_bigbang_artifact()`](https://sebollin.github.io/bigbang/reference/scan_bigbang_artifact.md)
+for the same archive-name policy and resource limits used by the reader.
 Component source directories are built in a temporary directory with the
 optional pkgbuild package; passing an already built archive avoids that
 optional dependency.

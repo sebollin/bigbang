@@ -30,7 +30,7 @@
 
     <a class="navbar-brand me-2" href="index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -245,6 +245,7 @@
 <span><span class="va">plan</span><span class="op">$</span><span class="va">files</span>                                       <span class="co"># what would be written</span></span>
 <span><span class="va">plan</span><span class="op">$</span><span class="va">findings</span>                                    <span class="co"># every validation finding</span></span></code></pre></div>
 <p><code>dry_run = TRUE</code> does not create <code>dest_dir</code> and does not touch the destination at all, so it is a safe way to see what a call would do before it does it. During an update it also plans reconciliation of every sibling journal folder and reports each path and action without mutating those folders.</p>
+<p>The generated <code>&lt;meta&gt;_deps(plan = TRUE)</code> is the recipient-side preflight. It reads archive <code>DESCRIPTION</code> files and installed package metadata without loading components, contacting a repository, installing, or writing outside its own temporary directory, which it removes on exit. Its <code>components</code> table reports archive and installed versions, library, action, and reason; its <code>external</code> table reports missing or unsatisfied external constraints. The default <code>plan = FALSE</code> return remains the historical dependency vector. Use <code>governance = TRUE</code> to add English <code>CONTRIBUTING.md</code>, <code>CODE_OF_CONDUCT.md</code>, and the package-inclusion issue template; these files are excluded from the built source package and are tracked by <code>update = TRUE</code>.</p>
 <ul>
 <li>
 <code>on_component_error = "skip"</code> generates from the components that are valid instead of aborting, and reports the ones it left out. The exclusion is transitive: a component that depends on an excluded one is excluded too, and the chain is reported. When an invalid archive still has a readable <code>DESCRIPTION</code>, its declared package name drives this propagation; otherwise bigbang falls back to the filename and reports that limitation. Excluding everything is an error. During an update, a failed input never authorizes deletion of an archive already shipped by the project. If the old component cannot be identified unambiguously, archive reconciliation waits for a clean update.</li>
@@ -254,7 +255,7 @@
 <li>
 <code>install_upgrade</code> fixes the default upgrade policy of the installer that gets emitted, so you decide when generating whether recipients stay pinned to the versions you ship (<code>"always"</code>) or keep anything newer they already have (<code>"newer"</code>, the default).</li>
 </ul>
-<p>The generated installer also takes <code>only</code> to install a subset — local dependencies of the selection are added automatically — and <code>lib</code> to choose the library it installs into.</p>
+<p>The generated installer also takes <code>only</code> to install a subset — local dependencies of the selection are added automatically — and <code>lib</code> to choose the library it installs into. When <code>lib</code> is omitted, a component already installed in any library on <code><a href="https://rdrr.io/r/base/libPaths.html" class="external-link">.libPaths()</a></code> counts as installed, and a missing one goes into the first library. With an explicit <code>lib</code>, only that library counts for the components, and every component installation goes there. <code>&lt;meta&gt;_deps(plan = TRUE)</code> and <code><a href="reference/install_local_pkg.html">install_local_pkg()</a></code> follow the same rule.</p>
 </div>
 <div class="section level2">
 <h2 id="toolbox-main-api">🧰 Main API<a class="anchor" aria-label="anchor" href="#toolbox-main-api"></a>
@@ -271,9 +272,11 @@
 </ul>
 </div>
 <div class="section level2">
-<h2 id="clamp-zip-files-and-portability">🗜️ ZIP files and portability<a class="anchor" aria-label="anchor" href="#clamp-zip-files-and-portability"></a>
+<h2 id="clamp-archives-and-portability">🗜️ Archives and portability<a class="anchor" aria-label="anchor" href="#clamp-archives-and-portability"></a>
 </h2>
 <p>ZIP archives are classified by content. A ZIP containing <code>Meta/package.rds</code> is a Windows binary and is installed with <code>type = "win.binary"</code> on Windows only. Other ZIPs containing DESCRIPTION are unpacked into an owned temporary directory and installed as source packages.</p>
+<p>bigbang reads every tar and ZIP archive with its own validating reader, not with <code><a href="https://rdrr.io/r/utils/untar.html" class="external-link">untar()</a></code> or <code><a href="https://rdrr.io/r/utils/unzip.html" class="external-link">unzip()</a></code>, wherever it opens one: generation, diagnostics, local installation, artifact scans and generated installers. The reader creates only regular files and directories inside the destination. It rejects links, devices and inconsistent layouts, checks CRC-32 and sizes, and stops at the limits set by the <code>bigbang.archive.max_*</code> options documented in <code><a href="reference/scan_bigbang_artifact.html">?scan_bigbang_artifact</a></code>.</p>
+<p>By default, bigbang also rejects file names that would stop a meta-package from installing on Windows: names Windows reserves, such as <code>aux.R</code> or <code>con.R</code>, names containing <code>&lt; &gt; : " | ? *</code>, names ending in a dot or a space, and two files whose names differ only in case. The error names the file. If every recipient uses Linux or macOS, <code>options(bigbang.archive.portable_names = FALSE)</code> accepts those names wherever the file system can store them, and bigbang warns that the package will not install on Windows. The option has no effect on Windows, and it never relaxes the safety checks: links, absolute paths, <code>..</code>, names made only of dots and spaces, control characters and invalid UTF-8 are always rejected.</p>
 <p>All generated text is written explicitly as UTF-8. CI checks R release on Windows and macOS, and release, devel, oldrel-1 and 4.1 on Ubuntu. The declared minimum is R 4.1.0, the minimum of the imported <code>glue</code> release, and the 4.1 job checks it.</p>
 </div>
 <div class="section level2">

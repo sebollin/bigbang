@@ -15,7 +15,7 @@ installed as source packages."><meta property="og:image" content="https://seboll
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -55,7 +55,7 @@ installed as source packages.</p>
 <span>  <span class="va">package</span>,</span>
 <span>  pkg_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  ext <span class="op">=</span> <span class="st">".tar.gz"</span>,</span>
-<span>  repos <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">getOption</a></span><span class="op">(</span><span class="st">"repos"</span><span class="op">)</span>,</span>
+<span>  repos <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  cran_deps <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"skip"</span>, <span class="st">"error"</span>, <span class="st">"install"</span><span class="op">)</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">getOption</a></span><span class="op">(</span><span class="st">"bigbang.verbose"</span>, <span class="fu"><a href="https://rdrr.io/r/base/interactive.html" class="external-link">interactive</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  force <span class="op">=</span> <span class="cn">FALSE</span>,</span>
@@ -129,6 +129,17 @@ skipped packages. Components that an upgrade policy left in place are
 reported in <code>unchanged</code>, not in <code>installed</code>.</p>
     </div>
     <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Archive entry names follow the <code>bigbang.archive.portable_names</code> option
+described in <code><a href="scan_bigbang_artifact.html">scan_bigbang_artifact()</a></code>. It is <code>TRUE</code> by default; set it to
+<code>FALSE</code> only when every recipient uses Linux or macOS. Relaxed names warn
+during installation and remain unavailable on Windows or on filesystems that
+do not distinguish case. Case-only collisions are decided when the archive
+is extracted; an earlier inspection without a destination defers that
+decision. Components made only of dots and spaces, Windows-specific rules,
+and security-critical path rules are never relaxed.</p>
+    </div>
+    <div class="section level2">
     <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a></h2>
 
 
@@ -151,7 +162,7 @@ the declared <code>Package</code> field must be checked against the installed pa
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="create_metapackage.html">create_metapackage()</a></code> for generating a meta-package with an explicit
-component installer.</p></div>
+component installer; <code><a href="scan_bigbang_artifact.html">scan_bigbang_artifact()</a></code> for the archive-name policy.</p></div>
     </div>
 
     <div class="section level2">

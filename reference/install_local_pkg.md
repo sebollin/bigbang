@@ -13,7 +13,7 @@ install_local_pkg(
   package,
   pkg_dir = NULL,
   ext = ".tar.gz",
-  repos = getOption("repos"),
+  repos = NULL,
   cran_deps = c("skip", "error", "install"),
   verbose = getOption("bigbang.verbose", interactive()),
   force = FALSE,
@@ -87,6 +87,19 @@ Invisibly, a list describing installed, unchanged, failed, and skipped
 packages. Components that an upgrade policy left in place are reported
 in `unchanged`, not in `installed`.
 
+## Details
+
+Archive entry names follow the `bigbang.archive.portable_names` option
+described in
+[`scan_bigbang_artifact()`](https://sebollin.github.io/bigbang/reference/scan_bigbang_artifact.md).
+It is `TRUE` by default; set it to `FALSE` only when every recipient
+uses Linux or macOS. Relaxed names warn during installation and remain
+unavailable on Windows or on filesystems that do not distinguish case.
+Case-only collisions are decided when the archive is extracted; an
+earlier inspection without a destination defers that decision.
+Components made only of dots and spaces, Windows-specific rules, and
+security-critical path rules are never relaxed.
+
 ## Installation
 
 This function installs packages into `lib`, which defaults to the user's
@@ -111,7 +124,9 @@ against the installed package.
 ## See also
 
 [`create_metapackage()`](https://sebollin.github.io/bigbang/reference/create_metapackage.md)
-for generating a meta-package with an explicit component installer.
+for generating a meta-package with an explicit component installer;
+[`scan_bigbang_artifact()`](https://sebollin.github.io/bigbang/reference/scan_bigbang_artifact.md)
+for the archive-name policy.
 
 ## Examples
 

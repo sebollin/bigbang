@@ -1,56 +1,152 @@
 # Changelog
 
-## bigbang (development version)
+## bigbang 0.6.0
+
+### Security
+
+- bigbang now reads tar and ZIP archives with its own validating reader,
+  and no longer calls
+  [`utils::untar()`](https://rdrr.io/r/utils/untar.html) or
+  [`utils::unzip()`](https://rdrr.io/r/utils/unzip.html). On R 4.1 to
+  4.5, a component archive containing a symbolic link, followed by an
+  entry written through that link, could write outside the temporary
+  extraction directory before bigbang rejected the archive, even with
+  `dry_run = TRUE`. R 4.6.0 blocks this inside
+  [`untar()`](https://rdrr.io/r/utils/untar.html), but earlier releases
+  do not.
+
+  The new reader:
+
+  - creates only regular files and directories inside the destination;
+  - treats Windows junctions and symbolic links as links, so it never
+    extracts into them and its cleanup never deletes through them;
+  - rejects links, devices, other special entries, and malformed,
+    overlapping or trailing archive data;
+  - by default rejects names that Windows cannot create, such as `aux.R`
+    or a name containing `:` or `?`, names ending in a dot or a space,
+    and names that differ only in case. If every recipient uses Linux or
+    macOS, `options(bigbang.archive.portable_names = FALSE)` accepts
+    them wherever the file system can store them, which is never on
+    Windows, and warns that the package will not install there. Links,
+    absolute paths, `..`, names made only of dots and spaces, control
+    characters and invalid UTF-8 are always rejected;
+  - verifies CRC-32 and sizes through zlib;
+  - stops at configurable limits:
+    `options(bigbang.archive.max_entries, bigbang.archive.max_total_bytes, bigbang.archive.max_metadata_bytes, bigbang.archive.max_path_bytes)`
+    (see
+    [`?scan_bigbang_artifact`](https://sebollin.github.io/bigbang/reference/scan_bigbang_artifact.md)).
+
+  Generation,
+  [`diagnose_dependencies()`](https://sebollin.github.io/bigbang/reference/diagnose_dependencies.md),
+  [`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md),
+  [`scan_bigbang_artifact()`](https://sebollin.github.io/bigbang/reference/scan_bigbang_artifact.md),
+  and the installers of generated meta-packages all use the same reader.
+  [`scan_bigbang_artifact()`](https://sebollin.github.io/bigbang/reference/scan_bigbang_artifact.md)
+  reports an archive with links as vulnerable, and a damaged one as an
+  archive error, instead of failing.
 
 ### Dependencies
 
 - bigbang now requires R \>= 4.1.0. Its own code needs nothing newer
-  than R 3.6.0, but the imported `glue` has required R 4.1 since glue
-  1.8.1, so installing on an older R already failed unless an older glue
-  was installed by hand. CI now checks R 4.1.
+  than R 3.6.0. The imported glue, however, has required R 4.1 since
+  glue 1.8.1, so installing on an older R already failed unless an older
+  glue was installed by hand. CI now checks R 4.1. Generated
+  meta-packages keep their `R (>= 3.5.0)` floor, which has been verified
+  on R 3.5.3.
+
+### New features
+
+- `<meta>_deps(plan = TRUE)` returns a read-only plan of what
+  `<meta>_install()` will do. It reports, for each component, the
+  archive and installed versions, the library, the action and the
+  reason, and, for each external dependency, its version constraint and
+  whether it is satisfied. The plan uses the installer’s own `upgrade`
+  default, `only` closure, and rules for libraries and version
+  constraints. It loads no namespaces and installs nothing.
+  `<meta>_deps(only = ...)` also lists the dependencies of that closure
+  without a plan. Called with no arguments, `<meta>_deps()` returns what
+  it did before.
+- `create_metapackage(governance = TRUE)` adds a `CONTRIBUTING.md`, a
+  code of conduct adapted from the Contributor Covenant 2.1, and a
+  package-inclusion issue template to the generated meta-package.
+  Updates track these files, and the built package excludes them. The
+  default remains `governance = FALSE`.
 
 ### Bug fixes
 
-- Generated meta-packages translate every message their code emits. The
-  warning about components skipped because a local dependency was
-  skipped never reached Spanish, and nine other messages had no catalog
-  entry. Tests now fail when generated code emits a message that is
-  missing from its catalog, or formats an untranslated sentence.
-- The printed results of
-  [`create_metapackage()`](https://sebollin.github.io/bigbang/reference/create_metapackage.md),
+- **Name collisions.** A meta-package whose name matches one of its
+  components, or another local package the installer can see, is
+  rejected before anything is written, ignoring case. So are two
+  components whose names differ only in case. The generated installer
+  also rejects an archive whose `Package:` field changed after
+  generation.
+- **Failure messages.** When `R CMD INSTALL` fails,
   [`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md)
-  and
-  [`scan_bigbang_artifact()`](https://sebollin.github.io/bigbang/reference/scan_bigbang_artifact.md)
-  are translated into Spanish too, and so is the error
+  and generated installers now report the last real error, together with
+  the lines around it, and give the path to the full log. Compiler
+  errors are included, and logs that are not valid UTF-8 are read
+  safely.
+- **External dependencies.** Version constraints on external
+  dependencies are checked for each component. With
+  `cran_deps = "install"`, an unsatisfied dependency is updated from the
+  explicit `repos`. Nothing uses the network without an explicit,
+  non-empty `repos`.
+- **Source-only repositories.** On Windows and macOS,
+  `cran_deps = "install"` installed nothing from a repository that only
+  has source packages, such as an internal repository, and the reason
+  was discarded. If the default attempt leaves a dependency unsatisfied,
   [`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md)
-  gives when `R CMD INSTALL` fails without output. The English output is
-  unchanged.
-- A meta-package generated with `document = FALSE` no longer declares
-  `RoxygenNote: 7.3.2`, a roxygen run that never happened.
-- The Spanish catalog drops two messages that are no longer emitted and
-  fixes a conjunction in the collision diagnostic.
-- The test suite no longer fails when the bundled example component is
-  already installed in the user library.
+  and generated installers now retry with `type = "source"`, so binaries
+  are still preferred where they exist. When both attempts fail, the
+  result says why.
+- **Result categories.** Every component ends in exactly one result
+  category. Dependents of a failed or skipped component are skipped
+  without being built, and a shared dependency is installed only once.
+- **Installed components.** Without `lib`, a component installed in any
+  library on [`.libPaths()`](https://rdrr.io/r/base/libPaths.html)
+  counts as installed. With an explicit `lib`, only that library counts.
+- **Translations.** Printed results, installation results and every
+  message emitted by generated meta-packages are translated into
+  Spanish. Tests now fail on any untranslated message, and the English
+  output is unchanged.
+- **Smaller fixes.**
+  - A meta-package generated with `document = FALSE` no longer declares
+    a `RoxygenNote` for a roxygen run that never happened.
+  - Replacing a file through a Windows reparse point no longer warns.
+  - An invalid `lib`, such as an empty string, `NA` or several paths,
+    gives the same classed error in
+    [`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md),
+    `<meta>_deps(plan = TRUE)` and generated installers. When the
+    installers cannot create the library, they fail with that error too,
+    with no [`dir.create()`](https://rdrr.io/r/base/files2.html) warning
+    before it.
+  - 46 obsolete entries were removed from the Spanish catalog.
+  - The test suite no longer depends on what is installed in the user
+    library.
+
+### Performance
+
+- Archives are listed once per call: listing ten 1 MB archives went from
+  64 to 19 ms.
+- [`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md)
+  no longer rebuilds shared dependencies.
 
 ### Documentation
 
-- The README citation section no longer pastes a BibTeX entry, which had
-  been left at version 0.3.0. It points to `citation("bigbang")`, which
-  reports the installed version, and explains the CRAN and Zenodo DOIs.
-- The README no longer says that recipients always get the tested
-  versions: by default (`install_upgrade = "newer"`) a newer installed
-  version is kept, and `install_upgrade = "always"` makes every
-  installation match the archives.
-- The vignettes call `<meta>_reexport_verification()` only for
-  meta-packages generated with `reexport = TRUE`, the only ones that
-  have it, and the `R CMD build` call in
-  [`vignette("getting-started")`](https://sebollin.github.io/bigbang/articles/getting-started.md)
-  quotes the path.
-- Smaller README corrections: the distributed unit is one self-contained
-  meta-package, the r-universe command gives a binary only on Windows
-  and macOS, and the CI description matches the workflow. The Spanish
-  README gains the sections it lacked, and `CONTRIBUTING.md` documents
-  the test and lint commands.
+- The README citation section points to `citation("bigbang")` and
+  explains the CRAN and Zenodo DOIs. It no longer pastes a BibTeX entry,
+  which had been left at version 0.3.0.
+- The README now explains that recipients keep a newer installed version
+  by default (`install_upgrade = "newer"`), and that
+  `install_upgrade = "always"` makes every installation match the
+  archives.
+- The vignettes use `<meta>_reexport_verification()` only with
+  `reexport = TRUE`, and quote the path given to `R CMD build`.
+- Smaller fixes:
+  - the README describes the self-contained meta-package, r-universe
+    binaries and CI accurately;
+  - the Spanish README gains the sections it lacked;
+  - `CONTRIBUTING.md` documents the test and lint commands.
 
 ## bigbang 0.5.1
 

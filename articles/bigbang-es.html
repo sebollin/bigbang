@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -145,6 +145,16 @@ cualquier versión instalada. <code>force = TRUE</code> equivale a
 <code>options(&lt;meta&gt;.quiet = TRUE)</code>. Si <code>cli</code> no
 está disponible, el mensaje de arranque vuelve al banner ASCII sin
 fallar.</p>
+<p>Antes de instalar en la máquina receptora, consulte el plan de solo
+lectura:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">equipoverse_deps</span><span class="op">(</span>plan <span class="op">=</span> <span class="cn">TRUE</span>, upgrade <span class="op">=</span> <span class="st">"newer"</span>, cran_deps <span class="op">=</span> <span class="st">"skip"</span><span class="op">)</span></span></code></pre></div>
+<p>Lee únicamente los <code>DESCRIPTION</code> de los archivos y los
+metadatos de los paquetes instalados. Informa la versión del archivo, la
+versión y biblioteca instaladas, la acción prevista y las restricciones
+externas faltantes o no satisfechas. No carga, instala, usa la red ni
+escribe en disco. El instalador y este diagnóstico comparten la misma
+evaluación de versiones y de la política <code>upgrade</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="colisiones-de-reexportación">Colisiones de reexportación<a class="anchor" aria-label="anchor" href="#colisiones-de-reexportaci%C3%B3n"></a>
@@ -173,7 +183,7 @@ con
 diario durable junto al proyecto. La actualización siguiente lo revisa
 antes de escribir y <code>dry_run = TRUE</code> muestra la acción
 pendiente. Después de confirmar que no sigue corriendo otra
-actualización, usá <code>recover = TRUE</code> para preservar bytes de
+actualización, use <code>recover = TRUE</code> para preservar bytes de
 usuario desconocidos y completar la recuperación.</p>
 </div>
 <div class="section level2">
@@ -189,7 +199,7 @@ extraen en un directorio temporal propio y se instalan como fuente.</p>
 </h2>
 <p>El escáner nunca carga el paquete y funciona en fuentes, tarballs,
 ZIP e instalaciones:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/scan_bigbang_artifact.html">scan_bigbang_artifact</a></span><span class="op">(</span><span class="st">"ruta/al/artefacto"</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <p>Si detecta firmas V1/V2/V3/V7, no ejecute <code><a href="https://rdrr.io/r/base/library.html" class="external-link">library()</a></code>,
 <code><a href="https://devtools.r-lib.org/reference/document.html" class="external-link">devtools::document()</a></code> ni hooks del artefacto. Genere una
@@ -211,7 +221,7 @@ componente también puede ser un directorio fuente, que se empaqueta con
 el paquete opcional <code>pkgbuild</code>, o la lista entera puede vivir
 en un manifiesto bajo control de versiones.</p>
 <p>Dos opciones que conviene conocer antes de generar algo en serio:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/create_metapackage.html">create_metapackage</a></span><span class="op">(</span><span class="va">...</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">plan</span><span class="op">$</span><span class="va">order</span>      <span class="co"># el orden de instalación que se usaría</span></span>
 <span><span class="va">plan</span><span class="op">$</span><span class="va">findings</span>   <span class="co"># todos los hallazgos de validación, sin escribir nada</span></span></code></pre></div>

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,25 +33,74 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="bigbang-development-version">bigbang (development version)<a class="anchor" aria-label="anchor" href="#bigbang-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.6.0" id="bigbang-060">bigbang 0.6.0<a class="anchor" aria-label="anchor" href="#bigbang-060"></a></h2>
 <div class="section level3">
-<h3 id="dependencies-development-version">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies-development-version"></a></h3>
-<ul><li>bigbang now requires R &gt;= 4.1.0. Its own code needs nothing newer than R 3.6.0, but the imported <code>glue</code> has required R 4.1 since glue 1.8.1, so installing on an older R already failed unless an older glue was installed by hand. CI now checks R 4.1.</li>
+<h3 id="security-0-6-0">Security<a class="anchor" aria-label="anchor" href="#security-0-6-0"></a></h3>
+<ul><li>
+<p>bigbang now reads tar and ZIP archives with its own validating reader, and no longer calls <code><a href="https://rdrr.io/r/utils/untar.html" class="external-link">utils::untar()</a></code> or <code><a href="https://rdrr.io/r/utils/unzip.html" class="external-link">utils::unzip()</a></code>. On R 4.1 to 4.5, a component archive containing a symbolic link, followed by an entry written through that link, could write outside the temporary extraction directory before bigbang rejected the archive, even with <code>dry_run = TRUE</code>. R 4.6.0 blocks this inside <code><a href="https://rdrr.io/r/utils/untar.html" class="external-link">untar()</a></code>, but earlier releases do not.</p>
+<p>The new reader:</p>
+<ul><li>creates only regular files and directories inside the destination;</li>
+<li>treats Windows junctions and symbolic links as links, so it never extracts into them and its cleanup never deletes through them;</li>
+<li>rejects links, devices, other special entries, and malformed, overlapping or trailing archive data;</li>
+<li>by default rejects names that Windows cannot create, such as <code>aux.R</code> or a name containing <code>:</code> or <code>?</code>, names ending in a dot or a space, and names that differ only in case. If every recipient uses Linux or macOS, <code>options(bigbang.archive.portable_names = FALSE)</code> accepts them wherever the file system can store them, which is never on Windows, and warns that the package will not install there. Links, absolute paths, <code>..</code>, names made only of dots and spaces, control characters and invalid UTF-8 are always rejected;</li>
+<li>verifies CRC-32 and sizes through zlib;</li>
+<li>stops at configurable limits: <code>options(bigbang.archive.max_entries, bigbang.archive.max_total_bytes, bigbang.archive.max_metadata_bytes, bigbang.archive.max_path_bytes)</code> (see <code><a href="../reference/scan_bigbang_artifact.html">?scan_bigbang_artifact</a></code>).</li>
+</ul><p>Generation, <code><a href="../reference/diagnose_dependencies.html">diagnose_dependencies()</a></code>, <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code>, <code><a href="../reference/scan_bigbang_artifact.html">scan_bigbang_artifact()</a></code>, and the installers of generated meta-packages all use the same reader. <code><a href="../reference/scan_bigbang_artifact.html">scan_bigbang_artifact()</a></code> reports an archive with links as vulnerable, and a damaged one as an archive error, instead of failing.</p>
+</li>
 </ul></div>
 <div class="section level3">
-<h3 id="bug-fixes-development-version">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-development-version"></a></h3>
-<ul><li>Generated meta-packages translate every message their code emits. The warning about components skipped because a local dependency was skipped never reached Spanish, and nine other messages had no catalog entry. Tests now fail when generated code emits a message that is missing from its catalog, or formats an untranslated sentence.</li>
-<li>The printed results of <code><a href="../reference/create_metapackage.html">create_metapackage()</a></code>, <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code> and <code><a href="../reference/scan_bigbang_artifact.html">scan_bigbang_artifact()</a></code> are translated into Spanish too, and so is the error <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code> gives when <code>R CMD INSTALL</code> fails without output. The English output is unchanged.</li>
-<li>A meta-package generated with <code>document = FALSE</code> no longer declares <code>RoxygenNote: 7.3.2</code>, a roxygen run that never happened.</li>
-<li>The Spanish catalog drops two messages that are no longer emitted and fixes a conjunction in the collision diagnostic.</li>
-<li>The test suite no longer fails when the bundled example component is already installed in the user library.</li>
+<h3 id="dependencies-0-6-0">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies-0-6-0"></a></h3>
+<ul><li>bigbang now requires R &gt;= 4.1.0. Its own code needs nothing newer than R 3.6.0. The imported glue, however, has required R 4.1 since glue 1.8.1, so installing on an older R already failed unless an older glue was installed by hand. CI now checks R 4.1. Generated meta-packages keep their <code>R (&gt;= 3.5.0)</code> floor, which has been verified on R 3.5.3.</li>
 </ul></div>
 <div class="section level3">
-<h3 id="documentation-development-version">Documentation<a class="anchor" aria-label="anchor" href="#documentation-development-version"></a></h3>
-<ul><li>The README citation section no longer pastes a BibTeX entry, which had been left at version 0.3.0. It points to <code>citation("bigbang")</code>, which reports the installed version, and explains the CRAN and Zenodo DOIs.</li>
-<li>The README no longer says that recipients always get the tested versions: by default (<code>install_upgrade = "newer"</code>) a newer installed version is kept, and <code>install_upgrade = "always"</code> makes every installation match the archives.</li>
-<li>The vignettes call <code>&lt;meta&gt;_reexport_verification()</code> only for meta-packages generated with <code>reexport = TRUE</code>, the only ones that have it, and the <code>R CMD build</code> call in <code><a href="../articles/getting-started.html">vignette("getting-started")</a></code> quotes the path.</li>
-<li>Smaller README corrections: the distributed unit is one self-contained meta-package, the r-universe command gives a binary only on Windows and macOS, and the CI description matches the workflow. The Spanish README gains the sections it lacked, and <code>CONTRIBUTING.md</code> documents the test and lint commands.</li>
+<h3 id="new-features-0-6-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-6-0"></a></h3>
+<ul><li>
+<code>&lt;meta&gt;_deps(plan = TRUE)</code> returns a read-only plan of what <code>&lt;meta&gt;_install()</code> will do. It reports, for each component, the archive and installed versions, the library, the action and the reason, and, for each external dependency, its version constraint and whether it is satisfied. The plan uses the installer’s own <code>upgrade</code> default, <code>only</code> closure, and rules for libraries and version constraints. It loads no namespaces and installs nothing. <code>&lt;meta&gt;_deps(only = ...)</code> also lists the dependencies of that closure without a plan. Called with no arguments, <code>&lt;meta&gt;_deps()</code> returns what it did before.</li>
+<li>
+<code>create_metapackage(governance = TRUE)</code> adds a <code>CONTRIBUTING.md</code>, a code of conduct adapted from the Contributor Covenant 2.1, and a package-inclusion issue template to the generated meta-package. Updates track these files, and the built package excludes them. The default remains <code>governance = FALSE</code>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-0-6-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-6-0"></a></h3>
+<ul><li>
+<strong>Name collisions.</strong> A meta-package whose name matches one of its components, or another local package the installer can see, is rejected before anything is written, ignoring case. So are two components whose names differ only in case. The generated installer also rejects an archive whose <code>Package:</code> field changed after generation.</li>
+<li>
+<strong>Failure messages.</strong> When <code>R CMD INSTALL</code> fails, <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code> and generated installers now report the last real error, together with the lines around it, and give the path to the full log. Compiler errors are included, and logs that are not valid UTF-8 are read safely.</li>
+<li>
+<strong>External dependencies.</strong> Version constraints on external dependencies are checked for each component. With <code>cran_deps = "install"</code>, an unsatisfied dependency is updated from the explicit <code>repos</code>. Nothing uses the network without an explicit, non-empty <code>repos</code>.</li>
+<li>
+<strong>Source-only repositories.</strong> On Windows and macOS, <code>cran_deps = "install"</code> installed nothing from a repository that only has source packages, such as an internal repository, and the reason was discarded. If the default attempt leaves a dependency unsatisfied, <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code> and generated installers now retry with <code>type = "source"</code>, so binaries are still preferred where they exist. When both attempts fail, the result says why.</li>
+<li>
+<strong>Result categories.</strong> Every component ends in exactly one result category. Dependents of a failed or skipped component are skipped without being built, and a shared dependency is installed only once.</li>
+<li>
+<strong>Installed components.</strong> Without <code>lib</code>, a component installed in any library on <code><a href="https://rdrr.io/r/base/libPaths.html" class="external-link">.libPaths()</a></code> counts as installed. With an explicit <code>lib</code>, only that library counts.</li>
+<li>
+<strong>Translations.</strong> Printed results, installation results and every message emitted by generated meta-packages are translated into Spanish. Tests now fail on any untranslated message, and the English output is unchanged.</li>
+<li>
+<strong>Smaller fixes.</strong>
+<ul><li>A meta-package generated with <code>document = FALSE</code> no longer declares a <code>RoxygenNote</code> for a roxygen run that never happened.</li>
+<li>Replacing a file through a Windows reparse point no longer warns.</li>
+<li>An invalid <code>lib</code>, such as an empty string, <code>NA</code> or several paths, gives the same classed error in <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code>, <code>&lt;meta&gt;_deps(plan = TRUE)</code> and generated installers. When the installers cannot create the library, they fail with that error too, with no <code><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create()</a></code> warning before it.</li>
+<li>46 obsolete entries were removed from the Spanish catalog.</li>
+<li>The test suite no longer depends on what is installed in the user library.</li>
+</ul></li>
+</ul></div>
+<div class="section level3">
+<h3 id="performance-0-6-0">Performance<a class="anchor" aria-label="anchor" href="#performance-0-6-0"></a></h3>
+<ul><li>Archives are listed once per call: listing ten 1 MB archives went from 64 to 19 ms.</li>
+<li>
+<code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code> no longer rebuilds shared dependencies.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-0-6-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-6-0"></a></h3>
+<ul><li>The README citation section points to <code>citation("bigbang")</code> and explains the CRAN and Zenodo DOIs. It no longer pastes a BibTeX entry, which had been left at version 0.3.0.</li>
+<li>The README now explains that recipients keep a newer installed version by default (<code>install_upgrade = "newer"</code>), and that <code>install_upgrade = "always"</code> makes every installation match the archives.</li>
+<li>The vignettes use <code>&lt;meta&gt;_reexport_verification()</code> only with <code>reexport = TRUE</code>, and quote the path given to <code>R CMD build</code>.</li>
+<li>Smaller fixes:
+<ul><li>the README describes the self-contained meta-package, r-universe binaries and CI accurately;</li>
+<li>the Spanish README gains the sections it lacked;</li>
+<li>
+<code>CONTRIBUTING.md</code> documents the test and lint commands.</li>
+</ul></li>
 </ul></div>
 </div>
     <div class="section level2">

@@ -11,7 +11,7 @@ them with a graph-based (topologically ordered) approach."><meta property="og:im
 
     <a class="navbar-brand me-2" href="../index.html">bigbang</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -74,7 +74,8 @@ them with a graph-based (topologically ordered) approach.</p>
 <span>  install_upgrade <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"newer"</span>, <span class="st">"always"</span>, <span class="st">"never"</span><span class="op">)</span>,</span>
 <span>  reexport_prefer <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  reexport_exclude <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>  recover <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  recover <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  governance <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -306,6 +307,11 @@ project before recovery; that directory is reported and is never removed
 automatically. A proven-live owner still blocks mutation; an uncertain
 owner can be reclaimed only with <code>recover = TRUE</code>. Defaults to <code>FALSE</code>.</p></dd>
 
+
+<dt id="arg-governance">governance<a class="anchor" aria-label="anchor" href="#arg-governance"></a></dt>
+<dd><p>Logical. If <code>TRUE</code>, generate English contribution,
+conduct, and package-inclusion-request templates. Defaults to <code>FALSE</code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -352,7 +358,29 @@ and unsatisfied local version constraints remain hard errors. Checks about
 project tidiness can be relaxed individually through <code>tolerate</code>; there is no
 switch that disables validation as a whole. bigbang does not run
 <code>R CMD check</code> on component packages, so component warnings and notes do not
-prevent generation.
+prevent generation.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="portable-archive-names">Portable archive names<a class="anchor" aria-label="anchor" href="#portable-archive-names"></a></h2>
+
+
+<p>Archive entry names are validated strictly by default. The option
+<code>bigbang.archive.portable_names</code> defaults to <code>TRUE</code> and rejects Windows
+device names, Windows-invalid characters, trailing dots or spaces, and
+case-only collisions on every system. Set it to <code>FALSE</code> only when every
+recipient uses Linux or macOS. On non-Windows systems this relaxes only the
+Windows-specific rules; case-only collisions are relaxed only when a real
+probe of the extraction filesystem shows that it distinguishes case; an
+inspection without an extraction destination defers that decision until
+extraction. Components made only of dots and spaces are always rejected.
+Links, special entries, absolute or parent-traversal paths, empty
+components, backslashes, control characters, invalid UTF-8, and size limits
+are never relaxed. Windows always applies the strict Windows rules,
+regardless of the option. Relaxed entries produce warnings and the resulting
+package cannot be installed on Windows, or on a filesystem that does not
+distinguish case.
+See <code><a href="scan_bigbang_artifact.html">scan_bigbang_artifact()</a></code> for the same archive-name policy and resource
+limits used by the reader.
 Component source directories are built in a temporary directory with the
 optional pkgbuild package; passing an already built archive avoids that
 optional dependency.</p>
