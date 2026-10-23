@@ -1,104 +1,109 @@
-# bigbang (development version)
+# bigbang 0.6.0
 
-## New features
+## Security
 
-- Generated `<meta>_deps(plan = TRUE)` provides a read-only recipient-side
-  installation plan with archive and installed versions, libraries, actions,
-  reasons, and missing or unsatisfied external dependencies. Its default
-  dependency-vector return remains unchanged.
-- `create_metapackage(governance = TRUE)` optionally generates English
-  contribution, Contributor Covenant v2.1 attribution, and package-inclusion
-  issue-template files; `governance = FALSE` remains the default.
-- Generated `<meta>_deps(only = ...)` now previews the same local dependency
-  closure as `<meta>_install(only = ...)`.
+- bigbang now reads tar and ZIP archives with its own validating reader, and no
+  longer calls `utils::untar()` or `utils::unzip()`. On R 4.1 to 4.5, a
+  component archive containing a symbolic link, followed by an entry written
+  through that link, could write outside the temporary extraction directory
+  before bigbang rejected the archive, even with `dry_run = TRUE`. R 4.6.0
+  blocks this inside `untar()`, but earlier releases do not.
 
-## Bug fixes
+  The new reader:
+  - creates only regular files and directories inside the destination;
+  - rejects links, devices, other special entries, non-portable or
+    case-colliding names, and malformed, overlapping or trailing archive data;
+  - verifies CRC-32 and sizes through zlib;
+  - stops at configurable limits: `options(bigbang.archive.max_entries,
+    bigbang.archive.max_total_bytes, bigbang.archive.max_metadata_bytes,
+    bigbang.archive.max_path_bytes)` (see `?scan_bigbang_artifact`).
 
-- Generated dependency plans now use the same default upgrade policy as their
-  generated installers, and report repository availability consistently.
-- Matching archive filenames no longer produce false identity warnings. Intentional
-  filename and version mismatches remain covered by warning expectations.
-- Installation excerpts preserve the error-anchor line when long output is
-  truncated; governance updates remove only empty directories they created.
-- Gzip inspection validates the streamed TAR CRC-32 and ISIZE trailer without
-  allocating memory from the attacker-controlled ISIZE field. External
-  dependency restrictions are evaluated per component, and forced
-  reinstalls now report `forced_reinstall` exactly.
+  Generation, `diagnose_dependencies()`, `install_local_pkg()`,
+  `scan_bigbang_artifact()`, and the installers of generated meta-packages all
+  use the same reader. `scan_bigbang_artifact()` reports an archive with links
+  as vulnerable, and a damaged one as an archive error, instead of failing.
 
 ## Dependencies
 
 - bigbang now requires R >= 4.1.0. Its own code needs nothing newer than R
-  3.6.0, but the imported `glue` has required R 4.1 since glue 1.8.1, so
+  3.6.0. The imported glue, however, has required R 4.1 since glue 1.8.1, so
   installing on an older R already failed unless an older glue was installed by
-  hand. CI now checks R 4.1.
+  hand. CI now checks R 4.1. Generated meta-packages keep their `R (>= 3.5.0)`
+  floor, which has been verified on R 3.5.3.
+
+## New features
+
+- `<meta>_deps(plan = TRUE)` returns a read-only plan of what
+  `<meta>_install()` will do. It reports, for each component, the archive and
+  installed versions, the library, the action and the reason, and, for each
+  external dependency, its version constraint and whether it is satisfied. The
+  plan uses the installer's own `upgrade` default, `only` closure, and rules for
+  libraries and version constraints. It loads no namespaces and installs
+  nothing. `<meta>_deps(only = ...)` also lists the dependencies of that
+  closure without a plan. Called with no arguments, `<meta>_deps()` returns
+  what it did before.
+- `create_metapackage(governance = TRUE)` adds a `CONTRIBUTING.md`, a code of
+  conduct adapted from the Contributor Covenant 2.1, and a package-inclusion
+  issue template to the generated meta-package. Updates track these files, and
+  the built package excludes them. The default remains `governance = FALSE`.
 
 ## Bug fixes
 
-- Archive validation now streams Deflate through zlib, verifies ZIP CRC-32 and
-  gzip CRC-32/ISIZE trailers, charges compressed bytes before reading them, and
-  selects the structurally consistent ZIP end record. Tar padding and Windows
-  device-name variants are covered by the same resource and path checks.
-- Local installation now classifies every reachable component exactly once;
-  dependents of failed or skipped components are skipped in both installers.
-  Error excerpts are byte-safe and prefer the final real error block, while
-  metapackage name checks cover case folding, all visible local packages, and
-  embedded archive filenames.
+- **Name collisions.** A meta-package whose name matches one of its
+  components, or another local package the installer can see, is rejected
+  before anything is written, ignoring case. So are two components whose names
+  differ only in case. The generated installer also rejects an archive whose
+  `Package:` field changed after generation.
+- **Failure messages.** When `R CMD INSTALL` fails, `install_local_pkg()` and
+  generated installers now report the last real error, together with the lines
+  around it, and give the path to the full log. Compiler errors are included,
+  and logs that are not valid UTF-8 are read safely.
+- **External dependencies.** Version constraints on external dependencies are
+  checked for each component. With `cran_deps = "install"`, an unsatisfied
+  dependency is updated from the explicit `repos`. Nothing uses the network
+  without an explicit, non-empty `repos`.
+- **Result categories.** Every component ends in exactly one result category.
+  Dependents of a failed or skipped component are skipped without being built,
+  and a shared dependency is installed only once.
+- **Installed components.** Without `lib`, a component installed in any
+  library on `.libPaths()` counts as installed. With an explicit `lib`, only
+  that library counts.
+- **Translations.** Printed results, installation results and every message
+  emitted by generated meta-packages are translated into Spanish. Tests now
+  fail on any untranslated message, and the English output is unchanged.
+- **Smaller fixes.**
+  - A meta-package generated with `document = FALSE` no longer declares a
+    `RoxygenNote` for a roxygen run that never happened.
+  - Replacing a file through a Windows reparse point no longer warns.
+  - An invalid `lib`, such as an empty string, `NA` or several paths, gives
+    the same classed error in `install_local_pkg()`,
+    `<meta>_deps(plan = TRUE)` and generated installers. When the installers
+    cannot create the library, they fail with that error too, with no
+    `dir.create()` warning before it.
+  - 46 obsolete entries were removed from the Spanish catalog.
+  - The test suite no longer depends on what is installed in the user library.
 
-- ZIP inspection now requires local headers, compressed data, and any
-  12/16-byte data descriptors to cover the complete pre-central-directory
-  region without gaps or overlaps. The central directory and EOCD must reach
-  the exact end of the file, descriptor values are checked against the central
-  directory, and duplicate EOCD structures are rejected. Deflate and stored
-  payload CRCs are now verified by zlib through a gzip container; R no longer
-  computes a byte-at-a-time CRC. Archive metadata accounting includes TAR
-  headers, ZIP data descriptors, and EOCD comments. PAX/GNU metadata headers
-  count as entries, case folding is locale-independent for the supported
-  scripts, and the help documents the deliberate NFC/NFD limitation.
-- Archive inspection and extraction now share one stateful tar/ZIP walk. ZIP
-  entries are decoded by bigbang for stored and deflate data, with CRC-32
-  verification, resource limits, portable-name validation, and translated
-  format errors. Deflate output is bounded before it is materialized, ZIP
-  metadata is charged to the configured limits, and failed extraction rolls
-  back its private staging tree. Generated installers receive the same reader
-  and parity tests compare both verdicts and extracted trees.
-- Archive validation and tar extraction now share one streaming reader. Tar
-  extraction creates only regular files and directories, applies execution
-  permissions without special bits, honors PAX sizes and USTAR prefixes, and
-  rejects unsafe or contradictory stream geometry before writing outside the
-  extraction directory. ZIP central-directory records are parsed directly and
-  the end-of-central-directory record is found from the file tail without
-  loading the complete archive.
-- Generated meta-packages translate every message their code emits. The
-  warning about components skipped because a local dependency was skipped never
-  reached Spanish, and nine other messages had no catalog entry. Tests now fail
-  when generated code emits a message that is missing from its catalog, or
-  formats an untranslated sentence.
-- The printed results of `create_metapackage()`, `install_local_pkg()` and
-  `scan_bigbang_artifact()` are translated into Spanish too, and so is the
-  error `install_local_pkg()` gives when `R CMD INSTALL` fails without output.
-  The English output is unchanged.
-- A meta-package generated with `document = FALSE` no longer declares
-  `RoxygenNote: 7.3.2`, a roxygen run that never happened.
-- The Spanish catalog drops two messages that are no longer emitted and fixes
-  a conjunction in the collision diagnostic.
-- The test suite no longer fails when the bundled example component is already
-  installed in the user library.
+## Performance
+
+- Archives are listed once per call: listing ten 1 MB archives went from 64 to
+  19 ms.
+- `install_local_pkg()` no longer rebuilds shared dependencies.
 
 ## Documentation
 
-- The README citation section no longer pastes a BibTeX entry, which had been
-  left at version 0.3.0. It points to `citation("bigbang")`, which reports the
-  installed version, and explains the CRAN and Zenodo DOIs.
-- The README no longer says that recipients always get the tested versions: by
-  default (`install_upgrade = "newer"`) a newer installed version is kept, and
-  `install_upgrade = "always"` makes every installation match the archives.
-- The vignettes call `<meta>_reexport_verification()` only for meta-packages
-  generated with `reexport = TRUE`, the only ones that have it, and the
-  `R CMD build` call in `vignette("getting-started")` quotes the path.
-- Smaller README corrections: the distributed unit is one self-contained
-  meta-package, the r-universe command gives a binary only on Windows and
-  macOS, and the CI description matches the workflow. The Spanish README gains the sections
-  it lacked, and `CONTRIBUTING.md` documents the test and lint commands.
+- The README citation section points to `citation("bigbang")` and explains the
+  CRAN and Zenodo DOIs. It no longer pastes a BibTeX entry, which had been left
+  at version 0.3.0.
+- The README now explains that recipients keep a newer installed version by
+  default (`install_upgrade = "newer"`), and that `install_upgrade = "always"`
+  makes every installation match the archives.
+- The vignettes use `<meta>_reexport_verification()` only with
+  `reexport = TRUE`, and quote the path given to `R CMD build`.
+- Smaller fixes:
+  - the README describes the self-contained meta-package, r-universe binaries
+    and CI accurately;
+  - the Spanish README gains the sections it lacked;
+  - `CONTRIBUTING.md` documents the test and lint commands.
 
 # bigbang 0.5.1
 

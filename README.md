@@ -450,7 +450,11 @@ source package and are tracked by `update = TRUE`.
 
 The generated installer also takes `only` to install a subset — local
 dependencies of the selection are added automatically — and `lib` to choose the
-library it installs into.
+library it installs into. When `lib` is omitted, a component already installed
+in any library on `.libPaths()` counts as installed, and a missing one goes into
+the first library. With an explicit `lib`, only that library counts for the
+components, and every component installation goes there.
+`<meta>_deps(plan = TRUE)` and `install_local_pkg()` follow the same rule.
 
 ## 🧰 Main API
 
@@ -461,12 +465,20 @@ library it installs into.
   packages for historical deletion signatures without loading them.
 
 
-## 🗜️ ZIP files and portability
+## 🗜️ Archives and portability
 
 ZIP archives are classified by content. A ZIP containing `Meta/package.rds` is
 a Windows binary and is installed with `type = "win.binary"` on Windows only.
 Other ZIPs containing DESCRIPTION are unpacked into an owned temporary
 directory and installed as source packages.
+
+bigbang reads every tar and ZIP archive with its own validating reader, not with
+`untar()` or `unzip()`, wherever it opens one: generation, diagnostics, local
+installation, artifact scans and generated installers. The reader creates only
+regular files and directories inside the destination. It rejects links, devices,
+non-portable or case-colliding names and inconsistent layouts, checks CRC-32
+and sizes, and stops at the limits set by the `bigbang.archive.max_*` options
+documented in `?scan_bigbang_artifact`.
 
 All generated text is written explicitly as UTF-8. CI checks R release on
 Windows and macOS, and release, devel, oldrel-1 and 4.1 on Ubuntu. The declared

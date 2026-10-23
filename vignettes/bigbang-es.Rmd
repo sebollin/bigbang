@@ -109,7 +109,7 @@ instalación con `<meta>_reexport_verification(<meta>_conflicts())`.
 Una actualización con `update = TRUE` interrumpida deja un diario durable junto
 al proyecto. La actualización siguiente lo revisa antes de escribir y
 `dry_run = TRUE` muestra la acción pendiente. Después de confirmar que no sigue
-corriendo otra actualización, usá `recover = TRUE` para preservar bytes de
+corriendo otra actualización, use `recover = TRUE` para preservar bytes de
 usuario desconocidos y completar la recuperación.
 
 ## Archivos ZIP
