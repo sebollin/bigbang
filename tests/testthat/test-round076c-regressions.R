@@ -144,26 +144,17 @@ test_that("partial plans and installs agree on component external constraints", 
   expect_identical(plan_rows["diaA", "reason"], "local_dependency_failed")
   expect_setequal(plan$components$component, c("diaA", "diaB", "diaC"))
 
-  installed <- NULL
-  warning_state <- new.env(parent = emptyenv())
-  warning_state$seen <- FALSE
-  expect_warning(
-    installed <- withCallingHandlers(
-      runtime$diamondverse_install(
-        pkg_dir = archives, only = "diaA", cran_deps = "skip",
-        upgrade = "always", verbose = FALSE, lib = lib
-      ),
-      warning = function(condition) {
-        if (!grepl("Some components were skipped", conditionMessage(condition),
-                   fixed = TRUE) || warning_state$seen) {
-          invokeRestart("muffleWarning")
-        } else {
-          warning_state$seen <- TRUE
-        }
-      }
-    ),
-    regexp = "Some components were skipped"
-  )
+  captured <- capture_warnings(runtime$diamondverse_install(
+    pkg_dir = archives, only = "diaA", cran_deps = "skip",
+    upgrade = "always", verbose = FALSE, lib = lib
+  ))
+  installed <- captured$value
+  expect_warning_set(captured$warnings, c(
+    "Skipped diaB_1.0.0: Skipped because non-local dependencies are missing",
+    "Skipped diaA_1.0.0: Skipped because local dependency diaB was not installed",
+    "Some components were skipped because non-local dependencies are missing",
+    "Some components were skipped because local dependencies were skipped"
+  ))
   expect_true("diaC_1.0.0" %in% names(installed$installed))
   expect_true("diaB_1.0.0" %in% names(installed$skipped))
   expect_true("diaA_1.0.0" %in% names(installed$skipped))

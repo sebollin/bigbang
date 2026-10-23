@@ -66,22 +66,15 @@ test_that("the recipient plan is read-only and agrees with installation", {
   expect_setequal(before_namespaces[before_namespaces %in% loadedNamespaces()],
                   before_namespaces)
 
-  installed <- NULL
-  expect_warning(
-    installed <- withCallingHandlers(
-      runtime$planverse_install(
-        pkg_dir = archives, cran_deps = "skip", verbose = FALSE,
-        lib = library_dir
-      ),
-      warning = function(condition) {
-        if (!grepl("Some components were skipped", conditionMessage(condition),
-                   fixed = TRUE)) {
-          invokeRestart("muffleWarning")
-        }
-      }
-    ),
-    regexp = "Some components were skipped"
-  )
+  captured <- capture_warnings(runtime$planverse_install(
+    pkg_dir = archives, cran_deps = "skip", verbose = FALSE,
+    lib = library_dir
+  ))
+  installed <- captured$value
+  expect_warning_set(captured$warnings, c(
+    "Skipped planpkg_1.0.0: Skipped because non-local dependencies are missing",
+    "Some components were skipped because non-local dependencies are missing"
+  ))
   expect_true("planpkg_1.0.0" %in% names(installed$skipped))
   expect_identical(plan$components$action, "skip")
 })

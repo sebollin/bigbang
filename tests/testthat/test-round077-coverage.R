@@ -73,24 +73,19 @@ test_that("the plan marks repository installation as pending and unverified", {
   expect_identical(before,
                    list.files(library_dir, all.files = TRUE, recursive = TRUE))
 
-  installation_error <- NULL
-  expect_warning(
-    installation_error <- expect_error(
-      withCallingHandlers(
-        runtime$r077repositoryverse_install(
-          pkg_dir = dirname(archive), cran_deps = "install",
-          repos = "file:///r077-repository-does-not-exist", lib = library_dir,
-          verbose = FALSE
-        ),
-        warning = function(condition) {
-          if (!grepl("Installation failed", conditionMessage(condition),
-                     fixed = TRUE)) invokeRestart("muffleWarning")
-        }
-      ),
-      class = "bigbang_error_install"
+  captured <- capture_warnings(expect_error(
+    runtime$r077repositoryverse_install(
+      pkg_dir = dirname(archive), cran_deps = "install",
+      repos = "file:///r077-repository-does-not-exist", lib = library_dir,
+      verbose = FALSE
     ),
-    regexp = "Installation failed"
-  )
+    class = "bigbang_error_install"
+  ))
+  installation_error <- captured$value
+  expect_warning_set(captured$warnings, c(
+    "cannot open compressed file '.*r077-repository-does-not-exist/src/contrib/PACKAGES",
+    "Installation failed for r077repository_1.0.0"
+  ), fixed = FALSE)
   expect_match(conditionMessage(installation_error),
                "Missing non-local dependencies", fixed = TRUE)
   expect_false(dir.exists(file.path(library_dir, "r077repository")))
@@ -375,25 +370,16 @@ test_that("the plan deduplicates archive identity warnings", {
   archive <- .r077_make_archive(source_root, "r077warning")
   alias <- file.path(archives, "alias_9.9.tar.gz")
   file.copy(archive, alias)
-  first_warning <- TRUE
-  generated <- NULL
-  expect_warning(
-    generated <- withCallingHandlers(
-      round075_create_metapackage(
-        "r077warningverse", alias, dest_dir = destination,
-        document = FALSE, verbose = FALSE, import_deps = character(),
-        force_deps = character()
-      ),
-      warning = function(condition) {
-        if (first_warning) {
-          first_warning <<- FALSE
-        } else {
-          invokeRestart("muffleWarning")
-        }
-      }
-    ),
-    regexp = "declares package"
-  )
+  captured <- capture_warnings(round075_create_metapackage(
+    "r077warningverse", alias, dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character()
+  ))
+  generated <- captured$value
+  expect_warning_set(captured$warnings, c(
+    "declares package r077warning, but its filename suggests alias",
+    "declares version 1.0.0, but its filename suggests version 9.9"
+  ))
   runtime <- .r077_runtime(generated$path)
   messages <- character()
   plan <- withCallingHandlers(

@@ -261,26 +261,21 @@ test_that("failed and skipped diamonds classify every reachable node in both ins
     "r32meta074", unname(archives), dest_dir = file.path(root, "generated"),
     document = FALSE, verbose = FALSE, force_deps = character()
   )
-  generated_error <- NULL
-  warning_state <- new.env(parent = emptyenv())
-  warning_state$seen <- FALSE
-  expect_warning(
-    generated_error <- tryCatch(withCallingHandlers(
-      r32_generated_install(
-        generated, "r32meta074", root, file.path(root, "generated-lib"),
-        upgrade = "always"
-      ),
-      warning = function(condition) {
-        if (!grepl("Installation failed", conditionMessage(condition), fixed = TRUE) ||
-              warning_state$seen) {
-          invokeRestart("muffleWarning")
-        } else {
-          warning_state$seen <- TRUE
-        }
-      }
-    ), error = identity),
-    regexp = "Installation failed"
-  )
+  captured <- capture_warnings(tryCatch(
+    r32_generated_install(
+      generated, "r32meta074", root, file.path(root, "generated-lib"),
+      upgrade = "always"
+    ),
+    error = identity
+  ))
+  generated_error <- captured$value
+  expect_warning_set(captured$warnings, c(
+    "Installation failed for r32base074_0.1.0: Installation failed; error details:",
+    "Skipped r32left074_0.1.0: Skipped because local dependency r32base074 was not installed",
+    "Skipped r32right074_0.1.0: Skipped because local dependency r32base074 was not installed",
+    "Skipped r32top074_0.1.0: Skipped because local dependency r32left074 was not installed",
+    "Some components were skipped because local dependencies were skipped:"
+  ))
   expect_s3_class(generated_error, "bigbang_error_install")
   expect_setequal(names(generated_error$failures), "r32base074_0.1.0")
 

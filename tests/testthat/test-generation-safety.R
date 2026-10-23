@@ -388,20 +388,14 @@ test_that("malformed R source is reported during heuristic scanning", {
     "badparse", "1.0.0", source_root, archives,
     code = "badparse_value <- function(x) {{{"
   )
-  warning_message <- NULL
-  withCallingHandlers(
+  captured <- capture_warnings(
     create_metapackage(
       "parseverse", "badparse_1.0.0", archives,
       dest_dir = destination, document = FALSE, verbose = FALSE
-    ),
-    warning = function(w) {
-      if (grepl("Could not parse R source file", conditionMessage(w))) {
-        warning_message <<- conditionMessage(w)
-      }
-      invokeRestart("muffleWarning")
-    }
+    )
   )
-  expect_false(is.null(warning_message))
+  expect_warning_set(captured$warnings, "Could not parse R source file: ")
+  warning_message <- captured$warnings[[1L]]
   # Name the component archive and the path inside it. The extraction directory
   # is a temporary that no longer exists when the reader sees the warning, so
   # reporting it would leave nothing to act on.
@@ -756,10 +750,18 @@ test_that("generation tolerations cannot disable recipient protection invariants
   expect_true("symbolic_link" %in% names(checks) ||
                 .Platform$OS.type == "windows")
   for (label in names(checks)) {
+    warnings <- character()
     condition <- tryCatch(
-      expect_no_warning(checks[[label]]$run()),
+      withCallingHandlers(
+        checks[[label]]$run(),
+        warning = function(warning_condition) {
+          warnings <<- c(warnings, conditionMessage(warning_condition))
+          invokeRestart("muffleWarning")
+        }
+      ),
       error = identity
     )
+    expect_equal(length(warnings), 0L, info = label)
     expect_true(inherits(condition, "error"), info = label)
     expected_class <- checks[[label]]$class
     if (!is.null(expected_class)) {
