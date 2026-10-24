@@ -2,6 +2,8 @@
 
 ## bigbang 0.6.0
 
+CRAN release: 2026-10-23
+
 ### Security
 
 - bigbang now reads tar and ZIP archives with its own validating reader,
