@@ -335,9 +335,18 @@ test_that("case probe is silent and conservative", {
   root <- tempfile("round079-case-probe-")
   dir.create(root)
   withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  expect_false(bigbang:::.archive_fs_case_sensitive(
+    root, file_create = function(path) TRUE,
+    file_exists = function(path) FALSE
+  ))
   read_only <- file.path(root, "read-only")
   dir.create(read_only)
   Sys.chmod(read_only, "0555")
+  withr::defer(Sys.chmod(read_only, "0755"))
+  # Root, as in the r-universe containers, can still write here.
+  if (file.access(read_only, 2L) == 0L) {
+    skip("The current user can write the read-only directory.")
+  }
   warnings <- character()
   value <- withCallingHandlers(
     bigbang:::.archive_fs_case_sensitive(read_only),
@@ -346,13 +355,8 @@ test_that("case probe is silent and conservative", {
       invokeRestart("muffleWarning")
     }
   )
-  Sys.chmod(read_only, "0755")
   expect_false(value)
   expect_length(warnings, 0L)
-  expect_false(bigbang:::.archive_fs_case_sensitive(
-    root, file_create = function(path) TRUE,
-    file_exists = function(path) FALSE
-  ))
 })
 
 test_that("simulated Windows stays strict when the option is FALSE", {
