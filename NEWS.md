@@ -1,5 +1,38 @@
 # bigbang (development version)
 
+## Bug fixes
+
+- `<meta>_deps(plan = TRUE)` warns, with class
+  `bigbang_warning_install_library`, when the installers would not be able to
+  use the installation library:
+  - it does not exist and cannot be created, because its first existing
+    ancestor is not a directory with write and search permission, or is a
+    dangling or looping symbolic link;
+  - it exists but is not writable, and the plan has something to install.
+
+  The plan still creates nothing and its actions do not change. A `lib` that is
+  an existing regular file remains an error, as in the installers.
+- When a re-exported symbol is unavailable because its component is not
+  installed, the error says so directly instead of nesting "component is not
+  installed" inside an installed-version label, in English and Spanish.
+- The warning `install_local_pkg()` gives for an archive in `pkg_dir` that it
+  cannot read now has the class `bigbang_warning_archive_inventory`. An archive
+  that cannot even be opened gives that single warning, with the reason,
+  instead of an extra warning from R.
+- The warning about archive names that only pass with
+  `bigbang.archive.portable_names = FALSE` lists the first three names and how
+  many more there are.
+- When a component is given as a source directory, `diagnose_dependencies()`,
+  `install_local_pkg()` and `create_metapackage()` build it once per call and
+  remove their temporary build directories when they finish, also after an
+  error. These directories used to stay in the session's temporary directory.
+
+## Tests
+
+- The tests cover more of the archive reader's rejections (PAX, CRC, ZIP and
+  tar layout, limits) and of the installation diagnostics, and they run faster
+  under CRAN settings.
+
 # bigbang 0.6.0
 
 ## Security
