@@ -182,6 +182,64 @@ test_that("manifests accept an absolute source directory", {
   expect_identical(result$packages, "sourcecomponent")
 })
 
+test_that("source component builds are reused and cleaned per public operation", {
+  skip_if_not_installed("pkgbuild")
+  root <- tempfile("bigbang-round80d-source-build-")
+  source_dir <- file.path(root, "sourcecomponent")
+  destination <- file.path(root, "destination")
+  library_dir <- file.path(root, "library")
+  dir.create(file.path(source_dir, "R"), recursive = TRUE)
+  dir.create(destination)
+  dir.create(library_dir)
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  writeLines(c(
+    "Package: sourcecomponent80d", "Version: 1.0.0",
+    "Title: Source build ownership fixture",
+    "Description: Source build ownership fixture.", "License: MIT",
+    "Author: Test Author",
+    "Maintainer: Test Author <test@example.org>"
+  ), file.path(source_dir, "DESCRIPTION"), useBytes = TRUE)
+  writeLines("export(fixture_value)", file.path(source_dir, "NAMESPACE"),
+             useBytes = TRUE)
+  writeLines("fixture_value <- function() 1L",
+             file.path(source_dir, "R", "value.R"), useBytes = TRUE)
+  build_roots <- function() {
+    paths <- list.dirs(tempdir(), full.names = TRUE, recursive = FALSE)
+    paths[grepl("^bigbang-source-build-", basename(paths))]
+  }
+
+  before <- build_roots()
+  context <- .source_build_context_new()
+  withr::defer(.source_build_context_close(context))
+  first <- .resolve_archive_input(source_dir, build_context = context)
+  second <- .resolve_archive_input(source_dir, build_context = context)
+  expect_identical(first, second)
+  expect_length(context$build_dirs, 1L)
+  .source_build_context_close(context)
+  expect_identical(build_roots(), before)
+
+  before <- build_roots()
+  expect_no_warning(diagnose_dependencies(source_dir))
+  expect_identical(build_roots(), before)
+
+  before <- build_roots()
+  expect_no_warning(install_local_pkg(
+    source_dir, lib = library_dir, upgrade = "always", verbose = FALSE
+  ))
+  expect_identical(build_roots(), before)
+
+  before <- build_roots()
+  expect_error(
+    create_metapackage(
+      "sourcebuild80dverse", source_dir, dest_dir = destination,
+      document = FALSE, verbose = FALSE, import_deps = character(),
+      force_deps = character(), include_archives = FALSE
+    ),
+    "require include_archives"
+  )
+  expect_identical(build_roots(), before)
+})
+
 test_that("skip propagation uses declared identity when it is readable", {
   root <- tempfile("bigbang-round85-identity-")
   archive_dir <- file.path(root, "archives")
@@ -207,6 +265,7 @@ test_that("skip propagation uses declared identity when it is readable", {
     bad, files = c("old", "extra"), compression = "gzip"
   ))
   warnings <- character()
+  warning_condition <- NULL
   result <- withCallingHandlers(
     create_metapackage(
       "identityskipverse", c(bad, dependent, good), dest_dir = destination,
@@ -214,11 +273,15 @@ test_that("skip propagation uses declared identity when it is readable", {
       force_deps = character(), on_component_error = "skip"
     ),
     warning = function(condition) {
+      if (grepl("Could not read archive", conditionMessage(condition), fixed = TRUE)) {
+        warning_condition <<- condition
+      }
       warnings <<- c(warnings, conditionMessage(condition))
       invokeRestart("muffleWarning")
     }
   )
   expect_true(any(grepl("Could not read archive", warnings, fixed = TRUE)))
+  expect_s3_class(warning_condition, "bigbang_warning_archive_inventory")
   expect_identical(result$packages, "good")
   expect_setequal(result$omitted$component, c("real", "dependent"))
 })

@@ -114,9 +114,11 @@ test_that("plan and generated installation reject a regular-file library equally
   writeLines("user data", library_file)
   expected <- paste0("Could not create installation library: ", library_file)
 
-  planned <- expect_no_warning(tryCatch(runtime$r077libraryverse_deps(
-    pkg_dir = dirname(archive), plan = TRUE, lib = library_file
-  ), error = identity))
+  planned <- expect_no_warning(tryCatch(
+    runtime$r077libraryverse_deps(
+      pkg_dir = dirname(archive), plan = TRUE, lib = library_file
+    ), error = identity
+  ))
   installed <- expect_no_warning(tryCatch(runtime$r077libraryverse_install(
     pkg_dir = dirname(archive), lib = library_file, verbose = FALSE
   ), error = identity))
@@ -132,6 +134,437 @@ test_that("plan and generated installation reject a regular-file library equally
   expect_identical(conditionMessage(direct), expected)
   expect_true(file.exists(library_file))
   expect_false(dir.exists(paste0(library_file, ".dir")))
+})
+
+test_that("an unwritable library ancestor is reported by a read-only plan", {
+  skip_on_cran()
+  skip_on_os("windows")
+  skip_if(identical(Sys.info()[["effective_user"]], "root"),
+          "root can write through mode bits")
+  root <- tempfile("bigbang-r077-library-unwritable-")
+  dir.create(root)
+  withr::defer({
+    Sys.chmod(root, "0755")
+    unlink(root, recursive = TRUE, force = TRUE)
+  })
+  source_root <- file.path(root, "sources")
+  destination <- file.path(root, "destination")
+  dir.create(source_root)
+  dir.create(destination)
+  archive <- .r077_make_archive(source_root, "r077unwritable")
+  generated <- round075_create_metapackage(
+    "r077unwritableverse", archive, dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character()
+  )
+  runtime <- .r077_runtime(generated$path)
+  lib <- file.path(root, "missing", "library")
+  Sys.chmod(root, "0555")
+  before <- list.files(root, all.files = TRUE, recursive = TRUE)
+  warning_condition <- NULL
+  plan <- withCallingHandlers(
+    runtime$r077unwritableverse_deps(
+      pkg_dir = dirname(archive), plan = TRUE, lib = lib
+    ),
+    warning = function(condition) {
+      warning_condition <<- condition
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_s3_class(plan, "bigbang_dependency_plan")
+  expect_s3_class(warning_condition, "bigbang_warning_install_library")
+  expect_identical(
+    list.files(root, all.files = TRUE, recursive = TRUE), before
+  )
+})
+
+test_that("a creatable library does not warn during planning", {
+  skip_on_cran()
+  root <- tempfile("bigbang-r077-library-creatable-")
+  dir.create(root)
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  source_root <- file.path(root, "sources")
+  destination <- file.path(root, "destination")
+  dir.create(source_root)
+  dir.create(destination)
+  archive <- .r077_make_archive(source_root, "r077creatable")
+  generated <- round075_create_metapackage(
+    "r077creatableverse", archive, dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character()
+  )
+  runtime <- .r077_runtime(generated$path)
+  lib <- file.path(root, "new", "library")
+  plan <- expect_no_warning(runtime$r077creatableverse_deps(
+    pkg_dir = dirname(archive), plan = TRUE, lib = lib
+  ))
+  expect_s3_class(plan, "bigbang_dependency_plan")
+  expect_false(dir.exists(lib))
+})
+
+test_that("library feasibility warnings match both installers", {
+  skip_on_os("windows")
+  skip_if(identical(Sys.info()[["effective_user"]], "root"),
+          "root can write through mode bits")
+  root <- tempfile("bigbang-r080c-library-feasibility-")
+  dir.create(root)
+  withr::defer({
+    if ("package:r080clibrary" %in% search()) {
+      detach("package:r080clibrary", character.only = TRUE, unload = TRUE)
+    }
+    if (isNamespaceLoaded("r080clibrary")) {
+      try(unloadNamespace("r080clibrary"), silent = TRUE)
+    }
+  })
+  withr::defer({
+    for (path in list.files(root, all.files = TRUE, full.names = TRUE,
+                            recursive = FALSE)) {
+      if (dir.exists(path)) Sys.chmod(path, "0755")
+    }
+    Sys.chmod(root, "0755")
+    unlink(root, recursive = TRUE, force = TRUE)
+  })
+  source_root <- file.path(root, "sources")
+  destination <- file.path(root, "destination")
+  dir.create(source_root)
+  dir.create(destination)
+  archive <- .r077_make_archive(source_root, "r080clibrary")
+  generated <- round075_create_metapackage(
+    "r080clibraryverse", archive, dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character()
+  )
+  runtime <- .r077_runtime(generated$path)
+  deps <- runtime$r080clibraryverse_deps
+  installer <- runtime$r080clibraryverse_install
+
+  capture_plan <- function(lib, upgrade = "always") {
+    condition <- NULL
+    value <- withCallingHandlers(
+      deps(pkg_dir = dirname(archive), plan = TRUE, lib = lib,
+           upgrade = upgrade),
+      warning = function(item) {
+        condition <<- item
+        invokeRestart("muffleWarning")
+      }
+    )
+    list(value = value, warning = condition)
+  }
+  expect_error_class <- function(expression, class) {
+    condition <- tryCatch(expression, error = identity)
+    expect_s3_class(condition, class)
+    condition
+  }
+  expect_invalid_install <- function(lib) {
+    generated_error <- expect_error_class(
+      installer(pkg_dir = dirname(archive), lib = lib, verbose = FALSE),
+      "bigbang_error_install_policy"
+    )
+    direct_error <- expect_error_class(
+      install_local_pkg(archive, lib = lib, verbose = FALSE),
+      "bigbang_error_install_policy"
+    )
+    expect_identical(conditionMessage(generated_error),
+                     conditionMessage(direct_error))
+    invisible(NULL)
+  }
+
+  dangling <- file.path(root, "dangling-library")
+  expect_true(file.symlink("missing-target", dangling))
+  dangling_plan <- capture_plan(dangling)
+  expect_s3_class(dangling_plan$warning, "bigbang_warning_install_library")
+  expect_identical(dangling_plan$warning$reason, "not_creatable")
+  expect_invalid_install(dangling)
+
+  dangling_parent <- file.path(root, "dangling-parent")
+  expect_true(file.symlink("missing-parent", dangling_parent))
+  dangling_child <- file.path(dangling_parent, "library")
+  parent_plan <- capture_plan(dangling_child)
+  expect_s3_class(parent_plan$warning, "bigbang_warning_install_library")
+  expect_identical(parent_plan$warning$reason, "not_creatable")
+  expect_invalid_install(dangling_child)
+
+  cycle_root <- file.path(root, "cycle")
+  dir.create(cycle_root)
+  expect_true(file.symlink("cycle-b", file.path(cycle_root, "cycle-a")))
+  expect_true(file.symlink("cycle-a", file.path(cycle_root, "cycle-b")))
+  cycle_lib <- file.path(cycle_root, "cycle-a", "library")
+  cycle_plan <- capture_plan(cycle_lib)
+  expect_s3_class(cycle_plan$warning, "bigbang_warning_install_library")
+  expect_identical(cycle_plan$warning$reason, "not_creatable")
+  expect_invalid_install(cycle_lib)
+
+  regular <- file.path(root, "regular")
+  writeLines("not a directory", regular)
+  regular_slash <- paste0(regular, "/")
+  regular_plan <- expect_error_class(
+    deps(pkg_dir = dirname(archive), plan = TRUE, lib = regular_slash),
+    "bigbang_error_install_policy"
+  )
+  expect_invalid_install(regular_slash)
+  expect_identical(
+    conditionMessage(regular_plan),
+    paste0("Could not create installation library: ", regular_slash)
+  )
+
+  no_search <- file.path(root, "no-search")
+  dir.create(no_search)
+  Sys.chmod(no_search, "0200")
+  no_search_lib <- file.path(no_search, "library")
+  no_search_plan <- capture_plan(no_search_lib)
+  expect_s3_class(no_search_plan$warning, "bigbang_warning_install_library")
+  expect_identical(no_search_plan$warning$reason, "not_creatable")
+  expect_invalid_install(no_search_lib)
+
+  existing <- file.path(root, "existing")
+  dir.create(existing)
+  Sys.chmod(existing, "0555")
+  existing_plan <- capture_plan(existing)
+  expect_s3_class(existing_plan$warning, "bigbang_warning_install_library")
+  expect_identical(existing_plan$warning$reason, "not_writable")
+  generated_existing <- capture_warnings(tryCatch(
+    installer(pkg_dir = dirname(archive), lib = existing, verbose = FALSE),
+    error = identity
+  ))
+  direct_existing <- capture_warnings(tryCatch(
+    install_local_pkg(archive, lib = existing, verbose = FALSE),
+    error = identity
+  ))
+  expect_length(generated_existing$warnings, 1L)
+  expect_length(direct_existing$warnings, 0L)
+  generated_existing <- generated_existing$value
+  direct_existing <- direct_existing$value
+  expect_true(inherits(generated_existing, "bigbang_error_install"))
+  expect_true(
+    inherits(direct_existing, "bigbang_error_install") ||
+      (is.list(direct_existing) && length(direct_existing$failed) > 0L)
+  )
+
+  kept <- file.path(root, "kept")
+  dir.create(kept)
+  install_local_pkg(archive, lib = kept, upgrade = "always", verbose = FALSE)
+  Sys.chmod(kept, "0555")
+  kept_plan <- capture_plan(kept, upgrade = "never")
+  expect_null(kept_plan$warning)
+  expect_identical(kept_plan$value$components$action, "keep")
+  kept_generated <- expect_no_warning(installer(
+    pkg_dir = dirname(archive), lib = kept, upgrade = "never", verbose = FALSE
+  ))
+  kept_direct <- expect_no_warning(install_local_pkg(
+    archive, lib = kept, upgrade = "never", verbose = FALSE
+  ))
+  expect_true("r080clibrary_1.0.0" %in% names(kept_generated$unchanged))
+  expect_true("r080clibrary_1.0.0" %in% names(kept_direct$unchanged))
+
+  creatable <- file.path(root, "new", "library")
+  creatable_plan <- capture_plan(creatable)
+  expect_null(creatable_plan$warning)
+  expect_no_warning(installer(
+    pkg_dir = dirname(archive), lib = creatable, verbose = FALSE
+  ))
+})
+
+test_that("a non-creatable library is warned about even when all components skip", {
+  skip_on_os("windows")
+  skip_if(identical(Sys.info()[["effective_user"]], "root"),
+          "root can write through mode bits")
+  root <- tempfile("bigbang-r080d-library-skip-")
+  dir.create(root)
+  withr::defer({
+    Sys.chmod(root, "0755")
+    unlink(root, recursive = TRUE, force = TRUE)
+  })
+  source_root <- file.path(root, "sources")
+  destination <- file.path(root, "destination")
+  dir.create(source_root)
+  dir.create(destination)
+  archive <- .r077_make_archive(
+    source_root, "r080dskip", imports = "r080d_missing (>= 99.0.0)"
+  )
+  generated <- round075_create_metapackage(
+    "r080dskipverse", archive, dest_dir = destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character()
+  )
+  runtime <- .r077_runtime(generated$path)
+  dangling <- file.path(root, "dangling")
+  expect_true(file.symlink("missing-target", dangling))
+  restricted <- file.path(root, "restricted")
+  dir.create(restricted)
+  Sys.chmod(restricted, "0100")
+  withr::defer(Sys.chmod(restricted, "0755"))
+
+  for (lib in c(dangling, file.path(restricted, "library"))) {
+    warning_condition <- NULL
+    plan <- withCallingHandlers(
+      runtime$r080dskipverse_deps(
+        pkg_dir = dirname(archive), plan = TRUE, lib = lib,
+        cran_deps = "skip"
+      ),
+      warning = function(condition) {
+        warning_condition <<- condition
+        invokeRestart("muffleWarning")
+      }
+    )
+    expect_identical(plan$components$action, "skip")
+    expect_s3_class(warning_condition, "bigbang_warning_install_library")
+    expect_identical(warning_condition$reason, "not_creatable")
+    expect_error(
+      runtime$r080dskipverse_install(
+        pkg_dir = dirname(archive), lib = lib, cran_deps = "skip",
+        verbose = FALSE
+      ),
+      class = "bigbang_error_install_policy"
+    )
+    expect_error(
+      install_local_pkg(
+        archive, lib = lib, cran_deps = "skip", verbose = FALSE
+      ),
+      class = "bigbang_error_install_policy"
+    )
+  }
+})
+
+test_that("inventory warnings survive successful reads in every public lookup", {
+  skip_on_os("windows")
+  root <- tempfile("bigbang-r080d-inventory-warning-")
+  dir.create(root)
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  source_root <- file.path(root, "sources")
+  archives <- file.path(root, "archives")
+  dir.create(source_root)
+  dir.create(archives)
+  child <- .r077_make_archive(source_root, "r080dnonportable")
+  child_root <- file.path(source_root, "r080dnonportable-source")
+  writeLines("aux_value <- function() 80L",
+             file.path(child_root, "R", "aux.R"))
+  unlink(child)
+  withr::with_dir(source_root, utils::tar(
+    child, basename(child_root), compression = "gzip"
+  ))
+  parent <- .r077_make_archive(
+    source_root, "r080dparent", imports = "r080dnonportable"
+  )
+  file.copy(c(child, parent), archives)
+  child <- file.path(archives, basename(child))
+  parent <- file.path(archives, basename(parent))
+  withr::local_options(bigbang.archive.portable_names = FALSE)
+  capture <- function(expr) {
+    warnings <- list()
+    value <- withCallingHandlers(
+      force(expr),
+      warning = function(condition) {
+        warnings[[length(warnings) + 1L]] <<- condition
+        invokeRestart("muffleWarning")
+      }
+    )
+    list(value = value, warnings = warnings)
+  }
+  expect_nonportable <- function(result) {
+    expect_length(result$warnings, 1L)
+    expect_s3_class(
+      result$warnings[[1L]], "bigbang_warning_archive_nonportable_name"
+    )
+  }
+
+  direct <- capture(install_local_pkg(
+    child, pkg_dir = archives, lib = file.path(root, "direct"),
+    verbose = FALSE, upgrade = "always"
+  ))
+  expect_nonportable(direct)
+  parent_result <- capture(install_local_pkg(
+    parent, pkg_dir = archives, lib = file.path(root, "parent"),
+    verbose = FALSE, upgrade = "always"
+  ))
+  expect_nonportable(parent_result)
+  by_name <- capture(install_local_pkg(
+    "r080dnonportable", pkg_dir = archives,
+    lib = file.path(root, "by-name"), verbose = FALSE, upgrade = "always"
+  ))
+  expect_nonportable(by_name)
+
+  inventory <- capture(bigbang:::.archive_inventory(archives))
+  expect_true(length(inventory$warnings) >= 1L)
+  expect_true(all(vapply(
+    inventory$warnings, inherits, logical(1L),
+    what = "bigbang_warning_archive_nonportable_name"
+  )))
+})
+
+test_that("unreadable archive inventory emits one typed warning", {
+  skip_on_os("windows")
+  skip_if(identical(Sys.info()[["effective_user"]], "root"),
+          "root can read through mode bits")
+  root <- tempfile("bigbang-r080c-inventory-permission-")
+  dir.create(root)
+  withr::defer({
+    Sys.chmod(file.path(root, "unreadable_1.0.0.tar.gz"), "0644")
+    unlink(root, recursive = TRUE, force = TRUE)
+  })
+  source_root <- file.path(root, "sources")
+  dir.create(source_root)
+  valid <- .r077_make_archive(source_root, "r080cvalid")
+  unreadable <- file.path(root, "unreadable_1.0.0.tar.gz")
+  file.copy(valid, unreadable)
+  Sys.chmod(unreadable, "0000")
+  condition <- NULL
+  withCallingHandlers(
+    install_local_pkg(valid, pkg_dir = root, lib = file.path(root, "lib"),
+                      verbose = FALSE),
+    warning = function(item) {
+      expect_null(condition)
+      condition <<- item
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_s3_class(condition, "bigbang_warning_archive_inventory")
+  expect_match(condition$reason,
+               "cannot open file|Permission denied", ignore.case = TRUE)
+})
+
+test_that("local installer reports circular archive dependencies", {
+  skip_on_cran()
+  root <- tempfile("bigbang-r080c-cycle-")
+  dir.create(root)
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  .r077_make_archive(
+    root, "r080ccyclea", imports = "r080ccycleb"
+  )
+  top <- .r077_make_archive(
+    root, "r080ccycleb", imports = "r080ccyclea"
+  )
+  result <- install_local_pkg(
+    top, pkg_dir = root, lib = file.path(root, "library"),
+    upgrade = "always", verbose = FALSE
+  )
+  expect_true(any(grepl("Circular local dependency", result$failed,
+                        fixed = TRUE)))
+  expect_true(any(grepl("Circular local dependency", result$skipped,
+                        fixed = TRUE)) || length(result$skipped) == 0L)
+})
+
+test_that("local installer rejects a Windows binary ZIP on POSIX", {
+  skip_on_cran()
+  skip_on_os("windows")
+  root <- tempfile("bigbang-r080c-binary-")
+  dir.create(root)
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  archive <- file.path(root, "r080cbinary_1.0.0.zip")
+  package_root <- file.path(root, "r080cbinary")
+  dir.create(file.path(package_root, "Meta"), recursive = TRUE)
+  writeLines(c(
+    "Package: r080cbinary", "Version: 1.0.0", "Title: Binary fixture",
+    "Description: Binary fixture.", "License: MIT"
+  ), file.path(package_root, "DESCRIPTION"))
+  writeBin(charToRaw("rds"), file.path(package_root, "Meta", "package.rds"))
+  withr::with_dir(package_root, utils::zip(
+    archive, files = c("DESCRIPTION", "Meta/package.rds"), flags = "-q"
+  ))
+  result <- install_local_pkg(
+    archive, lib = file.path(root, "library"),
+    upgrade = "always", verbose = FALSE
+  )
+  expect_match(result$failed[[1L]], "Windows binary ZIP", fixed = TRUE)
 })
 
 test_that("corrupt gzip trailers have a private message and generated parity", {
@@ -223,14 +656,14 @@ test_that("omitted lib has plan, generated, and direct-install parity", {
   for (path in c(source_root, archives, destination, lib1, lib2, explicit)) {
     dir.create(path, recursive = TRUE)
   }
-  archive <- .r077_make_archive(source_root, "r077library")
+  archive <- .r077_make_archive(source_root, "r077libraryparity")
   file.copy(archive, archives, overwrite = TRUE)
   seeded <- install_local_pkg(
     archive, lib = lib2, upgrade = "always", verbose = FALSE
   )
   expect_length(seeded$failed, 0L)
   generated <- round075_create_metapackage(
-    "r077libraryverse", archive, dest_dir = destination,
+    "r077libraryparityverse", archive, dest_dir = destination,
     document = FALSE, verbose = FALSE, import_deps = character(),
     force_deps = character()
   )
@@ -243,7 +676,7 @@ test_that("omitted lib has plan, generated, and direct-install parity", {
   expect_length(direct$unchanged, 1L)
   expect_length(direct$installed, 0L)
 
-  plan <- runtime$r077libraryverse_deps(
+  plan <- runtime$r077libraryparityverse_deps(
     pkg_dir = archives, plan = TRUE, upgrade = "never"
   )
   expect_identical(plan$components$action, "keep")
@@ -253,18 +686,18 @@ test_that("omitted lib has plan, generated, and direct-install parity", {
     normalizePath(lib2, winslash = "/")
   )
 
-  generated_result <- expect_no_warning(runtime$r077libraryverse_install(
+  generated_result <- expect_no_warning(runtime$r077libraryparityverse_install(
     pkg_dir = archives, upgrade = "never", verbose = FALSE
   ))
   expect_length(generated_result$unchanged, 1L)
   expect_length(generated_result$installed, 0L)
-  expect_false(dir.exists(file.path(lib1, "r077library")))
+  expect_false(dir.exists(file.path(lib1, "r077libraryparity")))
 
-  explicit_result <- expect_no_warning(runtime$r077libraryverse_install(
+  explicit_result <- expect_no_warning(runtime$r077libraryparityverse_install(
     pkg_dir = archives, upgrade = "never", lib = explicit, verbose = FALSE
   ))
-  expect_true("r077library_1.0.0" %in% names(explicit_result$installed))
-  expect_true(dir.exists(file.path(explicit, "r077library")))
+  expect_true("r077libraryparity_1.0.0" %in% names(explicit_result$installed))
+  expect_true(dir.exists(file.path(explicit, "r077libraryparity")))
 })
 
 test_that("generated installation attaches retained components from lib2", {

@@ -91,10 +91,28 @@ test_that("reexport active bindings stay lazy and preserve NSE and S3", {
     if ("toyverse" %in% loadedNamespaces()) unloadNamespace("toyverse")
     if ("toya" %in% loadedNamespaces()) unloadNamespace("toya")
   })
-  expect_error(toya_value(1), "Component package 'toya' is not installed")
+  missing_value_error <- expect_error(toya_value(1))
+  expect_match(
+    conditionMessage(missing_value_error),
+    "Component package 'toya' is not installed",
+    fixed = TRUE
+  )
+  expect_false(grepl(
+    "installed version:.*component is not installed",
+    conditionMessage(missing_value_error)
+  ))
   missing_data <- getExportedValue("toyverse", "toya_data")
   expect_true(is.function(missing_data))
-  expect_error(missing_data(), "Component package 'toya' is not installed")
+  missing_data_error <- expect_error(missing_data())
+  expect_match(
+    conditionMessage(missing_data_error),
+    "Component package 'toya' is not installed",
+    fixed = TRUE
+  )
+  expect_false(grepl(
+    "installed version:.*component is not installed",
+    conditionMessage(missing_data_error)
+  ))
 
   toyverse_install(lib = component_library, verbose = FALSE)
   expect_identical(toya_value(1), 2)
@@ -162,11 +180,16 @@ test_that("an installed old component cannot break metapackage installation", {
   expect_no_error(as.list(namespace, all.names = TRUE))
   placeholder <- getExportedValue("staleverse064", "new_value")
   expect_true(is.function(placeholder))
-  expect_error(
-    placeholder(),
-    "stalecomponent064.*0\\.4\\.0|does not export.*new_value|staleverse064_install",
+  placeholder_error <- expect_error(placeholder())
+  expect_match(
+    conditionMessage(placeholder_error),
+    "\\(loaded version: 0\\.4\\.0\\)",
     ignore.case = TRUE
   )
+  expect_false(grepl(
+    "installed version:.*component is not installed",
+    conditionMessage(placeholder_error)
+  ))
 })
 
 test_that("reexport rejects export collisions and own generated symbols", {

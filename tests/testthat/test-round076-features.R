@@ -24,6 +24,29 @@
   archive_path
 }
 
+.r076_toy_archive <- local({
+  cached <- NULL
+  function() {
+    if (is.null(cached)) {
+      source <- system.file(
+        "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
+      )
+      if (!nzchar(source)) {
+        source <- testthat::test_path(
+          "..", "..", "inst", "extdata", "toycomponent_0.1.0.tar.gz"
+        )
+      }
+      cached_path <- file.path(
+        tempfile("bigbang-r076-toy-"), "toycomponent_0.1.0.tar.gz"
+      )
+      dir.create(dirname(cached_path), recursive = TRUE)
+      file.copy(source, cached_path)
+      cached <<- cached_path
+    }
+    cached
+  }
+})
+
 .r076_source_runtime <- function(project) {
   runtime <- new.env(parent = baseenv())
   for (file in list.files(file.path(project, "R"), pattern = "[.]R$",
@@ -79,7 +102,7 @@ test_that("the recipient plan is read-only and agrees with installation", {
   expect_identical(plan$components$action, "skip")
 })
 
-test_that("the plan default follows the generated install upgrade policy", {
+test_that("plan and installer defaults follow the generated upgrade policy", {
   root <- tempfile("bigbang-r076-upgrade-default-")
   archives <- file.path(root, "archives")
   destination <- file.path(root, "destination")
@@ -95,7 +118,7 @@ test_that("the plan default follows the generated install upgrade policy", {
     "upgradepkg", "2.0.0", file.path(archives, "upgradepkg_2.0.0.tar.gz"),
     source_root
   )
-  for (policy in c("newer", "always", "never")) {
+  for (policy in c("always", "never")) {
     name <- paste0("upgrade", policy, "verse")
     generated <- round075_create_metapackage(
       name, archive_new, dest_dir = destination, document = FALSE,
@@ -103,8 +126,18 @@ test_that("the plan default follows the generated install upgrade policy", {
       install_upgrade = policy
     )
     runtime <- .r076_source_runtime(generated$path)
+    generated_text <- paste(
+      unlist(lapply(list.files(file.path(generated$path, "R"),
+                               pattern = "[.]R$", full.names = TRUE),
+                    readLines, warn = FALSE), use.names = FALSE),
+      collapse = "\n"
+    )
+    expect_match(generated_text, paste0('upgrade = "', policy, '"'),
+                 fixed = TRUE)
     lib <- file.path(root, paste0("lib-", policy))
     dir.create(lib)
+    # The same-version case distinguishes always from newer, while the older
+    # installed version distinguishes never from newer.
     seed <- if (identical(policy, "always")) archive_new else archive_old
     install_local_pkg(seed, lib = lib, upgrade = "always", verbose = FALSE)
     plan <- runtime[[paste0(name, "_deps")]](
@@ -233,15 +266,14 @@ test_that("generated installation sees a component in a secondary library", {
 })
 
 test_that("governance is opt-in and update tracks its files", {
+  withr::local_envvar(c(LC_ALL = "", LANG = "C", LANGUAGE = "en"))
+  withr::local_language("en")
   root <- tempfile("bigbang-r076-governance-")
   archives <- file.path(root, "archives")
   destination <- file.path(root, "destination")
   dir.create(archives, recursive = TRUE)
   dir.create(destination)
-  archive <- file.copy(
-    system.file("extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"),
-    archives
-  )
+  archive <- file.copy(.r076_toy_archive(), archives)
   plain <- round075_create_metapackage(
     "plainverse", "toycomponent_0.1.0", pkg_dir = archives,
     dest_dir = destination, document = FALSE, verbose = FALSE,
@@ -310,4 +342,34 @@ test_that("governance is opt-in and update tracks its files", {
     update = TRUE
   )
   expect_true(dir.exists(file.path(user_dirs$path, ".github", "ISSUE_TEMPLATE")))
+
+  governance_root <- file.path(root, "governance-probes")
+  dir.create(governance_root)
+  expect_no_error(bigbang:::.prune_governance_dirs(
+    governance_root, c("missing", "also-missing")
+  ))
+  nonempty <- file.path(governance_root, "nonempty")
+  dir.create(nonempty)
+  writeLines("user-owned", file.path(nonempty, "keep.txt"))
+  expect_no_error(bigbang:::.prune_governance_dirs(governance_root, "nonempty"))
+  expect_true(file.exists(file.path(nonempty, "keep.txt")))
+  if (!nzchar(Sys.readlink(governance_root))) {
+    symlink_target <- file.path(governance_root, "symlink-target")
+    symlink_path <- file.path(governance_root, "symlink-dir")
+    dir.create(symlink_target)
+    if (file.symlink(symlink_target, symlink_path)) {
+      expect_error(
+        bigbang:::.prune_governance_dirs(governance_root, "symlink-dir"),
+        class = "bigbang_error_symlink_generated_path"
+      )
+    }
+  }
+  expect_error(
+    round075_create_metapackage(
+      "invalidgovernanceverse", "toycomponent_0.1.0", pkg_dir = archives,
+      dest_dir = destination, document = FALSE, verbose = FALSE,
+      import_deps = character(), force_deps = character(), governance = "yes"
+    ),
+    regexp = "'governance' must be TRUE or FALSE"
+  )
 })

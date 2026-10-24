@@ -255,8 +255,9 @@ test_that("zlib verifies stored and deflate CRCs without an R CRC pass", {
            crc = 0L)
     )))
     result <- t072e_verdict(reader, archive, ".zip")
-    expect_false(result$ok, info = method)
-    expect_match(result$message, "CRC-32", fixed = TRUE, info = method)
+    expect_false(result$ok, info = as.character(method))
+    expect_match(result$message, "CRC-32", fixed = TRUE,
+                 info = as.character(method))
   }
 })
 

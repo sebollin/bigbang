@@ -19,20 +19,76 @@ round052_make_archive <- function(root, name = "journalcomp") {
   archive
 }
 
+round052_template <- local({
+  template <- NULL
+  function() {
+    if (!is.null(template)) return(template)
+    root <- tempfile("bigbang-round052-template-")
+    destination <- file.path(root, "destination")
+    dir.create(destination, recursive = TRUE)
+    archive <- round052_make_archive(root)
+    initial <- create_metapackage(
+      "journalverse", archive, dest_dir = destination,
+      document = FALSE, verbose = FALSE, import_deps = character(),
+      force_deps = character(), include_archives = TRUE,
+      workflow = c(Stage = "journalcomp")
+    )
+    template <<- list(
+      project = initial$path,
+      archive = archive
+    )
+    template
+  }
+})
+
+round052_document_template <- local({
+  template <- NULL
+  function() {
+    if (!is.null(template)) return(template)
+    root <- tempfile("bigbang-round052-document-template-")
+    destination <- file.path(root, "destination")
+    dir.create(destination, recursive = TRUE)
+    archive <- round052_make_archive(root)
+    initial <- create_metapackage(
+      "journalverse", archive, dest_dir = destination,
+      document = TRUE, verbose = FALSE, import_deps = character(),
+      force_deps = character(), include_archives = TRUE,
+      workflow = c(Stage = "journalcomp")
+    )
+    template <<- list(project = initial$path, archive = archive)
+    template
+  }
+})
+
 round052_fixture <- function(prefix = "bigbang-round052-", document = FALSE,
                              workflow = TRUE, include_archives = TRUE) {
   root <- tempfile(prefix)
   destination <- file.path(root, "destination")
   dir.create(destination, recursive = TRUE)
-  archive <- round052_make_archive(root)
-  initial <- create_metapackage(
-    "journalverse", archive, dest_dir = destination,
-    document = document, verbose = FALSE, import_deps = character(),
-    force_deps = character(), include_archives = include_archives,
-    workflow = if (workflow) c(Stage = "journalcomp") else NULL
-  )
+  if (isTRUE(workflow) && isTRUE(include_archives)) {
+    source <- if (isTRUE(document)) {
+      round052_document_template()
+    } else {
+      round052_template()
+    }
+    project <- file.path(destination, "journalverse")
+    dir.create(file.path(root, "archives"), recursive = TRUE)
+    archive <- file.path(root, "archives", basename(source$archive))
+    file.copy(source$archive, archive, overwrite = TRUE)
+    file.copy(source$project, destination, recursive = TRUE)
+    project <- normalizePath(project, winslash = "/", mustWork = TRUE)
+  } else {
+    archive <- round052_make_archive(root)
+    initial <- create_metapackage(
+      "journalverse", archive, dest_dir = destination,
+      document = document, verbose = FALSE, import_deps = character(),
+      force_deps = character(), include_archives = include_archives,
+      workflow = if (workflow) c(Stage = "journalcomp") else NULL
+    )
+    project <- initial$path
+  }
   list(root = root, destination = destination, archive = archive,
-       project = initial$path)
+       project = project)
 }
 
 round052_snapshot <- function(path) {

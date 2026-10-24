@@ -130,6 +130,11 @@ test_that("direct installation retains the cause and complete log path", {
 
 test_that("external version constraints use every operator and explicit repos", {
   skip_on_cran()
+  # Under R CMD check on Windows, callr's profiles would hijack .libPaths() in
+  # the child installers; see test-group-c-features.R for the full reason.
+  withr::local_envvar(c(
+    R_ENVIRON = "", R_ENVIRON_USER = "", R_PROFILE = "", R_PROFILE_USER = ""
+  ))
   root <- tempfile("bigbang-round074-versions-")
   dir.create(root)
   withr::defer(unlink(root, recursive = TRUE, force = TRUE))

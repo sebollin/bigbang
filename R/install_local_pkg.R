@@ -73,7 +73,9 @@
       .bb_tr("The installation library must be one non-empty path.")
     )
   }
-  if (file.exists(lib) && !dir.exists(lib)) {
+  existing <- sub("[/\\\\]+$", "", lib)
+  if (!nzchar(existing)) existing <- "/"
+  if (file.exists(existing) && !dir.exists(existing)) {
     .bigbang_abort(
       "bigbang_error_install_policy",
       .bb_trf("Could not create installation library: %s", lib)
@@ -522,10 +524,18 @@ install_local_pkg <- function(
     .archive_warning_state$active <- FALSE
     .archive_warning_state$seen <- character()
   }, add = TRUE)
+  source_build_context <- .source_build_context_new()
+  on.exit(.source_build_context_close(source_build_context), add = TRUE)
   lib_was_missing <- missing(lib)
   cran_deps <- match.arg(cran_deps)
   upgrade <- .resolve_upgrade_policy(force, upgrade, missing(upgrade))
   .validate_install_library(lib)
+  if (!dir.exists(lib) && !.install_library_creatable(lib)) {
+    .bigbang_abort(
+      "bigbang_error_install_policy",
+      .bb_trf("Could not create installation library: %s", lib)
+    )
+  }
   if (!dir.exists(lib) && !dir.create(lib, recursive = TRUE,
                                       showWarnings = FALSE)) {
     .bigbang_abort(
@@ -560,7 +570,9 @@ install_local_pkg <- function(
     ))
   }
   candidate <- tryCatch({
-    path <- .resolve_archive_input(package, pkg_dir, ext)
+    path <- .resolve_archive_input(
+      package, pkg_dir, ext, build_context = source_build_context
+    )
     actual_ext <- .archive_extension(path)
     list(
       path = path,
@@ -629,7 +641,9 @@ install_local_pkg <- function(
   }
 
   resolved <- tryCatch(
-    .resolve_components(package, pkg_dir, ext),
+    .resolve_components(
+      package, pkg_dir, ext, build_context = source_build_context
+    ),
     error = function(error) error
   )
   if (inherits(resolved, "error")) {

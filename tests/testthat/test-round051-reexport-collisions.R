@@ -139,6 +139,11 @@ test_that("round 051 requires an explicit choice for every collision", {
 
 test_that("re-export verification does not occupy a conflict symbol slot", {
   skip_on_cran()
+  # Under R CMD check on Windows, callr's profiles would hijack .libPaths() in
+  # the child installers; see test-group-c-features.R for the full reason.
+  withr::local_envvar(c(
+    R_ENVIRON = "", R_ENVIRON_USER = "", R_PROFILE = "", R_PROFILE_USER = ""
+  ))
   sandbox <- tempfile("bigbang-round062-conflict-slot-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -678,6 +683,11 @@ test_that("round 053 labels every measured static-analysis escape as undetermine
 
 test_that("round 051 prefers a non-syntactic export and installs its binding", {
   testthat::skip_on_cran()
+  # Under R CMD check on Windows, callr's profiles would hijack .libPaths() in
+  # the child installers; see test-group-c-features.R for the full reason.
+  withr::local_envvar(c(
+    R_ENVIRON = "", R_ENVIRON_USER = "", R_PROFILE = "", R_PROFILE_USER = ""
+  ))
   sandbox <- tempfile("bigbang-round051-install-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -746,6 +756,11 @@ test_that("round 051 prefers a non-syntactic export and installs its binding", {
 
 test_that("round 053 verifies probable choices after install and keeps the binding", {
   testthat::skip_on_cran()
+  # Under R CMD check on Windows, callr's profiles would hijack .libPaths() in
+  # the child installers; see test-group-c-features.R for the full reason.
+  withr::local_envvar(c(
+    R_ENVIRON = "", R_ENVIRON_USER = "", R_PROFILE = "", R_PROFILE_USER = ""
+  ))
   sandbox <- tempfile("bigbang-round053-verify-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -864,6 +879,11 @@ test_that("round 053 verifies probable choices after install and keeps the bindi
 
 test_that("clean re-export verification follows the runtime library order", {
   testthat::skip_on_cran()
+  # Under R CMD check on Windows, callr's profiles would hijack .libPaths() in
+  # the child installers; see test-group-c-features.R for the full reason.
+  withr::local_envvar(c(
+    R_ENVIRON = "", R_ENVIRON_USER = "", R_PROFILE = "", R_PROFILE_USER = ""
+  ))
   sandbox <- tempfile("bigbang-round063-second-library-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -932,6 +952,11 @@ test_that("clean re-export verification follows the runtime library order", {
 
 test_that("round 055 verification warns when an installed owner lost its export", {
   skip_on_cran()
+  # Under R CMD check on Windows, callr's profiles would hijack .libPaths() in
+  # the child installers; see test-group-c-features.R for the full reason.
+  withr::local_envvar(c(
+    R_ENVIRON = "", R_ENVIRON_USER = "", R_PROFILE = "", R_PROFILE_USER = ""
+  ))
   sandbox <- tempfile("bigbang-round055-missing-export-")
   source_root <- file.path(sandbox, "sources")
   bad_source_root <- file.path(sandbox, "bad-sources")
@@ -1014,6 +1039,11 @@ test_that("round 055 verification warns when an installed owner lost its export"
 
 test_that("round 055 names equivalent copies separately from distinct objects", {
   skip_on_cran()
+  # Under R CMD check on Windows, callr's profiles would hijack .libPaths() in
+  # the child installers; see test-group-c-features.R for the full reason.
+  withr::local_envvar(c(
+    R_ENVIRON = "", R_ENVIRON_USER = "", R_PROFILE = "", R_PROFILE_USER = ""
+  ))
   sandbox <- tempfile("bigbang-round055-equivalent-copies-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -1090,6 +1120,11 @@ test_that("round 055 names equivalent copies separately from distinct objects", 
 
 test_that("round 053 poison component cannot mask generated runtime calls", {
   testthat::skip_on_cran()
+  # Under R CMD check on Windows, callr's profiles would hijack .libPaths() in
+  # the child installers; see test-group-c-features.R for the full reason.
+  withr::local_envvar(c(
+    R_ENVIRON = "", R_ENVIRON_USER = "", R_PROFILE = "", R_PROFILE_USER = ""
+  ))
   sandbox <- tempfile("bigbang-round053-poison-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")

@@ -35,7 +35,7 @@
     ".archive_state_add_member",
     ".archive_state_members", ".archive_state_lengths",
     ".archive_state_display", ".archive_state_add_directory",
-    ".archive_warning", ".archive_state_warn",
+    ".archive_warning", ".archive_warning_entries", ".archive_state_warn",
     ".archive_state_relaxed_names",
     ".archive_read_exact",
     ".archive_discard", ".archive_raw_text", ".archive_cstring",
@@ -156,7 +156,7 @@ external_dependency_action <- function(status, cran_deps, repos) {{
   ) "fail" else "install_unverified"
 }}
 
-validate_install_library <- function(lib) {{
+validate_install_library <- function(lib, allow_uncreatable = FALSE) {{
   if (!base::is.character(lib) || base::length(lib) != 1L ||
       base::is.na(lib) || !base::nzchar(lib)) {{
     .bigbang_abort(
@@ -164,13 +164,69 @@ validate_install_library <- function(lib) {{
       .meta_tr("The installation library must be one non-empty path.")
     )
   }}
-  if (base::file.exists(lib) && !base::dir.exists(lib)) {{
+  existing <- base::sub("[/\\\\]+$", "", lib)
+  if (!base::nzchar(existing)) existing <- "/"
+  if (base::file.exists(existing) && !base::dir.exists(existing)) {{
     .bigbang_abort(
       "bigbang_error_install_policy",
       .meta_trf("Could not create installation library: %s", lib)
     )
   }}
   base::invisible(lib)
+}}
+
+installation_library_ancestor <- function(lib) {{
+  candidate <- base::normalizePath(lib, winslash = "/", mustWork = FALSE)
+  candidate <- base::sub("[/\\\\]+$", "", candidate)
+  if (!base::nzchar(candidate)) candidate <- "/"
+  if (base::grepl("^[A-Za-z]:$", candidate)) candidate <- base::paste0(candidate, "/")
+  repeat {{
+    if (base::file.exists(candidate) || base::dir.exists(candidate) ||
+        base::isTRUE(.path_is_symlink(candidate))) break
+    parent <- base::dirname(candidate)
+    if (base::identical(parent, candidate)) break
+    candidate <- parent
+  }}
+  candidate
+}}
+
+install_library_creatable <- function(lib) {{
+  ancestor <- installation_library_ancestor(lib)
+  base::dir.exists(ancestor) && base::file.access(ancestor, 3L) == 0L
+}}
+
+warn_uncreatable_install_library <- function(lib, writes = TRUE) {{
+  if (!base::isTRUE(writes) && base::dir.exists(lib)) {{
+    return(base::invisible(NULL))
+  }}
+  if (base::dir.exists(lib) && base::file.access(lib, 3L) != 0L) {{
+    reason <- "not_writable"
+    message <- .meta_trf(
+      "The planned installation library exists but is not writable: %s.",
+      lib
+    )
+    ancestor <- lib
+  }} else {{
+    if (install_library_creatable(lib)) return(base::invisible(NULL))
+    reason <- "not_creatable"
+    ancestor <- installation_library_ancestor(lib)
+    message <- .meta_trf(
+      "The planned installation library cannot be created: %s (the first existing ancestor is not a writable directory: %s).",
+      lib, ancestor
+    )
+  }}
+  condition <- base::structure(
+    base::list(
+      message = message,
+      call = NULL,
+      lib = lib,
+      ancestor = ancestor,
+      reason = reason
+    ),
+    class = c("bigbang_warning_install_library", "warning", "condition")
+  )
+  base::warning(condition)
+  base::invisible(NULL)
 }}
 
 with_install_library_path <- function(libraries, code) {{
@@ -1674,7 +1730,7 @@ print.bigbang_dependency_plan <- function(x, ...) {{
   }}
   upgrade <- resolve_upgrade_policy(force, upgrade, base::missing(upgrade))
   cran_deps <- base::match.arg(cran_deps)
-  validate_install_library(lib)
+  validate_install_library(lib, allow_uncreatable = TRUE)
   libraries <- base::unique(base::c(lib, base::.libPaths()))
   component_libraries <- if (base::isTRUE(lib_was_missing)) libraries else lib
   cache <- .archive_cache_new()
@@ -1808,6 +1864,9 @@ print.bigbang_dependency_plan <- function(x, ...) {{
     cran_deps = cran_deps,
     repositories_configured = repositories_configured(repos),
     libraries = libraries
+  )
+  warn_uncreatable_install_library(
+    lib, writes = base::any(result$components$action == "install")
   )
   base::class(result) <- "bigbang_dependency_plan"
   result
@@ -2972,6 +3031,13 @@ zzz = '
         "  .meta_trf('installed version: %s', installed)",
         "}",
         "",
+        ".reexport_unavailable_message <- function(package, symbol, reason, libraries) {",
+        "  installed <- .reexport_installed_version(package, libraries)",
+        "  if (base::identical(installed, .meta_tr('component is not installed'))) return(.meta_trf(\"Re-exported symbol '%s' from component package '%s' is unavailable: %s. Run %s to install the required component version.\", symbol, package, reason, \"{{ name }}_install()\"))",
+        "  version <- .reexport_version_text(package, libraries)",
+        "  .meta_trf(\"Re-exported symbol '%s' from component package '%s' (%s) is unavailable: %s. Run %s to install the required component version.\", symbol, package, version, reason, \"{{ name }}_install()\")",
+        "}",
+        "",
         ".reexport_component_value <- function(package, symbol) {",
         "  libraries <- .reexport_library_paths()",
         "  target <- base::find.package(package, lib.loc = libraries, quiet = TRUE)",
@@ -2982,13 +3048,13 @@ zzz = '
         "  }",
         "  if (base::inherits(loaded, 'error') || base::is.character(loaded)) {",
         "    reason <- if (base::inherits(loaded, 'error')) .meta_trf('component could not be loaded: %s', base::conditionMessage(loaded)) else .meta_trf(\"Component package '%s' is not installed\", package)",
-        "    message <- .meta_trf(\"Re-exported symbol '%s' from component package '%s' (%s) is unavailable: %s. Run %s to install the required component version.\", symbol, package, .reexport_version_text(package, libraries), reason, \"{{ name }}_install()\")",
+        "    message <- .reexport_unavailable_message(package, symbol, reason, libraries)",
         "    return(function(...) base::stop(message, call. = FALSE))",
         "  }",
         "  value <- base::tryCatch(base::getExportedValue(package, symbol), error = base::identity)",
         "  if (base::inherits(value, 'error')) {",
         "    reason <- .meta_trf(\"component does not export '%s': %s\", symbol, base::conditionMessage(value))",
-        "    message <- .meta_trf(\"Re-exported symbol '%s' from component package '%s' (%s) is unavailable: %s. Run %s to install the required component version.\", symbol, package, .reexport_version_text(package, libraries), reason, \"{{ name }}_install()\")",
+        "    message <- .reexport_unavailable_message(package, symbol, reason, libraries)",
         "    return(function(...) base::stop(message, call. = FALSE))",
         "  }",
         "  value",

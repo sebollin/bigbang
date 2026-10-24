@@ -944,7 +944,7 @@ test_that("diagnose_dependencies refuses an archive carrying symbolic links", {
   suppressWarnings(utils::untar(archive, exdir = extracted))
   probe <- file.path(extracted, "spy", "R", "f.R")
   skip_if_not(
-    nzchar(Sys.readlink(probe)),
+    bigbang:::.path_is_symlink(probe),
     "This platform did not restore the member as a symbolic link."
   )
 
