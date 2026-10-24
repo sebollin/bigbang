@@ -357,11 +357,25 @@ test_that("governance is opt-in and update tracks its files", {
     symlink_target <- file.path(governance_root, "symlink-target")
     symlink_path <- file.path(governance_root, "symlink-dir")
     dir.create(symlink_target)
-    if (file.symlink(symlink_target, symlink_path)) {
+    can_make_link <- !identical(.Platform$OS.type, "windows") ||
+      exists("Sys.junction", mode = "function")
+    made_link <- can_make_link && bb_dir_link(symlink_target, symlink_path)
+    cleanup_link <- function() {
+      if (file.exists(symlink_path) || dir.exists(symlink_path) ||
+            bigbang:::.path_is_symlink(symlink_path)) {
+        suppressWarnings(unlink(symlink_path, recursive = FALSE, force = TRUE))
+      }
+      invisible(NULL)
+    }
+    if (made_link) {
+      withr::defer(cleanup_link())
       expect_error(
         bigbang:::.prune_governance_dirs(governance_root, "symlink-dir"),
         class = "bigbang_error_symlink_generated_path"
       )
+      cleanup_link()
+      expect_false(file.exists(symlink_path) || dir.exists(symlink_path) ||
+                     bigbang:::.path_is_symlink(symlink_path))
     }
   }
   expect_error(

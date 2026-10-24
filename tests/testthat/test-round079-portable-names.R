@@ -1343,6 +1343,9 @@ test_that("archive rejection families preserve their specific diagnostics", {
   expect_error(crc$write(r079_raw("x")),
                class = "bigbang_archive_parse_error")
   crc_missing <- bigbang:::.archive_crc32_sink()
+  try(suppressWarnings(close(environment(crc_missing$write)$stream)),
+      silent = TRUE)
+  environment(crc_missing$finish)$state$closed <- TRUE
   unlink(crc_missing$path, force = TRUE)
   expect_error(crc_missing$finish(), class = "bigbang_archive_parse_error")
 

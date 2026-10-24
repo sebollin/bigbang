@@ -24,6 +24,9 @@
 - The warning about archive names that only pass with
   `bigbang.archive.portable_names = FALSE` lists the first three names and how
   many more there are.
+- On Windows, the excerpts of `R CMD INSTALL` errors that `install_local_pkg()`
+  and generated installers show no longer end each line with a stray carriage
+  return.
 - When a component is given as a source directory, `diagnose_dependencies()`,
   `install_local_pkg()` and `create_metapackage()` build it once per call and
   remove their temporary build directories when they finish, also after an

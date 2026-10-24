@@ -208,11 +208,32 @@ test_that("local installer policy and diagnostics cover their defensive branches
 
   empty_log <- tempfile("round080b-empty-install-log-")
   file.create(empty_log)
+  withr::defer(unlink(empty_log, force = TRUE))
   expect_identical(bigbang:::.read_install_log(empty_log), character())
   writeBin(as.raw(c(0L, 0L)), empty_log)
   expect_identical(bigbang:::.read_install_log(empty_log), character())
-  writeLines(c("first", "second"), empty_log, useBytes = TRUE)
-  expect_identical(bigbang:::.read_install_log(empty_log), c("first", "second"))
+  crlf <- as.raw(c(
+    charToRaw("first"), 13L, 10L, charToRaw("second"), 13L, 10L
+  ))
+  writeBin(crlf, empty_log)
+  expected_log <- c("first", "second")
+  expect_identical(bigbang:::.read_install_log(empty_log), expected_log)
+  generated_destination <- tempfile("round080f-generated-log-")
+  dir.create(generated_destination)
+  withr::defer(unlink(generated_destination, recursive = TRUE, force = TRUE))
+  toy <- system.file("extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang")
+  generated <- round075_create_metapackage(
+    "round080flogverse", toy, dest_dir = generated_destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character()
+  )
+  generated_runtime <- new.env(parent = baseenv())
+  for (file in list.files(file.path(generated$path, "R"), full.names = TRUE)) {
+    sys.source(file, generated_runtime)
+  }
+  expect_identical(
+    generated_runtime$.read_install_log(empty_log), expected_log
+  )
   unlink(empty_log)
   expect_identical(bigbang:::.read_install_log(empty_log), character())
 

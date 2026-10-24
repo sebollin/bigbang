@@ -301,7 +301,8 @@ install_external_dependency <- function(dependency, libraries, lib, repos,
   )
   if (base::length(text) == 0L || !base::nzchar(text)) return(base::character())
   if (base::endsWith(text, "\n")) text <- base::substr(text, 1L, base::nchar(text) - 1L)
-  base::strsplit(text, "\n", fixed = TRUE)[[1L]]
+  lines <- base::strsplit(text, "\n", fixed = TRUE)[[1L]]
+  base::sub("\\r$", "", lines)
 }}
 
 installation_error_excerpt <- function(output, max_lines = 18L,

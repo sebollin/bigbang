@@ -164,7 +164,8 @@
   )
   if (length(text) == 0L || !nzchar(text)) return(character())
   if (endsWith(text, "\n")) text <- substr(text, 1L, nchar(text) - 1L)
-  strsplit(text, "\n", fixed = TRUE)[[1L]]
+  lines <- strsplit(text, "\n", fixed = TRUE)[[1L]]
+  sub("\r$", "", lines)
 }
 
 .installation_error_excerpt <- function(output, max_lines = 18L,
