@@ -519,10 +519,12 @@ install_local_pkg <- function(
 ) {
   .archive_portable_names()
   .archive_warning_state$seen <- character()
+  .archive_warning_state$inventory_seen <- character()
   .archive_warning_state$active <- TRUE
   on.exit({
     .archive_warning_state$active <- FALSE
     .archive_warning_state$seen <- character()
+    .archive_warning_state$inventory_seen <- character()
   }, add = TRUE)
   source_build_context <- .source_build_context_new()
   on.exit(.source_build_context_close(source_build_context), add = TRUE)

@@ -44,6 +44,32 @@
 .archive_warning_state <- new.env(parent = emptyenv())
 .archive_warning_state$active <- FALSE
 .archive_warning_state$seen <- character()
+.archive_warning_state$inventory_seen <- character()
+
+.archive_warning_state_enter <- function() {
+  token <- list(
+    active = isTRUE(.archive_warning_state$active),
+    seen = .archive_warning_state$seen,
+    inventory_seen = .archive_warning_state$inventory_seen
+  )
+  if (!token$active) {
+    .archive_warning_state$active <- TRUE
+    .archive_warning_state$seen <- character()
+    .archive_warning_state$inventory_seen <- character()
+  } else if (is.null(.archive_warning_state$inventory_seen)) {
+    .archive_warning_state$inventory_seen <- character()
+  }
+  token
+}
+
+.archive_warning_state_exit <- function(token) {
+  if (!isTRUE(token$active)) {
+    .archive_warning_state$active <- token$active
+    .archive_warning_state$seen <- token$seen
+    .archive_warning_state$inventory_seen <- token$inventory_seen
+  }
+  invisible(NULL)
+}
 
 .archive_name_error <- function(name, reason, other = NULL) {
   if (identical(reason, "case")) {

@@ -467,6 +467,15 @@ test_that("inventory warnings survive successful reads in every public lookup", 
     )
   }
 
+  metadata <- capture(bigbang:::extract_dependencies(
+    child, pkg_dir = archives
+  ))
+  expect_nonportable(metadata)
+  identity <- capture(bigbang:::.archives_for_package_identity(
+    "r080dnonportable", archives
+  ))
+  expect_nonportable(identity)
+
   direct <- capture(install_local_pkg(
     child, pkg_dir = archives, lib = file.path(root, "direct"),
     verbose = FALSE, upgrade = "always"
@@ -484,11 +493,17 @@ test_that("inventory warnings survive successful reads in every public lookup", 
   expect_nonportable(by_name)
 
   inventory <- capture(bigbang:::.archive_inventory(archives))
-  expect_true(length(inventory$warnings) >= 1L)
-  expect_true(all(vapply(
-    inventory$warnings, inherits, logical(1L),
-    what = "bigbang_warning_archive_nonportable_name"
-  )))
+  expect_nonportable(inventory)
+  diagnosed <- capture(diagnose_dependencies(
+    "r080dnonportable", pkg_dir = archives
+  ))
+  expect_nonportable(diagnosed)
+  generated <- capture(create_metapackage(
+    "r080dnonportableverse", "r080dnonportable", pkg_dir = archives,
+    dest_dir = file.path(root, "generated"), document = FALSE, verbose = FALSE,
+    import_deps = character(), force_deps = character()
+  ))
+  expect_nonportable(generated)
 })
 
 test_that("unreadable archive inventory emits one typed warning", {
@@ -506,20 +521,47 @@ test_that("unreadable archive inventory emits one typed warning", {
   valid <- .r077_make_archive(source_root, "r080cvalid")
   unreadable <- file.path(root, "unreadable_1.0.0.tar.gz")
   file.copy(valid, unreadable)
+  file.copy(valid, root)
   Sys.chmod(unreadable, "0000")
-  condition <- NULL
-  withCallingHandlers(
+  capture <- function(expr) {
+    warnings <- list()
+    value <- withCallingHandlers(
+      force(expr),
+      warning = function(condition) {
+        warnings[[length(warnings) + 1L]] <<- condition
+        invokeRestart("muffleWarning")
+      }
+    )
+    list(value = value, warnings = warnings)
+  }
+  expect_inventory_warning <- function(result) {
+    expect_length(result$warnings, 1L)
+    expect_s3_class(
+      result$warnings[[1L]], "bigbang_warning_archive_inventory"
+    )
+    expect_match(
+      result$warnings[[1L]]$reason,
+      "cannot open file|Permission denied", ignore.case = TRUE
+    )
+  }
+  expect_inventory_warning(capture(
     install_local_pkg(valid, pkg_dir = root, lib = file.path(root, "lib"),
-                      verbose = FALSE),
-    warning = function(item) {
-      expect_null(condition)
-      condition <<- item
-      invokeRestart("muffleWarning")
-    }
-  )
-  expect_s3_class(condition, "bigbang_warning_archive_inventory")
-  expect_match(condition$reason,
-               "cannot open file|Permission denied", ignore.case = TRUE)
+                      verbose = FALSE)
+  ))
+  expect_inventory_warning(capture(
+    install_local_pkg("r080cvalid", pkg_dir = root,
+                      lib = file.path(root, "by-name-lib"), verbose = FALSE)
+  ))
+  expect_inventory_warning(capture(
+    diagnose_dependencies("r080cvalid", pkg_dir = root)
+  ))
+  expect_inventory_warning(capture(
+    create_metapackage(
+      "r080cvalidverse", "r080cvalid", pkg_dir = root,
+      dest_dir = file.path(root, "generated"), document = FALSE,
+      verbose = FALSE, import_deps = character(), force_deps = character()
+    )
+  ))
 })
 
 test_that("local installer reports circular archive dependencies", {

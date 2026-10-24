@@ -754,6 +754,15 @@ resolve_component_archive <- function(package, pkg_dir, ext = NULL) {{
 #\' @return A list with declared package metadata and dependencies.
 #\' @keywords internal
 read_archive_metadata <- function(package, pkg_dir, ext = NULL, cache = NULL) {{
+  warning_state_was_active <- base::isTRUE(.archive_warning_state$active)
+  if (!warning_state_was_active) {{
+    .archive_warning_state$active <- TRUE
+    .archive_warning_state$seen <- base::character()
+  }}
+  base::on.exit(if (!warning_state_was_active) {{
+    .archive_warning_state$active <- FALSE
+    .archive_warning_state$seen <- base::character()
+  }}, add = TRUE)
   resolved <- resolve_component_archive(package, pkg_dir, ext)
   archive <- resolved$path
   ext <- resolved$ext

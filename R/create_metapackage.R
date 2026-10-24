@@ -978,10 +978,12 @@ create_metapackage <- function(
 ) {
   .archive_portable_names()
   .archive_warning_state$seen <- character()
+  .archive_warning_state$inventory_seen <- character()
   .archive_warning_state$active <- TRUE
   on.exit({
     .archive_warning_state$active <- FALSE
     .archive_warning_state$seen <- character()
+    .archive_warning_state$inventory_seen <- character()
   }, add = TRUE)
   archive_cache <- .archive_cache_new()
   on.exit(.archive_cache_close(archive_cache), add = TRUE)

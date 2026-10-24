@@ -18,7 +18,9 @@
 - The warning `install_local_pkg()` gives for an archive in `pkg_dir` that it
   cannot read now has the class `bigbang_warning_archive_inventory`. An archive
   that cannot even be opened gives that single warning, with the reason,
-  instead of an extra warning from R.
+  instead of an extra warning from R. Each archive is reported once per call,
+  even when a package is requested by name and `pkg_dir` is searched more than
+  once; it used to be reported up to three times.
 - The warning about archive names that only pass with
   `bigbang.archive.portable_names = FALSE` lists the first three names and how
   many more there are.

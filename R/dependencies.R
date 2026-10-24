@@ -300,6 +300,8 @@
 }
 
 .archives_for_package_identity <- function(package, dirs, cache = NULL) {
+  warning_state <- .archive_warning_state_enter()
+  on.exit(.archive_warning_state_exit(warning_state), add = TRUE)
   archives <- unique(unlist(lapply(dirs, function(dir) {
     files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
     files <- files[file.exists(files) & !dir.exists(files)]
@@ -328,6 +330,16 @@
 }
 
 .archive_inventory_warning <- function(archive, reason) {
+  key <- paste(
+    normalizePath(archive, winslash = "/", mustWork = FALSE), reason,
+    sep = "\n"
+  )
+  if (key %in% .archive_warning_state$inventory_seen) {
+    return(invisible(NULL))
+  }
+  .archive_warning_state$inventory_seen <- c(
+    .archive_warning_state$inventory_seen, key
+  )
   condition <- structure(
     list(
       message = .bb_trf(
@@ -595,6 +607,8 @@
                                    include_exports = FALSE,
                                    include_reexport_evidence = include_exports,
                                    cache = NULL, build_context = NULL) {
+  warning_state <- .archive_warning_state_enter()
+  on.exit(.archive_warning_state_exit(warning_state), add = TRUE)
   archive <- if (file.exists(package) && !dir.exists(package)) {
     normalizePath(package, winslash = "/", mustWork = TRUE)
   } else {
@@ -771,6 +785,8 @@
 # validation: an archive can expose Package and Version while still being
 # rejected for another invariant (for example, multiple package roots).
 .read_archive_identity <- function(archive, ext, cache = NULL) {
+  warning_state <- .archive_warning_state_enter()
+  on.exit(.archive_warning_state_exit(warning_state), add = TRUE)
   if (is.null(cache)) {
     temp_dir <- tempfile("bigbang-identity-")
     if (!dir.create(temp_dir)) {
@@ -2210,6 +2226,8 @@
 }
 
 .archive_inventory <- function(pkg_dir, ext = NULL, known = list(), cache = NULL) {
+  warning_state <- .archive_warning_state_enter()
+  on.exit(.archive_warning_state_exit(warning_state), add = TRUE)
   dirs <- .normalize_archive_dirs(pkg_dir)
   paths <- unique(unlist(lapply(dirs, function(dir) {
     files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
@@ -3237,6 +3255,8 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
 #' @return A character vector of dependency names declared in DESCRIPTION.
 #' @noRd
 extract_dependencies <- function(package, pkg_dir = NULL, ext = ".tar.gz") {
+  warning_state <- .archive_warning_state_enter()
+  on.exit(.archive_warning_state_exit(warning_state), add = TRUE)
   .read_archive_metadata(package, pkg_dir, ext)$dependencies
 }
 
@@ -3295,6 +3315,8 @@ extract_dependencies <- function(package, pkg_dir = NULL, ext = ".tar.gz") {
 #' lapply(res, function(x) x$matrix_refs)
 #' @export
 diagnose_dependencies <- function(packages, pkg_dir = NULL, ext = ".tar.gz") {
+  warning_state <- .archive_warning_state_enter()
+  on.exit(.archive_warning_state_exit(warning_state), add = TRUE)
   archive_cache <- .archive_cache_new()
   on.exit(.archive_cache_close(archive_cache), add = TRUE)
   source_build_context <- .source_build_context_new()
