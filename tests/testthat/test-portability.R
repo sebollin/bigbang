@@ -22,6 +22,7 @@ make_portability_package <- function(name, root, imports = NULL) {
 }
 
 test_that("all generated text files are valid UTF-8 in the C locale", {
+  skip_on_cran()
   skip_if_not_installed("brio")
   skip_if_not_installed("whisker")
   skip_if_not_installed("withr")

@@ -57,6 +57,7 @@
 }
 
 test_that("the recipient plan is read-only and agrees with installation", {
+  skip_on_cran()
   root <- tempfile("bigbang-r076-plan-")
   archives <- file.path(root, "archives")
   destination <- file.path(root, "destination")
@@ -103,6 +104,7 @@ test_that("the recipient plan is read-only and agrees with installation", {
 })
 
 test_that("plan and installer defaults follow the generated upgrade policy", {
+  skip_on_cran()
   root <- tempfile("bigbang-r076-upgrade-default-")
   archives <- file.path(root, "archives")
   destination <- file.path(root, "destination")
@@ -159,6 +161,7 @@ test_that("plan and installer defaults follow the generated upgrade policy", {
 })
 
 test_that("matching archive identity is silent in both installers", {
+  skip_on_cran()
   root <- tempfile("bigbang-r076-identity-")
   archives <- file.path(root, "archives")
   destination <- file.path(root, "destination")
@@ -201,6 +204,7 @@ test_that("matching archive identity is silent in both installers", {
 })
 
 test_that("the plan reports repository availability like its external action", {
+  skip_on_cran()
   root <- tempfile("bigbang-r076-repositories-")
   archives <- file.path(root, "archives")
   destination <- file.path(root, "destination")
@@ -234,6 +238,7 @@ test_that("the plan reports repository availability like its external action", {
 })
 
 test_that("generated installation sees a component in a secondary library", {
+  skip_on_cran()
   root <- tempfile("bigbang-r076-secondary-")
   archives <- file.path(root, "archives")
   destination <- file.path(root, "destination")
@@ -266,6 +271,7 @@ test_that("generated installation sees a component in a secondary library", {
 })
 
 test_that("governance is opt-in and update tracks its files", {
+  skip_on_cran()
   withr::local_envvar(c(LC_ALL = "", LANG = "C", LANGUAGE = "en"))
   withr::local_language("en")
   root <- tempfile("bigbang-r076-governance-")

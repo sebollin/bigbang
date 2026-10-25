@@ -99,6 +99,7 @@ generate_in_sandbox <- function() {
 }
 
 test_that("metapackage generation preserves every cwd directory", {
+  skip_on_cran()
   s <- generate_in_sandbox()
   files <- file.path(s$cwd, s$decoys, "x.txt")
   files[match(c("aaa", "bbb"), s$decoys)] <- c(
@@ -244,6 +245,7 @@ test_that("R CMD INSTALL preserves decoys inside the source tree", {
 })
 
 test_that("a vulnerable legacy source is rejected without changing files", {
+  skip_on_cran()
   s <- generate_in_sandbox()
   legacy_dir <- file.path(dirname(s$project), "legacy")
   dir.create(file.path(legacy_dir, "testverse", "R"), recursive = TRUE)
@@ -274,6 +276,7 @@ test_that("a vulnerable legacy source is rejected without changing files", {
 })
 
 test_that("dependency graph detects cycles without installing", {
+  skip_on_cran()
   s <- make_functional_sandbox()
   sources <- file.path(s$sandbox, "cycle-sources")
   cycle_archives <- file.path(s$sandbox, "cycle-archives")
@@ -306,6 +309,7 @@ test_that("dependency graph detects cycles without installing", {
 })
 
 test_that("_install turns engine failures into a visible error", {
+  skip_on_cran()
   s <- make_functional_sandbox()
   env <- new.env(parent = baseenv())
   sys.source(file.path(s$project, "R", "utils.R"), envir = env)
@@ -323,6 +327,7 @@ test_that("_install turns engine failures into a visible error", {
 })
 
 test_that("generated metapackage contains no cleanup scripts", {
+  skip_on_cran()
   s <- generate_in_sandbox()
   expect_false(file.exists(file.path(s$project, "cleanup")))
   expect_false(file.exists(file.path(s$project, "cleanup.win")))

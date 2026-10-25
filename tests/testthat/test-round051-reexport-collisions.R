@@ -71,6 +71,7 @@ round051_collision_condition <- function(expr) {
 }
 
 test_that("round 051 requires an explicit choice for every collision", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-round051-origins-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -623,6 +624,7 @@ test_that("round 053 covers the remaining evidence and proof branches", {
 })
 
 test_that("round 053 labels every measured static-analysis escape as undetermined", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-round053-vectors-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")
@@ -1359,6 +1361,7 @@ test_that("generated call qualification respects parse tokens", {
 })
 
 test_that("control-byte re-export suggestions round-trip as R literals", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-round055-control-literal-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")

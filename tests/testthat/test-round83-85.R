@@ -33,6 +33,7 @@ round83_generate <- function(name, archive_dir, destination) {
 }
 
 test_that("update rejects a symlink in a generated manifest file", {
+  skip_on_cran()
   skip_on_os("windows")
   root <- tempfile("bigbang-round83-file-link-")
   archives <- file.path(root, "archives")
@@ -64,6 +65,7 @@ test_that("update rejects a symlink in a generated manifest file", {
 })
 
 test_that("update rejects a symlink in a generated path component", {
+  skip_on_cran()
   skip_on_os("windows")
   root <- tempfile("bigbang-round83-dir-link-")
   archives <- file.path(root, "archives")
@@ -183,6 +185,7 @@ test_that("manifests accept an absolute source directory", {
 })
 
 test_that("source component builds are reused and cleaned per public operation", {
+  skip_on_cran()
   skip_if_not_installed("pkgbuild")
   root <- tempfile("bigbang-round80d-source-build-")
   source_dir <- file.path(root, "sourcecomponent")
@@ -241,6 +244,7 @@ test_that("source component builds are reused and cleaned per public operation",
 })
 
 test_that("skip propagation uses declared identity when it is readable", {
+  skip_on_cran()
   root <- tempfile("bigbang-round85-identity-")
   archive_dir <- file.path(root, "archives")
   source_root <- file.path(root, "sources")

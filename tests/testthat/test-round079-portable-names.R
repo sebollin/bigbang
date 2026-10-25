@@ -483,6 +483,7 @@ test_that("portable_names works end to end for a generated Linux metapackage", {
 })
 
 test_that("case-only names install locally and through generated runtime", {
+  skip_on_cran()
   skip_on_os("windows")
   root <- tempfile("round079-case-e2e-")
   dir.create(root)

@@ -227,6 +227,7 @@ test_that("external version constraints use every operator and explicit repos", 
 })
 
 test_that("external dependency installation retries from source in both runtimes", {
+  skip_on_cran()
   requirements <- stats::setNames(list(list()), "fakeexternal074")
   libraries <- character()
   lib <- tempfile("round074-retry-lib-")

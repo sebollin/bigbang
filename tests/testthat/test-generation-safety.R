@@ -102,6 +102,7 @@ test_that("default implicit scanning reports guesses without binding them", {
 })
 
 test_that("dependency constraints are validated and R requirements propagate", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-constraints-")
   source_root <- file.path(sandbox, "sources")
   low_archives <- file.path(sandbox, "low")
@@ -837,6 +838,7 @@ test_that("already installed messages report the installed version", {
 })
 
 test_that("reexport FALSE keeps the attach-only generation path", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-reexport-")
   archives <- file.path(sandbox, "archives")
   destination <- file.path(sandbox, "destination")

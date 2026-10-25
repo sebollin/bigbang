@@ -35,8 +35,11 @@
 ## Tests
 
 - The tests cover more of the archive reader's rejections (PAX, CRC, ZIP and
-  tar layout, limits) and of the installation diagnostics, and they run faster
-  under CRAN settings.
+  tar layout, limits) and of the installation diagnostics.
+- Under CRAN settings, the tests run fast unit checks and a smoke test of each
+  area, in about a quarter of the previous time. The integration tests, which
+  generate, build and install meta-packages, run with `NOT_CRAN=true`, as in
+  the project's CI.
 
 # bigbang 0.6.0
 

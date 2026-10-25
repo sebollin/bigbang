@@ -423,6 +423,7 @@ test_that("the bigbang runtime catalog translates messages to Spanish", {
 })
 
 test_that("bigbang print methods translate in a Spanish child without changing English", {
+  skip_on_cran()
   result <- structure(
     list(
       name = "demo", path = "/tmp/demo", packages = c("a", "b"),
@@ -556,6 +557,7 @@ test_that("bigbang print methods translate in a Spanish child without changing E
 })
 
 test_that("generated metapackages include their own Spanish runtime catalog", {
+  skip_on_cran()
   skip_if_not(exists("create_metapackage", mode = "function"))
   sandbox <- tempfile("bigbang-i18n-meta-")
   sources <- file.path(sandbox, "sources")
@@ -626,6 +628,7 @@ test_that("generated metapackages include their own Spanish runtime catalog", {
 })
 
 test_that("every generated .meta_tr literal is in its generated catalog", {
+  skip_on_cran()
   skip_if_not(exists("create_metapackage", mode = "function"))
   cases <- expand.grid(
     reexport = c(FALSE, TRUE), include_archives = c(FALSE, TRUE),

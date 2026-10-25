@@ -203,6 +203,7 @@ test_that("a creatable library does not warn during planning", {
 })
 
 test_that("library feasibility warnings match both installers", {
+  skip_on_cran()
   skip_on_os("windows")
   skip_if(identical(Sys.info()[["effective_user"]], "root"),
           "root can write through mode bits")
@@ -426,6 +427,7 @@ test_that("a non-creatable library is warned about even when all components skip
 })
 
 test_that("inventory warnings survive successful reads in every public lookup", {
+  skip_on_cran()
   skip_on_os("windows")
   root <- tempfile("bigbang-r080d-inventory-warning-")
   dir.create(root)
@@ -507,6 +509,7 @@ test_that("inventory warnings survive successful reads in every public lookup", 
 })
 
 test_that("unreadable archive inventory emits one typed warning", {
+  skip_on_cran()
   skip_on_os("windows")
   skip_if(identical(Sys.info()[["effective_user"]], "root"),
           "root can read through mode bits")

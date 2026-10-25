@@ -49,6 +49,7 @@ test_that("manifest archive filenames fall back to supplied pkg_dir", {
 })
 
 test_that("manifest entries can mix files beside the manifest and in pkg_dir", {
+  skip_on_cran()
   root <- tempfile("bigbang-round82-mixed-")
   manifest_dir <- file.path(root, "repository")
   archive_dir <- file.path(root, "archives")

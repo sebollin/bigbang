@@ -804,6 +804,7 @@ test_that("failed documentation leaves a clean reexport toggle retry", {
 })
 
 test_that("every generated top-level symbol is reserved from reexport", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-reexport-reserved-")
   destination <- file.path(sandbox, "destination")
   dir.create(destination, recursive = TRUE)

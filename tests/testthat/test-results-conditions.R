@@ -15,6 +15,7 @@ test_that("generation requires an explicit destination without writing to cwd", 
 })
 
 test_that("generation returns a classified result and non-empty destinations are typed", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-result-sandbox-")
   sources <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")

@@ -178,6 +178,7 @@ test_that("omitted archive preservation fails toward retaining data", {
 })
 
 test_that("an omitted update input cannot delete its shipped archive", {
+  skip_on_cran()
   root <- tempfile("bigbang-update-omitted-")
   source_root <- file.path(root, "sources")
   archives <- file.path(root, "archives")
@@ -244,6 +245,7 @@ test_that("identified omitted archives are preserved while deliberate removals p
 })
 
 test_that("update rejects a symbolic project root before writing", {
+  skip_on_cran()
   skip_on_os("windows")
   root <- tempfile("bigbang-update-root-link-")
   source_root <- file.path(root, "sources")
@@ -270,6 +272,7 @@ test_that("update rejects a symbolic project root before writing", {
 })
 
 test_that("installer transcripts follow verbose and failures retain ERROR", {
+  skip_on_cran()
   run_checks <- function(install_function, environment, binding = "system2") {
     environment[[binding]] <- function(command, args, stdout, stderr, ...) {
       writeLines(c("* installing fixture", "* DONE (fixture)"), stdout)

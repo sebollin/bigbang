@@ -195,6 +195,7 @@ test_that("installation diagnostics are byte-safe and use the final error block"
 })
 
 test_that("local installer policy and diagnostics cover their defensive branches", {
+  skip_on_cran()
   expect_identical(
     bigbang:::.component_upgrade_action(
       package_version("1.0.0"), "2.0.0", "never"
@@ -369,6 +370,7 @@ test_that("metapackage names compare with archive case folding and visible local
 })
 
 test_that("failed and skipped diamonds classify every reachable node in both installers", {
+  skip_on_cran()
   make_diamond <- function(root, broken = FALSE, missing = FALSE) {
     base <- r32_archive(
       root, "r32base074", imports = if (missing) "r32missing074" else NULL,

@@ -91,6 +91,7 @@ test_that("generated cycle detection reports a cycle", {
 })
 
 test_that("generated LICENSE derives its holder and current year from Authors@R", {
+  skip_on_cran()
   fixture <- algorithm_fixture()
   license <- readLines(file.path(fixture$result$path, "LICENSE"), warn = FALSE)
   expect_identical(license[[1L]], paste0("YEAR: ", format(Sys.Date(), "%Y")))
