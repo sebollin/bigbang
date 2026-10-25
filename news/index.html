@@ -34,6 +34,25 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="bigbang-development-version">bigbang (development version)<a class="anchor" aria-label="anchor" href="#bigbang-development-version"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-development-version">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-development-version"></a></h3>
+<ul><li>
+<code>&lt;meta&gt;_deps(plan = TRUE)</code> warns, with class <code>bigbang_warning_install_library</code>, when the installers would not be able to use the installation library:
+<ul><li>it does not exist and cannot be created, because its first existing ancestor is not a directory with write and search permission, or is a dangling or looping symbolic link;</li>
+<li>it exists but is not writable, and the plan has something to install.</li>
+</ul>
+The plan still creates nothing and its actions do not change. A <code>lib</code> that is an existing regular file remains an error, as in the installers.</li>
+<li>When a re-exported symbol is unavailable because its component is not installed, the error says so directly instead of nesting “component is not installed” inside an installed-version label, in English and Spanish.</li>
+<li>The warning <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code> gives for an archive in <code>pkg_dir</code> that it cannot read now has the class <code>bigbang_warning_archive_inventory</code>. An archive that cannot even be opened gives that single warning, with the reason, instead of an extra warning from R. Each archive is reported once per call, even when a package is requested by name and <code>pkg_dir</code> is searched more than once; it used to be reported up to three times.</li>
+<li>The warning about archive names that only pass with <code>bigbang.archive.portable_names = FALSE</code> lists the first three names and how many more there are.</li>
+<li>On Windows, the excerpts of <code>R CMD INSTALL</code> errors that <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code> and generated installers show no longer end each line with a stray carriage return.</li>
+<li>When a component is given as a source directory, <code><a href="../reference/diagnose_dependencies.html">diagnose_dependencies()</a></code>, <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code> and <code><a href="../reference/create_metapackage.html">create_metapackage()</a></code> build it once per call and remove their temporary build directories when they finish, also after an error. These directories used to stay in the session’s temporary directory.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="tests-development-version">Tests<a class="anchor" aria-label="anchor" href="#tests-development-version"></a></h3>
+<ul><li>The tests cover more of the archive reader’s rejections (PAX, CRC, ZIP and tar layout, limits) and of the installation diagnostics.</li>
+<li>Under CRAN settings, the tests run fast unit checks and a smoke test of each area, in about a quarter of the previous time. The integration tests, which generate, build and install meta-packages, run with <code>NOT_CRAN=true</code>, as in the project’s CI.</li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.0" id="bigbang-060">bigbang 0.6.0<a class="anchor" aria-label="anchor" href="#bigbang-060"></a></h2><p class="text-muted">CRAN release: 2026-10-23</p>

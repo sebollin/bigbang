@@ -2,6 +2,57 @@
 
 ## bigbang (development version)
 
+### Bug fixes
+
+- `<meta>_deps(plan = TRUE)` warns, with class
+  `bigbang_warning_install_library`, when the installers would not be
+  able to use the installation library:
+  - it does not exist and cannot be created, because its first existing
+    ancestor is not a directory with write and search permission, or is
+    a dangling or looping symbolic link;
+  - it exists but is not writable, and the plan has something to
+    install.
+
+  The plan still creates nothing and its actions do not change. A `lib`
+  that is an existing regular file remains an error, as in the
+  installers.
+- When a re-exported symbol is unavailable because its component is not
+  installed, the error says so directly instead of nesting “component is
+  not installed” inside an installed-version label, in English and
+  Spanish.
+- The warning
+  [`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md)
+  gives for an archive in `pkg_dir` that it cannot read now has the
+  class `bigbang_warning_archive_inventory`. An archive that cannot even
+  be opened gives that single warning, with the reason, instead of an
+  extra warning from R. Each archive is reported once per call, even
+  when a package is requested by name and `pkg_dir` is searched more
+  than once; it used to be reported up to three times.
+- The warning about archive names that only pass with
+  `bigbang.archive.portable_names = FALSE` lists the first three names
+  and how many more there are.
+- On Windows, the excerpts of `R CMD INSTALL` errors that
+  [`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md)
+  and generated installers show no longer end each line with a stray
+  carriage return.
+- When a component is given as a source directory,
+  [`diagnose_dependencies()`](https://sebollin.github.io/bigbang/reference/diagnose_dependencies.md),
+  [`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md)
+  and
+  [`create_metapackage()`](https://sebollin.github.io/bigbang/reference/create_metapackage.md)
+  build it once per call and remove their temporary build directories
+  when they finish, also after an error. These directories used to stay
+  in the session’s temporary directory.
+
+### Tests
+
+- The tests cover more of the archive reader’s rejections (PAX, CRC, ZIP
+  and tar layout, limits) and of the installation diagnostics.
+- Under CRAN settings, the tests run fast unit checks and a smoke test
+  of each area, in about a quarter of the previous time. The integration
+  tests, which generate, build and install meta-packages, run with
+  `NOT_CRAN=true`, as in the project’s CI.
+
 ## bigbang 0.6.0
 
 CRAN release: 2026-10-23

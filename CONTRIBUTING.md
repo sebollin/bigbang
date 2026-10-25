@@ -17,6 +17,15 @@ without new findings. New behavior comes with a test, and a fix with a
 test that fails without it. The complete release gates, including
 `R CMD check --as-cran`, are in `RELEASE.md`.
 
+Tests must pass on Linux, Windows and macOS, and under root. r-universe
+builds the Linux binaries as root, which ignores file permissions. A
+test that relies on [`Sys.chmod()`](https://rdrr.io/r/base/files2.html)
+checks the restriction with
+[`file.access()`](https://rdrr.io/r/base/file.access.html) and skips
+when it is not enforced. A test that relies on symbolic links,
+case-sensitive file names or POSIX tools skips where they are not
+available.
+
 ## Reproducible spelling checks
 
 The package declares `Language: en`, while `vignettes/bigbang-es.Rmd` is
