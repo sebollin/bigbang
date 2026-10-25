@@ -34,6 +34,7 @@
     "Archive %s contains entries accepted only because options(bigbang.archive.portable_names = FALSE): %s. This package will not be installable on Windows." = "El archivo %s contiene entradas aceptadas solo porque options(bigbang.archive.portable_names = FALSE): %s. Este paquete no se podr\u00e1 instalar en Windows.",
     "Archive %s contains entries accepted because the destination filesystem distinguishes case: %s. This package will not be installable on filesystems that do not distinguish case." = "El archivo %s contiene entradas aceptadas porque el sistema de archivos de destino distingue may\u00fasculas de min\u00fasculas: %s. Este paquete no se podr\u00e1 instalar en sistemas de archivos que no distinguen may\u00fasculas de min\u00fasculas.",
     "Non-portable names accepted" = "Nombres no port\u00e1tiles aceptados",
+    "and %d more" = "y %d m\u00e1s",
     "Archive %s exceeds its configured %s limit (%s > %s); raise options('%s') only for trusted input." = "El archivo %s supera el l\u00edmite configurado de %s (%s > %s); aumente options('%s') solo para entradas confiables.",
     "Could not read archive %s; excluding it from the archive inventory: %s" = "No se pudo leer el archivo %s; se excluye del inventario de archivos: %s",
     "Component %s declares dependency %s, but archive %s could not be read and was excluded from the inventory: %s" = "El componente %s declara la dependencia %s, pero no se pudo leer el archivo %s y se excluy\u00f3 del inventario: %s",
@@ -346,7 +347,7 @@
   } else {
     paste0(name, "_install(pkg_dir = PATH, cran_deps = 'install')")
   }
-  stats::setNames(
+  catalog <- stats::setNames(
     c(
       "Los archivos de los componentes que acompa\u00f1an a este paquete no est\u00e1n disponibles. Reinst\u00e1lelo o pase pkg_dir apuntando a un directorio con los archivos de los componentes.",
       "El directorio de archivos no existe: %s",
@@ -423,6 +424,7 @@
       "El archivo %s contiene entradas aceptadas solo porque options(bigbang.archive.portable_names = FALSE): %s. Este paquete no se podr\u00e1 instalar en Windows.",
       "El archivo %s contiene entradas aceptadas porque el sistema de archivos de destino distingue may\u00fasculas de min\u00fasculas: %s. Este paquete no se podr\u00e1 instalar en sistemas de archivos que no distinguen may\u00fasculas de min\u00fasculas.",
       "Nombres no port\u00e1tiles aceptados",
+      "y %d m\u00e1s",
       "R CMD INSTALL termin\u00f3 con el estado %d",
       "No se captur\u00f3 salida del instalador",
       "Fall\u00f3 la instalaci\u00f3n; detalles del error: %s; registro completo de instalaci\u00f3n: %s",
@@ -447,6 +449,8 @@
       "El componente %s requiere %s %s %s, pero el archivo incluido proporciona la versi\u00f3n %s.",
       "La biblioteca de instalaci\u00f3n debe ser una ruta no vac\u00eda.",
       "No se pudo crear la biblioteca de instalaci\u00f3n: %s",
+      "La biblioteca de instalaci\u00f3n planificada no se puede crear: %s (el primer ancestro existente no es un directorio con permisos de escritura: %s).",
+      "La biblioteca de instalaci\u00f3n planificada existe pero no tiene permisos de escritura: %s.",
       "'only' debe contener nombres de paquetes componentes.",
       "'only' debe contener uno o m\u00e1s nombres de paquetes componentes \u00fanicos.",
       "Componente(s) desconocido(s) en 'only': %s.",
@@ -460,6 +464,7 @@
       "el componente no se pudo cargar: %s",
       "el componente no exporta '%s': %s",
       "El s\u00edmbolo reexportado '%s' del paquete componente '%s' (%s) no est\u00e1 disponible: %s. Ejecute %s para instalar la versi\u00f3n requerida del componente.",
+      "El s\u00edmbolo reexportado '%s' del paquete componente '%s' no est\u00e1 disponible: %s. Ejecute %s para instalar la versi\u00f3n requerida del componente.",
       "Omitido porque la dependencia local %s fue omitida: %s",
       "El contenido restante del diario de actualizaci\u00f3n se apart\u00f3 en %s; solo se eliminaron archivos verificados del inventario antes de preservar el contenido no verificable y continuar el update.",
       "La verificaci\u00f3n de reexportaci\u00f3n no est\u00e1 disponible.",
@@ -560,6 +565,7 @@
       "Archive %s contains entries accepted only because options(bigbang.archive.portable_names = FALSE): %s. This package will not be installable on Windows.",
       "Archive %s contains entries accepted because the destination filesystem distinguishes case: %s. This package will not be installable on filesystems that do not distinguish case.",
       "Non-portable names accepted",
+      "and %d more",
       "R CMD INSTALL exited with status %d",
       "No installer output was captured",
       "Installation failed; error details: %s; full installation log: %s",
@@ -584,6 +590,8 @@
       "Component %s requires %s %s %s, but the included archive provides version %s.",
       "The installation library must be one non-empty path.",
       "Could not create installation library: %s",
+      "The planned installation library cannot be created: %s (the first existing ancestor is not a writable directory: %s).",
+      "The planned installation library exists but is not writable: %s.",
       "'only' must contain component package names.",
       "'only' must contain one or more unique component package names.",
       "Unknown component(s) in 'only': %s.",
@@ -597,6 +605,7 @@
       "component could not be loaded: %s",
       "component does not export '%s': %s",
       "Re-exported symbol '%s' from component package '%s' (%s) is unavailable: %s. Run %s to install the required component version.",
+      "Re-exported symbol '%s' from component package '%s' is unavailable: %s. Run %s to install the required component version.",
       "Skipped because local dependency %s was skipped: %s",
       "Set aside remaining update-journal content at %s; only verified inventory files were deleted before unverified content was preserved and the update continues.",
       "Re-export verification is not available.",
@@ -622,5 +631,27 @@
       "'plan' must be TRUE or FALSE"
     )
   )
+  unused_runtime_keys <- c(
+    "Package archive does not exist: %s",
+    "Package %s (installed version %s) is already installed.",
+    "Missing",
+    "Cannot install non-local dependencies without a configured repository: %s",
+    "Repository not configured",
+    "Installing non-local dependency: %s",
+    "Dependencies are not installed: %s",
+    "Not installed",
+    "Expected one DESCRIPTION in source ZIP; found %d",
+    "DEBUG: %s",
+    "More than one archive was supplied for component package(s): %s.",
+    "More than one archive was found for component stem '%s': %s.",
+    "Non-portable names accepted",
+    "Cannot create metapackage '%s': component package '%s' has the same name.",
+    "'only' must contain component package names.",
+    "Skipped because local dependency %s was skipped: %s",
+    "Set aside remaining update-journal content at %s; only verified inventory files were deleted before unverified content was preserved and the update continues.",
+    "Could not unload component namespace: %s. Restart R before retrying; another package imports it.",
+    "No re-export resolutions found."
+  )
+  catalog[setdiff(names(catalog), unused_runtime_keys)]
 }
 # nolint end

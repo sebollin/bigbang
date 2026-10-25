@@ -70,10 +70,12 @@
 scan_bigbang_artifact <- function(path, dry_run = TRUE) {
   .archive_portable_names()
   .archive_warning_state$seen <- character()
+  .archive_warning_state$inventory_seen <- character()
   .archive_warning_state$active <- TRUE
   on.exit({
     .archive_warning_state$active <- FALSE
     .archive_warning_state$seen <- character()
+    .archive_warning_state$inventory_seen <- character()
   }, add = TRUE)
   if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
     stop(.bb_tr("'path' must be one non-empty character string."), call. = FALSE)

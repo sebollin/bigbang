@@ -103,6 +103,9 @@ msgstr ""
 msgid "Non-portable names accepted"
 msgstr ""
 
+msgid "and %d more"
+msgstr ""
+
 msgid "Archive %s exceeds its configured %s limit (%s > %s); raise options('%s') only for trusted input."
 msgstr ""
 

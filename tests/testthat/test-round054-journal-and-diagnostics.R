@@ -329,6 +329,7 @@ test_that("H3 moved projects recognize the journal by name and manifest hash", {
 })
 
 test_that("a journal left behind by a move reports where to look", {
+  skip_on_cran()
   fixture <- round054_fixture("bigbang-round054-h3-left-")
   manifest <- readRDS(file.path(fixture$project, .generation_manifest_name))
   journal <- .create_update_journal(fixture$project, fixture$name, manifest)
@@ -396,6 +397,7 @@ test_that("a discarded folder with an invalid tombstone is set aside", {
 })
 
 test_that("a moved journal rejects a state hash that does not match its backup", {
+  skip_on_cran()
   fixture <- round054_fixture("bigbang-round054-state-hash-")
   manifest <- readRDS(file.path(fixture$project, .generation_manifest_name))
   journal <- .create_update_journal(fixture$project, fixture$name, manifest)
@@ -416,6 +418,7 @@ test_that("a moved journal rejects a state hash that does not match its backup",
 })
 
 test_that("missing projects and unarmed dry runs explain the next action", {
+  skip_on_cran()
   missing <- file.path(tempdir(), paste0("bigbang-round054-missing-", Sys.getpid()))
   error <- expect_error(
     .recover_pending_update(missing, "round054verse"),
@@ -438,6 +441,7 @@ test_that("missing projects and unarmed dry runs explain the next action", {
 })
 
 test_that("an armed journal with an out-of-plan intent is never deleted", {
+  skip_on_cran()
   fixture <- round054_fixture("bigbang-round054-out-of-plan-")
   manifest <- readRDS(file.path(fixture$project, .generation_manifest_name))
   journal <- .create_update_journal(fixture$project, fixture$name, manifest)

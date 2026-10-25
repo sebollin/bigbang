@@ -26,6 +26,33 @@ generate_self_contained <- function(name, archives, destination, ...) {
   )
 }
 
+# These generated trees are read-only fixtures. Keep one shipped and one
+# external-archive project for the file so the assertions below do not pay the
+# generator cost repeatedly; tests that mutate, build, or install keep their
+# private fixture.
+cached_self_contained <- local({
+  cache <- list()
+  function(include_archives = TRUE) {
+    key <- if (isTRUE(include_archives)) "shipped" else "external"
+    if (is.null(cache[[key]])) {
+      root <- tempfile(paste0("bigbang-self-contained-cache-", key, "-"))
+      archives <- file.path(root, "archives")
+      toy_archive_dir(archives)
+      destination <- file.path(root, "destination")
+      dir.create(destination, recursive = TRUE)
+      name <- if (isTRUE(include_archives)) {
+        "selfcachedverse"
+      } else {
+        "externalcachedverse"
+      }
+      cache[[key]] <<- generate_self_contained(
+        name, archives, destination, include_archives = include_archives
+      )
+    }
+    cache[[key]]
+  }
+})
+
 installer_signature <- function(project_dir) {
   sources <- list.files(file.path(project_dir, "R"), full.names = TRUE)
   lines <- unlist(lapply(sources, readLines, warn = FALSE), use.names = FALSE)
@@ -33,13 +60,9 @@ installer_signature <- function(project_dir) {
 }
 
 test_that("component archives travel inside the meta-package by default", {
-  sandbox <- tempfile("bigbang-self-contained-")
-  archives <- file.path(sandbox, "archives")
-  toy_archive_dir(archives)
-  destination <- file.path(sandbox, "destination")
-  dir.create(destination, recursive = TRUE)
-
-  result <- generate_self_contained("selfverse", archives, destination)
+  result <- cached_self_contained(TRUE)
+  archives <- file.path(dirname(dirname(result$path)), "archives")
+  sandbox <- dirname(archives)
 
   expect_true(dir.exists(file.path(result$path, "inst", "archives")))
   expect_identical(
@@ -116,13 +139,7 @@ test_that("shipped archives do not leak any source directory", {
 })
 
 test_that("the build ignore rules keep shipped archives and drop stray ones", {
-  sandbox <- tempfile("bigbang-buildignore-")
-  archives <- file.path(sandbox, "archives")
-  toy_archive_dir(archives)
-  destination <- file.path(sandbox, "destination")
-  dir.create(destination, recursive = TRUE)
-
-  result <- generate_self_contained("ignoreverse", archives, destination)
+  result <- cached_self_contained(TRUE)
   patterns <- readLines(file.path(result$path, ".Rbuildignore"), warn = FALSE)
 
   matches_any <- function(path) {
@@ -140,15 +157,7 @@ test_that("the build ignore rules keep shipped archives and drop stray ones", {
 })
 
 test_that("include_archives = FALSE keeps pkg_dir mandatory", {
-  sandbox <- tempfile("bigbang-external-archives-")
-  archives <- file.path(sandbox, "archives")
-  toy_archive_dir(archives)
-  destination <- file.path(sandbox, "destination")
-  dir.create(destination, recursive = TRUE)
-
-  result <- generate_self_contained(
-    "externalverse", archives, destination, include_archives = FALSE
-  )
+  result <- cached_self_contained(FALSE)
 
   expect_false(dir.exists(file.path(result$path, "inst", "archives")))
   signature <- installer_signature(result$path)
@@ -298,28 +307,20 @@ test_that("a shipped meta-package installs its components with no arguments", {
 })
 
 test_that("the generated README documents the installation call that applies", {
-  sandbox <- tempfile("bigbang-readme-modes-")
-  archives <- file.path(sandbox, "archives")
-  toy_archive_dir(archives)
-  destination <- file.path(sandbox, "destination")
-  dir.create(destination, recursive = TRUE)
-
-  shipped <- generate_self_contained("shippedreadme", archives, destination)
+  shipped <- cached_self_contained(TRUE)
   shipped_readme <- readLines(
     file.path(shipped$path, "README.md"), warn = FALSE
   )
-  expect_true(any(grepl("shippedreadme_install()", shipped_readme, fixed = TRUE)))
+  expect_true(any(grepl("selfcachedverse_install()", shipped_readme, fixed = TRUE)))
   expect_false(any(grepl("pkg_dir =", shipped_readme, fixed = TRUE)))
   expect_true(any(grepl("ship inside this package", shipped_readme, fixed = TRUE)))
 
-  external <- generate_self_contained(
-    "externalreadme", archives, destination, include_archives = FALSE
-  )
+  external <- cached_self_contained(FALSE)
   external_readme <- readLines(
     file.path(external$path, "README.md"), warn = FALSE
   )
   expect_true(any(grepl(
-    "externalreadme_install(pkg_dir =", external_readme, fixed = TRUE
+    "externalcachedverse_install(pkg_dir =", external_readme, fixed = TRUE
   )))
   expect_true(any(grepl("live outside this package", external_readme, fixed = TRUE)))
 
@@ -395,25 +396,17 @@ test_that("reserved R package names are refused", {
 })
 
 test_that("the startup hint names a call the reader can actually make", {
-  sandbox <- tempfile("bigbang-hints-")
-  archives <- file.path(sandbox, "archives")
-  toy_archive_dir(archives)
-  destination <- file.path(sandbox, "destination")
-  dir.create(destination, recursive = TRUE)
-
-  shipped <- generate_self_contained("hintshipped", archives, destination)
+  shipped <- cached_self_contained(TRUE)
   shipped_code <- unlist(lapply(
     list.files(file.path(shipped$path, "R"), full.names = TRUE),
     readLines, warn = FALSE
   ), use.names = FALSE)
   hints <- grep("to install them", shipped_code, value = TRUE)
   expect_length(hints, 2L)
-  expect_true(all(grepl("hintshipped_install()", hints, fixed = TRUE)))
+  expect_true(all(grepl("selfcachedverse_install()", hints, fixed = TRUE)))
   expect_false(any(grepl("pkg_dir", hints, fixed = TRUE)))
 
-  external <- generate_self_contained(
-    "hintexternal", archives, destination, include_archives = FALSE
-  )
+  external <- cached_self_contained(FALSE)
   external_code <- unlist(lapply(
     list.files(file.path(external$path, "R"), full.names = TRUE),
     readLines, warn = FALSE
@@ -422,7 +415,7 @@ test_that("the startup hint names a call the reader can actually make", {
   expect_length(external_hints, 2L)
   # Suggesting a bare call here would send the reader straight into an error.
   expect_true(all(grepl(
-    "hintexternal_install(pkg_dir = PATH)", external_hints, fixed = TRUE
+    "externalcachedverse_install(pkg_dir = PATH)", external_hints, fixed = TRUE
   )))
 })
 
@@ -452,13 +445,7 @@ test_that("the published argument prefix stays stable through 0.4.0", {
 })
 
 test_that("only the real inst/archives is exempt from the ignore rules", {
-  sandbox <- tempfile("bigbang-ignore-case-")
-  archives <- file.path(sandbox, "archives")
-  toy_archive_dir(archives)
-  destination <- file.path(sandbox, "destination")
-  dir.create(destination, recursive = TRUE)
-
-  result <- generate_self_contained("caseverse", archives, destination)
+  result <- cached_self_contained(TRUE)
   patterns <- readLines(file.path(result$path, ".Rbuildignore"), warn = FALSE)
   # R applies these with perl = TRUE and ignore.case = TRUE.
   excluded <- function(path) {
@@ -477,40 +464,26 @@ test_that("only the real inst/archives is exempt from the ignore rules", {
 
 test_that("the generated vignette names the installation call of its mode", {
   skip_on_cran()
-  sandbox <- tempfile("bigbang-vignette-mode-")
-  archives <- file.path(sandbox, "archives")
-  toy_archive_dir(archives)
-  destination <- file.path(sandbox, "destination")
-  dir.create(destination, recursive = TRUE)
-
-  shipped <- generate_self_contained("vshipped", archives, destination)
+  shipped <- cached_self_contained(TRUE)
   shipped_lines <- readLines(
-    file.path(shipped$path, "vignettes", "introduction-vshipped.Rmd"),
+    file.path(shipped$path, "vignettes", "introduction-selfcachedverse.Rmd"),
     warn = FALSE
   )
-  expect_true(any(grepl("vshipped_install()`", shipped_lines, fixed = TRUE)))
+  expect_true(any(grepl("selfcachedverse_install()`", shipped_lines, fixed = TRUE)))
   expect_false(any(grepl("pkg_dir = ...", shipped_lines, fixed = TRUE)))
 
-  external <- generate_self_contained(
-    "vexternal", archives, destination, include_archives = FALSE
-  )
+  external <- cached_self_contained(FALSE)
   external_lines <- readLines(
-    file.path(external$path, "vignettes", "introduction-vexternal.Rmd"),
+    file.path(external$path, "vignettes", "introduction-externalcachedverse.Rmd"),
     warn = FALSE
   )
   expect_true(any(grepl(
-    "vexternal_install(pkg_dir = ...)", external_lines, fixed = TRUE
+    "externalcachedverse_install(pkg_dir = ...)", external_lines, fixed = TRUE
   )))
 })
 
 test_that("the stamped generator version tracks the package version", {
-  sandbox <- tempfile("bigbang-generator-version-")
-  archives <- file.path(sandbox, "archives")
-  toy_archive_dir(archives)
-  destination <- file.path(sandbox, "destination")
-  dir.create(destination, recursive = TRUE)
-
-  result <- generate_self_contained("stampverse", archives, destination)
+  result <- cached_self_contained(TRUE)
   description <- read.dcf(file.path(result$path, "DESCRIPTION"))
   expect_identical(
     unname(description[1, "Config/bigbang/generator-version"]),
@@ -519,13 +492,7 @@ test_that("the stamped generator version tracks the package version", {
 })
 
 test_that("returned paths use one separator convention", {
-  sandbox <- tempfile("bigbang-separators-")
-  archives <- file.path(sandbox, "archives")
-  toy_archive_dir(archives)
-  destination <- file.path(sandbox, "destination")
-  dir.create(destination, recursive = TRUE)
-
-  result <- generate_self_contained("sepverse", archives, destination)
+  result <- cached_self_contained(TRUE)
 
   # The package normalises with winslash = "/" throughout. A result path in the
   # platform default would not compare equal to a path the caller built with
@@ -533,7 +500,7 @@ test_that("returned paths use one separator convention", {
   expect_identical(
     result$path,
     normalizePath(
-      file.path(destination, "sepverse"), winslash = "/", mustWork = TRUE
+      result$path, winslash = "/", mustWork = TRUE
     )
   )
   expect_false(grepl("\\\\", result$path))

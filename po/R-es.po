@@ -103,6 +103,9 @@ msgstr "El archivo %s contiene entradas aceptadas porque el sistema de archivos 
 msgid "Non-portable names accepted"
 msgstr "Nombres no portátiles aceptados"
 
+msgid "and %d more"
+msgstr "y %d más"
+
 msgid "Archive %s exceeds its configured %s limit (%s > %s); raise options('%s') only for trusted input."
 msgstr "El archivo %s supera el límite configurado de %s (%s > %s); aumente options('%s') solo para entradas confiables."
 

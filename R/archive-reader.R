@@ -44,6 +44,32 @@
 .archive_warning_state <- new.env(parent = emptyenv())
 .archive_warning_state$active <- FALSE
 .archive_warning_state$seen <- character()
+.archive_warning_state$inventory_seen <- character()
+
+.archive_warning_state_enter <- function() {
+  token <- list(
+    active = isTRUE(.archive_warning_state$active),
+    seen = .archive_warning_state$seen,
+    inventory_seen = .archive_warning_state$inventory_seen
+  )
+  if (!token$active) {
+    .archive_warning_state$active <- TRUE
+    .archive_warning_state$seen <- character()
+    .archive_warning_state$inventory_seen <- character()
+  } else if (is.null(.archive_warning_state$inventory_seen)) {
+    .archive_warning_state$inventory_seen <- character()
+  }
+  token
+}
+
+.archive_warning_state_exit <- function(token) {
+  if (!isTRUE(token$active)) {
+    .archive_warning_state$active <- token$active
+    .archive_warning_state$seen <- token$seen
+    .archive_warning_state$inventory_seen <- token$inventory_seen
+  }
+  invisible(NULL)
+}
 
 .archive_name_error <- function(name, reason, other = NULL) {
   if (identical(reason, "case")) {
@@ -384,6 +410,17 @@
   invisible(NULL)
 }
 
+.archive_warning_entries <- function(entries) {
+  shown <- utils::head(entries, 3L)
+  if (length(shown) == 0L) return(character())
+  text <- paste(paste0("`", shown, "`"), collapse = ", ")
+  extra <- length(entries) - length(shown)
+  if (extra > 0L) {
+    text <- paste0(text, " ", .bb_trf("and %d more", extra))
+  }
+  text
+}
+
 .archive_state_warn <- function(state) {
   if (isTRUE(state$portable_names)) return(invisible(NULL))
   entries <- utils::head(state$relaxed_windows, 3L)
@@ -395,7 +432,7 @@
           "options(bigbang.archive.portable_names = FALSE): %s. ",
           "This package will not be installable on Windows."
         ),
-        state$archive, paste(paste0("`", entries, "`"), collapse = ", ")
+        state$archive, .archive_warning_entries(state$relaxed_windows)
       ),
       rule = "windows", entries = entries, archive = state$archive
     )
@@ -409,7 +446,7 @@
           "filesystem distinguishes case: %s. This package will not be ",
           "installable on filesystems that do not distinguish case."
         ),
-        state$archive, paste(paste0("`", entries, "`"), collapse = ", ")
+        state$archive, .archive_warning_entries(state$relaxed_case)
       ),
       rule = "case", entries = entries, archive = state$archive
     )
@@ -1566,7 +1603,7 @@
   }
   records <- lapply(candidates, candidate_record)
   structural <- vapply(records, function(record) {
-    !is.null(record) && record$disk == 0L && record$central_disk == 0L &&
+    !is.null(record) &&
       record$disk_entries == record$total_entries &&
       record$central_offset + record$central_size == record$offset &&
       record$central_offset <= record$offset

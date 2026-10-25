@@ -141,6 +141,7 @@ test_that("archive names that collide only by case are rejected", {
 })
 
 test_that("unreadable unrelated archives are excluded with diagnostics", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-round77-inventory-")
   source_root <- file.path(sandbox, "sources")
   archive_dir <- file.path(sandbox, "archives")

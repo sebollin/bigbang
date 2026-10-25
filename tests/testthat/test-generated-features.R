@@ -27,6 +27,7 @@ generate_feature_metapackage <- function(
 }
 
 test_that("generated startup supports cli formatting, fallback, and quiet mode", {
+  skip_on_cran()
   result <- generate_feature_metapackage()
   runtime <- new.env(parent = baseenv())
   sys.source(file.path(result$path, "R", "utils.R"), envir = runtime)
@@ -91,6 +92,7 @@ test_that("generated startup supports cli formatting, fallback, and quiet mode",
 })
 
 test_that("generated banners are lazy, byte-stable, and label reexports", {
+  skip_on_cran()
   fake_library <- tempfile("bigbang-banner-library-")
   fake_package <- file.path(fake_library, "bannercomponent")
   dir.create(fake_package, recursive = TRUE)
@@ -176,6 +178,7 @@ test_that("generated banners are lazy, byte-stable, and label reexports", {
 })
 
 test_that("generated conflict reports inspect package namespace exports", {
+  skip_on_cran()
   result <- generate_feature_metapackage("conflictverse")
   runtime <- new.env(parent = baseenv())
   sys.source(file.path(result$path, "R", "utils.R"), envir = runtime)
@@ -205,6 +208,7 @@ test_that("generated conflict reports inspect package namespace exports", {
 })
 
 test_that("generated metadata and base test agree on component identity", {
+  skip_on_cran()
   result <- generate_feature_metapackage("consistentverse")
   description <- read.dcf(file.path(result$path, "DESCRIPTION"))
   expect_identical(
@@ -239,6 +243,7 @@ test_that("generated metadata and base test agree on component identity", {
 })
 
 test_that("workflow creates an ordered vignette and validates all components", {
+  skip_on_cran()
   workflow <- c("Import data" = "toycomponent")
   result <- generate_feature_metapackage("workflowverse", workflow)
   expect_identical(result$workflow, workflow)

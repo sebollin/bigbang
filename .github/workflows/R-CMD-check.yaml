@@ -90,8 +90,10 @@ jobs:
         if: failure() && matrix.config.os == 'ubuntu-latest' && matrix.config.r == 'release'
         shell: bash
         run: |
-          find "${{ runner.temp }}/bigbang-covr" -name 'testthat.Rout.fail' -type f \
-            -exec sh -c 'echo "=== $1 ==="; cat "$1"' _ {} \;
+          if [ -d "${{ runner.temp }}/bigbang-covr" ]; then
+            find "${{ runner.temp }}/bigbang-covr" -name 'testthat.Rout.fail' -type f \
+              -exec sh -c 'echo "=== $1 ==="; cat "$1"' _ {} \;
+          fi
 
       - name: Upload test coverage to Codecov
         if: matrix.config.os == 'ubuntu-latest' && matrix.config.r == 'release'

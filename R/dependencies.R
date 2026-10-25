@@ -83,6 +83,9 @@
       stop(.bb_trf("Could not create temporary directory for %s", archive),
            call. = FALSE)
     }
+    # A NULL cache has no owner that can close it after this function returns.
+    # The caller receives the extraction directory and therefore owns its
+    # cleanup; do not return a path whose on.exit has already removed it.
     committed <- FALSE
     on.exit(if (!committed) safe_unlink(extract_dir, recursive = TRUE), add = TRUE)
     listing <- .archive_listing(archive, ext)
@@ -90,6 +93,7 @@
     .validate_archive_members(members)
     .archive_extract(archive, ext, extract_dir)
     .validate_extracted_links(extract_dir, archive)
+    committed <- TRUE
     return(extract_dir)
   }
   entry <- .archive_cache_entry(cache, archive, ext)
@@ -208,16 +212,45 @@
   )
 }
 
-.build_source_component <- function(source_dir) {
+.source_build_context_new <- function() {
+  context <- new.env(parent = emptyenv())
+  context$build_dirs <- character()
+  context$archives <- new.env(hash = TRUE, parent = emptyenv())
+  context
+}
+
+.source_build_context_close <- function(context) {
+  if (is.null(context) || !is.environment(context)) {
+    return(invisible(NULL))
+  }
+  paths <- unique(context$build_dirs)
+  if (length(paths) > 0L) safe_unlink(paths, recursive = TRUE)
+  context$build_dirs <- character()
+  invisible(NULL)
+}
+
+.build_source_component <- function(source_dir, build_context = NULL) {
   if (!requireNamespace("pkgbuild", quietly = TRUE)) {
     stop(.bb_tr(
       "Component directories require the 'pkgbuild' package. Install 'pkgbuild' or pass a built archive instead."
     ), call. = FALSE)
   }
+  source_dir <- normalizePath(source_dir, winslash = "/", mustWork = TRUE)
+  if (!is.null(build_context)) {
+    key <- source_dir
+    if (exists(key, envir = build_context$archives, inherits = FALSE)) {
+      cached <- get(key, envir = build_context$archives, inherits = FALSE)
+      if (file.exists(cached)) return(cached)
+      rm(list = key, envir = build_context$archives)
+    }
+  }
   build_dir <- tempfile("bigbang-source-build-")
   if (!dir.create(build_dir, recursive = TRUE)) {
     stop(.bb_trf("Could not create temporary directory for %s", source_dir),
          call. = FALSE)
+  }
+  if (!is.null(build_context)) {
+    build_context$build_dirs <- c(build_context$build_dirs, build_dir)
   }
   built <- tryCatch(
     pkgbuild::build(
@@ -246,7 +279,11 @@
     }
     built <- candidates[[1L]]
   }
-  normalizePath(built, winslash = "/", mustWork = TRUE)
+  built <- normalizePath(built, winslash = "/", mustWork = TRUE)
+  if (!is.null(build_context)) {
+    assign(source_dir, built, envir = build_context$archives)
+  }
+  built
 }
 
 .normalize_archive_dirs <- function(pkg_dir) {
@@ -263,6 +300,8 @@
 }
 
 .archives_for_package_identity <- function(package, dirs, cache = NULL) {
+  warning_state <- .archive_warning_state_enter()
+  on.exit(.archive_warning_state_exit(warning_state), add = TRUE)
   archives <- unique(unlist(lapply(dirs, function(dir) {
     files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
     files <- files[file.exists(files) & !dir.exists(files)]
@@ -271,16 +310,18 @@
     }, logical(1L))]
   }), use.names = FALSE))
   identities <- lapply(archives, function(path) {
-    tryCatch(
-      .read_archive_identity(path, .archive_extension(path), cache = cache),
-      error = function(error) {
-        warning(.bb_trf(
-          "Could not read archive %s; excluding it from the archive inventory: %s",
-          path, conditionMessage(error)
-        ), call. = FALSE)
-        NULL
-      }
-    )
+    read <- .archive_inventory_read(function() {
+      .read_archive_identity(path, .archive_extension(path), cache = cache)
+    })
+    if (inherits(read$value, "error")) {
+      reason <- paste(unique(c(
+        read$warnings, conditionMessage(read$value)
+      )), collapse = "; ")
+      .archive_inventory_warning(path, reason)
+      NULL
+    } else {
+      read$value
+    }
   })
   matches <- vapply(identities, function(identity) {
     !is.null(identity) && identical(identity$package, package)
@@ -288,15 +329,43 @@
   normalizePath(archives[matches], winslash = "/", mustWork = TRUE)
 }
 
+.archive_inventory_warning <- function(archive, reason) {
+  key <- paste(
+    normalizePath(archive, winslash = "/", mustWork = FALSE), reason,
+    sep = "\n"
+  )
+  if (key %in% .archive_warning_state$inventory_seen) {
+    return(invisible(NULL))
+  }
+  .archive_warning_state$inventory_seen <- c(
+    .archive_warning_state$inventory_seen, key
+  )
+  condition <- structure(
+    list(
+      message = .bb_trf(
+        "Could not read archive %s; excluding it from the archive inventory: %s",
+        archive, reason
+      ),
+      call = NULL,
+      archive = archive,
+      reason = reason
+    ),
+    class = c("bigbang_warning_archive_inventory", "warning", "condition")
+  )
+  warning(condition)
+  invisible(NULL)
+}
+
 .resolve_archive_input <- function(input, pkg_dir = NULL, ext = ".tar.gz",
-                                   cache = NULL) {
+                                   cache = NULL, build_context = NULL) {
   if (!is.character(input) || length(input) != 1L || is.na(input) || !nzchar(input)) {
     stop(.bb_tr("Each component must be one non-empty archive path or stem"), call. = FALSE)
   }
   if (dir.exists(input) && file.exists(file.path(input, "DESCRIPTION"))) {
-    return(.build_source_component(normalizePath(
-      input, winslash = "/", mustWork = TRUE
-    )))
+    return(.build_source_component(
+      normalizePath(input, winslash = "/", mustWork = TRUE),
+      build_context = build_context
+    ))
   }
   if (file.exists(input) && !dir.exists(input)) {
     return(normalizePath(input, winslash = "/", mustWork = TRUE))
@@ -366,7 +435,8 @@
 
 .resolve_components <- function(packages, pkg_dir = NULL, ext = ".tar.gz",
                                 on_component_error = "abort",
-                                reexport = FALSE, cache = NULL) {
+                                reexport = FALSE, cache = NULL,
+                                build_context = NULL) {
   if (!is.character(packages) || length(packages) < 1L) {
     stop(.bb_tr("'packages' must be a non-empty character vector"), call. = FALSE)
   }
@@ -391,7 +461,9 @@
       NULL
     }
     path_result <- tryCatch(
-      .resolve_archive_input(input, dirs, ext, cache = cache), error = identity
+      .resolve_archive_input(
+        input, dirs, ext, cache = cache, build_context = build_context
+      ), error = identity
     )
     declared_identity <- NULL
     if (!inherits(path_result, "error")) {
@@ -534,12 +606,15 @@
 .read_archive_metadata <- function(package, pkg_dir = NULL, ext = NULL,
                                    include_exports = FALSE,
                                    include_reexport_evidence = include_exports,
-                                   cache = NULL) {
+                                   cache = NULL, build_context = NULL) {
+  warning_state <- .archive_warning_state_enter()
+  on.exit(.archive_warning_state_exit(warning_state), add = TRUE)
   archive <- if (file.exists(package) && !dir.exists(package)) {
     normalizePath(package, winslash = "/", mustWork = TRUE)
   } else {
     .resolve_archive_input(
-      package, pkg_dir, .or_null(ext, ".tar.gz"), cache = cache
+      package, pkg_dir, .or_null(ext, ".tar.gz"), cache = cache,
+      build_context = build_context
     )
   }
   ext <- .or_null(ext, .archive_extension(archive))
@@ -710,6 +785,8 @@
 # validation: an archive can expose Package and Version while still being
 # rejected for another invariant (for example, multiple package roots).
 .read_archive_identity <- function(archive, ext, cache = NULL) {
+  warning_state <- .archive_warning_state_enter()
+  on.exit(.archive_warning_state_exit(warning_state), add = TRUE)
   if (is.null(cache)) {
     temp_dir <- tempfile("bigbang-identity-")
     if (!dir.create(temp_dir)) {
@@ -2111,7 +2188,46 @@
   invisible(components)
 }
 
+.installation_library_ancestor <- function(lib) {
+  candidate <- normalizePath(lib, winslash = "/", mustWork = FALSE)
+  candidate <- sub("[/\\\\]+$", "", candidate)
+  if (!nzchar(candidate)) candidate <- "/"
+  if (grepl("^[A-Za-z]:$", candidate)) candidate <- paste0(candidate, "/")
+  repeat {
+    if (file.exists(candidate) || dir.exists(candidate) ||
+          isTRUE(.path_is_symlink(candidate))) break
+    parent <- dirname(candidate)
+    if (identical(parent, candidate)) break
+    candidate <- parent
+  }
+  candidate
+}
+
+.install_library_creatable <- function(lib) {
+  ancestor <- .installation_library_ancestor(lib)
+  dir.exists(ancestor) && file.access(ancestor, 3L) == 0L
+}
+
+.archive_inventory_read <- function(reader) {
+  warnings <- character()
+  conditions <- list()
+  value <- withCallingHandlers(
+    tryCatch(reader(), error = identity),
+    warning = function(condition) {
+      warnings <<- c(warnings, conditionMessage(condition))
+      conditions[[length(conditions) + 1L]] <<- condition
+      invokeRestart("muffleWarning")
+    }
+  )
+  if (!inherits(value, "error")) {
+    for (condition in conditions) warning(condition)
+  }
+  list(value = value, warnings = warnings)
+}
+
 .archive_inventory <- function(pkg_dir, ext = NULL, known = list(), cache = NULL) {
+  warning_state <- .archive_warning_state_enter()
+  on.exit(.archive_warning_state_exit(warning_state), add = TRUE)
   dirs <- .normalize_archive_dirs(pkg_dir)
   paths <- unique(unlist(lapply(dirs, function(dir) {
     files <- list.files(dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
@@ -2133,17 +2249,16 @@
       known[[known_index]]
     } else {
       actual_ext <- .archive_extension(path)
-      metadata <- tryCatch(
-        .read_archive_metadata(path, ext = actual_ext, cache = cache),
-        error = identity
-      )
+      read <- .archive_inventory_read(function() {
+        .read_archive_metadata(path, ext = actual_ext, cache = cache)
+      })
+      metadata <- read$value
       if (inherits(metadata, "error")) {
-        reason <- conditionMessage(metadata)
+        reason <- paste(unique(c(
+          read$warnings, conditionMessage(metadata)
+        )), collapse = "; ")
         guessed_package <- sub("_.*", "", .archive_stem(path, actual_ext))
-        warning(.bb_trf(
-          "Could not read archive %s; excluding it from the archive inventory: %s",
-          path, reason
-        ), call. = FALSE)
+        .archive_inventory_warning(path, reason)
         unreadable[[length(unreadable) + 1L]] <<- list(
           path = path, package = guessed_package, reason = reason
         )
@@ -3140,6 +3255,8 @@ classify_dependencies <- function(dependencies, pkg_dir = NULL, ext = ".tar.gz",
 #' @return A character vector of dependency names declared in DESCRIPTION.
 #' @noRd
 extract_dependencies <- function(package, pkg_dir = NULL, ext = ".tar.gz") {
+  warning_state <- .archive_warning_state_enter()
+  on.exit(.archive_warning_state_exit(warning_state), add = TRUE)
   .read_archive_metadata(package, pkg_dir, ext)$dependencies
 }
 
@@ -3198,10 +3315,17 @@ extract_dependencies <- function(package, pkg_dir = NULL, ext = ".tar.gz") {
 #' lapply(res, function(x) x$matrix_refs)
 #' @export
 diagnose_dependencies <- function(packages, pkg_dir = NULL, ext = ".tar.gz") {
+  warning_state <- .archive_warning_state_enter()
+  on.exit(.archive_warning_state_exit(warning_state), add = TRUE)
   archive_cache <- .archive_cache_new()
   on.exit(.archive_cache_close(archive_cache), add = TRUE)
+  source_build_context <- .source_build_context_new()
+  on.exit(.source_build_context_close(source_build_context), add = TRUE)
   results <- list()
-  resolved <- .resolve_components(packages, pkg_dir, ext, cache = archive_cache)
+  resolved <- .resolve_components(
+    packages, pkg_dir, ext, cache = archive_cache,
+    build_context = source_build_context
+  )
 
   for (component in resolved$components) {
     archive <- component$path
@@ -3288,9 +3412,13 @@ detect_implicit_dependencies <- function(
   packages, pkg_dir = NULL, ext = ".tar.gz", components = NULL, cache = NULL
 ) {
   possible_deps <- character(0)
+  source_build_context <- NULL
   if (is.null(components)) {
+    source_build_context <- .source_build_context_new()
+    on.exit(.source_build_context_close(source_build_context), add = TRUE)
     components <- .resolve_components(
-      packages, pkg_dir, ext, cache = cache
+      packages, pkg_dir, ext, cache = cache,
+      build_context = source_build_context
     )$components
   }
 

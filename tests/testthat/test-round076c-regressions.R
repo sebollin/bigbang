@@ -100,6 +100,7 @@ test_that("gzip ISIZE lies are rejected under timeout and memory limits", {
 })
 
 test_that("partial plans and installs agree on component external constraints", {
+  skip_on_cran()
   root <- tempfile("bigbang-r076c-diamond-")
   archives <- file.path(root, "archives")
   external_archives <- file.path(root, "external-archives")

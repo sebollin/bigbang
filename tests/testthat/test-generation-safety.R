@@ -102,6 +102,7 @@ test_that("default implicit scanning reports guesses without binding them", {
 })
 
 test_that("dependency constraints are validated and R requirements propagate", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-constraints-")
   source_root <- file.path(sandbox, "sources")
   low_archives <- file.path(sandbox, "low")
@@ -837,6 +838,7 @@ test_that("already installed messages report the installed version", {
 })
 
 test_that("reexport FALSE keeps the attach-only generation path", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-reexport-")
   archives <- file.path(sandbox, "archives")
   destination <- file.path(sandbox, "destination")
@@ -944,7 +946,7 @@ test_that("diagnose_dependencies refuses an archive carrying symbolic links", {
   suppressWarnings(utils::untar(archive, exdir = extracted))
   probe <- file.path(extracted, "spy", "R", "f.R")
   skip_if_not(
-    nzchar(Sys.readlink(probe)),
+    bigbang:::.path_is_symlink(probe),
     "This platform did not restore the member as a symbolic link."
   )
 

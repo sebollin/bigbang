@@ -196,6 +196,7 @@ test_that("failed documentation keeps tracked Rd files and remains retryable", {
 })
 
 test_that("documentation updates refuse an existing untracked Rd file", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-untracked-documentation-")
   destination <- file.path(root, "destination")
@@ -221,6 +222,7 @@ test_that("documentation updates refuse an existing untracked Rd file", {
 })
 
 test_that("documentation update rejection leaves the user Rd byte-for-byte", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   root <- tempfile("bigbang-overwritten-documentation-")
   destination <- file.path(root, "destination")

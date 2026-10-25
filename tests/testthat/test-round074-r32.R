@@ -194,6 +194,147 @@ test_that("installation diagnostics are byte-safe and use the final error block"
   expect_no_error(bigbang:::.installation_error_excerpt(invalid))
 })
 
+test_that("local installer policy and diagnostics cover their defensive branches", {
+  skip_on_cran()
+  expect_identical(
+    bigbang:::.component_upgrade_action(
+      package_version("1.0.0"), "2.0.0", "never"
+    )$reason_code,
+    "upgrade_never"
+  )
+  expect_identical(
+    bigbang:::.component_upgrade_action(NULL, "1.0.0", "newer")$action,
+    "install"
+  )
+
+  empty_log <- tempfile("round080b-empty-install-log-")
+  file.create(empty_log)
+  withr::defer(unlink(empty_log, force = TRUE))
+  expect_identical(bigbang:::.read_install_log(empty_log), character())
+  writeBin(as.raw(c(0L, 0L)), empty_log)
+  expect_identical(bigbang:::.read_install_log(empty_log), character())
+  crlf <- as.raw(c(
+    charToRaw("first"), 13L, 10L, charToRaw("second"), 13L, 10L
+  ))
+  writeBin(crlf, empty_log)
+  expected_log <- c("first", "second")
+  expect_identical(bigbang:::.read_install_log(empty_log), expected_log)
+  generated_destination <- tempfile("round080f-generated-log-")
+  dir.create(generated_destination)
+  withr::defer(unlink(generated_destination, recursive = TRUE, force = TRUE))
+  toy <- system.file("extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang")
+  generated <- round075_create_metapackage(
+    "round080flogverse", toy, dest_dir = generated_destination,
+    document = FALSE, verbose = FALSE, import_deps = character(),
+    force_deps = character()
+  )
+  generated_runtime <- new.env(parent = baseenv())
+  for (file in list.files(file.path(generated$path, "R"), full.names = TRUE)) {
+    sys.source(file, generated_runtime)
+  }
+  expect_identical(
+    generated_runtime$.read_install_log(empty_log), expected_log
+  )
+  unlink(empty_log)
+  expect_identical(bigbang:::.read_install_log(empty_log), character())
+
+  expect_match(
+    bigbang:::.installation_error_excerpt(
+      c("ordinary", strrep("x", 100L), "Error: failure"),
+      max_lines = 1L, max_chars = 20L
+    ),
+    "Error:", fixed = TRUE
+  )
+  expect_match(
+    bigbang:::.installation_error_excerpt(
+      "prefix Error: failure followed by a long diagnostic",
+      max_chars = 20L
+    ),
+    "Error:", fixed = TRUE
+  )
+  expect_match(
+    bigbang:::.installation_error_excerpt(
+      "long diagnostic that ends with Error: failure",
+      max_chars = 20L
+    ),
+    "...Error:", fixed = TRUE
+  )
+  expect_match(
+    bigbang:::.installation_error_excerpt(character()),
+    "No installer output was captured", fixed = TRUE
+  )
+  expect_identical(
+    bigbang:::.external_dependency_status(
+      "round080b_missing", list(list(
+        package = "round080b_missing", op = ">=", version = "1.0.0"
+      )), character()
+    )$satisfied,
+    FALSE
+  )
+  expect_match(
+    bigbang:::.external_dependency_status(
+      "round080b_missing", list(list(
+        package = "round080b_missing", op = ">=", version = "1.0.0"
+      )), character()
+    )$detail,
+    "required constraint", fixed = TRUE
+  )
+
+  root <- tempfile("round080b-install-policy-")
+  dir.create(root)
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  archive <- r32_archive(root, "round080bpolicy")
+  regular_parent <- file.path(root, "regular-parent")
+  writeLines("not a directory", regular_parent, useBytes = TRUE)
+  direct_error <- expect_error(
+    install_local_pkg(
+      archive, lib = file.path(regular_parent, "library"),
+      upgrade = "always", verbose = FALSE
+    ),
+    class = "bigbang_error_install_policy"
+  )
+  expect_match(conditionMessage(direct_error), "Could not create installation library", fixed = TRUE)
+
+  lib <- file.path(root, "external-library")
+  dir.create(lib)
+  withr::local_options(pkgType = "source")
+  diagnostics <- bigbang:::.install_external_dependency(
+    "round080b_missing", character(), lib, "file:///round080b-missing-repository"
+  )
+  expect_true(length(diagnostics$diagnostics) > 0L)
+  testthat::local_mocked_bindings(
+    .install_external_dependency = function(...) list(diagnostics = character()),
+    .external_dependency_status = function(...) {
+      list(satisfied = FALSE, detail = "still missing")
+    },
+    .package = "bigbang"
+  )
+  prepared <- bigbang:::.prepare_external_dependencies(
+    stats::setNames(list(list()), "round080b_missing"), character(), lib,
+    cran_deps = "install", repos = "https://round080b.invalid"
+  )
+  expect_match(prepared$status[[1L]]$detail, "Installation attempts", fixed = TRUE)
+
+  keep_lib <- file.path(root, "keep-library")
+  dir.create(keep_lib)
+  expect_length(install_local_pkg(
+    archive, lib = keep_lib, upgrade = "always", verbose = FALSE
+  )$installed, 1L)
+  kept <- install_local_pkg(
+    archive, lib = keep_lib, upgrade = "newer", verbose = FALSE
+  )
+  expect_length(kept$unchanged, 1L)
+
+  invalid <- file.path(root, "invalid.tar.gz")
+  writeLines("not an archive", invalid, useBytes = TRUE)
+  result <- install_local_pkg(
+    invalid, lib = file.path(root, "library"), upgrade = "always",
+    verbose = FALSE
+  )
+  expect_length(result$installed, 0L)
+  expect_length(result$failed, 1L)
+})
+
 test_that("metapackage names compare with archive case folding and visible locals", {
   root <- tempfile("round074-r32-names-")
   dir.create(root)
@@ -229,6 +370,7 @@ test_that("metapackage names compare with archive case folding and visible local
 })
 
 test_that("failed and skipped diamonds classify every reachable node in both installers", {
+  skip_on_cran()
   make_diamond <- function(root, broken = FALSE, missing = FALSE) {
     base <- r32_archive(
       root, "r32base074", imports = if (missing) "r32missing074" else NULL,

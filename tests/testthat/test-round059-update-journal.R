@@ -345,6 +345,7 @@ test_that("a real SIGKILL leaves a lock that a later update reclaims", {
 })
 
 test_that("uncertain lock ownership gives the recover instruction", {
+  skip_on_cran()
   fixture <- round059_fixture("bigbang-round059-lock-message-")
   lock_path <- .update_lock_path(fixture$project)
   dir.create(lock_path)

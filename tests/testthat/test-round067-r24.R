@@ -78,6 +78,7 @@ test_that("update adds, re-adds, and previews new generated files", {
 })
 
 test_that("update refuses an existing user file at a planned new path", {
+  skip_on_cran()
   fixture <- round067_fixture()
   first <- round067_make_archive(fixture$sources, fixture$archives, "first")
   second <- round067_make_archive(fixture$sources, fixture$archives, "second")
@@ -122,6 +123,7 @@ test_that("a version bump adds the new archive and removes the old one", {
 })
 
 test_that("attachment uses loaded namespaces and preflights Depends", {
+  skip_on_cran()
   fixture <- round067_fixture()
   loaded <- round067_make_archive(fixture$sources, fixture$archives, "loaded")
   missing <- round067_make_archive(

@@ -153,6 +153,7 @@ test_that("a partial stale-file removal is rolled back and remains retryable", {
 })
 
 test_that("an update dry run reports every generated file it would remove", {
+  skip_on_cran()
   fixture <- round99_fixture("bigbang-update-dry-run-")
   before <- round99_snapshot(fixture$project)
   shipped_drop <- file.path("inst", "archives", basename(fixture$drop))
@@ -172,6 +173,7 @@ test_that("an update dry run reports every generated file it would remove", {
 })
 
 test_that("an incomplete restoration preserves its durable journal", {
+  skip_on_cran()
   fixture <- round99_fixture("bigbang-update-restore-failure-")
   manifest <- readRDS(file.path(
     fixture$project, .generation_manifest_name

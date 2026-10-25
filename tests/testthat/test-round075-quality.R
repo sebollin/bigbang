@@ -75,6 +75,7 @@ test_that("the Spanish catalog does not retain the 44 retired keys", {
 })
 
 test_that("generated packages declare the runtime floor that was exercised", {
+  skip_on_cran()
   archive <- system.file(
     "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
   )

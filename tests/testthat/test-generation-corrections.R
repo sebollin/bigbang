@@ -27,6 +27,7 @@ generate_toy_metapackage <- function(name, archives, destination,
 }
 
 test_that("relative destination and archive paths generate a complete project", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-relative-generation-")
   dir.create(sandbox)
   copy_toy_archive(file.path(sandbox, "archives"))
@@ -75,6 +76,7 @@ test_that("relative destination and archive paths generate a complete project", 
 })
 
 test_that("failed generation restores cwd and rolls back only its own project", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-generation-rollback-")
   dir.create(sandbox)
   archives <- file.path(sandbox, "archives")
@@ -273,6 +275,7 @@ test_that("generated DESCRIPTION records roxygen only after documentation runs",
 })
 
 test_that("failed documentation is reported and restores the caller session", {
+  skip_on_cran()
   skip_if_not_installed("devtools")
   sandbox <- tempfile("bigbang-document-failure-")
   archives <- file.path(sandbox, "archives")

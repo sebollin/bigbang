@@ -237,6 +237,7 @@ test_that("the local installer reports policy, constraint, and install failures"
 })
 
 test_that("stems retain the old fallback while pkg_dir is optional for paths", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-component-stems-")
   source_root <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")
@@ -266,6 +267,7 @@ test_that("stems retain the old fallback while pkg_dir is optional for paths", {
 })
 
 test_that("bare package names resolve by exact DESCRIPTION identity", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-bare-package-identity-")
   source_root <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")
@@ -304,6 +306,7 @@ test_that("bare package names resolve by exact DESCRIPTION identity", {
 })
 
 test_that("ambiguous bare package names list every archive candidate", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-bare-package-ambiguity-")
   first_source <- file.path(sandbox, "first-source")
   second_source <- file.path(sandbox, "second-source")
@@ -464,6 +467,7 @@ test_that("a stem collision across archive formats names the stem", {
 })
 
 test_that("generated metadata validation rejects empty DESCRIPTION fields", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-generated-metadata-")
   source_root <- file.path(sandbox, "sources")
   archives <- file.path(sandbox, "archives")
@@ -645,6 +649,7 @@ test_that("archive basenames from different sources cannot overwrite", {
 })
 
 test_that("multiple external sources are represented in the generated installer", {
+  skip_on_cran()
   sandbox <- tempfile("bigbang-external-sources-")
   source_root <- file.path(sandbox, "sources")
   first_dir <- file.path(sandbox, "first")

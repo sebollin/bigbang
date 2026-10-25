@@ -978,13 +978,17 @@ create_metapackage <- function(
 ) {
   .archive_portable_names()
   .archive_warning_state$seen <- character()
+  .archive_warning_state$inventory_seen <- character()
   .archive_warning_state$active <- TRUE
   on.exit({
     .archive_warning_state$active <- FALSE
     .archive_warning_state$seen <- character()
+    .archive_warning_state$inventory_seen <- character()
   }, add = TRUE)
   archive_cache <- .archive_cache_new()
   on.exit(.archive_cache_close(archive_cache), add = TRUE)
+  source_build_context <- .source_build_context_new()
+  on.exit(.source_build_context_close(source_build_context), add = TRUE)
   verbose <- isTRUE(verbose)
   debug <- isTRUE(debug)
   on_component_error <- match.arg(on_component_error)
@@ -1071,7 +1075,8 @@ create_metapackage <- function(
   # when re-export analysis is disabled.
   resolved_components <- .resolve_components(
     packages, pkg_dir, ext, on_component_error = on_component_error,
-    reexport = isTRUE(reexport), cache = archive_cache
+    reexport = isTRUE(reexport), cache = archive_cache,
+    build_context = source_build_context
   )
   .validate_metapackage_name(
     name, resolved_components$components, resolved_components$inventory

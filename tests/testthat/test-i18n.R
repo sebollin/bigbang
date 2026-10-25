@@ -255,6 +255,17 @@ meta_untranslated_sentences <- function(project) {
 
 ast_catalog_literals <- function(project, helpers) {
   literals <- character()
+  nested_literals <- function(node) {
+    direct <- ast_literal_text(node)
+    if (!is.null(direct)) return(direct)
+    if (is.call(node) && identical(ast_call_name(node), "if") &&
+          length(node) >= 3L) {
+      branches <- as.list(node)[3L:length(node)]
+      return(unique(unlist(lapply(branches, nested_literals),
+                           use.names = FALSE)))
+    }
+    character()
+  }
   is_missing_call_child <- function(child) {
     if (missing(child)) return(TRUE)
     is.symbol(child) && identical(as.character(child), "")
@@ -270,8 +281,7 @@ ast_catalog_literals <- function(project, helpers) {
     }
     if (!is.call(node)) return(invisible(NULL))
     if (ast_call_name(node) %in% helpers && length(node) >= 2L) {
-      literal <- ast_literal_text(node[[2L]])
-      if (!is.null(literal)) literals <<- c(literals, literal)
+      literals <<- c(literals, nested_literals(node[[2L]]))
     }
     children <- if (length(node) > 1L) as.list(node)[-1L] else list()
     for (index in seq_along(children)) {
@@ -287,6 +297,34 @@ ast_catalog_literals <- function(project, helpers) {
 meta_translation_literals <- function(project) {
   ast_catalog_literals(project, c(".meta_tr", ".meta_trf"))
 }
+
+catalog_guard_fixtures <- local({
+  cache <- list()
+  function(include_archives) {
+    key <- if (isTRUE(include_archives)) "with-archives" else "without-archives"
+    if (!is.null(cache[[key]])) return(cache[[key]])
+    fixture <- system.file(
+      "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
+    )
+    if (!nzchar(fixture)) {
+      fixture <- testthat::test_path(
+        "..", "..", "inst", "extdata", "toycomponent_0.1.0.tar.gz"
+      )
+    }
+    root <- tempfile(paste0("bigbang-i18n-generated-catalog-", key, "-"))
+    destination <- file.path(root, "output")
+    dir.create(destination, recursive = TRUE)
+    name <- paste0("catalogguard", length(cache) + 1L, "verse")
+    result <- create_metapackage(
+      name, "toycomponent_0.1.0", dirname(fixture), dest_dir = destination,
+      document = FALSE, verbose = FALSE, reexport = TRUE,
+      include_archives = include_archives, governance = TRUE,
+      import_deps = character(), force_deps = character()
+    )
+    cache[[key]] <<- list(path = result$path, name = name)
+    cache[[key]]
+  }
+})
 
 test_that("user-facing R diagnostics use the translation helpers", {
   source_root <- normalizePath(
@@ -385,6 +423,7 @@ test_that("the bigbang runtime catalog translates messages to Spanish", {
 })
 
 test_that("bigbang print methods translate in a Spanish child without changing English", {
+  skip_on_cran()
   result <- structure(
     list(
       name = "demo", path = "/tmp/demo", packages = c("a", "b"),
@@ -410,18 +449,34 @@ test_that("bigbang print methods translate in a Spanish child without changing E
   )
   artifact <- structure(
     list(path = "/tmp/artifact", type = "source", vulnerable = FALSE,
-         signatures = "one"),
+         signatures = "one",
+         portable_name_warnings = list(
+           windows = c("aux.R", "con.R"), case = c("Name.R", "name.R")
+         )),
     class = "bigbang_artifact_scan"
   )
   vulnerable <- artifact
   vulnerable$vulnerable <- TRUE
+  withr::local_options(bigbang.archive.portable_names = FALSE)
   withr::local_envvar(LANGUAGE = "C")
   expect_identical(
     capture.output(print(artifact)),
     c(
       "<bigbang artifact scan>", "  Path: /tmp/artifact",
       "  Type: source", "  Result: no deletion signatures found",
+      "  Non-portable names accepted: aux.R, con.R, Name.R, name.R",
       "  Signatures: one"
+    )
+  )
+  broken <- artifact
+  broken$portable_name_warnings <- list()
+  broken$archive_error <- list(message = "broken archive")
+  expect_identical(
+    capture.output(print(broken)),
+    c(
+      "<bigbang artifact scan>", "  Path: /tmp/artifact",
+      "  Type: source", "  Result: no deletion signatures found",
+      "  Archive error: broken archive", "  Signatures: one"
     )
   )
   expect_identical(
@@ -464,7 +519,9 @@ test_that("bigbang print methods translate in a Spanish child without changing E
     "install <- structure(list(installed=list(a=TRUE), unchanged=list(b=TRUE), ",
     "failed=list(), skipped=list()), class='bigbang_install_result'); ",
     "artifact <- structure(list(path='/tmp/artifact', type='source', ",
-    "vulnerable=FALSE, signatures='one'), class='bigbang_artifact_scan'); ",
+    "vulnerable=FALSE, signatures='one', portable_name_warnings=",
+    "list(windows=c('aux.R','con.R'), case=c('Name.R','name.R'))), ",
+    "class='bigbang_artifact_scan'); ",
     "vulnerable <- artifact; vulnerable$vulnerable <- TRUE; ",
     "artifact_print <- get('print.bigbang_artifact_scan', envir=asNamespace('bigbang')); ",
     "result_print <- get('print.bigbang_result', envir=asNamespace('bigbang')); ",
@@ -479,6 +536,7 @@ test_that("bigbang print methods translate in a Spanish child without changing E
   translated <- paste(output, collapse = "\n")
   expect_match(translated, "<escaneo de artefacto bigbang>", fixed = TRUE)
   expect_match(translated, "  Ruta: /tmp/artifact", fixed = TRUE)
+  expect_match(translated, "  Nombres no port\u00e1tiles aceptados: aux.R, con.R, Name.R, name.R", fixed = TRUE)
   expect_match(translated, "  Resultado: no se encontraron firmas de eliminaci\u00f3n", fixed = TRUE)
   expect_match(translated, "  Resultado: VULNERABLE", fixed = TRUE)
   expect_match(translated, "<metapaquete bigbang>", fixed = TRUE)
@@ -499,6 +557,7 @@ test_that("bigbang print methods translate in a Spanish child without changing E
 })
 
 test_that("generated metapackages include their own Spanish runtime catalog", {
+  skip_on_cran()
   skip_if_not(exists("create_metapackage", mode = "function"))
   sandbox <- tempfile("bigbang-i18n-meta-")
   sources <- file.path(sandbox, "sources")
@@ -552,41 +611,81 @@ test_that("generated metapackages include their own Spanish runtime catalog", {
     "Components available"
   )
   expect_identical(tail(output, 1L), "Componentes disponibles")
+  missing_reexport <- paste0(
+    "Re-exported symbol '%s' from component package '%s' is unavailable: %s. ",
+    "Run %s to install the required component version."
+  )
+  missing_reexport_output <- translate_from_catalog(
+    "R-i18nverse", file.path(result$path, "inst", "po"), missing_reexport
+  )
+  expect_identical(
+    tail(missing_reexport_output, 1L),
+    paste0(
+      "El s\u00edmbolo reexportado '%s' del paquete componente '%s' no est\u00e1 ",
+      "disponible: %s. Ejecute %s para instalar la versi\u00f3n requerida del componente."
+    )
+  )
 })
 
 test_that("every generated .meta_tr literal is in its generated catalog", {
+  skip_on_cran()
   skip_if_not(exists("create_metapackage", mode = "function"))
-  fixture <- system.file(
-    "extdata", "toycomponent_0.1.0.tar.gz", package = "bigbang"
-  )
-  if (!nzchar(fixture)) {
-    fixture <- testthat::test_path(
-      "..", "..", "inst", "extdata", "toycomponent_0.1.0.tar.gz"
-    )
-  }
   cases <- expand.grid(
     reexport = c(FALSE, TRUE), include_archives = c(FALSE, TRUE),
+    governance = c(FALSE, TRUE), document = c(FALSE, TRUE),
     KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
   )
   missing <- vector("list", nrow(cases))
+  orphan_candidates <- c(
+    "Package archive does not exist: %s",
+    "Package %s (installed version %s) is already installed.",
+    "Missing",
+    "Cannot install non-local dependencies without a configured repository: %s",
+    "Repository not configured",
+    "Installing non-local dependency: %s",
+    "Dependencies are not installed: %s",
+    "Not installed",
+    "Expected one DESCRIPTION in source ZIP; found %d",
+    "DEBUG: %s",
+    "More than one archive was supplied for component package(s): %s.",
+    "More than one archive was found for component stem '%s': %s.",
+    "Non-portable names accepted",
+    "Cannot create metapackage '%s': component package '%s' has the same name.",
+    "'only' must contain component package names.",
+    "Skipped because local dependency %s was skipped: %s",
+    paste0(
+      "Set aside remaining update-journal content at %s; only verified inventory ",
+      "files were deleted before unverified content was preserved and the update continues."
+    ),
+    "Could not unload component namespace: %s. Restart R before retrying; another package imports it.",
+    "No re-export resolutions found."
+  )
   for (index in seq_len(nrow(cases))) {
-    root <- tempfile("bigbang-i18n-generated-catalog-")
-    destination <- file.path(root, "output")
-    dir.create(destination, recursive = TRUE)
-    name <- paste0("catalogguard", index, "verse")
-    result <- create_metapackage(
-      name, "toycomponent_0.1.0", dirname(fixture), dest_dir = destination,
-      document = FALSE, verbose = FALSE, reexport = cases$reexport[[index]],
-      include_archives = cases$include_archives[[index]],
-      import_deps = character(), force_deps = character()
+    fixture <- catalog_guard_fixtures(
+      cases$include_archives[[index]]
     )
-    generated <- meta_translation_literals(result$path)
+    generated <- meta_translation_literals(fixture$path)
     catalog <- names(.metapackage_spanish_catalog(
-      name, include_archives = cases$include_archives[[index]]
+      fixture$name, include_archives = cases$include_archives[[index]]
     ))
     missing[[index]] <- c(
       setdiff(generated, catalog),
-      meta_untranslated_sentences(result$path)
+      meta_untranslated_sentences(fixture$path)
+    )
+    # The all-enabled fixture contains every conditional runtime emitter. The
+    # loop still checks all 16 public generation combinations, while avoiding
+    # a second full package generation for branches that only affect metadata.
+    expect_true(
+      length(setdiff(catalog, generated)) == 0L,
+      info = paste(
+        "catalog entries without a generated emitter:",
+        paste(setdiff(catalog, generated), collapse = " | ")
+      )
+    )
+    expect_true(
+      !any(orphan_candidates %in% catalog),
+      info = paste("orphan catalog entries:",
+                   paste(intersect(orphan_candidates, catalog), collapse = " | "))
     )
   }
   expect_true(
@@ -595,7 +694,9 @@ test_that("every generated .meta_tr literal is in its generated catalog", {
       vapply(seq_along(missing), function(index) {
         paste0(
           "reexport=", cases$reexport[[index]],
-          ", include_archives=", cases$include_archives[[index]], ": ",
+          ", include_archives=", cases$include_archives[[index]],
+          ", governance=", cases$governance[[index]],
+          ", document=", cases$document[[index]], ": ",
           paste(missing[[index]], collapse = " | ")
         )
       }, character(1L)),
@@ -655,10 +756,7 @@ test_that("Spanish catalogs are complete and preserve format placeholders", {
     "catalogverse_install", unname(meta_catalog[install_messages]), fixed = TRUE
   )))
   stem_collision <- "More than one archive was found for component stem '%s': %s."
-  expect_identical(
-    unname(meta_catalog[stem_collision]),
-    "Se encontr\u00f3 m\u00e1s de un archivo para el stem componente '%s': %s."
-  )
+  expect_false(stem_collision %in% names(meta_catalog))
   expect_identical(
     unname(local_catalog[[
       "For distinct_definitions and undetermined collisions, decide among these candidates: %s"

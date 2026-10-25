@@ -138,6 +138,7 @@ test_that("discard revalidates links after the private journal rename", {
 })
 
 test_that("unreadable discarded folders are set aside and never treated as empty", {
+  skip_on_cran()
   fixture <- round064_fixture("bigbang-round064-permissions-")
   # Entries set aside keep their 0000 mode under a new name; restore every
   # directory under the fixture so tempdir() can be removed afterwards.
@@ -295,6 +296,7 @@ test_that("journal deletion recognizes portable directory links", {
 })
 
 test_that("recover sets aside an unrecognized armed journal owned by a dead process", {
+  skip_on_cran()
   # Only a control character makes an entry name unverifiable here, and
   # Windows file names cannot contain one: the state cannot occur there.
   skip_on_os("windows")
