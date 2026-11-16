@@ -9,7 +9,6 @@
 [![Descargas de CRAN](https://cranlogs.r-pkg.org/badges/grand-total/bigbang)](https://CRAN.R-project.org/package=bigbang)
 [![Descargas de CRAN por mes](https://cranlogs.r-pkg.org/badges/bigbang)](https://CRAN.R-project.org/package=bigbang)
 [![r-universe](https://sebollin.r-universe.dev/bigbang/badges/version)](https://sebollin.r-universe.dev/bigbang)
-[![Preguntar a DeepWiki](https://img.shields.io/badge/preguntar-DeepWiki-0969DA.svg)](https://deepwiki.com/sebollin/bigbang)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.23192961-1682D4.svg)](https://doi.org/10.5281/zenodo.23192961)
 [![Estado del proyecto: activo](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 [![Licencia: GPL v3](https://img.shields.io/badge/licencia-GPL%20(%3E%3D%203)-142839.svg)](https://www.gnu.org/licenses/gpl-3.0)
