@@ -19,6 +19,157 @@
 #' @noRd
 .archive_subdir <- "archives"
 
+# Generated meta-packages embed the archive reader as deparsed source. Under a
+# coverage tool every function of bigbang is instrumented: covr wraps each
+# expression in `if (TRUE) { <counter>; expr }`, with the counter written as
+# `covr:::count(key)`, `covr:::count_and_record(key)` or
+# `.Call(covr:::covr_count, key)`. Those counters must not reach generated
+# code, which runs in processes without covr. They also do not survive
+# deparse() and parse(): a counter around a braceless branch has no `else`, so
+# the `else` that follows it attaches to the counter when the text is parsed.
+.is_coverage_counter <- function(x) {
+  if (!is.call(x)) return(FALSE)
+  covr_reference <- function(y) {
+    is.call(y) && length(y) == 3L && identical(y[[1L]], as.name(":::")) &&
+      identical(y[[2L]], as.name("covr"))
+  }
+  if (covr_reference(x[[1L]])) return(TRUE)
+  dot_call <- identical(x[[1L]], as.name(".Call")) ||
+    identical(x[[1L]], quote(base::.Call)) ||
+    identical(x[[1L]], .Call)
+  dot_call && length(x) >= 2L && covr_reference(x[[2L]])
+}
+
+.is_coverage_wrapper <- function(x) {
+  is.call(x) && length(x) == 3L && identical(x[[1L]], as.name("if")) &&
+    isTRUE(x[[2L]]) && is.call(x[[3L]]) &&
+    identical(x[[3L]][[1L]], as.name("{")) && length(x[[3L]]) >= 3L &&
+    .is_coverage_counter(x[[3L]][[2L]])
+}
+
+# Removes coverage counters from a language object, recursing into calls and
+# into the argument defaults of nested `function` expressions.
+.strip_coverage_counters <- function(x) {
+  if (!is.call(x)) return(x)
+  if (.is_coverage_wrapper(x)) {
+    kept <- lapply(as.list(x[[3L]])[-c(1L, 2L)], .strip_coverage_counters)
+    if (length(kept) == 1L) return(kept[[1L]])
+    return(as.call(c(list(as.name("{")), kept)))
+  }
+  for (index in seq_along(x)) {
+    if (is.call(x[[index]])) {
+      x[index] <- list(.strip_coverage_counters(x[[index]]))
+    }
+  }
+  if (identical(x[[1L]], as.name("function")) && length(x) >= 2L &&
+        is.pairlist(x[[2L]]) && length(x[[2L]]) > 0L) {
+    x[[2L]] <- as.pairlist(.strip_coverage_defaults(as.list(x[[2L]])))
+  }
+  x
+}
+
+.strip_coverage_defaults <- function(defaults) {
+  for (index in seq_along(defaults)) {
+    if (is.call(defaults[[index]])) {
+      defaults[index] <- list(.strip_coverage_counters(defaults[[index]]))
+    }
+  }
+  defaults
+}
+
+# Returns `object` itself unless it is a closure with coverage counters.
+.without_coverage_counters <- function(object) {
+  if (!is.function(object) || is.primitive(object)) return(object)
+  old_body <- body(object)
+  old_formals <- as.list(formals(object))
+  # Every counter refers to covr, so code without that name has none.
+  defaults <- as.call(c(list(as.name("c")), old_formals))
+  if (!("covr" %in% c(all.names(old_body), all.names(defaults)))) {
+    return(object)
+  }
+  new_body <- .strip_coverage_counters(old_body)
+  new_formals <- .strip_coverage_defaults(old_formals)
+  if (identical(new_body, old_body) && identical(new_formals, old_formals)) {
+    return(object)
+  }
+  formals(object) <- new_formals
+  body(object) <- new_body
+  object
+}
+
+# Drops source references, which parse(keep.source = FALSE) does not create,
+# so that parsed code can be compared with the code of a closure.
+.language_without_srcrefs <- function(x) {
+  if (!is.call(x)) return(x)
+  attributes(x) <- NULL
+  is_function <- identical(x[[1L]], as.name("function"))
+  if (is_function && length(x) >= 4L) x[4L] <- list(NULL)
+  for (index in seq_along(x)) {
+    if (is.call(x[[index]])) {
+      x[index] <- list(.language_without_srcrefs(x[[index]]))
+    }
+  }
+  if (is_function && length(x) >= 2L && is.pairlist(x[[2L]]) &&
+        length(x[[2L]]) > 0L) {
+    x[[2L]] <- as.pairlist(.defaults_without_srcrefs(as.list(x[[2L]])))
+  }
+  x
+}
+
+.defaults_without_srcrefs <- function(defaults) {
+  for (index in seq_along(defaults)) {
+    if (is.call(defaults[[index]])) {
+      defaults[index] <- list(.language_without_srcrefs(defaults[[index]]))
+    }
+  }
+  defaults
+}
+
+# Whether `source`, the deparsed `name <- value` assignments of `objects`,
+# parses back to the same functions and values. R's deparser does not add the
+# braces that some programmatically built code needs, so this is checked
+# rather than assumed.
+.deparsed_code_matches <- function(source, objects) {
+  expressions <- tryCatch(
+    parse(text = source, keep.source = FALSE),
+    error = function(error) NULL
+  )
+  if (is.null(expressions) || length(expressions) != length(objects)) {
+    return(FALSE)
+  }
+  for (index in seq_along(objects)) {
+    expression <- expressions[[index]]
+    if (!is.call(expression) || !identical(expression[[1L]], as.name("<-")) ||
+          !identical(expression[[2L]], as.name(names(objects)[[index]]))) {
+      return(FALSE)
+    }
+    value <- expression[[3L]]
+    object <- objects[[index]]
+    if (is.function(object)) {
+      if (!is.call(value) || !identical(value[[1L]], as.name("function"))) {
+        return(FALSE)
+      }
+      # Installed packages usually have no source references, so the direct
+      # comparison is enough; the slower one is for code that has them.
+      same <- identical(as.list(value[[2L]]), as.list(formals(object))) &&
+        identical(value[[3L]], body(object))
+      if (!same) {
+        same <- identical(
+          .defaults_without_srcrefs(as.list(value[[2L]])),
+          .defaults_without_srcrefs(as.list(formals(object)))
+        ) && identical(
+          .language_without_srcrefs(value[[3L]]),
+          .language_without_srcrefs(body(object))
+        )
+      }
+      if (!same) return(FALSE)
+    } else if (!identical(eval(value, baseenv()), object)) {
+      return(FALSE)
+    }
+  }
+  TRUE
+}
+
 .archive_reader_template <- function() {
   reader_names <- c(
     ".path_is_windows_reparse_point", ".path_is_symlink",
@@ -63,10 +214,20 @@
     ".archive_relaxed_names"
   )
   reader_environment <- environment(.archive_inspect)
+  objects <- stats::setNames(lapply(reader_names, function(name) {
+    .without_coverage_counters(
+      get(name, envir = reader_environment, inherits = TRUE)
+    )
+  }), reader_names)
   source <- unlist(lapply(reader_names, function(name) {
-    object <- get(name, envir = reader_environment, inherits = TRUE)
-    c(paste0(name, " <- "), deparse(object, width.cutoff = 500L))
+    c(paste0(name, " <- "), deparse(objects[[name]], width.cutoff = 500L))
   }), use.names = FALSE)
+  if (!.deparsed_code_matches(source, objects)) {
+    .bigbang_abort(
+      "bigbang_error_internal",
+      .bb_tr("Internal error: the archive reader copied into generated meta-packages does not match its source functions.")
+    )
+  }
   source <- gsub(".bb_trf", ".meta_trf", source, fixed = TRUE)
   source <- gsub(".bb_tr", ".meta_tr", source, fixed = TRUE)
   paste(source, collapse = "\n")

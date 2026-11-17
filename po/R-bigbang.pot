@@ -403,6 +403,9 @@ msgstr ""
 msgid "Could not extract archive %s safely: %s"
 msgstr ""
 
+msgid "Internal error: the archive reader copied into generated meta-packages does not match its source functions."
+msgstr ""
+
 msgid "could not validate gzip member trailer"
 msgstr ""
 
