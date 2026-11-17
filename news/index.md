@@ -2,7 +2,19 @@
 
 ## bigbang (development version)
 
+### Tests
+
+- The tests pass again when coverage is measured with covr 4.0.0.
+  Generated meta-packages embed bigbang’s archive reader as deparsed
+  source. Under covr that source carried the counters covr adds, and
+  with covr 4.0.0 it no longer parsed back to the same functions
+  (r-lib/covr#776). bigbang now removes coverage counters before it
+  embeds the reader, and checks that the embedded code parses back to
+  the same functions.
+
 ## bigbang 0.6.1
+
+CRAN release: 2026-11-17
 
 ### Bug fixes
 

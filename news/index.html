@@ -34,9 +34,13 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="bigbang-development-version">bigbang (development version)<a class="anchor" aria-label="anchor" href="#bigbang-development-version"></a></h2>
+<div class="section level3">
+<h3 id="tests-development-version">Tests<a class="anchor" aria-label="anchor" href="#tests-development-version"></a></h3>
+<ul><li>The tests pass again when coverage is measured with covr 4.0.0. Generated meta-packages embed bigbang’s archive reader as deparsed source. Under covr that source carried the counters covr adds, and with covr 4.0.0 it no longer parsed back to the same functions (r-lib/covr#776). bigbang now removes coverage counters before it embeds the reader, and checks that the embedded code parses back to the same functions.</li>
+</ul></div>
 </div>
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.6.1" id="bigbang-061">bigbang 0.6.1<a class="anchor" aria-label="anchor" href="#bigbang-061"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.6.1" id="bigbang-061">bigbang 0.6.1<a class="anchor" aria-label="anchor" href="#bigbang-061"></a></h2><p class="text-muted">CRAN release: 2026-11-17</p>
 <div class="section level3">
 <h3 id="bug-fixes-0-6-1">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-6-1"></a></h3>
 <ul><li>
