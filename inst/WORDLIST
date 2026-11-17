@@ -3,6 +3,7 @@ bigbang's
 checkable
 CMD
 Codecov
+covr
 cryptographic
 CRAN
 cwd

@@ -134,6 +134,7 @@
     "Archive contains unsafe absolute or parent-traversal paths: %s" = "El archivo contiene rutas absolutas o recorridos al directorio padre inseguros: %s",
     "Archive %s contains symbolic links or another unsupported special entry: %s" = "El archivo %s contiene enlaces simb\u00f3licos u otra entrada especial no compatible: %s",
     "Could not extract archive %s safely: %s" = "No se pudo extraer el archivo %s de forma segura: %s",
+    "Internal error: the archive reader copied into generated meta-packages does not match its source functions." = "Error interno: el lector de archivos que se copia en los metapaquetes generados no coincide con sus funciones de origen.",
     "could not validate gzip member trailer" = "no se pudo validar el tr\u00e1iler del miembro gzip",
     "could not decompress TAR archive: %s" = "no se pudo descomprimir el archivo TAR: %s",
     "Archive error" = "Error del archivo",

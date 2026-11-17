@@ -48,13 +48,9 @@ jobs:
           sudo apt-get install -y language-pack-es
           sudo locale-gen es_ES.UTF-8
 
-      # covr is pinned to 3.6.5. covr 4.0.0 instruments braceless if/else
-      # branches with code that does not survive deparse() and parse(), and
-      # generated meta-packages embed the deparsed archive reader, so their
-      # tests fail under coverage only. Drop the pin once that is fixed.
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck, covr@3.6.5, any::xml2, any::lintr, any::tinytex
+          extra-packages: any::rcmdcheck, any::covr, any::xml2, any::lintr, any::tinytex
           needs: check
 
       - name: Install LaTeX packages required by the PDF manual
@@ -88,7 +84,7 @@ jobs:
             quiet = FALSE, clean = FALSE, install_path = install_path
           )
           print(coverage)
-          covr::to_cobertura(coverage, filename = "cobertura.xml")
+          covr::cobertura(coverage, file = "cobertura.xml")
 
       - name: Diagnose test coverage failure
         if: failure() && matrix.config.os == 'ubuntu-latest' && matrix.config.r == 'release'
