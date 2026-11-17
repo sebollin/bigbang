@@ -1,6 +1,6 @@
 # Changelog
 
-## bigbang (development version)
+## bigbang 0.6.1
 
 ### Bug fixes
 
