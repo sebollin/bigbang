@@ -1,10 +1,9 @@
 url: https://sebollin.github.io/bigbang/
 home:
-  title: "bigbang — create custom R metapackages from local packages"
+  title: "bigbang — build and share your R toolkit"
   description: >
-    bigbang — create custom R metapackages from local packages. Distribute a
-    curated, version-pinned set of interdependent packages as a single
-    installable metapackage that knows its own installation order.
+    Share your R toolkit as one metapackage that knows its own installation
+    order.
 template:
   bootstrap: 5
   light-switch: true
