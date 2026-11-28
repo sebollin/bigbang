@@ -1,6 +1,6 @@
 # bigbang <img src="man/figures/logo.png" align="right" height="200" alt="bigbang logo" />
 
-> **Create custom R metapackages from local packages.**
+> **Your R toolkit. One metapackage that knows its own installation order.**
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml)
@@ -16,50 +16,64 @@
 [![docs: español](https://img.shields.io/badge/docs-espa%C3%B1ol-0D9786.svg)](https://github.com/sebollin/bigbang/blob/main/README.es.md)
 <!-- badges: end -->
 
-**bigbang** builds tidyverse-style metapackages from local package archives.
-Every metapackage ends in *-verse*—`tidyverse`, `teamverse`, yours. This package
-creates them: one function call, and a new *-verse* exists.
+**bigbang** turns a set of interdependent R packages into one metapackage, in
+the style of the tidyverse, that you can version and share as a single bundle.
 
-Its reason to exist is **distributing a set of packages as a single unit**.
+Say you maintain four R packages that form your organization's internal
+toolkit. They work together and depend on each other. Someone joins the team,
+or another office asks for them. They are not on CRAN, so you send a folder of
+`.tar.gz` files and instructions: install this one first, then that one.
 
-Say you maintain four packages of your own that are used together and depend on
-each other. Someone joins the team, or another office asks for them. They are
-not on CRAN, so the way to hand them over is a folder of `.tar.gz` files.
+Those instructions are manual work for every recipient, and one more document
+to keep current whenever a package changes or joins the set.
 
-At best you add instructions: install this one first, then that one, this
-version goes with that one. But instructions are manual work for whoever
-receives them, and one more document to keep current every time a version
-changes or a package joins the set.
+bigbang puts that knowledge inside the metapackage instead. It bundles the
+component archives and knows its own installation order, derived from the
+dependencies each component declares; cycles are rejected when you generate
+it. Components need neither publication in a repository nor a clean
+`R CMD check`. bigbang validates archive structure, metadata, and declared
+dependencies; testing what the components do stays with their maintainers.
 
-bigbang puts that knowledge inside the package instead. The order comes from the
-real dependency graph and the versions are recorded in the generated
-metapackage, so there is nothing to follow by hand and nothing that can drift
-out of step with what the folder actually contains. The set you curated is the
-set they install, in a single line.
+When the toolkit changes, raise the versions of the components you changed and
+publish a new version of the metapackage. Recipients install it and call
+`teamverse_install()` again. By default, that call installs missing components
+and upgrades only those whose bundled version is newer than the installed one.
+
+Call it `teamverse`, or any other valid package name. Installation works
+offline when external dependencies are already available, or it can install
+them from a repository you configure explicitly.
 
 ## ✨ At a glance
 
-- 📦 **One call, one -verse** — `create_metapackage()` scaffolds a complete,
-  documented, CRAN-checkable metapackage from your own package archives.
+- 🧭 **Installation order built in** — the dependencies declared among
+  components form a graph, and the installer follows its topological order.
+  Cycles and local version requirements that cannot be met are rejected
+  during generation. Nobody downstream has to work out what to install first.
+- 📮 **One artifact to hand over** — the component archives travel inside the
+  generated metapackage together with its installer, so `<meta>_install()`
+  works with no arguments, recipients do not need bigbang, and no path has to
+  be agreed on between machines.
+- 🔄 **Updates by version** — by default, the installer adds missing
+  components and upgrades only those whose bundled version is newer than the
+  installed one. Generate with `install_upgrade = "always"` to reinstall every
+  component from the bundled archives instead.
+- 🏢 **Internal packages welcome** — components need neither publication in a
+  repository nor a clean `R CMD check`. Archive and dependency validation still
+  apply.
+- 🔍 **Inspect before installing** — `<meta>_deps(plan = TRUE)` shows versions,
+  libraries, planned actions, and unmet external requirements without
+  installing anything or contacting a repository.
+- 🔌 **Repository access is your choice** — `cran_deps = "skip"`, the default,
+  never contacts a repository, so installation works offline when external
+  dependencies are already available. `cran_deps = "install"` with an explicit
+  `repos` installs them.
 - 🗂️ **Your packages where you keep them** — components can come from several
   directories, mix `.tar.gz`, `.tar` and `.zip`, carry no version in the
   filename, be listed in a manifest file, or be source directories that bigbang
   builds for you. Identity and version are read from each archive's
   `DESCRIPTION`, not guessed from its name.
-- 🎯 **A curated set, distributed as one** — the metapackage records and ships
-  the exact archive versions it was built from. By default a recipient who
-  already has a newer version keeps it; generate with
-  `install_upgrade = "always"` and every installation gets the combination you
-  tested.
-- 📮 **One artifact to hand over** — the component archives travel inside the
-  generated metapackage, so `<meta>_install()` works with no arguments and no
-  path has to be agreed on between machines.
-- 🧭 **Real dependency resolution** — builds the local dependency graph,
-  orders installation topologically, and refuses cycles up front. Nobody
-  downstream has to work out what to install first.
-- 🔌 **No repository required** — every component is read from local files, so
-  installation needs no network at all; `cran_deps = "skip"` is the default. This is what makes bigbang work behind an institutional firewall,
-  but it is just as useful for shipping a versioned bundle anywhere.
+- 📦 **One call, one metapackage** — `create_metapackage()` scaffolds a
+  complete, documented package source tree from your own package archives.
 - 🌐 **Bilingual at runtime** — English and Spanish messages through R's native
   gettext support.
 - 🛡️ **Safe by design** — startup hooks never install packages or remove
@@ -68,7 +82,8 @@ set they install, in a single line.
 The generated package has two separate jobs:
 
 - `library(<meta>)` attaches components that are already installed and reports
-  missing ones.
+  missing ones. With `reexport = TRUE`, it exposes their exports through
+  bindings instead.
 - `<meta>_install()` explicitly installs local archives once, in topological
   dependency order, and then attaches them.
 
@@ -99,8 +114,8 @@ pak::pak("sebollin/bigbang")
 remotes::install_github("sebollin/bigbang")
 ```
 
-And true to the package's offline spirit, a local source checkout installs
-without any network at all:
+A local source checkout also installs without a repository, provided bigbang's
+dependencies are already installed:
 
 ```r
 install.packages("path/to/bigbang", repos = NULL, type = "source")
@@ -242,10 +257,11 @@ The liveness proof and process-start token are selected by platform:
 The source is stored with the token, so a `/proc` token is never compared with
 a `ps` token. `LANGUAGE` and `LC_TIME` cannot change the portable `ps` token.
 
-`cran_deps = "skip"` is the default and never accesses the network. Use
-`"error"` to fail immediately when a non-local dependency is missing, or
-`"install"` with an explicitly configured `repos` value to allow repository
-installation.
+`cran_deps = "skip"` is the default and never contacts a repository: a
+component whose non-local dependency is missing is skipped and reported. Use
+`"error"` to report those components as failures, still without attempting
+repository installation, or `"install"` with an explicitly configured `repos`
+value to allow repository installation.
 
 Generated installers also accept `upgrade = "newer"` (the default), `"always"`,
 or `"never"`; `force = TRUE` is the concise form of `upgrade = "always"`.
@@ -265,9 +281,13 @@ workflow = c("Import" = "datahelpers", "Report" = "reports")
 During generation, bigbang validates everything that protects the recipient of a
 generated metapackage. Unsafe or malformed archives, invalid component metadata,
 duplicate components, unsatisfied local version constraints, and dependency
-cycles are always hard errors and cannot be disabled. Installation is more
-tolerant: an already installed component can be kept when an archive it will
-not use cannot be read, and the reason is reported.
+cycles are always hard errors and cannot be disabled. With
+`on_component_error = "skip"`, generation leaves an invalid component and the
+components that depend on it out of the metapackage, but it never includes
+them. `install_local_pkg()` is more tolerant: it can keep an already installed
+component when an archive it will not use cannot be read, and reports the
+reason. A generated installer reads the archives of every component it
+installs or keeps.
 
 Checks about project tidiness can be relaxed individually and explicitly:
 
@@ -444,9 +464,12 @@ source package and are tracked by `update = TRUE`.
   liveness is never tested with
   `tools::pskill()`, because it would terminate the probed process.
 - `install_upgrade` fixes the default upgrade policy of the installer that gets
-  emitted, so you decide when generating whether recipients stay pinned to the
-  versions you ship (`"always"`) or keep anything newer they already have
-  (`"newer"`, the default).
+  emitted, so you decide when generating whether recipients reinstall every
+  component from the archives you ship (`"always"`), keep any installed version
+  at least as new as the shipped one (`"newer"`, the default), or keep any
+  installed version at all (`"never"`). Missing components are installed under
+  every policy, and recipients can still choose another policy with `upgrade`.
+  None of them pins external dependencies.
 
 The generated installer also takes `only` to install a subset — local
 dependencies of the selection are added automatically — and `lib` to choose the

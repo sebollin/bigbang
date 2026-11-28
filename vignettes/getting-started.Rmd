@@ -12,6 +12,12 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 library(bigbang)
 ```
 
+bigbang turns a collection of R packages into one metapackage that can be
+versioned and shared as a single bundle, with component installation ordered
+by the dependencies the components declare. The same workflow applies to an
+organization's internal toolkit and to any other set of packages maintained
+together.
+
 ## A complete disposable example
 
 This guide creates a component archive and a metapackage source tree entirely
@@ -128,11 +134,12 @@ Before installing on a recipient machine, inspect the read-only plan:
 toyverse_deps(plan = TRUE, upgrade = "newer", cran_deps = "skip")
 ```
 
-This reads the archive `DESCRIPTION` files and installed package metadata only.
-It reports the archive version, installed version and library, planned action,
-and missing or unsatisfied external constraints. It performs no loading,
-installation, network access, or disk write. The installer and this plan share
-the same version and upgrade policy evaluation.
+This reads the archive `DESCRIPTION` files and installed package metadata. It
+reports the archive version, installed version and library, planned action,
+and missing or unsatisfied external constraints. It does not load components,
+install anything, or contact a repository, and it writes only to its own
+temporary directory, which it removes on exit. The installer and this plan
+share the same version and upgrade policy evaluation.
 
 ## Interrupted updates and recovery
 
