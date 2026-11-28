@@ -66,11 +66,19 @@
 <div class="section level2">
 <h2 id="qué-hace-bigbang">Qué hace bigbang<a class="anchor" aria-label="anchor" href="#qu%C3%A9-hace-bigbang"></a>
 </h2>
-<p><code>bigbang</code> crea un metapaquete a partir de archivos locales
-<code>.tar.gz</code>, <code>.tar</code> o <code>.zip</code>. Está
-pensado para equipos que distribuyen paquetes internos sin depender de
-un repositorio en línea. La generación nunca instala componentes ni
-borra contenido del directorio de trabajo.</p>
+<p><code>bigbang</code> convierte un conjunto de paquetes de R que
+dependen entre sí en un solo metapaquete, que se puede versionar y
+compartir como una unidad. El metapaquete lleva los archivos
+<code>.tar.gz</code>, <code>.tar</code> o <code>.zip</code> de sus
+componentes y sabe en qué orden instalarlos, a partir de las
+dependencias que declara cada uno. Sirve, por ejemplo, para distribuir
+la caja de herramientas interna de una organización: los componentes no
+necesitan estar publicados en un repositorio ni pasar
+<code>R CMD check</code> sin observaciones. Con cada versión nueva del
+metapaquete, el instalador agrega los componentes que faltan y, por
+omisión, actualiza solo los que traen una versión más nueva que la
+instalada. La generación nunca instala componentes ni borra contenido
+del directorio de trabajo.</p>
 <p>La API pública usa nombres en inglés para ser consistente con el
 ecosistema de R:</p>
 <ul>
@@ -103,17 +111,20 @@ extensión:</p>
 <span>  document <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">resultado</span></span></code></pre></div>
-<p>El destino debe ser nuevo o estar vacío. Esta restricción evita
-conservar hooks o scripts generados por versiones antiguas vulnerables.
-Nunca regenere in-place una fuente cuya procedencia no haya sido
-verificada.</p>
+<p>El destino debe ser nuevo o estar vacío, salvo para actualizar con
+<code>update = TRUE</code> un proyecto que bigbang generó y cuyo
+manifiesto sigue intacto. Esta restricción evita conservar hooks o
+scripts generados por versiones antiguas vulnerables. Nunca regenere
+in-place una fuente cuya procedencia no haya sido verificada.</p>
 </div>
 <div class="section level2">
 <h2 id="instalar-y-adjuntar-componentes">Instalar y adjuntar componentes<a class="anchor" aria-label="anchor" href="#instalar-y-adjuntar-componentes"></a>
 </h2>
-<p>La instalación es explícita. <code><a href="https://rdrr.io/r/base/library.html" class="external-link">library(equipoverse)</a></code> solo
-adjunta los componentes ya instalados e informa cuáles faltan. Para
-instalar desde los archivos locales:</p>
+<p>La instalación es explícita. En el modo predeterminado,
+<code><a href="https://rdrr.io/r/base/library.html" class="external-link">library(equipoverse)</a></code> solo adjunta los componentes ya
+instalados e informa cuáles faltan; con <code>reexport = TRUE</code>
+expone sus exportaciones mediante bindings. Para instalar desde los
+archivos locales:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">equipoverse</span><span class="op">)</span></span>
 <span><span class="fu">equipoverse_install</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
@@ -131,11 +142,14 @@ donde quedó instalado.</p>
 deban permanecer en una ubicación a la que todos los destinatarios ya
 tengan acceso; en ese caso <code>equipoverse_install()</code> va a pedir
 un <code>pkg_dir</code> explícito.</p>
-<p>La política predeterminada <code>cran_deps = "skip"</code> no accede
-a la red. Las alternativas son <code>"error"</code> (falla sin red) e
-<code>"install"</code> (intenta instalar desde <code>repos</code>). Los
-paquetes locales se instalan una sola vez en orden topológico; los
-ciclos producen una condición <code>bigbang_error_cycle</code>.</p>
+<p>La política predeterminada <code>cran_deps = "skip"</code> no
+consulta repositorios: saltea los componentes a los que les falta una
+dependencia externa y lo informa. Las alternativas son
+<code>"error"</code> (informa esos componentes como fallas, también sin
+consultar repositorios) e <code>"install"</code> (intenta instalar desde
+<code>repos</code>). Los paquetes locales se instalan una sola vez en
+orden topológico; los ciclos producen una condición
+<code>bigbang_error_cycle</code>.</p>
 <p><code>upgrade = "newer"</code> instala solo archivos más nuevos;
 <code>"always"</code> reinstala y <code>"never"</code> conserva
 cualquier versión instalada. <code>force = TRUE</code> equivale a
@@ -148,12 +162,13 @@ fallar.</p>
 lectura:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">equipoverse_deps</span><span class="op">(</span>plan <span class="op">=</span> <span class="cn">TRUE</span>, upgrade <span class="op">=</span> <span class="st">"newer"</span>, cran_deps <span class="op">=</span> <span class="st">"skip"</span><span class="op">)</span></span></code></pre></div>
-<p>Lee únicamente los <code>DESCRIPTION</code> de los archivos y los
-metadatos de los paquetes instalados. Informa la versión del archivo, la
-versión y biblioteca instaladas, la acción prevista y las restricciones
-externas faltantes o no satisfechas. No carga, instala, usa la red ni
-escribe en disco. El instalador y este diagnóstico comparten la misma
-evaluación de versiones y de la política <code>upgrade</code>.</p>
+<p>Lee los <code>DESCRIPTION</code> de los archivos y los metadatos de
+los paquetes instalados. Informa la versión del archivo, la versión y
+biblioteca instaladas, la acción prevista y las restricciones externas
+faltantes o no satisfechas. No carga componentes, no instala nada ni
+consulta repositorios, y solo escribe en su propio directorio temporal,
+que borra al terminar. El instalador y este diagnóstico comparten la
+misma evaluación de versiones y de la política <code>upgrade</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="colisiones-de-reexportación">Colisiones de reexportación<a class="anchor" aria-label="anchor" href="#colisiones-de-reexportaci%C3%B3n"></a>

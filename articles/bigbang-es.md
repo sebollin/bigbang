@@ -2,9 +2,16 @@
 
 ## Qué hace bigbang
 
-`bigbang` crea un metapaquete a partir de archivos locales `.tar.gz`,
-`.tar` o `.zip`. Está pensado para equipos que distribuyen paquetes
-internos sin depender de un repositorio en línea. La generación nunca
+`bigbang` convierte un conjunto de paquetes de R que dependen entre sí
+en un solo metapaquete, que se puede versionar y compartir como una
+unidad. El metapaquete lleva los archivos `.tar.gz`, `.tar` o `.zip` de
+sus componentes y sabe en qué orden instalarlos, a partir de las
+dependencias que declara cada uno. Sirve, por ejemplo, para distribuir
+la caja de herramientas interna de una organización: los componentes no
+necesitan estar publicados en un repositorio ni pasar `R CMD check` sin
+observaciones. Con cada versión nueva del metapaquete, el instalador
+agrega los componentes que faltan y, por omisión, actualiza solo los que
+traen una versión más nueva que la instalada. La generación nunca
 instala componentes ni borra contenido del directorio de trabajo.
 
 La API pública usa nombres en inglés para ser consistente con el
@@ -36,16 +43,18 @@ resultado <- create_metapackage(
 resultado
 ```
 
-El destino debe ser nuevo o estar vacío. Esta restricción evita
-conservar hooks o scripts generados por versiones antiguas vulnerables.
-Nunca regenere in-place una fuente cuya procedencia no haya sido
-verificada.
+El destino debe ser nuevo o estar vacío, salvo para actualizar con
+`update = TRUE` un proyecto que bigbang generó y cuyo manifiesto sigue
+intacto. Esta restricción evita conservar hooks o scripts generados por
+versiones antiguas vulnerables. Nunca regenere in-place una fuente cuya
+procedencia no haya sido verificada.
 
 ## Instalar y adjuntar componentes
 
-La instalación es explícita.
+La instalación es explícita. En el modo predeterminado,
 [`library(equipoverse)`](https://rdrr.io/r/base/library.html) solo
-adjunta los componentes ya instalados e informa cuáles faltan. Para
+adjunta los componentes ya instalados e informa cuáles faltan; con
+`reexport = TRUE` expone sus exportaciones mediante bindings. Para
 instalar desde los archivos locales:
 
 ``` r
@@ -69,11 +78,13 @@ permanecer en una ubicación a la que todos los destinatarios ya tengan
 acceso; en ese caso `equipoverse_install()` va a pedir un `pkg_dir`
 explícito.
 
-La política predeterminada `cran_deps = "skip"` no accede a la red. Las
-alternativas son `"error"` (falla sin red) e `"install"` (intenta
-instalar desde `repos`). Los paquetes locales se instalan una sola vez
-en orden topológico; los ciclos producen una condición
-`bigbang_error_cycle`.
+La política predeterminada `cran_deps = "skip"` no consulta
+repositorios: saltea los componentes a los que les falta una dependencia
+externa y lo informa. Las alternativas son `"error"` (informa esos
+componentes como fallas, también sin consultar repositorios) e
+`"install"` (intenta instalar desde `repos`). Los paquetes locales se
+instalan una sola vez en orden topológico; los ciclos producen una
+condición `bigbang_error_cycle`.
 
 `upgrade = "newer"` instala solo archivos más nuevos; `"always"`
 reinstala y `"never"` conserva cualquier versión instalada.
@@ -90,12 +101,13 @@ lectura:
 equipoverse_deps(plan = TRUE, upgrade = "newer", cran_deps = "skip")
 ```
 
-Lee únicamente los `DESCRIPTION` de los archivos y los metadatos de los
-paquetes instalados. Informa la versión del archivo, la versión y
-biblioteca instaladas, la acción prevista y las restricciones externas
-faltantes o no satisfechas. No carga, instala, usa la red ni escribe en
-disco. El instalador y este diagnóstico comparten la misma evaluación de
-versiones y de la política `upgrade`.
+Lee los `DESCRIPTION` de los archivos y los metadatos de los paquetes
+instalados. Informa la versión del archivo, la versión y biblioteca
+instaladas, la acción prevista y las restricciones externas faltantes o
+no satisfechas. No carga componentes, no instala nada ni consulta
+repositorios, y solo escribe en su propio directorio temporal, que borra
+al terminar. El instalador y este diagnóstico comparten la misma
+evaluación de versiones y de la política `upgrade`.
 
 ## Colisiones de reexportación
 

@@ -35,6 +35,12 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="bigbang-development-version">bigbang (development version)<a class="anchor" aria-label="anchor" href="#bigbang-development-version"></a></h2>
 <div class="section level3">
+<h3 id="documentation-development-version">Documentation<a class="anchor" aria-label="anchor" href="#documentation-development-version"></a></h3>
+<ul><li>The title, the description and the opening of the README now say what bigbang is for: distributing a set of interdependent packages, such as an organization’s internal toolkit, as one meta-package that installs its components in dependency order. They also say that components do not need to be published in a repository or pass <code>R CMD check</code>, and how a new version of the meta-package upgrades only the components whose bundled version is newer. Working offline is now described as an option rather than as the purpose of the package.</li>
+<li>The help of <code><a href="../reference/create_metapackage.html">create_metapackage()</a></code> no longer says that <code>install_upgrade = "never"</code> skips archive inspection, or that a generated installer can keep a component without reading its archive. Only <code><a href="../reference/install_local_pkg.html">install_local_pkg()</a></code> does that; a generated installer reads the archives of every component it handles under every policy.</li>
+<li>The vignettes and the README describe more precisely what <code>&lt;meta&gt;_deps(plan = TRUE)</code> and <code>cran_deps = "error"</code> do: the plan writes only to its own temporary directory, and <code>"error"</code> reports the components with a missing external dependency instead of stopping at the first one.</li>
+</ul></div>
+<div class="section level3">
 <h3 id="tests-development-version">Tests<a class="anchor" aria-label="anchor" href="#tests-development-version"></a></h3>
 <ul><li>The tests pass again when coverage is measured with covr 4.0.0. Generated meta-packages embed bigbang’s archive reader as deparsed source. Under covr that source carried the counters covr adds, and with covr 4.0.0 it no longer parsed back to the same functions (r-lib/covr#776). bigbang now removes coverage counters before it embeds the reader, and checks that the embedded code parses back to the same functions.</li>
 </ul></div>

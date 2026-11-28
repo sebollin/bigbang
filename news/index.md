@@ -2,6 +2,30 @@
 
 ## bigbang (development version)
 
+### Documentation
+
+- The title, the description and the opening of the README now say what
+  bigbang is for: distributing a set of interdependent packages, such as
+  an organization’s internal toolkit, as one meta-package that installs
+  its components in dependency order. They also say that components do
+  not need to be published in a repository or pass `R CMD check`, and
+  how a new version of the meta-package upgrades only the components
+  whose bundled version is newer. Working offline is now described as an
+  option rather than as the purpose of the package.
+- The help of
+  [`create_metapackage()`](https://sebollin.github.io/bigbang/reference/create_metapackage.md)
+  no longer says that `install_upgrade = "never"` skips archive
+  inspection, or that a generated installer can keep a component without
+  reading its archive. Only
+  [`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md)
+  does that; a generated installer reads the archives of every component
+  it handles under every policy.
+- The vignettes and the README describe more precisely what
+  `<meta>_deps(plan = TRUE)` and `cran_deps = "error"` do: the plan
+  writes only to its own temporary directory, and `"error"` reports the
+  components with a missing external dependency instead of stopping at
+  the first one.
+
 ### Tests
 
 - The tests pass again when coverage is measured with covr 4.0.0.

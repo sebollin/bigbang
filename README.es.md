@@ -1,6 +1,7 @@
 # bigbang
 
-> **Creá tus propios metapaquetes de R a partir de paquetes locales.**
+> **Tu caja de herramientas de R. Un metapaquete que sabe en qué orden
+> instalarse.**
 
 [![R-CMD-check](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/sebollin/bigbang/actions/workflows/R-CMD-check.yaml)
 [![Cobertura de tests en
@@ -22,67 +23,79 @@ estable](https://img.shields.io/badge/ciclo%20de%20vida-estable-0D9786.svg)](htt
 [![docs:
 English](https://img.shields.io/badge/docs-English-0D9786.svg)](https://github.com/sebollin/bigbang/blob/main/README.md)
 
-**bigbang** construye metapaquetes estilo tidyverse a partir de archivos
-locales. Todo metapaquete termina en *-verse*—`tidyverse`,
-`equipoverse`, el tuyo. Este paquete es lo que los crea: una llamada, y
-un nuevo *-verse* existe.
+**bigbang** convierte un conjunto de paquetes de R que dependen entre sí
+en un solo metapaquete, al estilo del tidyverse, que podés versionar y
+compartir como una unidad.
 
-Su razón de ser es **distribuir un conjunto de paquetes como una sola
-unidad**.
+Supongamos que mantenés cuatro paquetes de R que forman la caja de
+herramientas interna de tu organización. Se usan juntos y dependen entre
+sí. Entra alguien nuevo al equipo, o te los pide otra oficina. Como no
+están en CRAN, mandás una carpeta con los `.tar.gz` e instrucciones:
+instalá este primero, después aquel.
 
-Supongamos que mantenés cuatro paquetes propios que se usan juntos y
-dependen entre sí. Entra alguien nuevo al equipo, o te los pide otra
-oficina. Como no están en CRAN, la forma de entregarlos es mandar una
-carpeta con los `.tar.gz`.
+Esas instrucciones son trabajo manual para cada persona que las recibe,
+y un documento más que mantener al día cada vez que cambia un paquete o
+entra uno nuevo.
 
-En el mejor de los casos le sumás instrucciones: instalá este primero,
-después este otro, esta versión va con aquella. Pero esas instrucciones
-son trabajo manual para quien recibe, y un documento más que mantener al
-día cada vez que cambia una versión o entra un paquete nuevo.
+bigbang pone ese conocimiento adentro del metapaquete. Lleva los
+archivos de sus componentes y sabe en qué orden instalarlos, a partir de
+las dependencias que declara cada uno; los ciclos se rechazan al
+generarlo. Los componentes no necesitan estar publicados en un
+repositorio ni pasar `R CMD check` sin observaciones. bigbang valida la
+estructura de los archivos, la metadata y las dependencias declaradas;
+probar lo que hacen los componentes sigue siendo tarea de quienes los
+mantienen.
 
-bigbang pone ese conocimiento adentro del paquete, y también los
-archivos: el metapaquete generado lleva los `.tar.gz` de sus
-componentes. Le entregás un solo archivo y nada más —ni la carpeta al
-lado, ni una ruta que acordar— y del otro lado alcanza una línea. El
-orden sale del grafo real de dependencias y las versiones quedan
-registradas, así que no hay nada que seguir a mano ni nada que pueda
-quedar desfasado.
+Cuando la caja de herramientas cambia, subí la versión de los
+componentes que cambiaste y publicá una versión nueva del metapaquete.
+Quien lo recibe lo instala y vuelve a llamar a `equipoverse_install()`.
+Por omisión, esa llamada instala los componentes que faltan y actualiza
+solo los que traen una versión más nueva que la instalada.
 
-Eso incluye a los equipos que trabajan detrás de un firewall
-institucional y no mantienen un repositorio de paquetes, pero no se
-limita a ellos: sirve igual para entregar un conjunto con sus versiones
-registradas a cualquier destinatario.
+Llamalo `equipoverse` o con cualquier otro nombre de paquete válido. La
+instalación funciona sin red cuando las dependencias externas ya están
+disponibles, o puede instalarlas desde un repositorio que configures
+explícitamente.
 
 ## ✨ De un vistazo
 
-- 📦 **Una llamada, un -verse** —
-  [`create_metapackage()`](https://sebollin.github.io/bigbang/reference/create_metapackage.md)
-  arma, a partir de tus propios archivos de paquetes, un metapaquete
-  completo y documentado, listo para los chequeos de CRAN.
+- 🧭 **El orden de instalación viene incluido** — las dependencias
+  declaradas entre los componentes forman un grafo, y el instalador
+  sigue su orden topológico. Los ciclos y las restricciones de versión
+  locales que no se pueden cumplir se rechazan al generar. Nadie del
+  otro lado tiene que averiguar qué instalar primero.
+- 📮 **Un solo artefacto para entregar** — los archivos de los
+  componentes viajan dentro del metapaquete generado junto con su
+  instalador, así que `<meta>_install()` funciona sin argumentos, quien
+  lo recibe no necesita bigbang y no hay rutas que acordar entre
+  máquinas.
+- 🔄 **Actualizaciones por versión** — por omisión, el instalador agrega
+  los componentes que faltan y actualiza solo los que traen una versión
+  más nueva que la instalada. Generalo con `install_upgrade = "always"`
+  para que, en cambio, reinstale todos los componentes desde los
+  archivos que lleva.
+- 🏢 **Paquetes internos, bienvenidos** — los componentes no necesitan
+  estar publicados en un repositorio ni pasar `R CMD check` sin
+  observaciones. La validación de los archivos y de las dependencias se
+  aplica igual.
+- 🔍 **Revisá antes de instalar** — `<meta>_deps(plan = TRUE)` muestra
+  versiones, bibliotecas, acciones previstas y requisitos externos que
+  faltan, sin instalar nada ni consultar ningún repositorio.
+- 🔌 **El acceso a repositorios lo elegís vos** — `cran_deps = "skip"`,
+  el valor por omisión, nunca consulta un repositorio, así que la
+  instalación funciona sin red cuando las dependencias externas ya están
+  disponibles. `cran_deps = "install"` con un `repos` explícito las
+  instala.
 - 🗂️ **Tus paquetes donde los tengas** — los componentes pueden venir de
   varios directorios, mezclar `.tar.gz`, `.tar` y `.zip`, no llevar la
   versión en el nombre, estar listados en un archivo de manifiesto o ser
   directorios fuente que bigbang construye por vos. La identidad y la
   versión se leen del `DESCRIPTION` de cada archivo, no se adivinan por
   el nombre.
-- 🎯 **Un conjunto curado, distribuido como uno** — el metapaquete
-  registra y lleva las versiones exactas de los archivos con los que se
-  construyó. Por omisión, quien ya tiene una versión más nueva la
-  conserva; generalo con `install_upgrade = "always"` y cada instalación
-  recibe la combinación que probaste.
-- 📮 **Un solo artefacto para entregar** — los archivos de los
-  componentes viajan dentro del metapaquete generado, así que
-  `<meta>_install()` funciona sin argumentos y no hay rutas que acordar
-  entre máquinas.
-- 🧭 **Resolución real de dependencias** — arma el grafo de dependencias
-  locales, ordena la instalación en forma topológica y rechaza los
-  ciclos de entrada. Nadie del otro lado tiene que averiguar qué
-  instalar primero.
-- 🔌 **Sin repositorio** — cada componente se lee de archivos locales,
-  así que la instalación no necesita red; `cran_deps = "skip"` es el
-  valor por omisión. Eso es lo que hace que bigbang funcione detrás de
-  un firewall institucional, pero sirve igual para entregar un conjunto
-  versionado a cualquier lado.
+- 📦 **Una llamada, un metapaquete** —
+  [`create_metapackage()`](https://sebollin.github.io/bigbang/reference/create_metapackage.md)
+  arma, a partir de tus propios archivos de paquetes, la fuente completa
+  y documentada de un metapaquete.
 - 🌐 **Bilingüe al ejecutar** — mensajes en inglés y en español mediante
   el soporte nativo de gettext de R.
 - 🛡️ **Seguro por diseño** — los hooks de inicio nunca instalan paquetes
@@ -92,7 +105,8 @@ registradas a cualquier destinatario.
 La arquitectura separa dos acciones:
 
 - `library(<meta>)` adjunta los componentes ya instalados e informa los
-  faltantes.
+  faltantes. Con `reexport = TRUE`, en cambio, expone sus exportaciones
+  mediante bindings.
 - `<meta>_install()` instala explícitamente los archivos locales una
   sola vez, en orden topológico, y luego los adjunta.
 
@@ -127,8 +141,8 @@ pak::pak("sebollin/bigbang")
 remotes::install_github("sebollin/bigbang")
 ```
 
-Y fiel al espíritu offline del paquete, una copia local de la fuente se
-instala sin red:
+Una copia local de la fuente también se instala sin repositorio, siempre
+que las dependencias de bigbang ya estén instaladas:
 
 ``` r
 
@@ -283,9 +297,11 @@ La fuente se guarda junto con el token, por lo que nunca se compara un
 token de `/proc` con uno de `ps`. `LANGUAGE` y `LC_TIME` no pueden
 cambiar el token portable de `ps`.
 
-`"skip"` es el modo predeterminado y nunca usa la red. `"error"` falla
-si falta una dependencia no local; `"install"` permite instalar desde un
-`repos` configurado explícitamente.
+`"skip"` es el modo predeterminado y nunca consulta un repositorio: un
+componente al que le falta una dependencia no local se saltea y se
+informa. `"error"` informa esos componentes como fallas, también sin
+intentar instalar desde un repositorio; `"install"` permite instalar
+desde un `repos` configurado explícitamente.
 
 Los instaladores generados también aceptan `upgrade = "newer"`
 (predeterminado), `"always"` o `"never"`; `force = TRUE` equivale a
@@ -308,9 +324,14 @@ Durante la generación, bigbang valida todo lo que protege al receptor
 del metapaquete generado. Los archivos inseguros o malformados, la
 metadata inválida, los componentes duplicados, las restricciones de
 versión locales insatisfechas y los ciclos de dependencias siempre son
-errores duros y no se pueden desactivar. La instalación es más
-tolerante: puede conservar un componente ya instalado si no puede leer
-un archivo que no va a usar, e informa el motivo.
+errores duros y no se pueden desactivar. Con
+`on_component_error = "skip"`, la generación deja afuera del metapaquete
+un componente inválido y los que dependen de él, pero nunca los incluye.
+[`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md)
+es más tolerante: puede conservar un componente ya instalado si no puede
+leer un archivo que no va a usar, e informa el motivo. Un instalador
+generado lee los archivos de todos los componentes que instala o
+conserva.
 
 Las comprobaciones de prolijidad se relajan de forma individual y
 explícita:
@@ -506,8 +527,12 @@ los sigue en el manifiesto.
   porque esa llamada terminaría el proceso sondeado.
 - `install_upgrade` fija la política de actualización por defecto del
   instalador emitido, así que decidís al generar si los destinatarios
-  quedan clavados en las versiones que distribuís (`"always"`) o
-  conservan lo más nuevo que ya tengan (`"newer"`, el default).
+  reinstalan todos los componentes desde los archivos que distribuís
+  (`"always"`), conservan una versión instalada al menos tan nueva como
+  la distribuida (`"newer"`, el default) o conservan cualquier versión
+  instalada (`"never"`). Los componentes que faltan se instalan con
+  cualquier política, y quien recibe el metapaquete igual puede elegir
+  otra con `upgrade`. Ninguna fija las dependencias externas.
 
 El instalador generado también acepta `only` para instalar un
 subconjunto —las dependencias locales de lo elegido se agregan solas— y

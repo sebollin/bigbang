@@ -63,6 +63,11 @@
 
     
     
+<p>bigbang turns a collection of R packages into one metapackage that
+can be versioned and shared as a single bundle, with component
+installation ordered by the dependencies the components declare. The
+same workflow applies to an organization’s internal toolkit and to any
+other set of packages maintained together.</p>
 <div class="section level2">
 <h2 id="a-complete-disposable-example">A complete disposable example<a class="anchor" aria-label="anchor" href="#a-complete-disposable-example"></a>
 </h2>
@@ -118,7 +123,7 @@ separately.</p>
 <span><span class="va">result</span></span>
 <span><span class="co">#&gt; &lt;bigbang metapackage&gt;</span></span>
 <span><span class="co">#&gt;   Package: toyverse</span></span>
-<span><span class="co">#&gt;   Path: /tmp/RtmpYvcW1T/bigbang-vignette-1abf76efc18a/generated/toyverse</span></span>
+<span><span class="co">#&gt;   Path: /tmp/RtmprhVTPA/bigbang-vignette-1cb04cd1bbf5/generated/toyverse</span></span>
 <span><span class="co">#&gt;   Components: toycomponent</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">list.files</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span></span>
 <span><span class="co">#&gt;  [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           </span></span>
@@ -129,7 +134,7 @@ separately.</p>
 <code class="sourceCode R"><span><span class="va">scan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/scan_bigbang_artifact.html">scan_bigbang_artifact</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">path</span><span class="op">)</span></span>
 <span><span class="va">scan</span></span>
 <span><span class="co">#&gt; &lt;bigbang artifact scan&gt;</span></span>
-<span><span class="co">#&gt;   Path: /tmp/RtmpYvcW1T/bigbang-vignette-1abf76efc18a/generated/toyverse</span></span>
+<span><span class="co">#&gt;   Path: /tmp/RtmprhVTPA/bigbang-vignette-1cb04cd1bbf5/generated/toyverse</span></span>
 <span><span class="co">#&gt;   Type: source</span></span>
 <span><span class="co">#&gt;   Result: no deletion signatures found</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot</a></span><span class="op">(</span><span class="op">!</span><span class="va">scan</span><span class="op">$</span><span class="va">vulnerable</span><span class="op">)</span></span></code></pre></div>
@@ -189,10 +194,11 @@ plan:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">toyverse_deps</span><span class="op">(</span>plan <span class="op">=</span> <span class="cn">TRUE</span>, upgrade <span class="op">=</span> <span class="st">"newer"</span>, cran_deps <span class="op">=</span> <span class="st">"skip"</span><span class="op">)</span></span></code></pre></div>
 <p>This reads the archive <code>DESCRIPTION</code> files and installed
-package metadata only. It reports the archive version, installed version
-and library, planned action, and missing or unsatisfied external
-constraints. It performs no loading, installation, network access, or
-disk write. The installer and this plan share the same version and
+package metadata. It reports the archive version, installed version and
+library, planned action, and missing or unsatisfied external
+constraints. It does not load components, install anything, or contact a
+repository, and it writes only to its own temporary directory, which it
+removes on exit. The installer and this plan share the same version and
 upgrade policy evaluation.</p>
 </div>
 <div class="section level2">

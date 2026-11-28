@@ -1,5 +1,11 @@
 # Getting started with bigbang
 
+bigbang turns a collection of R packages into one metapackage that can
+be versioned and shared as a single bundle, with component installation
+ordered by the dependencies the components declare. The same workflow
+applies to an organization’s internal toolkit and to any other set of
+packages maintained together.
+
 ## A complete disposable example
 
 This guide creates a component archive and a metapackage source tree
@@ -60,7 +66,7 @@ result <- create_metapackage(
 result
 #> <bigbang metapackage>
 #>   Package: toyverse
-#>   Path: /tmp/RtmpYvcW1T/bigbang-vignette-1abf76efc18a/generated/toyverse
+#>   Path: /tmp/RtmprhVTPA/bigbang-vignette-1cb04cd1bbf5/generated/toyverse
 #>   Components: toycomponent
 list.files(result$path)
 #>  [1] "DESCRIPTION"    "inst"           "LICENSE"        "man"           
@@ -75,7 +81,7 @@ The generated tree can be scanned without loading it:
 scan <- scan_bigbang_artifact(result$path)
 scan
 #> <bigbang artifact scan>
-#>   Path: /tmp/RtmpYvcW1T/bigbang-vignette-1abf76efc18a/generated/toyverse
+#>   Path: /tmp/RtmprhVTPA/bigbang-vignette-1cb04cd1bbf5/generated/toyverse
 #>   Type: source
 #>   Result: no deletion signatures found
 stopifnot(!scan$vulnerable)
@@ -136,11 +142,12 @@ toyverse_deps(plan = TRUE, upgrade = "newer", cran_deps = "skip")
 ```
 
 This reads the archive `DESCRIPTION` files and installed package
-metadata only. It reports the archive version, installed version and
-library, planned action, and missing or unsatisfied external
-constraints. It performs no loading, installation, network access, or
-disk write. The installer and this plan share the same version and
-upgrade policy evaluation.
+metadata. It reports the archive version, installed version and library,
+planned action, and missing or unsatisfied external constraints. It does
+not load components, install anything, or contact a repository, and it
+writes only to its own temporary directory, which it removes on exit.
+The installer and this plan share the same version and upgrade policy
+evaluation.
 
 ## Interrupted updates and recovery
 

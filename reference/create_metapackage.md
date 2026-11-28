@@ -251,8 +251,11 @@ create_metapackage(
 
   Character default upgrade policy emitted in the generated installer
   function: "newer", "always", or "never". This controls whether a
-  generated installer keeps newer installed versions, reinstalls every
-  component, or skips archive inspection.
+  generated installer keeps installed versions at least as new as the
+  shipped archives, reinstalls every component, or keeps every installed
+  version. Missing components are installed under every policy, and the
+  generated installer reads the archives of the components it handles
+  under every policy.
 
 - reexport_prefer:
 
@@ -333,10 +336,12 @@ dependencies.
 
 Generation validates every supplied component and its dependency graph
 eagerly before writing the metapackage. This hard validation protects an
-artifact that will be distributed to another machine. The installer is
-more tolerant: when an already installed component does not need to be
-changed, it can retain that installation without reading an archive that
-will not be used.
+artifact that will be distributed to another machine.
+[`install_local_pkg()`](https://sebollin.github.io/bigbang/reference/install_local_pkg.md)
+is more tolerant: when an already installed component does not need to
+be changed, it can retain that installation without reading an archive
+that will not be used. A generated installer reads the archives of every
+component it handles.
 
 ## Validation strictness
 

@@ -281,8 +281,11 @@ the reserved generated-documentation filenames.</p></dd>
 <dt id="arg-install-upgrade">install_upgrade<a class="anchor" aria-label="anchor" href="#arg-install-upgrade"></a></dt>
 <dd><p>Character default upgrade policy emitted in the
 generated installer function: "newer", "always", or "never".
-This controls whether a generated installer keeps newer installed
-versions, reinstalls every component, or skips archive inspection.</p></dd>
+This controls whether a generated installer keeps installed versions at
+least as new as the shipped archives, reinstalls every component, or
+keeps every installed version. Missing components are installed under
+every policy, and the generated installer reads the archives of the
+components it handles under every policy.</p></dd>
 
 
 <dt id="arg-reexport-prefer">reexport_prefer<a class="anchor" aria-label="anchor" href="#arg-reexport-prefer"></a></dt>
@@ -343,9 +346,10 @@ archives, the user calls <code>&lt;meta&gt;_install()</code>. Installation resol
 with a graph-based topological ordering that also detects circular dependencies.</p>
 <p>Generation validates every supplied component and its dependency graph eagerly
 before writing the metapackage. This hard validation protects an artifact that
-will be distributed to another machine. The installer is more tolerant: when
-an already installed component does not need to be changed, it can retain that
-installation without reading an archive that will not be used.</p>
+will be distributed to another machine. <code><a href="install_local_pkg.html">install_local_pkg()</a></code> is more
+tolerant: when an already installed component does not need to be changed, it
+can retain that installation without reading an archive that will not be
+used. A generated installer reads the archives of every component it handles.</p>
     </div>
     <div class="section level2">
     <h2 id="validation-strictness">Validation strictness<a class="anchor" aria-label="anchor" href="#validation-strictness"></a></h2>
